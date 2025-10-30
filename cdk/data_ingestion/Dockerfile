@@ -1,4 +1,4 @@
-FROM public.ecr.aws/lambda/python:3.11
+FROM --platform=linux/amd64 public.ecr.aws/lambda/python:3.11
 
 # Install dependencies, including tesseract and its prerequisites
 RUN yum update -y && \
@@ -13,9 +13,11 @@ RUN mkdir -p $TESSDATA_PREFIX && \
 
 # Copy requirements and install python packages
 COPY requirements.txt ${LAMBDA_TASK_ROOT}
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -v -r requirements.txt
 
 # Copy the source code
 COPY src/ ${LAMBDA_TASK_ROOT}
 
+#test
+#test
 CMD [ "main.handler" ]
