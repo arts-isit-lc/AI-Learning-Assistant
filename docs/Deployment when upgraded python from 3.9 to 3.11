@@ -1,0 +1,23 @@
+When trying to deploy --all stacks after upgrading python from 3.9 to 3.11, we get a dependency error.
+
+This error occurs because CloudFormation can't update an exported resource that's being used by another stack. The psycopgLambdaLayer is exported by AILA-ApiGatewayStack and imported by AILA-DBFlowStack.
+
+The issue persists because CDK is still trying to deploy all stacks due to dependencies. You need to break the circular dependency by destroying the dependent stack first.
+The export dependency can only be resolved by removing the importing stack first.
+
+TO AVOID DELETING ALL STACKS (LOOSING DATA) and RE-DEPLOYING from scratch all stacks,follow these steps:
+
+Solution: Destroy and Redeploy
+
+	1	Destroy the dependent stack:
+cdk destroy AILA-DBFlowStack --context StackPrefix=AILA --context environment=prod --profile <profile-name>
+
+	2	Deploy ApiGatewayStack first:
+cdk deploy AILA-ApiGatewayStack --context StackPrefix=AILA --context environment=prod --profile <profile-name>
+
+	3	Then deploy DBFlowStack:
+cdk deploy AILA-DBFlowStack --context StackPrefix=AILA --context environment=prod --profile <profile-name>
+
+	4	Finally deploy remaining stacks:
+cdk deploy --all --parameters AILA-AmplifyStack:githubRepoName=AI-Learning-Assistant --context StackPrefix=AILA --context environment=prod --profile <profile-name>
+
