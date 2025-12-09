@@ -264,7 +264,7 @@ export const InstructorNewModule = ({ courseId }) => {
         />
 
         <TextField
-          label="Module Prompt"
+          label="Module Prompt (Optional)"
           name="modulePrompt"
           value={modulePrompt}
           onChange={(e) => setModulePrompt(e.target.value)}
@@ -272,6 +272,7 @@ export const InstructorNewModule = ({ courseId }) => {
           margin="normal"
           multiline
           rows={4}
+          helperText="Provide specific instructions for this module. This will be used alongside the course-level prompt."
         />
 
         <FormControl fullWidth margin="normal">
