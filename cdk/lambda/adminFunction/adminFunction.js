@@ -180,7 +180,7 @@ exports.handler = async (event) => {
               course_student_access,
             } = event.queryStringParameters;
 
-            const { system_prompt } = JSON.parse(event.body);
+            const { system_prompt, llm_model_id } = JSON.parse(event.body);
 
             // Insert new course into Courses table
             const newCourse = await sqlConnectionTableCreator`         
@@ -191,7 +191,8 @@ exports.handler = async (event) => {
                       course_number,
                       course_access_code,
                       course_student_access,
-                      system_prompt
+                      system_prompt,
+                      llm_model_id
                   )
                   VALUES (
                       uuid_generate_v4(),
@@ -200,7 +201,8 @@ exports.handler = async (event) => {
                       ${course_number},
                       ${course_access_code},
                       ${course_student_access.toLowerCase() === "true"},
-                      ${system_prompt}
+                      ${system_prompt},
+                      ${llm_model_id || 'meta.llama3-70b-instruct-v1:0'}
                   )
                   RETURNING *;
               `;

@@ -9,6 +9,8 @@ import InstructorAnalytics from "./InstructorAnalytics";
 import PromptSettings from "./PromptSettings";
 import ViewStudents from "./ViewStudents";
 import InstructorModules from "./InstructorModules";
+import EditModels from "./EditModels";
+import ChatLogs from "./ChatLogs";
 
 // course details page
 const CourseDetails = ({ openWebSocket }) => {
@@ -16,6 +18,8 @@ const CourseDetails = ({ openWebSocket }) => {
   const [selectedComponent, setSelectedComponent] = useState(
     "InstructorAnalytics"
   );
+  const [courseName, setCourseName] = useState("");
+  const [course_id, setCourseId] = useState("");
 
   // connect to api data
   useEffect(() => {
@@ -39,9 +43,11 @@ const CourseDetails = ({ openWebSocket }) => {
         );
         if (response.ok) {
           const data = await response.json();
-          const course_id = data.find((course) => course.course_id);
-          const course_name = data.find((course) => course.course_name);
-          setRows(formattedData);
+          const courseData = data.find((course) => course.course_id === courseId);
+          if (courseData) {
+            setCourseId(courseData.course_id);
+            setCourseName(courseData.course_name);
+          }
         } else {
           console.error("Failed to fetch courses:", response.statusText);
         }
@@ -51,7 +57,7 @@ const CourseDetails = ({ openWebSocket }) => {
     };
 
     fetchCourses();
-  }, [course_id, course_name]);
+  }, [courseId]);
 
 
   const renderComponent = () => {
@@ -64,6 +70,8 @@ const CourseDetails = ({ openWebSocket }) => {
         return <InstructorModules courseId={courseId} course_id={course_id}/>;
       case "PromptSettings":
         return <PromptSettings courseId={courseId} />;
+      case "EditModels":
+        return <EditModels courseName={courseName} course_id={course_id} />;
       case "ViewStudents":
         return <ViewStudents courseId={courseId} />;
       case "ChatLogs":

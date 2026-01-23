@@ -17,6 +17,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import PsychologyIcon from "@mui/icons-material/Psychology";
 import GroupIcon from "@mui/icons-material/Group";
 import DescriptionIcon from "@mui/icons-material/Description";
+import ModelTrainingIcon from "@mui/icons-material/ModelTraining";
 import { useNotification } from "../../context/NotificationContext";
 
 const InstructorSidebar = ({ setSelectedComponent, course_id, selectedComponent }) => {
@@ -91,6 +92,13 @@ const InstructorSidebar = ({ setSelectedComponent, course_id, selectedComponent 
               <PsychologyIcon />
             </ListItemIcon>
             <ListItemText primary="Prompt Settings" />
+          </ListItem>
+          <Divider />
+          <ListItem button onClick={() => handleNavigation("EditModels")}>
+            <ListItemIcon>
+              <ModelTrainingIcon />
+            </ListItemIcon>
+            <ListItemText primary="Edit Models" />
           </ListItem>
           <Divider />
           <ListItem button onClick={() => handleNavigation("ViewStudents")}>

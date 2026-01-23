@@ -645,6 +645,61 @@ exports.handler = async (event) => {
           });
         }
         break;
+      case "PUT /instructor/update_llm_model":
+        if (
+          event.queryStringParameters != null &&
+          event.queryStringParameters.course_id &&
+          event.queryStringParameters.instructor_email &&
+          event.body
+        ) {
+          try {
+            const { course_id, instructor_email } = event.queryStringParameters;
+            const { llm_model_id } = JSON.parse(event.body);
+
+            // Update LLM model for the course
+            const updatedCourse = await sqlConnection`
+                      UPDATE "Courses"
+                      SET llm_model_id = ${llm_model_id}
+                      WHERE course_id = ${course_id}
+                      RETURNING *;
+                    `;
+
+            // Insert into User Engagement Log
+            await sqlConnection`
+                      INSERT INTO "User_Engagement_Log" (
+                        log_id,
+                        user_id,
+                        course_id,
+                        module_id,
+                        enrolment_id,
+                        timestamp,
+                        engagement_type,
+                        engagement_details
+                      )
+                      VALUES (
+                        uuid_generate_v4(),
+                        (SELECT user_id FROM "Users" WHERE user_email = ${instructor_email}),
+                        ${course_id},
+                        null,
+                        null,
+                        CURRENT_TIMESTAMP,
+                        'instructor_updated_llm_model',
+                        ${llm_model_id}
+                      );
+                    `;
+
+            response.body = JSON.stringify(updatedCourse[0]);
+          } catch (err) {
+            response.statusCode = 500;
+            console.log(err);
+            response.body = JSON.stringify({ error: "Internal server error" });
+          }
+        } else {
+          response.statusCode = 400;
+          response.body =
+            "course_id, instructor_email, or request body is missing";
+        }
+        break;
       case "PUT /instructor/prompt":
         if (
           event.queryStringParameters != null &&
@@ -929,9 +984,9 @@ exports.handler = async (event) => {
           try {
             const { course_id } = event.queryStringParameters;
 
-            // Retrieve the system prompt from the Courses table
+            // Retrieve the system prompt and LLM model from the Courses table
             const coursePrompt = await sqlConnection`
-                    SELECT system_prompt 
+                    SELECT system_prompt, llm_model_id 
                     FROM "Courses"
                     WHERE course_id = ${course_id};
                   `;
