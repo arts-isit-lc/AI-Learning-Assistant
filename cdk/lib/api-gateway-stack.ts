@@ -27,6 +27,7 @@ import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as ssm from "aws-cdk-lib/aws-ssm";
 import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as appsync from "aws-cdk-lib/aws-appsync";
+import * as ses from "aws-cdk-lib/aws-ses";
 
 
 export class ApiGatewayStack extends cdk.Stack {
@@ -122,6 +123,14 @@ export class ApiGatewayStack extends cdk.Stack {
     this.layerList["psycopg2"] = psycopgLayer;
     this.layerList["postgres"] = postgres;
     this.layerList["jwt"] = jwt;
+
+    /**
+     * Create SES Domain Identity for ocelia.svc.ubc.ca
+     * Note: Domain must be verified by adding DNS records after deployment
+     */
+    const domainIdentity = new ses.EmailIdentity(this, `${id}-SESDomainIdentity`, {
+      identity: ses.Identity.domain('ocelia.svc.ubc.ca'),
+    });
 
     // Create FIFO SQS Queue for jobs that get classroom chatlogs for a course
     const messagesQueue = new sqs.Queue(this, `${id}-MessagesQueue`, {
@@ -1405,6 +1414,7 @@ export class ApiGatewayStack extends cdk.Stack {
           APPSYNC_API_URL: this.eventApi.graphqlUrl,
           APPSYNC_API_ID: this.eventApi.apiId,
           REGION: this.region,
+          SES_FROM_EMAIL: 'noreply@ocelia.svc.ubc.ca',
         },
         functionName: `${id}-NotificationFunction`,
         timeout: cdk.Duration.seconds(300),
@@ -1418,6 +1428,15 @@ export class ApiGatewayStack extends cdk.Stack {
         effect: iam.Effect.ALLOW,
         actions: ['appsync:GraphQL'],
         resources: [`arn:aws:appsync:${this.region}:${this.account}:apis/${this.eventApi.apiId}/*`],
+      })
+    );
+
+    // Grant SES permissions to send emails
+    notificationFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['ses:SendEmail', 'ses:SendRawEmail'],
+        resources: ['*'],
       })
     );
 
