@@ -19,7 +19,6 @@ import {
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { fetchAuthSession } from "aws-amplify/auth";
-import { LLM_MODELS, DEFAULT_LLM_MODEL } from "../../constants/llmModels";
 
 const CHARACTER_LIMIT = 1000;
 
@@ -55,7 +54,6 @@ export const AdminCreateCourse = ({ setSelectedComponent }) => {
   const [selectedInstructors, setSelectedInstructors] = useState([]);
   const [instructors, setInstructors] = useState([]);
   const [submitting, setSubmitting] = useState(false);
-  const [llmModelId, setLlmModelId] = useState(DEFAULT_LLM_MODEL);
   const handleStatusChange = (event) => {
     setIsActive(event.target.checked);
   };
@@ -140,7 +138,6 @@ export const AdminCreateCourse = ({ setSelectedComponent }) => {
           },
           body: JSON.stringify({
             system_prompt: coursePrompt,
-            llm_model_id: llmModelId,
           }),
         }
       );
@@ -322,28 +319,6 @@ export const AdminCreateCourse = ({ setSelectedComponent }) => {
             backgroundColor="default"
             inputProps={{ maxLength: 10, min: 0, step: 1 }}
           />
-          <FormControl fullWidth margin="normal">
-            <InputLabel id="llm-model-select-label">LLM Model</InputLabel>
-            <Select
-              labelId="llm-model-select-label"
-              value={llmModelId}
-              onChange={(e) => setLlmModelId(e.target.value)}
-              label="LLM Model"
-            >
-              {LLM_MODELS.map((model) => (
-                <MenuItem key={model.id} value={model.id}>
-                  <Box>
-                    <Typography variant="body1" fontWeight="medium">
-                      {model.name}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" fontSize="0.8rem">
-                      {model.description}
-                    </Typography>
-                  </Box>
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
           <FormControl fullWidth sx={{ marginBottom: 2, marginTop: 2 }}>
             <Autocomplete
               multiple
