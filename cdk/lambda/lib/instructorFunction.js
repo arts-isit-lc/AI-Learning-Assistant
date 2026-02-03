@@ -654,7 +654,7 @@ exports.handler = async (event) => {
         ) {
           try {
             const { course_id, instructor_email } = event.queryStringParameters;
-            const { prompt } = JSON.parse(event.body);
+            const { prompt, llm_model_id } = JSON.parse(event.body);
 
             // Retrieve the current system prompt
             const currentPromptResult = await sqlConnection`
@@ -671,10 +671,10 @@ exports.handler = async (event) => {
 
             const oldPrompt = currentPromptResult[0].system_prompt;
 
-            // Update system prompt for the course in Courses table
+            // Update system prompt and llm_model_id for the course in Courses table
             const updatedCourse = await sqlConnection`
                       UPDATE "Courses"
-                      SET system_prompt = ${prompt}
+                      SET system_prompt = ${prompt}, llm_model_id = ${llm_model_id}
                       WHERE course_id = ${course_id}
                       RETURNING *;
                     `;
@@ -929,9 +929,9 @@ exports.handler = async (event) => {
           try {
             const { course_id } = event.queryStringParameters;
 
-            // Retrieve the system prompt from the Courses table
+            // Retrieve the system prompt and llm_model_id from the Courses table
             const coursePrompt = await sqlConnection`
-                    SELECT system_prompt 
+                    SELECT system_prompt, llm_model_id 
                     FROM "Courses"
                     WHERE course_id = ${course_id};
                   `;

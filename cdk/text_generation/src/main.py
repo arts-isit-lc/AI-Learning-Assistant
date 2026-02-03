@@ -8,6 +8,7 @@ from langchain_aws import BedrockEmbeddings
 
 from helpers.vectorstore import get_vectorstore_retriever
 from helpers.chat import get_bedrock_llm, get_initial_student_query, get_student_query, create_dynamodb_history_table, get_response, update_session_name
+from constants.llm_models import DEFAULT_LLM_MODEL_ID, is_valid_model_id
 
 # Set up basic logging
 logging.basicConfig(level=logging.INFO)
@@ -172,6 +173,42 @@ def get_system_prompt(course_id):
         connection.rollback()
         return None
 
+def get_course_llm_model_id(course_id):
+    connection = connect_to_db()
+    if connection is None:
+        logger.error("No database connection available.")
+        return None
+    
+    try:
+        cur = connection.cursor()
+        logger.info("Connected to RDS instance!")
+
+        cur.execute("""
+            SELECT llm_model_id 
+            FROM "Courses" 
+            WHERE course_id = %s;
+        """, (course_id,))
+        
+        result = cur.fetchone()
+        logger.info(f"LLM Model ID query result: {result}")
+        llm_model_id = result[0] if result and result[0] else None
+        
+        cur.close()
+        
+        if llm_model_id:
+            logger.info(f"LLM model ID for course_id {course_id} found: {llm_model_id}")
+        else:
+            logger.warning(f"No LLM model ID found for course_id {course_id}, will use default")
+        
+        return llm_model_id
+
+    except Exception as e:
+        logger.error(f"Error fetching LLM model ID: {e}")
+        if cur:
+            cur.close()
+        connection.rollback()
+        return None
+
 def get_module_prompt(module_id):
     connection = connect_to_db()
     if connection is None:
@@ -271,6 +308,19 @@ def handler(event, context):
             'body': json.dumps('Error fetching system prompt')
         }
     
+    # Get course-specific LLM model ID, fallback to default if not set
+    course_llm_model_id = get_course_llm_model_id(course_id)
+    
+    # Validate the model ID and fallback to default if invalid
+    if course_llm_model_id and is_valid_model_id(course_llm_model_id):
+        effective_llm_model_id = course_llm_model_id
+    else:
+        effective_llm_model_id = BEDROCK_LLM_ID  # Fallback to system default
+        if course_llm_model_id:
+            logger.warning(f"Invalid LLM model ID '{course_llm_model_id}' for course {course_id}, using system default")
+    
+    logger.info(f"Using LLM model ID: {effective_llm_model_id} for course {course_id}")
+    
     module_prompt = get_module_prompt(module_id)
     
     topic = get_module_name(module_id)
@@ -294,7 +344,7 @@ def handler(event, context):
     
     try:
         logger.info("Creating Bedrock LLM instance.")
-        llm = get_bedrock_llm(BEDROCK_LLM_ID)
+        llm = get_bedrock_llm(effective_llm_model_id)
     except Exception as e:
         logger.error(f"Error getting LLM from Bedrock: {e}")
         return {
@@ -387,7 +437,7 @@ def handler(event, context):
     
     try:
         logger.info("Updating session name if this is the first exchange between the LLM and student")
-        potential_session_name = update_session_name(TABLE_NAME, session_id, BEDROCK_LLM_ID)
+        potential_session_name = update_session_name(TABLE_NAME, session_id, effective_llm_model_id)
         if potential_session_name:
             logger.info("This is the first exchange between the LLM and student. Updating session name.")
             session_name = potential_session_name

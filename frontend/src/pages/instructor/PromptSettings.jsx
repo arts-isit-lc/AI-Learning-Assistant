@@ -7,6 +7,11 @@ import {
   Box,
   Paper,
   Toolbar,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  FormHelperText,
 } from "@mui/material";
 import { fetchAuthSession, fetchUserAttributes } from "aws-amplify/auth";
 import { toast, ToastContainer } from "react-toastify";
@@ -17,6 +22,7 @@ import { useTheme } from "@mui/material/styles";
 import "react-toastify/dist/ReactToastify.css";
 import { useNavigate } from "react-router-dom";
 import { UserContext } from "../../App";
+import { LLM_MODELS, DEFAULT_LLM_MODEL_ID, getLLMModelOptions } from "../../constants/llmModels";
 
 const CHARACTER_LIMIT = 1000;
 function courseTitleCase(str) {
@@ -38,11 +44,14 @@ function courseTitleCase(str) {
 const PromptSettings = ({ courseName, course_id }) => {
   const theme = useTheme();
   const [userPrompt, setUserPrompt] = useState("");
+  const [selectedModelId, setSelectedModelId] = useState(DEFAULT_LLM_MODEL_ID);
   const [previousPrompts, setPreviousPrompts] = useState([]);
   const [activeStep, setActiveStep] = useState(0);
   const maxSteps = previousPrompts.length;
   const { isInstructorAsStudent } = useContext(UserContext);
   const navigate = useNavigate();
+
+  const modelOptions = getLLMModelOptions();
 
   useEffect(() => {
     if (isInstructorAsStudent) {
@@ -114,6 +123,8 @@ const PromptSettings = ({ courseName, course_id }) => {
         if (response.ok) {
           const data = await response.json();
           setUserPrompt(data.system_prompt);
+          // Set the selected model ID, defaulting to Llama 70B if not set
+          setSelectedModelId(data.llm_model_id || DEFAULT_LLM_MODEL_ID);
         } else {
           console.error("Failed to fetch prompt:", response.statusText);
         }
@@ -132,9 +143,10 @@ const PromptSettings = ({ courseName, course_id }) => {
       const token = session.tokens.idToken
       const { email } = await fetchUserAttributes();
 
-      // Save current prompt and fetch previous prompts
+      // Save current prompt and selected model ID
       const requestBody = {
         prompt: `${userPrompt}`,
+        llm_model_id: selectedModelId,
       };
       const response = await fetch(
         `${
@@ -161,7 +173,7 @@ const PromptSettings = ({ courseName, course_id }) => {
         };
         setUserPrompt(data.system_prompt);
         fetchPreviousPrompts();
-        toast.success("Prompt Updated successfully", {
+        toast.success("Settings updated successfully", {
           position: "top-center",
           autoClose: 1000,
           hideProgressBar: false,
@@ -172,8 +184,8 @@ const PromptSettings = ({ courseName, course_id }) => {
           theme: "colored",
         });
       } else {
-        console.error("Failed to update prompt:", response.statusText);
-        toast.error(`Failed to update prompt: ${response.statusText}`, {
+        console.error("Failed to update settings:", response.statusText);
+        toast.error(`Failed to update settings: ${response.statusText}`, {
           position: "top-center",
           autoClose: 1000,
           hideProgressBar: false,
@@ -185,7 +197,7 @@ const PromptSettings = ({ courseName, course_id }) => {
         });
       }
     } catch (error) {
-      console.error("Error updating prompt:", error);
+      console.error("Error updating settings:", error);
     }
   };
 
@@ -208,14 +220,48 @@ const PromptSettings = ({ courseName, course_id }) => {
             variant="h6"
             gutterBottom
           >
-            {courseTitleCase(courseName)} Prompt Settings
+            {courseTitleCase(courseName)} Settings
           </Typography>
           <Typography variant="h8">
-            Changes to the prompt will be applied to the LLM for this specific
+            Changes to the settings will be applied to the LLM for this specific
             course.
           </Typography>
+
+          {/* LLM Model Selection */}
+          <Box mt={3} mb={2}>
+            <Typography variant="h6" gutterBottom>
+              Language Model Selection
+            </Typography>
+            <FormControl fullWidth margin="normal">
+              <InputLabel id="llm-model-select-label">Select LLM Model</InputLabel>
+              <Select
+                labelId="llm-model-select-label"
+                id="llm-model-select"
+                value={selectedModelId}
+                label="Select LLM Model"
+                onChange={(e) => setSelectedModelId(e.target.value)}
+              >
+                {modelOptions.map((model) => (
+                  <MenuItem key={model.value} value={model.value}>
+                    <Box>
+                      <Typography variant="body1">{model.label}</Typography>
+                      <Typography variant="caption" color="textSecondary">
+                        {model.provider} - {model.description}
+                      </Typography>
+                    </Box>
+                  </MenuItem>
+                ))}
+              </Select>
+              <FormHelperText>
+                Choose the language model that will be used for conversations in this course.
+              </FormHelperText>
+            </FormControl>
+          </Box>
+
           <Typography variant="h6">
-            <br />
+            Prompt Settings
+          </Typography>
+          <Typography variant="h8">
             Example
           </Typography>
           <TextField

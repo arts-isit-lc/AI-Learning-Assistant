@@ -69,7 +69,8 @@ def handler(event, context):
                 "course_number" integer,
                 "course_access_code" varchar,
                 "course_student_access" bool,
-                "system_prompt" text
+                "system_prompt" text,
+                "llm_model_id" varchar DEFAULT 'meta.llama3-70b-instruct-v1:0'
             );
 
             CREATE TABLE IF NOT EXISTS "Course_Modules" (
@@ -218,6 +219,27 @@ def handler(event, context):
             """)
             if not cursor.fetchone()[0]:
                 cursor.execute('ALTER TABLE "Course_Modules" ADD COLUMN "module_prompt" text')
+                connection.commit()
+
+        # Check if Courses table exists and add llm_model_id column if missing
+        cursor.execute("""
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'Courses'
+            )
+        """)
+        if cursor.fetchone()[0]:
+            cursor.execute("""
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'Courses' 
+                    AND column_name = 'llm_model_id'
+                )
+            """)
+            if not cursor.fetchone()[0]:
+                cursor.execute('ALTER TABLE "Courses" ADD COLUMN "llm_model_id" varchar DEFAULT \'meta.llama3-70b-instruct-v1:0\'')
                 connection.commit()
 
         # Generate 16 bytes username and password randomly

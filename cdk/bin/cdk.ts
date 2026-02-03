@@ -17,7 +17,7 @@ const StackPrefix = app.node.tryGetContext("StackPrefix");
 const environment = app.node.tryGetContext("environment");
 const vpcStack = new VpcStack(app, `${StackPrefix}-VpcStack`, { env, environment });
 const dbStack = new DatabaseStack(app, `${StackPrefix}-DatabaseStack`, vpcStack, { env, environment });
-const apiStack = new ApiGatewayStack(app, `${StackPrefix}-ApiGatewayStack`, dbStack, vpcStack, { env });
+const apiStack = new ApiGatewayStack(app, `${StackPrefix}-ApiGatewayStack`, dbStack, vpcStack, { env, environment });
 const dbFlowStack = new DBFlowStack(app, `${StackPrefix}-DBFlowStack`, vpcStack, dbStack, apiStack, { env });
 const amplifyStack = new AmplifyStack(app, `${StackPrefix}-AmplifyStack`, apiStack, { env });
 Tags.of(app).add("app", "AI-Learning-Assistant");

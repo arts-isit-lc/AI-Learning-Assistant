@@ -90,7 +90,7 @@ const InstructorSidebar = ({ setSelectedComponent, course_id, selectedComponent 
             <ListItemIcon>
               <PsychologyIcon />
             </ListItemIcon>
-            <ListItemText primary="Prompt Settings" />
+            <ListItemText primary="Settings" />
           </ListItem>
           <Divider />
           <ListItem button onClick={() => handleNavigation("ViewStudents")}>

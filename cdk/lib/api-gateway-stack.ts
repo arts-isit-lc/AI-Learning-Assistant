@@ -53,10 +53,11 @@ export class ApiGatewayStack extends cdk.Stack {
     id: string,
     db: DatabaseStack,
     vpcStack: VpcStack,
-    props?: cdk.StackProps
+    props?: cdk.StackProps & { environment?: string }
   ) {
     super(scope, id, props);
 
+    const environment = props?.environment || 'dev';
     this.layerList = {};
 
     const embeddingStorageBucket = new s3.Bucket(
@@ -182,6 +183,21 @@ export class ApiGatewayStack extends cdk.Stack {
       accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
+
+    // Use low-level CloudFormation to configure SES with domain identity
+    const cfnUserPool = this.userPool.node.defaultChild as cognito.CfnUserPool;
+    
+    // Configure SES based on environment - different AWS accounts
+    const sesDomain = 'ocelia.svc.ubc.ca';
+    const sesFromEmail = environment === 'prod' ? 'noreply@ocelia.svc.ubc.ca' : 'dev-noreply@ocelia.svc.ubc.ca';
+    const sesAccountId = environment === 'prod' ? '509399614162' : '724772090264';
+    
+    cfnUserPool.emailConfiguration = {
+      emailSendingAccount: 'DEVELOPER',
+      sourceArn: `arn:aws:ses:${this.region}:${sesAccountId}:identity/${sesDomain}`,
+      from: sesFromEmail,
+      replyToEmailAddress: sesFromEmail,
+    };
 
     // Create app client
     this.appClient = this.userPool.addClient(`${id}-pool`, {
