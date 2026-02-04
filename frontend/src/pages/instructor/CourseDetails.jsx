@@ -63,7 +63,7 @@ const CourseDetails = ({ openWebSocket }) => {
       case "InstructorEditCourse":
         return <InstructorModules courseId={courseId} course_id={course_id}/>;
       case "PromptSettings":
-        return <PromptSettings courseId={courseId} />;
+        return <PromptSettings courseName={courseName} course_id={course_id} />;
       case "ViewStudents":
         return <ViewStudents courseId={courseId} />;
       case "ChatLogs":

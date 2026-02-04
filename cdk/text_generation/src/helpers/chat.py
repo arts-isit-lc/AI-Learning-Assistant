@@ -312,7 +312,7 @@ def get_llm_output(
     flag indicating whether competency has been achieved.
     """
 
-    //competion_sentence = " Congratulations! You have achieved competency over this module! Please try other modules to continue your learning journey! :)"
+    # competion_sentence = " Congratulations! You have achieved competency over this module! Please try other modules to continue your learning journey! :)"
     
     # New completion phrase to detect
     completion_phrase = "Thank you for chatting with me about this topic, you are ready to go discuss this with your class."
