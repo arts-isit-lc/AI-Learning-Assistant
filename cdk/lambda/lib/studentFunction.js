@@ -617,10 +617,8 @@ exports.handler = async (event) => {
               response.body = JSON.stringify(data);
               response.statusCode = 200;
             } else {
-              response.body = JSON.stringify({
-                message: "No messages found for this session.",
-              });
-              response.statusCode = 404;
+              response.body = JSON.stringify([]);  // Return empty array instead of error message
+              response.statusCode = 200;  // Return 200 instead of 404
             }
           } catch (err) {
             response.statusCode = 500;
