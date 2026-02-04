@@ -978,12 +978,29 @@ export class ApiGatewayStack extends cdk.Stack {
         "::foundation-model/meta.llama3-70b-instruct-v1:0",
         "arn:aws:bedrock:" +
         this.region +
+        "::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0",
+        "arn:aws:bedrock:" +
+        this.region +
         "::foundation-model/amazon.titan-embed-text-v2:0",
       ],
     });
 
+    // Custom policy statement for AWS Marketplace access (required for Anthropic models)
+    const marketplacePolicyStatement = new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        "aws-marketplace:ViewSubscriptions",
+        "aws-marketplace:Subscribe",
+        "aws-marketplace:Unsubscribe"
+      ],
+      resources: ["*"],
+    });
+
     // Attach the custom Bedrock policy to Lambda function
     textGenLambdaDockerFunc.addToRolePolicy(bedrockPolicyStatement);
+    
+    // Attach the AWS Marketplace policy to Lambda function (required for Anthropic models)
+    textGenLambdaDockerFunc.addToRolePolicy(marketplacePolicyStatement);
 
     // Grant access to Secret Manager
     textGenLambdaDockerFunc.addToRolePolicy(
@@ -1160,6 +1177,9 @@ export class ApiGatewayStack extends cdk.Stack {
 
     // Attach the custom Bedrock policy to Lambda function
     dataIngestLambdaDockerFunc.addToRolePolicy(bedrockPolicyStatement);
+    
+    // Attach the AWS Marketplace policy to Lambda function (required for Anthropic models)
+    dataIngestLambdaDockerFunc.addToRolePolicy(marketplacePolicyStatement);
 
     // Add the S3 event source trigger to the Lambda function
     dataIngestLambdaDockerFunc.addEventSource(

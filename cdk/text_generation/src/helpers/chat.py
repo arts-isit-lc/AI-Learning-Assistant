@@ -74,9 +74,22 @@ def get_bedrock_llm(
     Returns:
     ChatBedrock: An instance of the Bedrock LLM corresponding to the provided model ID.
     """
+    # Configure model-specific parameters
+    if "claude" in bedrock_llm_id.lower():
+        # Claude models require max_tokens parameter
+        model_kwargs = {
+            "temperature": temperature,
+            "max_tokens": 4000,  # Claude models require this parameter
+        }
+    else:
+        # Llama and other models
+        model_kwargs = {
+            "temperature": temperature,
+        }
+    
     return ChatBedrock(
         model_id=bedrock_llm_id,
-        model_kwargs=dict(temperature=temperature),
+        model_kwargs=model_kwargs,
     )
 
 def get_other_module_names(course_id: str, current_module_id: str, connection) -> list[str]:
@@ -299,7 +312,7 @@ def get_llm_output(
     flag indicating whether competency has been achieved.
     """
 
-    competion_sentence = " Congratulations! You have achieved competency over this module! Please try other modules to continue your learning journey! :)"
+    //competion_sentence = " Congratulations! You have achieved competency over this module! Please try other modules to continue your learning journey! :)"
     
     # New completion phrase to detect
     completion_phrase = "Thank you for chatting with me about this topic, you are ready to go discuss this with your class."
@@ -329,7 +342,7 @@ def get_llm_output(
                     if other_modules:
                         recommendation = " You may also want to explore these modules next: " + ", ".join(other_modules) + "."
                     return dict(
-                        llm_output=llm_response + competion_sentence + recommendation,
+                        llm_output=llm_response + completion_phrase + recommendation,
                         llm_verdict=True
                     )
     
@@ -341,7 +354,7 @@ def get_llm_output(
             recommendation = " You may also want to explore these modules next: " + ", ".join(other_modules) + "."
         
         return dict(
-            llm_output=response + competion_sentence + recommendation,
+            llm_output=response + completion_phrase + recommendation,
             llm_verdict=True
         )
     
@@ -432,9 +445,14 @@ def update_session_name(table_name: str, session_id: str, bedrock_llm_id: str) -
     student_message = human_messages[0].get('M', {}).get('data', {}).get('M', {}).get('content', {}).get('S', "")
     llm_message = ai_messages[0].get('M', {}).get('data', {}).get('M', {}).get('content', {}).get('S', "")
     
-    llm = BedrockLLM(
-                        model_id = bedrock_llm_id
-                    )
+    # Use ChatBedrock for consistency and better model support
+    if "claude" in bedrock_llm_id.lower():
+        llm = ChatBedrock(
+            model_id=bedrock_llm_id,
+            model_kwargs={"temperature": 0, "max_tokens": 100}
+        )
+    else:
+        llm = BedrockLLM(model_id=bedrock_llm_id)
     
     system_prompt = """
         You are given the first message from an AI and the first message from a student in a conversation. 
@@ -442,7 +460,18 @@ def update_session_name(table_name: str, session_id: str, bedrock_llm_id: str) -
         The name should be less than 30 characters. ONLY OUTPUT THE NAME YOU GENERATED. NO OTHER TEXT.
     """
     
-    prompt = f"""
+    # Use model-specific prompt formats
+    if "claude" in bedrock_llm_id.lower():
+        # Claude format - use ChatBedrock with messages
+        from langchain_core.messages import HumanMessage, SystemMessage
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=f"AI Message: {llm_message}\n\nStudent Message: {student_message}\n\nPlease generate a conversation name based on these messages.")
+        ]
+        session_name = llm.invoke(messages).content
+    else:
+        # Llama format - use BedrockLLM with formatted prompt
+        prompt = f"""
         <|begin_of_text|>
         <|start_header_id|>system<|end_header_id|>
         {system_prompt}
@@ -454,7 +483,7 @@ def update_session_name(table_name: str, session_id: str, bedrock_llm_id: str) -
         {student_message}
         <|eot_id|>
         <|start_header_id|>assistant<|end_header_id|>
-    """
+        """
+        session_name = llm.invoke(prompt)
     
-    session_name = llm.invoke(prompt)
     return session_name

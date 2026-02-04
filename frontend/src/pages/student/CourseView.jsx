@@ -277,20 +277,30 @@ export const CourseView = ({ course, setModule, setCourse }) => {
                       <TableCell sx={{ fontSize: "1rem" }}>
                         {titleCase(entry.concept_name)}{" "}
                       </TableCell>
-                      {entry.module_score === 100 ? (
-                        <TableCell sx={{ fontSize: "1rem" }}>
+                      <TableCell sx={{ fontSize: "1rem" }}>
+                        {entry.module_score === 100 ? (
                           <span
                             className="bg-[#2E7D32] text-white text-light rounded px-2 py-2"
                             style={{ display: "inline-block" }}
                           >
                             Complete
                           </span>
-                        </TableCell>
-                      ) : (
-                        <TableCell sx={{ fontSize: "1rem" }}>
-                          Incomplete
-                        </TableCell>
-                      )}
+                        ) : entry.last_accessed ? (
+                          <span
+                            className="bg-[#FFA726] text-white text-light rounded px-2 py-2"
+                            style={{ display: "inline-block" }}
+                          >
+                            In Progress
+                          </span>
+                        ) : (
+                          <span
+                            className="bg-[#E53E3E] text-white text-light rounded px-2 py-2"
+                            style={{ display: "inline-block" }}
+                          >
+                            Incomplete
+                          </span>
+                        )}
+                      </TableCell>
                       <TableCell sx={{ fontSize: "1rem" }}>
                         <Button
                           variant="contained"

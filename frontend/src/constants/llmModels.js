@@ -9,10 +9,10 @@ export const LLM_MODELS = {
     description: 'Large language model optimized for instruction following and educational conversations'
   },
   CLAUDE_3_SONNET: {
-    id: 'anthropic.claude-3-sonnet-20240229-v1:0',
-    name: 'Claude 3 Sonnet',
+    id: 'anthropic.claude-3-5-sonnet-20241022-v2:0', // Try Claude 3.5 Sonnet if available
+    name: 'Claude 3.5 Sonnet',
     provider: 'Anthropic',
-    description: 'Balanced model with strong reasoning capabilities and safety features'
+    description: 'Advanced model with strong reasoning capabilities and safety features'
   }
 };
 
