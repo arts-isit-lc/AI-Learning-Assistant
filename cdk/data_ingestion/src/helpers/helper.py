@@ -63,7 +63,8 @@ def store_module_data(
     course: str, 
     module: str,
     vectorstore_config_dict: Dict[str, str], 
-    embeddings: BedrockEmbeddings
+    embeddings: BedrockEmbeddings,
+    file_id: str = None
 ) -> None:
     """
     Store course data from an S3 bucket into the vectorstore.
@@ -104,5 +105,6 @@ def store_module_data(
         module=module,
         vectorstore=vectorstore,
         embeddings=embeddings,
-        record_manager=record_manager
+        record_manager=record_manager,
+        file_id=file_id
     )

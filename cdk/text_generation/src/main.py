@@ -243,6 +243,28 @@ def get_module_prompt(module_id):
         connection.rollback()
         return ""
 
+def get_allowed_file_ids(module_id):
+    connection = connect_to_db()
+    try:
+        cur = connection.cursor()
+        cur.execute("""
+            SELECT file_id FROM "Module_Files"
+            WHERE module_id = %s;
+        """, (module_id,))
+        own_ids = [str(row[0]) for row in cur.fetchall()]
+
+        cur.execute("""
+            SELECT referenced_file_id FROM "Module_File_References"
+            WHERE source_module_id = %s;
+        """, (module_id,))
+        ref_ids = [str(row[0]) for row in cur.fetchall()]
+
+        cur.close()
+        return own_ids + ref_ids
+    except Exception as e:
+        logger.error(f"Error fetching allowed_file_ids: {e}")
+        return []
+
 def handler(event, context):
     logger.info("Text Generation Lambda function is called!")
     initialize_constants()
@@ -385,10 +407,13 @@ def handler(event, context):
     try:
         logger.info("Creating history-aware retriever.")
 
+        allowed_file_ids = get_allowed_file_ids(module_id)
+
         history_aware_retriever = get_vectorstore_retriever(
             llm=llm,
             vectorstore_config_dict=vectorstore_config_dict,
-            embeddings=embeddings
+            embeddings=embeddings,
+            allowed_file_ids=allowed_file_ids
         )
     except Exception as e:
         logger.error(f"Error creating history-aware retriever: {e}")

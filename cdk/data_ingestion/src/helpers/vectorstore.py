@@ -7,7 +7,8 @@ def update_vectorstore(
     course: str,
     module: str,
     vectorstore_config_dict: Dict[str, str],
-    embeddings#: BedrockEmbeddings
+    embeddings,#: BedrockEmbeddings
+    file_id: str = None
 ) -> None:
     """
     Update the vectorstore with embeddings for all documents and images in the S3 bucket.
@@ -27,5 +28,6 @@ def update_vectorstore(
         course=course,
         module=module,
         vectorstore_config_dict=vectorstore_config_dict,
-        embeddings=embeddings
+        embeddings=embeddings,
+        file_id=file_id
     )

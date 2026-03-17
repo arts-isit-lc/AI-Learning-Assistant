@@ -125,7 +125,8 @@ def add_document(
     filename: str, 
     vectorstore: PGVector, 
     embeddings: BedrockEmbeddings,
-    output_bucket: str = EMBEDDING_BUCKET_NAME
+    output_bucket: str = EMBEDDING_BUCKET_NAME,
+    file_id: str = None
 ) -> List[Document]:
     """
     Add a document to the vectorstore.
@@ -155,7 +156,8 @@ def add_document(
         bucket=output_bucket,
         filenames=output_filenames,
         vectorstore=vectorstore,
-        embeddings=embeddings
+        embeddings=embeddings,
+        file_id=file_id
     )
     
     return this_doc_chunks
@@ -164,7 +166,8 @@ def store_doc_chunks(
     bucket: str, 
     filenames: List[str],
     vectorstore: PGVector, 
-    embeddings: BedrockEmbeddings
+    embeddings: BedrockEmbeddings,
+    file_id: str = None
 ) -> List[Document]:
     """
     Store chunks of documents in the vectorstore.
@@ -198,6 +201,8 @@ def store_doc_chunks(
             if doc_chunk:
                 doc_chunk.metadata["source"] = f"s3://{bucket}/{true_filename}"
                 doc_chunk.metadata["doc_id"] = this_uuid
+                if file_id:
+                    doc_chunk.metadata["file_id"] = file_id
                 
             else:
                 logger.warning(f"Empty chunk for {filename}")
@@ -215,7 +220,8 @@ def process_documents(
     module: str, 
     vectorstore: PGVector, 
     embeddings: BedrockEmbeddings,
-    record_manager: SQLRecordManager
+    record_manager: SQLRecordManager,
+    file_id: str = None
 ) -> None:
     """
     Process and add text documents from an S3 bucket to the vectorstore.
@@ -244,7 +250,8 @@ def process_documents(
                     module=module,
                     filename=os.path.basename(filename),
                     vectorstore=vectorstore,
-                    embeddings=embeddings
+                    embeddings=embeddings,
+                    file_id=file_id
                 )
 
                 all_doc_chunks.extend(this_doc_chunks)

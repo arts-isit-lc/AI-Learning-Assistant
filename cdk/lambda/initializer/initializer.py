@@ -177,6 +177,12 @@ def handler(event, context):
             ALTER TABLE "chatlogs_notifications" ADD FOREIGN KEY ("course_id") REFERENCES "Courses" ("course_id") ON DELETE CASCADE ON UPDATE CASCADE;
             ALTER TABLE "chatlogs_notifications" ADD FOREIGN KEY ("instructor_email") REFERENCES "Users" ("user_email") ON DELETE CASCADE ON UPDATE CASCADE;
 
+            CREATE TABLE IF NOT EXISTS "Module_File_References" (
+                source_module_id   uuid REFERENCES "Course_Modules"(module_id) ON DELETE CASCADE,
+                referenced_file_id uuid REFERENCES "Module_Files"(file_id) ON DELETE CASCADE,
+                PRIMARY KEY (source_module_id, referenced_file_id)
+            );
+
             DO $$
             BEGIN
                 IF NOT EXISTS (
@@ -241,6 +247,29 @@ def handler(event, context):
             if not cursor.fetchone()[0]:
                 cursor.execute('ALTER TABLE "Courses" ADD COLUMN "llm_model_id" varchar DEFAULT \'meta.llama3-70b-instruct-v1:0\'')
                 connection.commit()
+
+        # Backfill file_id into existing vectorstore chunks
+        cursor.execute("""
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.tables
+                WHERE table_name = 'langchain_pg_embedding'
+            )
+        """)
+        if cursor.fetchone()[0]:
+            cursor.execute("""
+                SELECT file_id, module_id, filename, filetype
+                FROM "Module_Files";
+            """)
+            files = cursor.fetchall()
+            for file_id, module_id, filename, filetype in files:
+                s3_path_pattern = f"%/{module_id}/documents/{filename}.{filetype}%"
+                cursor.execute("""
+                    UPDATE langchain_pg_embedding
+                    SET cmetadata = cmetadata || jsonb_build_object('file_id', %s::text)
+                    WHERE cmetadata->>'source' LIKE %s
+                    AND cmetadata->>'file_id' IS NULL;
+                """, (str(file_id), s3_path_pattern))
+            connection.commit()
 
         # Generate 16 bytes username and password randomly
         username = secrets.token_hex(8)

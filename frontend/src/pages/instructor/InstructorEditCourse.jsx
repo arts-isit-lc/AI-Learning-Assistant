@@ -16,6 +16,7 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  ListSubheader,
   Dialog,
   DialogActions,
   DialogContent,
@@ -56,6 +57,8 @@ const InstructorEditCourse = () => {
   const [concept, setConcept] = useState("");
   const [allConcepts, setAllConcept] = useState([]);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [referencedFileIds, setReferencedFileIds] = useState([]);
+  const [courseFiles, setCourseFiles] = useState([]);
 
   const handleBackClick = () => {
     window.history.back();
@@ -162,6 +165,33 @@ const InstructorEditCourse = () => {
   useEffect(() => {
     if (module) {
       fetchFiles();
+      const fetchCrossFileData = async () => {
+        try {
+          const session = await fetchAuthSession();
+          const token = session.tokens.idToken;
+          const [filesRes, refsRes] = await Promise.all([
+            fetch(
+              `${import.meta.env.VITE_API_ENDPOINT}instructor/course_files?course_id=${encodeURIComponent(course_id)}`,
+              { method: "GET", headers: { Authorization: token, "Content-Type": "application/json" } }
+            ),
+            fetch(
+              `${import.meta.env.VITE_API_ENDPOINT}instructor/module_file_references?module_id=${encodeURIComponent(module.module_id)}`,
+              { method: "GET", headers: { Authorization: token, "Content-Type": "application/json" } }
+            )
+          ]);
+          if (filesRes.ok) {
+            const data = await filesRes.json();
+            setCourseFiles(data.filter(f => f.module_id !== module.module_id));
+          }
+          if (refsRes.ok) {
+            const refs = await refsRes.json();
+            setReferencedFileIds(refs);
+          }
+        } catch (error) {
+          console.error("Error fetching cross-file data:", error);
+        }
+      };
+      fetchCrossFileData();
     }
   }, [module]);
 
@@ -408,6 +438,14 @@ const InstructorEditCourse = () => {
       const { token } = await getAuthSessionAndEmail();
       await deleteFiles(deletedFiles, token);
       await uploadFiles(newFiles, token);
+      await fetch(
+        `${import.meta.env.VITE_API_ENDPOINT}instructor/module_file_references?module_id=${encodeURIComponent(module.module_id)}`,
+        {
+          method: "PUT",
+          headers: { Authorization: token, "Content-Type": "application/json" },
+          body: JSON.stringify({ referenced_file_ids: referencedFileIds }),
+        }
+      );
       await Promise.all([
         updateMetaData(files, token),
         updateMetaData(savedFiles, token),
@@ -525,6 +563,37 @@ const InstructorEditCourse = () => {
                 {titleCase(concept.concept_name)}
               </MenuItem>
             ))}
+          </Select>
+        </FormControl>
+
+        <FormControl fullWidth margin="normal">
+          <InputLabel id="referenced-files-label">Reference Files from Other Modules (Optional)</InputLabel>
+          <Select
+            labelId="referenced-files-label"
+            multiple
+            value={referencedFileIds}
+            onChange={(e) => setReferencedFileIds(e.target.value)}
+            label="Reference Files from Other Modules (Optional)"
+            renderValue={(selected) =>
+              selected.map(id => {
+                const f = courseFiles.find(f => f.file_id === id);
+                return f ? `${f.filename}.${f.filetype}` : id;
+              }).join(", ")
+            }
+          >
+            {Object.entries(
+              courseFiles.reduce((groups, file) => {
+                (groups[file.module_name] = groups[file.module_name] || []).push(file);
+                return groups;
+              }, {})
+            ).map(([moduleName, files]) => [
+              <ListSubheader key={moduleName}>{titleCase(moduleName)}</ListSubheader>,
+              ...files.map(file => (
+                <MenuItem key={file.file_id} value={file.file_id}>
+                  {file.filename}.{file.filetype}
+                </MenuItem>
+              ))
+            ])}
           </Select>
         </FormControl>
 

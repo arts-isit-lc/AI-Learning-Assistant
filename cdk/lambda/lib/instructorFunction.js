@@ -1264,6 +1264,82 @@ exports.handler = async (event) => {
           response.body = JSON.stringify({ error: "instructor_email and course_id are required." });
         }
         break;
+      case "GET /instructor/course_files":
+        if (event.queryStringParameters?.course_id) {
+          const { course_id } = event.queryStringParameters;
+          try {
+            const files = await sqlConnection`
+              SELECT
+                mf.file_id,
+                mf.filename,
+                mf.filetype,
+                mf.module_id,
+                cm.module_name
+              FROM "Module_Files" mf
+              JOIN "Course_Modules" cm ON mf.module_id = cm.module_id
+              JOIN "Course_Concepts" cc ON cm.concept_id = cc.concept_id
+              WHERE cc.course_id = ${course_id}
+              ORDER BY cm.module_number ASC, mf.filename ASC;
+            `;
+            response.statusCode = 200;
+            response.body = JSON.stringify(files);
+          } catch (err) {
+            response.statusCode = 500;
+            response.body = JSON.stringify({ error: "Internal server error" });
+          }
+        } else {
+          response.statusCode = 400;
+          response.body = JSON.stringify({ error: "course_id is required" });
+        }
+        break;
+      case "GET /instructor/module_file_references":
+        if (event.queryStringParameters?.module_id) {
+          const { module_id } = event.queryStringParameters;
+          try {
+            const refs = await sqlConnection`
+              SELECT referenced_file_id
+              FROM "Module_File_References"
+              WHERE source_module_id = ${module_id};
+            `;
+            response.statusCode = 200;
+            response.body = JSON.stringify(refs.map(r => r.referenced_file_id));
+          } catch (err) {
+            response.statusCode = 500;
+            response.body = JSON.stringify({ error: "Internal server error" });
+          }
+        } else {
+          response.statusCode = 400;
+          response.body = JSON.stringify({ error: "module_id is required" });
+        }
+        break;
+      case "PUT /instructor/module_file_references":
+        if (event.queryStringParameters?.module_id) {
+          const { module_id } = event.queryStringParameters;
+          const { referenced_file_ids } = JSON.parse(event.body || "{}");
+          try {
+            await sqlConnection`
+              DELETE FROM "Module_File_References"
+              WHERE source_module_id = ${module_id};
+            `;
+            if (referenced_file_ids?.length > 0) {
+              await Promise.all(
+                referenced_file_ids.map(file_id => sqlConnection`
+                  INSERT INTO "Module_File_References" (source_module_id, referenced_file_id)
+                  VALUES (${module_id}, ${file_id});
+                `)
+              );
+            }
+            response.statusCode = 200;
+            response.body = JSON.stringify({ message: "Module file references updated successfully" });
+          } catch (err) {
+            response.statusCode = 500;
+            response.body = JSON.stringify({ error: "Internal server error" });
+          }
+        } else {
+          response.statusCode = 400;
+          response.body = JSON.stringify({ error: "module_id is required" });
+        }
+        break;
       default:
         throw new Error(`Unsupported route: "${pathData}"`);
     }
