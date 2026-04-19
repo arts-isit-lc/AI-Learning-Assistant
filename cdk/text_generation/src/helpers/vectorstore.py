@@ -4,7 +4,7 @@ import psycopg2
 from langchain_core.documents import Document
 from langchain_core.runnables import RunnableLambda
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain.chains import create_history_aware_retriever
+from langchain_classic.chains import create_history_aware_retriever
 
 from helpers.helper import get_vectorstore
 
@@ -114,7 +114,7 @@ def get_vectorstore_retriever(
     embeddings,
     allowed_file_ids: Optional[List[str]] = None
 ):
-    vectorstore, connection_string = get_vectorstore(
+    vectorstore, _ = get_vectorstore(
         collection_name=vectorstore_config_dict['collection_name'],
         embeddings=embeddings,
         dbname=vectorstore_config_dict['dbname'],
@@ -125,13 +125,20 @@ def get_vectorstore_retriever(
     )
 
     collection_name = vectorstore_config_dict['collection_name']
+    psycopg2_connection_string = (
+        f"dbname={vectorstore_config_dict['dbname']} "
+        f"user={vectorstore_config_dict['user']} "
+        f"password={vectorstore_config_dict['password']} "
+        f"host={vectorstore_config_dict['host']} "
+        f"port={vectorstore_config_dict['port']}"
+    )
 
     def retrieve(query: str) -> List[Document]:
         query_embedding = embeddings.embed_query(query)
         return hybrid_search(
             query=query,
             query_embedding=query_embedding,
-            connection_string=connection_string,
+            connection_string=psycopg2_connection_string,
             collection_name=collection_name,
             allowed_file_ids=allowed_file_ids
         )

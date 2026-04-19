@@ -5,6 +5,7 @@ import {
   Drawer,
   List,
   ListItem,
+  ListItemButton,
   ListItemIcon,
   ListItemText,
   Divider,
@@ -46,61 +47,49 @@ const InstructorSidebar = ({ setSelectedComponent, course_id, selectedComponent 
     >
       <Box sx={{ overflow: "auto", paddingTop: 10 }}>
         <List>
-          <ListItem
-            button
-            onClick={() => handleNavigation("InstructorAllCourses")}
-          >
+          <ListItemButton onClick={() => handleNavigation("InstructorAllCourses")}>
             <ListItemIcon>
               <HomeIcon />
             </ListItemIcon>
             <ListItemText primary="All Courses" />
-          </ListItem>
+          </ListItemButton>
           <Divider />
-          <ListItem
-            button
-            onClick={() => handleNavigation("InstructorAnalytics")}
-          >
+          <ListItemButton onClick={() => handleNavigation("InstructorAnalytics")}>
             <ListItemIcon>
               <ViewTimelineIcon />
             </ListItemIcon>
             <ListItemText primary="Analytics" />
-          </ListItem>
+          </ListItemButton>
           <Divider />
-          <ListItem
-            button
-            onClick={() => handleNavigation("InstructorEditConcepts")}
-          >
+          <ListItemButton onClick={() => handleNavigation("InstructorEditConcepts")}>
             <ListItemIcon>
               <EditIcon />
             </ListItemIcon>
             <ListItemText primary="Edit Concepts" />
-          </ListItem>
+          </ListItemButton>
           <Divider />
-          <ListItem
-            button
-            onClick={() => handleNavigation("InstructorEditCourse")}
-          >
+          <ListItemButton onClick={() => handleNavigation("InstructorEditCourse")}>
             <ListItemIcon>
               <EditIcon />
             </ListItemIcon>
             <ListItemText primary="Edit Modules" />
-          </ListItem>
+          </ListItemButton>
           <Divider />
-          <ListItem button onClick={() => handleNavigation("PromptSettings")}>
+          <ListItemButton onClick={() => handleNavigation("PromptSettings")}>
             <ListItemIcon>
               <PsychologyIcon />
             </ListItemIcon>
             <ListItemText primary="Settings" />
-          </ListItem>
+          </ListItemButton>
           <Divider />
-          <ListItem button onClick={() => handleNavigation("ViewStudents")}>
+          <ListItemButton onClick={() => handleNavigation("ViewStudents")}>
             <ListItemIcon>
               <GroupIcon />
             </ListItemIcon>
             <ListItemText primary="View Students" />
-          </ListItem>
+          </ListItemButton>
           <Divider />
-          <ListItem button onClick={() => handleNavigation("ChatLogs")}>
+          <ListItemButton onClick={() => handleNavigation("ChatLogs")}>
             <ListItemIcon>
               <Badge
                 color="error"
@@ -111,7 +100,7 @@ const InstructorSidebar = ({ setSelectedComponent, course_id, selectedComponent 
               </Badge>
             </ListItemIcon>
             <ListItemText primary="Chat History" />
-          </ListItem>
+          </ListItemButton>
         </List>
       </Box>
     </Drawer>

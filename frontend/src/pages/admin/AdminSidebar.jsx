@@ -3,6 +3,7 @@ import {
   Drawer,
   List,
   ListItem,
+  ListItemButton,
   ListItemIcon,
   ListItemText,
   Divider,
@@ -29,8 +30,7 @@ const AdminSidebar = ({
     >
       <Box sx={{ overflow: "auto", paddingTop: 10 }}>
         <List>
-          <ListItem
-            button
+          <ListItemButton
             onClick={() => {
               setSelectedInstructor(null);
               setSelectedCourse(null);
@@ -41,10 +41,9 @@ const AdminSidebar = ({
               <SchoolIcon />
             </ListItemIcon>
             <ListItemText primary="Instructors" />
-          </ListItem>
+          </ListItemButton>
           <Divider />
-          <ListItem
-            button
+          <ListItemButton
             onClick={() => {
               setSelectedInstructor(null);
               setSelectedCourse(null);
@@ -55,10 +54,9 @@ const AdminSidebar = ({
               <LibraryBooksIcon />
             </ListItemIcon>
             <ListItemText primary="Courses" />
-          </ListItem>
+          </ListItemButton>
           <Divider />
-          <ListItem
-            button
+          <ListItemButton
             onClick={() => {
               setSelectedInstructor(null);
               setSelectedCourse(null);
@@ -69,7 +67,7 @@ const AdminSidebar = ({
               <CreateIcon />
             </ListItemIcon>
             <ListItemText primary="Create Course" />
-          </ListItem>
+          </ListItemButton>
         </List>
       </Box>
     </Drawer>

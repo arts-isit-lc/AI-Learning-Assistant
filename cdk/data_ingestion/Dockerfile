@@ -1,6 +1,7 @@
 FROM --platform=linux/amd64 public.ecr.aws/lambda/python:3.11
 
 # Install dependencies, including tesseract and its prerequisites
+# Remove build tools after pip install to reduce image size
 RUN yum update -y && \
     yum install -y curl gcc gcc-c++ make postgresql-devel libpq tesseract zlib-devel libjpeg-turbo-devel
 
@@ -11,9 +12,12 @@ ENV TESSDATA_PREFIX=/usr/share/tessdata
 RUN mkdir -p $TESSDATA_PREFIX && \
     curl -L -o $TESSDATA_PREFIX/eng.traineddata https://github.com/tesseract-ocr/tessdata/raw/main/eng.traineddata
 
-# Copy requirements and install python packages
+# Copy requirements and install python packages, then remove build tools
 COPY requirements.txt ${LAMBDA_TASK_ROOT}
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && \
+    yum remove -y gcc gcc-c++ make postgresql-devel zlib-devel libjpeg-turbo-devel && \
+    yum clean all && \
+    rm -rf /var/cache/yum
 
 # Copy the source code
 COPY src/ ${LAMBDA_TASK_ROOT}

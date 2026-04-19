@@ -187,8 +187,9 @@ const InstructorAnalytics = ({ courseName, course_id }) => {
                       spacing={1}
                       alignItems="center"
                       direction="column"
+                      sx={{ width: '100%' }}
                     >
-                      <Grid item width="80%">
+                      <Grid size={{ xs: 12 }} sx={{ width: "80%" }}>
                         <Typography textAlign="right">
                           Completion Percentage:{" "}
                           {module.perfect_score_percentage.toFixed(2)}%
@@ -198,11 +199,11 @@ const InstructorAnalytics = ({ courseName, course_id }) => {
                           value={module.perfect_score_percentage}
                         />
                       </Grid>
-                      <Grid item>
+                      <Grid>
                         <Typography>Message Count</Typography>
                         <Typography>{module.message_count}</Typography>
                       </Grid>
-                      <Grid item>
+                      <Grid>
                         <Typography>Access Count</Typography>
                         <Typography>{module.access_count}</Typography>
                       </Grid>

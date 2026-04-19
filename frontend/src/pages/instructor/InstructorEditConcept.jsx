@@ -265,8 +265,8 @@ const InstructorEditConcept = () => {
           inputProps={{ maxLength: 50 }}
         />
 
-        <Grid container spacing={2} style={{ marginTop: 16 }}>
-          <Grid item xs={4}>
+        <Grid container spacing={2} sx={{ marginTop: 2, width: '100%' }}>
+          <Grid size={4}>
             <Box display="flex" gap={6}>
               <Button
                 variant="contained"
@@ -286,8 +286,8 @@ const InstructorEditConcept = () => {
               </Button>
             </Box>
           </Grid>
-          <Grid item xs={4}></Grid>
-          <Grid item xs={4} style={{ textAlign: "right" }}>
+          <Grid size={4}></Grid>
+          <Grid size={4} style={{ textAlign: "right" }}>
             <Button
               variant="contained"
               color="primary"
