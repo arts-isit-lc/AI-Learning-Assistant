@@ -357,14 +357,16 @@ export const AdminInstructors = ({ setSelectedInstructor }) => {
       <Dialog
         open={open}
         onClose={handleClose}
-        PaperProps={{
-          component: "form",
-          onSubmit: (event) => {
-            event.preventDefault();
-            const formData = new FormData(event.currentTarget);
-            const formJson = Object.fromEntries(formData.entries());
-            const email = formJson.email;
-            handleAddInstructor(email);
+        slotProps={{
+          paper: {
+            component: "form",
+            onSubmit: (event) => {
+              event.preventDefault();
+              const formData = new FormData(event.currentTarget);
+              const formJson = Object.fromEntries(formData.entries());
+              const email = formJson.email;
+              handleAddInstructor(email);
+            },
           },
         }}
       >

@@ -423,10 +423,7 @@ export const Login = () => {
         <Grid container component="main" sx={{ height: "100vh" }}>
           <CssBaseline />
           <Grid
-            item
-            xs={false}
-            sm={3}
-            md={5}
+            size={{ xs: false, sm: 3, md: 5 }}
             sx={{
               background: `linear-gradient(189deg, #d5e1ff, #dcbfe3)`,
               display: "flex",
@@ -450,10 +447,7 @@ export const Login = () => {
             !signUpConfirmation &&
             !forgotPassword && (
               <Grid
-                item
-                xs={12}
-                sm={9}
-                md={7}
+                size={{ xs: 12, sm: 9, md: 7 }}
                 component={Paper}
                 square
                 sx={{
@@ -517,7 +511,7 @@ export const Login = () => {
                       Sign In
                     </Button>
                     <Grid container>
-                      <Grid item xs={6}>
+                      <Grid size={6}>
                         <Link
                           href="#"
                           variant="body2"
@@ -526,7 +520,7 @@ export const Login = () => {
                           Forgot password?
                         </Link>
                       </Grid>
-                      <Grid item xs={6}>
+                      <Grid size={6}>
                         <Link
                           href="#"
                           variant="body2"
@@ -541,7 +535,7 @@ export const Login = () => {
               </Grid>
             )}
           {newSignUp && (
-            <Grid item xs={12} sm={9} md={7} component={Paper} square>
+            <Grid size={{ xs: 12, sm: 9, md: 7 }} component={Paper} square>
               <Box
                 sx={{
                   my: 8,
@@ -557,7 +551,7 @@ export const Login = () => {
 
                 <Box sx={{ mt: 1 }}>
                   <Grid container spacing={2}>
-                    <Grid item xs={12} sm={6}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
                       <TextField
                         autoComplete="given-name"
                         name="firstName"
@@ -571,7 +565,7 @@ export const Login = () => {
                         inputProps={{ maxLength: 30 }}
                       />
                     </Grid>
-                    <Grid item xs={12} sm={6}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
                       <TextField
                         required
                         fullWidth
@@ -584,7 +578,7 @@ export const Login = () => {
                         inputProps={{ maxLength: 30 }}
                       />
                     </Grid>
-                    <Grid item xs={12}>
+                    <Grid size={12}>
                       <TextField
                         required
                         fullWidth
@@ -597,7 +591,7 @@ export const Login = () => {
                         inputProps={{ maxLength: 40 }}
                       />
                     </Grid>
-                    <Grid item xs={12}>
+                    <Grid size={12}>
                       <TextField
                         required
                         fullWidth
@@ -611,7 +605,7 @@ export const Login = () => {
                         inputProps={{ maxLength: 50 }}
                       />
                     </Grid>
-                    <Grid item xs={12}>
+                    <Grid size={12}>
                       <TextField
                         required
                         fullWidth
@@ -648,7 +642,7 @@ export const Login = () => {
                     Sign Up
                   </Button>
                   <Grid container>
-                    <Grid item xs>
+                    <Grid size="grow">
                       <Link
                         href="#"
                         variant="body2"

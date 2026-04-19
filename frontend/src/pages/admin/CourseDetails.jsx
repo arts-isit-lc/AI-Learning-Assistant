@@ -393,7 +393,7 @@ const CourseDetails = ({ course, onBack }) => {
             />
           </Paper>
           <Grid container spacing={2}>
-            <Grid item xs={6}>
+            <Grid size={6}>
               <Button
                 variant="contained"
                 onClick={onBack}
@@ -402,7 +402,7 @@ const CourseDetails = ({ course, onBack }) => {
                 Back
               </Button>
             </Grid>
-            <Grid item xs={6} sx={{ textAlign: "right" }}>
+            <Grid size={6} sx={{ textAlign: "right" }}>
               <Button
                 variant="contained"
                 color="red"

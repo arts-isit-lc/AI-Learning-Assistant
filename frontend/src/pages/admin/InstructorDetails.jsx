@@ -28,10 +28,12 @@ import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 const MenuProps = {
-  PaperProps: {
-    style: {
-      maxHeight: 200,
-      overflowY: "auto",
+  slotProps: {
+    paper: {
+      style: {
+        maxHeight: 200,
+        overflowY: "auto",
+      },
     },
   },
 };
@@ -348,7 +350,7 @@ const InstructorDetails = ({ instructorData, onBack }) => {
           </FormControl>
         </Paper>
         <Grid container spacing={2}>
-          <Grid item xs={6}>
+          <Grid size={6}>
             <Button
               variant="contained"
               onClick={onBack}
@@ -357,7 +359,7 @@ const InstructorDetails = ({ instructorData, onBack }) => {
               Back
             </Button>
           </Grid>
-          <Grid item xs={6} container justifyContent="flex-end">
+          <Grid size={6} container justifyContent="flex-end">
             <Button
               variant="contained"
               color="error"

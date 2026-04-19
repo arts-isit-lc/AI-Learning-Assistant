@@ -319,7 +319,7 @@ export const StudentHomepage = ({ setCourse }) => {
                   >
                     <CardContent sx={{ height: "50%" }}>
                       <Grid container alignItems="center">
-                        <Grid item xs={8}>
+                        <Grid size={8}>
                           <Typography
                             variant="h6"
                             component="div"
@@ -340,8 +340,7 @@ export const StudentHomepage = ({ setCourse }) => {
                           </Typography>
                         </Grid>
                         <Grid
-                          item
-                          xs={4}
+                          size={4}
                           sx={{
                             display: "flex",
                             alignItems: "flex-end",
@@ -385,14 +384,16 @@ export const StudentHomepage = ({ setCourse }) => {
       <Dialog
         open={open}
         onClose={handleClose}
-        PaperProps={{
-          component: "form",
-          onSubmit: (event) => {
-            event.preventDefault();
-            const formData = new FormData(event.currentTarget);
-            const formJson = Object.fromEntries(formData.entries());
-            const code = formJson.code;
-            handleJoin(code);
+        slotProps={{
+          paper: {
+            component: "form",
+            onSubmit: (event) => {
+              event.preventDefault();
+              const formData = new FormData(event.currentTarget);
+              const formJson = Object.fromEntries(formData.entries());
+              const code = formJson.code;
+              handleJoin(code);
+            },
           },
         }}
       >
