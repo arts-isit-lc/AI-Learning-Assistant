@@ -339,3 +339,37 @@ Changes:
 - `eslint-plugin-react-hooks` bumped from `^4.6.2` to `^5.2.0` (v5 required for ESLint v9)
 - Added `@eslint/js` and `globals` as new devDependencies (required by flat config)
 - Lint script simplified from `eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0` to `eslint .` (v9 auto-detects file types from config)
+
+---
+
+## Post-Upgrade Audit
+
+A full codebase audit was performed after all 12 steps. Findings and fixes:
+
+### Fixed
+
+- `Login.jsx` forgot-password section had one remaining old `Grid item xs={12} sm={12} md={7}` — migrated to `Grid size={{ xs: 12, sm: 12, md: 7 }}`
+- All `Grid container` instances across the app were missing `width: '100%'` (MUI v6+ no longer auto-expands Grid containers). Fixed in: `Login.jsx`, `StudentHomepage.jsx`, `InstructorDetails.jsx`, `CourseDetails.jsx`
+- `u` package (`^0.1.0`) removed from `frontend/package.json` — never imported anywhere, dead dependency
+
+### Verified Clean
+
+- All `ListItem button` patterns properly migrated to `ListItemButton`
+- All `PaperProps` on Dialog/Menu migrated to `slotProps.paper`
+- No `aws-sdk` v2 imports remain
+- No `axios` imports remain
+- No `langchain.chains` / `langchain.indexes` imports remain (all using `langchain_classic`)
+- No `langchain_core.pydantic_v1` imports remain
+- No imports from deleted files (`handleAuth.js`, `useAuth.js`)
+- Both `requirements.txt` files consistent and pinned
+- CDK TypeScript build: 0 errors
+- Frontend Vite build: 0 errors
+
+### Known Deprecation Warnings (Non-Breaking, Deferred)
+
+MUI v9 deprecated `inputProps`, `InputProps`, and `InputLabelProps` on `TextField` in favor of `slotProps.htmlInput`, `slotProps.input`, and `slotProps.inputLabel`. These still work and won't be removed until a future major version. 27 instances across 11 files. Low priority — can be addressed incrementally or in a future cleanup pass.
+
+### Remaining Vulnerabilities
+
+- `frontend/`: 2 moderate — both dev-only (`esbuild`/`vite`), only affects local dev server, not production builds. Fix requires major Vite bump.
+- `cdk/`: 0 vulnerabilities

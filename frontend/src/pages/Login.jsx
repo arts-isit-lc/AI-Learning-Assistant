@@ -768,10 +768,7 @@ export const Login = () => {
           {/* forgot password?  */}
           {!loading && forgotPassword && (
             <Grid
-              item
-              xs={12}
-              sm={12}
-              md={7}
+              size={{ xs: 12, sm: 12, md: 7 }}
               component={Paper}
               square
               sx={{
