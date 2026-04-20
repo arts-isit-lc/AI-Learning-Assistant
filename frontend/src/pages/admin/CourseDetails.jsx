@@ -392,7 +392,7 @@ const CourseDetails = ({ course, onBack }) => {
               label={isActive ? "Active" : "Inactive"}
             />
           </Paper>
-          <Grid container spacing={2}>
+          <Grid container spacing={2} sx={{ width: '100%' }}>
             <Grid size={6}>
               <Button
                 variant="contained"

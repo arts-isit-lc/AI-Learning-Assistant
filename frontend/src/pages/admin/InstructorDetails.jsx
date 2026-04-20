@@ -349,7 +349,7 @@ const InstructorDetails = ({ instructorData, onBack }) => {
             />
           </FormControl>
         </Paper>
-        <Grid container spacing={2}>
+        <Grid container spacing={2} sx={{ width: '100%' }}>
           <Grid size={6}>
             <Button
               variant="contained"
@@ -359,7 +359,7 @@ const InstructorDetails = ({ instructorData, onBack }) => {
               Back
             </Button>
           </Grid>
-          <Grid size={6} container justifyContent="flex-end">
+          <Grid size={6} container sx={{ justifyContent: "flex-end", width: '100%' }}>
             <Button
               variant="contained"
               color="error"

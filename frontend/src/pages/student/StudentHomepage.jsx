@@ -318,7 +318,7 @@ export const StudentHomepage = ({ setCourse }) => {
                     }}
                   >
                     <CardContent sx={{ height: "50%" }}>
-                      <Grid container alignItems="center">
+                      <Grid container alignItems="center" sx={{ width: '100%' }}>
                         <Grid size={8}>
                           <Typography
                             variant="h6"

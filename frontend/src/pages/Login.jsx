@@ -420,7 +420,7 @@ export const Login = () => {
   return (
     <ThemeProvider theme={theme}>
       <PageContainer>
-        <Grid container component="main" sx={{ height: "100vh" }}>
+        <Grid container component="main" sx={{ height: "100vh", width: "100%" }}>
           <CssBaseline />
           <Grid
             size={{ xs: false, sm: 3, md: 5 }}
@@ -510,7 +510,7 @@ export const Login = () => {
                     >
                       Sign In
                     </Button>
-                    <Grid container>
+                    <Grid container sx={{ width: '100%' }}>
                       <Grid size={6}>
                         <Link
                           href="#"
@@ -550,7 +550,7 @@ export const Login = () => {
                 </Typography>
 
                 <Box sx={{ mt: 1 }}>
-                  <Grid container spacing={2}>
+                  <Grid container spacing={2} sx={{ width: '100%' }}>
                     <Grid size={{ xs: 12, sm: 6 }}>
                       <TextField
                         autoComplete="given-name"
@@ -641,7 +641,7 @@ export const Login = () => {
                   >
                     Sign Up
                   </Button>
-                  <Grid container>
+                  <Grid container sx={{ width: '100%' }}>
                     <Grid size="grow">
                       <Link
                         href="#"
