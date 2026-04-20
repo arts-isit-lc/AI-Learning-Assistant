@@ -7,21 +7,21 @@
 | ~~CDK CLI~~ | ~~`cdk/package.json`~~ | ~~Pinned to `2.146.0`, latest is `2.1118.0`, has CVE~~ | ✅ Done |
 | ~~CDK Lib~~ | ~~`cdk/package.json`~~ | ~~Resolves to `2.219.0`, latest is `2.249.0`~~ | ✅ Done |
 | ~~Alpha packages~~ | ~~`cdk/package.json`~~ | ~~Both pinned to old mismatched versions, `aws-appsync-alpha` removed (unused)~~ | ✅ Done |
-| `aws-sdk` v2 (CDK) | `cdk/package.json` | Deprecated, migrate to v3 | High |
-| `aws-sdk` v2 (frontend) | `frontend/package.json` | Deprecated, migrate to v3 | High |
+| ~~`aws-sdk` v2 (CDK)~~ | ~~`cdk/package.json`~~ | ~~Deprecated, removed (unused)~~ | ✅ Done |
+| ~~`aws-sdk` v2 (frontend)~~ | ~~`frontend/package.json`~~ | ~~Deprecated, removed along with dead `handleAuth.js` and `useAuth.js` (legacy SigV4 credential flow, superseded by JWT auth)~~ | ✅ Done |
 | ~~`@types/node` (CDK)~~ | ~~`cdk/package.json`~~ | ~~Pinned to `20.12.7`, running Node 24~~ | ✅ Done |
 | `typescript` (CDK) | `cdk/package.json` | `~5.4.5`, latest is `6.0.2` | Low |
 | ~~Lambda runtimes (Node)~~ | ~~`api-gateway-stack.ts`~~ | ~~All 13 Node Lambdas on `NODEJS_20_X`~~ | ✅ Done |
 | Lambda runtimes (Python) | `api-gateway-stack.ts`, `dbFlow-stack.ts` | All 9 Python Lambdas on `PYTHON_3_11` | Low |
 | ~~Powertools layer~~ | ~~`api-gateway-stack.ts`~~ | ~~Hard-pinned to version `:78`~~ | ~~N/A~~ — Public Powertools layer not available in `ca-central-1`. Functions work via runtime pre-install. No action needed. |
 | ~~`aws-jwt-verify` layer~~ | ~~`cdk/layers/aws-jwt-verify.zip`~~ | ~~Bundled version `4.0.0`, latest is `5.1.1`~~ | ✅ Done |
-| `langchain-aws` | `requirements.txt` (x2) | Pinned to `0.2.29`, latest is `1.4.3` | High |
+| ~~`langchain-aws`~~ | ~~`requirements.txt` (x2)~~ | ~~Pinned to `0.2.29`, upgraded to `1.4.4`. `langchain.chains` / `langchain.indexes` migrated to `langchain-classic`~~ | ✅ Done |
 | ~~`PyPDF2`~~ | ~~`requirements.txt` (x3)~~ | ~~Deprecated, unused in code~~ | ✅ Done |
 | ~~`PyMuPDF`~~ | ~~`requirements.txt` (x3)~~ | ~~Pinned to `1.24.10`, upgraded to `1.25.5` (max supported on AL2/Python 3.11)~~ | ✅ Done |
 | ~~CDK npm audit~~ | ~~`cdk/package.json`~~ | ~~10 vulnerabilities resolved down to 1 (aws-sdk v2 advisory, deferred to step 10)~~ | ✅ Done |
 | ~~Frontend npm audit~~ | ~~`frontend/package.json`~~ | ~~56 vulnerabilities resolved to 14 (remaining tied to `react-syntax-highlighter` and `aws-sdk` v2, deferred to steps 8 and 10)~~ | ✅ Done |
 | ~~Frontend packages~~ | ~~`frontend/package.json`~~ | ~~`axios` removed (unused + supply chain risk), `prism` removed (unused), `react-router-dom` `6.24.1` → `7.14.1`, `react-syntax-highlighter` `15.5.0` → `16.1.1`~~ | ✅ Done |
-| MUI v5 → v9 | `frontend/package.json` | `@mui/material` and `@mui/icons-material` are 4 major versions behind | Medium |
+| ~~MUI v5 → v9~~ | ~~`frontend/package.json`~~ | ~~Upgraded incrementally v5→v6→v9. `material-react-table` bumped to v3~~ | ✅ Done |
 | React 18 → 19 | `frontend/package.json` | React 19 available | Low |
 
 ---
@@ -243,8 +243,8 @@ Currently `^8.57.0`, latest is v9. v9 uses a flat config format — breaking cha
 
 ## 9. Python Dependencies (`requirements.txt`)
 
-### `langchain-aws` — `0.2.29` → `1.4.3`
-Pinned in both `text_generation/requirements.txt` and `data_ingestion/requirements.txt`. The `1.0.0` release introduced breaking changes to `ChatBedrock`, `BedrockEmbeddings`, and `BedrockLLM` interfaces used in `chat.py` and `main.py`. Review the [1.0.0 release notes](https://github.com/langchain-ai/langchain-aws/releases/tag/v1.0.0) before upgrading. Test Lambda responses end-to-end after upgrading.
+### `langchain-aws` — ✅ `0.2.29` → `1.4.4`
+Upgraded in both `text_generation/requirements.txt` and `data_ingestion/requirements.txt`. One breaking change required: `langchain_core.pydantic_v1` was removed in langchain-core 0.3+. Migrated `chat.py` to import `BaseModel` and `Field` directly from `pydantic`. All other APIs (`ChatBedrock`, `BedrockLLM`, `BedrockEmbeddings`, `DynamoDBChatMessageHistory`) remain unchanged.
 
 ### ~~`PyPDF2`~~ — ✅ Removed
 Removed from all three `requirements.txt` files. Confirmed not imported anywhere in the source code across the full data ingestion pipeline.
@@ -266,7 +266,50 @@ Upgraded in all three `requirements.txt` files. `1.27.2.2` was attempted but req
 | ~~6~~ | ~~Update Powertools layer ARN to latest version~~ | N/A — Public layer not available in `ca-central-1`, skipped |
 | ~~7~~ | ~~`npm install` + `npm audit fix` in `frontend/`~~ | ✅ Done |
 | 8 | Fix critical frontend CVEs: `axios`, `react-router-dom`, `react-syntax-highlighter` | ✅ Done |
-| 9 | `langchain-aws` `0.2.29` → `1.4.3` | High |
-| 10 | `aws-sdk` v2 → v3 in CDK and frontend | High |
-| 11 | MUI v5 → v9, `material-react-table` v2 → v3 | High |
+| 9 | `langchain-aws` `0.2.29` → `1.4.4` | ✅ Done |
+| ~~10~~ | ~~`aws-sdk` v2 → removed from CDK and frontend (unused in both)~~ | ✅ Done |
+| ~~11~~ | ~~MUI v5 → v6, `material-react-table` v2 → v3~~ | ✅ Done |
+| ~~11b~~ | ~~MUI v6 → v9~~ | ✅ Done |
 | 12 | `typescript` `5.4.5` → `6.x`, `eslint` v8 → v9 | Medium |
+ 
+
+---
+
+## 11. MUI v5 → v6 + `material-react-table` v2 → v3
+
+### Approach
+Direct v5 → v9 is too large a jump. Incremental path chosen:
+1. **v5 → v6** (done) — minimal breaking changes, MRT v3 requires MUI v6 minimum
+2. **MRT v2 → v3** (done) — peer dep bump only, no API changes for this codebase
+3. **v6 → v9** (next) — larger jump, deferred to step 11b
+
+### v5 → v6 Breaking Changes Fixed
+
+**Grid API** (5 files): `<Grid item xs={4}>` → `<Grid size={4}>`, `<Grid item>` → `<Grid>`, added `sx={{ width: '100%' }}` to all Grid containers.
+- `InstructorNewConcept.jsx`
+- `InstructorAnalytics.jsx`
+- `InstructorEditConcept.jsx`
+- `InstructorNewModule.jsx`
+- `InstructorEditCourse.jsx`
+
+**ListItem `button` prop removed** (2 files): Replaced `<ListItem button onClick={...}>` with `<ListItemButton onClick={...}>`.
+- `InstructorSidebar.jsx`
+- `AdminSidebar.jsx`
+
+**`@mui/x-date-pickers@^7.15.0`** added as a required peer dep for MRT v3 (not used directly in the app).
+
+### v6 → v9 Remaining Work (Step 11b) — ✅ Done
+
+**Additional files fixed during v6→v9:**
+
+| File | Change |
+|---|---|
+| `StudentHomepage.jsx` | `PaperProps` → `slotProps.paper` on Dialog; `Grid item xs` → `Grid size` |
+| `AdminInstructors.jsx` | `PaperProps` → `slotProps.paper` on Dialog |
+| `InstructorDetails.jsx` | `MenuProps.PaperProps` → `MenuProps.slotProps.paper`; `Grid item xs` → `Grid size` |
+| `CourseDetails.jsx` | `Grid item xs` → `Grid size` |
+| `Login.jsx` | All `Grid item xs/sm/md` → `Grid size={{ xs, sm, md }}`; `Grid item xs` (grow) → `Grid size="grow"` |
+
+`@mui/material` and `@mui/icons-material` final version: `^9.0.0`
+
+**Amplify deploy fix:** `@mui/x-date-pickers` bumped from `^7.29.4` to `^9.0.2` — the v7 release only supports `@mui/material ^5 || ^6 || ^7`, not v9. Also added `frontend/.npmrc` with `legacy-peer-deps=true` because `material-react-table@3.2.1` declares `@mui/material >= 6` as a peer dep, which npm strict mode rejects against v9. The `.npmrc` ensures Amplify's `npm install` tolerates this (functionally equivalent to `--legacy-peer-deps`).
