@@ -10,7 +10,7 @@
 | ~~`aws-sdk` v2 (CDK)~~ | ~~`cdk/package.json`~~ | ~~Deprecated, removed (unused)~~ | ✅ Done |
 | ~~`aws-sdk` v2 (frontend)~~ | ~~`frontend/package.json`~~ | ~~Deprecated, removed along with dead `handleAuth.js` and `useAuth.js` (legacy SigV4 credential flow, superseded by JWT auth)~~ | ✅ Done |
 | ~~`@types/node` (CDK)~~ | ~~`cdk/package.json`~~ | ~~Pinned to `20.12.7`, running Node 24~~ | ✅ Done |
-| `typescript` (CDK) | `cdk/package.json` | `~5.4.5`, latest is `6.0.2` | Low |
+| ~~`typescript` (CDK)~~ | ~~`cdk/package.json`~~ | ~~`~5.4.5` → `~6.0.3`~~ | ✅ Done |
 | ~~Lambda runtimes (Node)~~ | ~~`api-gateway-stack.ts`~~ | ~~All 13 Node Lambdas on `NODEJS_20_X`~~ | ✅ Done |
 | Lambda runtimes (Python) | `api-gateway-stack.ts`, `dbFlow-stack.ts` | All 9 Python Lambdas on `PYTHON_3_11` | Low |
 | ~~Powertools layer~~ | ~~`api-gateway-stack.ts`~~ | ~~Hard-pinned to version `:78`~~ | ~~N/A~~ — Public Powertools layer not available in `ca-central-1`. Functions work via runtime pre-install. No action needed. |
@@ -270,7 +270,7 @@ Upgraded in all three `requirements.txt` files. `1.27.2.2` was attempted but req
 | ~~10~~ | ~~`aws-sdk` v2 → removed from CDK and frontend (unused in both)~~ | ✅ Done |
 | ~~11~~ | ~~MUI v5 → v6, `material-react-table` v2 → v3~~ | ✅ Done |
 | ~~11b~~ | ~~MUI v6 → v9~~ | ✅ Done |
-| 12 | `typescript` `5.4.5` → `6.x`, `eslint` v8 → v9 | Medium |
+| ~~12~~ | ~~`typescript` `5.4.5` → `6.0.3`, `eslint` v8 → v9~~ | ✅ Done |
  
 
 ---
@@ -313,3 +313,29 @@ Direct v5 → v9 is too large a jump. Incremental path chosen:
 `@mui/material` and `@mui/icons-material` final version: `^9.0.0`
 
 **Amplify deploy fix:** `@mui/x-date-pickers` bumped from `^7.29.4` to `^9.0.2` — the v7 release only supports `@mui/material ^5 || ^6 || ^7`, not v9. Also added `frontend/.npmrc` with `legacy-peer-deps=true` because `material-react-table@3.2.1` declares `@mui/material >= 6` as a peer dep, which npm strict mode rejects against v9. The `.npmrc` ensures Amplify's `npm install` tolerates this (functionally equivalent to `--legacy-peer-deps`).
+
+---
+
+## 12. TypeScript 5.4.5 → 6.0.3 + ESLint v8 → v9
+
+### TypeScript 6.0.3 (`cdk/`)
+
+TS6 changes many defaults. The CDK project needed two `tsconfig.json` changes:
+
+1. `"module": "commonjs"` → `"module": "node16"` — TS6 enforces that `module` and `moduleResolution` must be paired. `node16` emits CJS for `.ts` files (same as `commonjs` did) but uses modern resolution.
+2. Added `"moduleResolution": "node16"` — TS6 defaults to `bundler` which doesn't match CDK's Node.js runtime. Explicit `node16` preserves correct behavior.
+
+No other changes needed — the existing `tsconfig.json` already had `"strict": true`, `"esModuleInterop": true`, `"types": ["node"]`, and `"target": "ES2020"`, all of which are compatible with TS6 defaults.
+
+`ts-jest@29.4.0` has a peer dep of `typescript >=4.3 <6` — npm warns but installs fine. Tests still pass.
+
+### ESLint v8 → v9 (`frontend/`)
+
+ESLint v9 dropped the `.eslintrc.*` config format in favor of flat config (`eslint.config.js`).
+
+Changes:
+- Deleted `frontend/.eslintrc.cjs`
+- Created `frontend/eslint.config.js` (flat config format)
+- `eslint-plugin-react-hooks` bumped from `^4.6.2` to `^5.2.0` (v5 required for ESLint v9)
+- Added `@eslint/js` and `globals` as new devDependencies (required by flat config)
+- Lint script simplified from `eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0` to `eslint .` (v9 auto-detects file types from config)
