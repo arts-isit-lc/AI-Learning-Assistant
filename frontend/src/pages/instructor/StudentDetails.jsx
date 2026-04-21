@@ -261,7 +261,7 @@ const StudentDetails = () => {
             overflowY: "scroll",
           }}
         >
-          <Box mb={2} sx={{ flexGrow: 1, p: 3, textAlign: "left", mt: 6 }}>
+          <Box sx={{ mb: 2, flexGrow: 1, p: 3, textAlign: "left", mt: 6 }}>
             <Typography variant="h5">Student Name: {studentId}</Typography>
             <Divider sx={{ my: 2 }} />
             <Typography sx={{ mb: 4 }} variant="body1">

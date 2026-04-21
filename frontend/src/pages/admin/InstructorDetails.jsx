@@ -349,14 +349,14 @@ const InstructorDetails = ({ instructorData, onBack }) => {
             />
           </FormControl>
         </Paper>
-        <Box display="flex" justifyContent="space-between" sx={{ width: '100%' }}>
+        <Box sx={{ display: "flex", justifyContent: "space-between", width: '100%' }}>
           <Button
             variant="contained"
             onClick={onBack}
           >
             Back
           </Button>
-          <Box display="flex" gap={2}>
+          <Box sx={{ display: "flex", gap: 2 }}>
             <Button
               variant="contained"
               color="error"

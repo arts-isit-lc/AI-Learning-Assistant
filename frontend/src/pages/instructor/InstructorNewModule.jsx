@@ -369,7 +369,7 @@ export const InstructorNewModule = ({ courseId }) => {
           setMetadata={setMetadata}
         />
 
-        <Box display="flex" justifyContent="space-between" sx={{ marginTop: 2, width: '100%' }}>
+        <Box sx={{ display: "flex", justifyContent: "space-between", marginTop: 2, width: '100%' }}>
           <Button
             variant="contained"
             color="primary"

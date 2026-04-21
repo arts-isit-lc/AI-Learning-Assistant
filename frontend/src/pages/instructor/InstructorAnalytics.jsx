@@ -118,7 +118,7 @@ const InstructorAnalytics = ({ courseName, course_id }) => {
         {courseTitleCase(courseName)}
       </Typography>
       <Paper>
-        <Box mb={4}>
+        <Box sx={{ mb: 4 }}>
           <Typography
             color="black"
             textAlign="left"
@@ -174,14 +174,14 @@ const InstructorAnalytics = ({ courseName, course_id }) => {
 
       {value === 0 ? (
         data.length > 0 ? (
-          <Box mt={2}>
+          <Box sx={{ mt: 2 }}>
             {data.map((module, index) => (
               <Accordion key={index}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Typography>{titleCase(module.module_name)}</Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Box width="100%">
+                  <Box sx={{ width: "100%" }}>
                     <Grid
                       container
                       spacing={1}
@@ -190,7 +190,7 @@ const InstructorAnalytics = ({ courseName, course_id }) => {
                       sx={{ width: '100%' }}
                     >
                       <Grid size={{ xs: 12 }} sx={{ width: "80%" }}>
-                        <Typography textAlign="right">
+                        <Typography sx={{ textAlign: "right" }}>
                           Completion Percentage:{" "}
                           {module.perfect_score_percentage.toFixed(2)}%
                         </Typography>

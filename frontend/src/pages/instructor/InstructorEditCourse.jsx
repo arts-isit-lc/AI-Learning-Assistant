@@ -610,8 +610,8 @@ const InstructorEditCourse = () => {
           setMetadata={setMetadata}
         />
 
-        <Box display="flex" justifyContent="space-between" sx={{ marginTop: 2, width: '100%' }}>
-          <Box display="flex" gap={2}>
+        <Box sx={{ display: "flex", justifyContent: "space-between", marginTop: 2, width: '100%' }}>
+          <Box sx={{ display: "flex", gap: 2 }}>
             <Button
               variant="contained"
               color="primary"

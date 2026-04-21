@@ -210,7 +210,7 @@ export const ChatLogs = ({ courseName, course_id, openWebSocket }) => {
             <Box component="main" sx={{ flexGrow: 1, p: 3, marginTop: 1, display: "flex", flexDirection: "column", alignItems: "center", width: "90%" }}>
                 <Toolbar />
                 <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", width: "100%", gap: 2, marginTop: 2, flexWrap: "wrap" }}>
-                    <Typography color="black" fontStyle="semibold" textAlign="center" variant="h6">
+                    <Typography color="black" variant="h6" sx={{ fontStyle: "italic", textAlign: "center" }}>
                         {courseName} Chat Logs
                     </Typography>
                     <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "170%", marginTop: 2, flexDirection: "column", }}>
@@ -226,7 +226,7 @@ export const ChatLogs = ({ courseName, course_id, openWebSocket }) => {
                 </Box>
                 <Paper sx={{ marginTop: 2, flexGrow: 1, height: "calc(100vh - 270px)", overflowY: "auto", display: "flex", flexDirection: "column", alignItems: "center", padding: 2, width: "100%" }}>
                     {loading ? (
-                        <Typography variant="body1" color="textSecondary" textAlign="center">
+                        <Typography variant="body1" color="textSecondary" sx={{ textAlign: "center" }}>
                             Loading chat logs...
                         </Typography>
                     ) : null }

@@ -212,7 +212,7 @@ const PromptSettings = ({ courseName, course_id }) => {
           padding: 2,
         }}
       >
-        <Box mb={1} sx={{ flexGrow: 1, p: 3, textAlign: "left" }}>
+        <Box sx={{ mb: 1, flexGrow: 1, p: 3, textAlign: "left" }}>
           <Typography
             color="black"
             fontStyle="semibold"
@@ -228,7 +228,7 @@ const PromptSettings = ({ courseName, course_id }) => {
           </Typography>
 
           {/* LLM Model Selection */}
-          <Box mt={3} mb={2}>
+          <Box sx={{ mt: 3, mb: 2 }}>
             <Typography variant="h6" gutterBottom>
               Language Model Selection
             </Typography>
@@ -277,7 +277,7 @@ const PromptSettings = ({ courseName, course_id }) => {
           />
         </Box>
 
-        <Box mb={1} sx={{ flexGrow: 1, p: 3, textAlign: "left" }}>
+        <Box sx={{ mb: 1, flexGrow: 1, p: 3, textAlign: "left" }}>
           <Typography variant="h6">Your Prompt</Typography>
           <Typography variant="h8">
             Warning:
@@ -298,7 +298,7 @@ const PromptSettings = ({ courseName, course_id }) => {
           />
         </Box>
 
-        <Box mb={1}>
+        <Box sx={{ mb: 1 }}>
           <Typography variant="h6">Previous Prompts</Typography>
           <MobileStepper
             steps={previousPrompts.length}
@@ -343,7 +343,7 @@ const PromptSettings = ({ courseName, course_id }) => {
           </Box>
         </Box>
 
-        <Box display="flex" justifyContent="flex-end">
+        <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
           <Button
             variant="contained"
             color="primary"

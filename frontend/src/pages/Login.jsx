@@ -545,7 +545,7 @@ export const Login = () => {
                   alignItems: "center",
                 }}
               >
-                <Typography component="h1" variant="h5" paddingBottom={3}>
+                <Typography component="h1" variant="h5" sx={{ pb: 3 }}>
                   Create your account
                 </Typography>
 
@@ -667,7 +667,7 @@ export const Login = () => {
                 alignItems: "center",
               }}
             >
-              <Typography component="h1" variant="h5" paddingBottom={3}>
+              <Typography component="h1" variant="h5" sx={{ pb: 3 }}>
                 New User
               </Typography>
               <p className="text-sm">
@@ -721,7 +721,7 @@ export const Login = () => {
 
               }}
             >
-              <Typography component="h1" variant="h5" paddingBottom={3}>
+              <Typography component="h1" variant="h5" sx={{ pb: 3 }}>
                 Account not verified
               </Typography>
               <p className="text-sm">
