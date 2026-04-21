@@ -392,22 +392,18 @@ const CourseDetails = ({ course, onBack }) => {
               label={isActive ? "Active" : "Inactive"}
             />
           </Paper>
-          <Grid container spacing={2} sx={{ width: '100%' }}>
-            <Grid size={6}>
-              <Button
-                variant="contained"
-                onClick={onBack}
-                sx={{ width: "30%" }}
-              >
-                Back
-              </Button>
-            </Grid>
-            <Grid size={6} sx={{ textAlign: "right" }}>
+          <Box display="flex" justifyContent="space-between" sx={{ width: '100%' }}>
+            <Button
+              variant="contained"
+              onClick={onBack}
+            >
+              Back
+            </Button>
+            <Box display="flex" gap={2}>
               <Button
                 variant="contained"
                 color="red"
                 onClick={handleConfirmDeleteOpen}
-                sx={{ width: "30%", marginRight: "15px" }}
               >
                 Delete
               </Button>
@@ -415,12 +411,11 @@ const CourseDetails = ({ course, onBack }) => {
                 variant="contained"
                 color="primary"
                 onClick={handleSave}
-                sx={{ width: "30%" }}
               >
                 Save
               </Button>
-            </Grid>
-          </Grid>
+            </Box>
+          </Box>
           <Dialog
             open={confirmDeleteOpen}
             onClose={handleConfirmDeleteClose}

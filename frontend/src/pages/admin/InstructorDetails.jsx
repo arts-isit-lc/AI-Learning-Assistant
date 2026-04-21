@@ -349,22 +349,18 @@ const InstructorDetails = ({ instructorData, onBack }) => {
             />
           </FormControl>
         </Paper>
-        <Grid container spacing={2} sx={{ width: '100%' }}>
-          <Grid size={6}>
-            <Button
-              variant="contained"
-              onClick={onBack}
-              sx={{ width: "30%", mx: "left" }}
-            >
-              Back
-            </Button>
-          </Grid>
-          <Grid size={6} container sx={{ justifyContent: "flex-end", width: '100%' }}>
+        <Box display="flex" justifyContent="space-between" sx={{ width: '100%' }}>
+          <Button
+            variant="contained"
+            onClick={onBack}
+          >
+            Back
+          </Button>
+          <Box display="flex" gap={2}>
             <Button
               variant="contained"
               color="error"
               onClick={handleConfirmDeleteOpen}
-              sx={{ width: "30%", mx: "right", mr: 2 }}
             >
               Delete
             </Button>
@@ -372,12 +368,11 @@ const InstructorDetails = ({ instructorData, onBack }) => {
               variant="contained"
               color="primary"
               onClick={handleSave}
-              sx={{ width: "30%", mx: "right" }}
             >
               Save
             </Button>
-          </Grid>
-        </Grid>
+          </Box>
+        </Box>
         <Dialog
           open={confirmDeleteOpen}
           onClose={handleConfirmDeleteClose}

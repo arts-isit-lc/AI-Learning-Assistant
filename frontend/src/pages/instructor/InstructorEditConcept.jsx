@@ -265,39 +265,31 @@ const InstructorEditConcept = () => {
           inputProps={{ maxLength: 50 }}
         />
 
-        <Grid container spacing={2} sx={{ marginTop: 2, width: '100%' }}>
-          <Grid size={4}>
-            <Box display="flex" gap={6}>
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={handleBackClick}
-                sx={{ width: "30%" }}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="contained"
-                color="error"
-                onClick={handleDeleteConfirmation}
-                sx={{ width: "30%" }}
-              >
-                Delete
-              </Button>
-            </Box>
-          </Grid>
-          <Grid size={4}></Grid>
-          <Grid size={4} style={{ textAlign: "right" }}>
+        <Box display="flex" justifyContent="space-between" sx={{ marginTop: 2, width: '100%' }}>
+          <Box display="flex" gap={2}>
             <Button
               variant="contained"
               color="primary"
-              onClick={handleSave}
-              style={{ width: "30%" }}
+              onClick={handleBackClick}
             >
-              Save
+              Cancel
             </Button>
-          </Grid>
-        </Grid>
+            <Button
+              variant="contained"
+              color="error"
+              onClick={handleDeleteConfirmation}
+            >
+              Delete
+            </Button>
+          </Box>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={handleSave}
+          >
+            Save
+          </Button>
+        </Box>
       </Paper>
       <ToastContainer
         position="top-center"
