@@ -9,7 +9,6 @@ import { dracula } from "react-syntax-highlighter/dist/cjs/styles/prism";
 const MarkdownRender = ({ content }) => {
   return (
     <ReactMarkdown
-      children={content}
       components={{
         code({ node, className, children, ...props }) {
           const match = /language-(\w+)/.exec(className || "");
@@ -30,7 +29,9 @@ const MarkdownRender = ({ content }) => {
           );
         },
       }}
-    />
+    >
+      {content}
+    </ReactMarkdown>
   );
 };
 

@@ -365,6 +365,23 @@ A full codebase audit was performed after all 12 steps. Findings and fixes:
 - CDK TypeScript build: 0 errors
 - Frontend Vite build: 0 errors
 
+### MUI v9 System Props Removal — Fixed
+
+MUI v9 removed system props (`mb`, `mt`, `display`, `textAlign`, `width`, `paddingBottom`, `justifyContent`, `gap`, etc.) as direct JSX attributes on `Box`, `Typography`, `Stack`, `Grid`, and `Link`. These must now go through the `sx` prop.
+
+**Button row layouts** (6 files): Replaced `Grid container` + `Grid size={4}` button rows with `Box sx={{ display: "flex", justifyContent: "space-between" }}`. The Grid `gap` spacing change in v6 broke the 3-column alignment; flexbox is the correct pattern for these layouts.
+- `InstructorEditCourse.jsx`, `InstructorEditConcept.jsx`, `InstructorNewModule.jsx`, `InstructorNewConcept.jsx`, `InstructorDetails.jsx`, `CourseDetails.jsx`
+
+**Box system props** (3 files): Moved `mb`, `mt`, `width`, `display`, `justifyContent` from direct props into `sx`.
+- `InstructorAnalytics.jsx` (4 instances)
+- `PromptSettings.jsx` (5 instances)
+- `StudentDetails.jsx` (1 instance)
+
+**Typography system props** (3 files): Moved `textAlign`, `paddingBottom`, `fontStyle` from direct props into `sx`.
+- `Login.jsx` (3 `paddingBottom` instances)
+- `ChatLogs.jsx` (2 `textAlign`/`fontStyle` instances)
+- `InstructorAnalytics.jsx` (1 `textAlign` instance)
+
 ### Known Deprecation Warnings (Non-Breaking, Deferred)
 
 MUI v9 deprecated `inputProps`, `InputProps`, and `InputLabelProps` on `TextField` in favor of `slotProps.htmlInput`, `slotProps.input`, and `slotProps.inputLabel`. These still work and won't be removed until a future major version. 27 instances across 11 files. Low priority — can be addressed incrementally or in a future cleanup pass.
