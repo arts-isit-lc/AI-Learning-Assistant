@@ -1,6 +1,7 @@
 import { Stack, StackProps } from "aws-cdk-lib";
 import { Construct } from "constructs";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
+import * as logs from "aws-cdk-lib/aws-logs";
 import { Fn } from "aws-cdk-lib";
 import { AwsCustomResource, AwsCustomResourcePolicy, PhysicalResourceId } from "aws-cdk-lib/custom-resources";
 
@@ -180,7 +181,14 @@ export class VpcStack extends Stack {
         ],
       });
 
-      this.vpc.addFlowLog("aila-vpcFlowLog");
+      // CO-8b: VPC Flow Logs with retention limits
+      const flowLogGroup = new logs.LogGroup(this, "aila-vpcFlowLogGroup", {
+        retention: isProduction ? logs.RetentionDays.SIX_MONTHS : logs.RetentionDays.ONE_WEEK,
+      });
+
+      this.vpc.addFlowLog("aila-vpcFlowLog", {
+        destination: ec2.FlowLogDestination.toCloudWatchLogs(flowLogGroup),
+      });
 
       // Add secrets manager endpoint to VPC
       this.vpc.addInterfaceEndpoint(`${id}-Secrets Manager Endpoint`, {
@@ -188,10 +196,14 @@ export class VpcStack extends Stack {
         subnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
       });
 
-      // Add RDS endpoint to VPC
-      this.vpc.addInterfaceEndpoint(`${id}-RDS Endpoint`, {
-        service: ec2.InterfaceVpcEndpointAwsService.RDS,
-        subnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
+      // CO-3: RDS endpoint removed — unused, Lambdas connect to RDS Proxy via TCP
+
+      // CO-1: Add S3 and DynamoDB gateway endpoints (free, reduces NAT traffic)
+      this.vpc.addGatewayEndpoint("S3Endpoint", {
+        service: ec2.GatewayVpcEndpointAwsService.S3,
+      });
+      this.vpc.addGatewayEndpoint("DynamoDBEndpoint", {
+        service: ec2.GatewayVpcEndpointAwsService.DYNAMODB,
       });
     }
   }

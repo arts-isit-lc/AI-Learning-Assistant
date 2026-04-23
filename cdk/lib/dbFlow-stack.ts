@@ -73,7 +73,7 @@ export class DBFlowStack extends Stack {
             runtime: lambda.Runtime.PYTHON_3_11,
             handler: "initializer.handler",
             timeout: Duration.seconds(300),
-            memorySize: 512,
+            memorySize: 256,
             environment: {
               DB_SECRET_NAME: db.secretPathAdminName,     // Admin Secret Manager name that only use once here.
               DB_USER_SECRET_NAME: db.secretPathUser.secretName,

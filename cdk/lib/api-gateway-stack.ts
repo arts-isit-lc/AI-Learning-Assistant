@@ -81,6 +81,12 @@ export class ApiGatewayStack extends cdk.Stack {
         // When deleting the stack, need to empty the Bucket and delete it manually
         removalPolicy: cdk.RemovalPolicy.RETAIN,
         enforceSSL: true,
+        intelligentTieringConfigurations: [
+          {
+            name: "default-tiering",
+            archiveAccessTierTime: cdk.Duration.days(90),
+          },
+        ],
       }
     );
 
@@ -275,7 +281,7 @@ export class ApiGatewayStack extends cdk.Stack {
       deployOptions: {
         metricsEnabled: true,
         loggingLevel: apigateway.MethodLoggingLevel.ERROR,
-        dataTraceEnabled: true,
+        dataTraceEnabled: false,
         stageName: "prod",
         methodOptions: {
           "/*/*": {
@@ -538,7 +544,7 @@ export class ApiGatewayStack extends cdk.Stack {
       runtime: lambda.Runtime.NODEJS_22_X,
       code: lambda.Code.fromAsset("lambda/lib"),
       handler: "studentFunction.handler",
-      timeout: Duration.seconds(300),
+      timeout: Duration.seconds(60),
       vpc: vpcStack.vpc,
       environment: {
         SM_DB_CREDENTIALS: db.secretPathUser.secretName,
@@ -546,7 +552,7 @@ export class ApiGatewayStack extends cdk.Stack {
         USER_POOL: this.userPool.userPoolId,
       },
       functionName: `${id}-studentFunction`,
-      memorySize: 512,
+      memorySize: 256,
       layers: [postgres],
       role: lambdaRole,
     });
@@ -569,7 +575,7 @@ export class ApiGatewayStack extends cdk.Stack {
         runtime: lambda.Runtime.NODEJS_22_X,
         code: lambda.Code.fromAsset("lambda/lib"),
         handler: "instructorFunction.handler",
-        timeout: Duration.seconds(300),
+        timeout: Duration.seconds(60),
         vpc: vpcStack.vpc,
         environment: {
           SM_DB_CREDENTIALS: db.secretPathUser.secretName,
@@ -577,7 +583,7 @@ export class ApiGatewayStack extends cdk.Stack {
           USER_POOL: this.userPool.userPoolId,
         },
         functionName: `${id}-instructorFunction`,
-        memorySize: 512,
+        memorySize: 256,
         layers: [postgres],
         role: lambdaRole,
       }
@@ -598,14 +604,14 @@ export class ApiGatewayStack extends cdk.Stack {
       runtime: lambda.Runtime.NODEJS_22_X,
       code: lambda.Code.fromAsset("lambda/adminFunction"),
       handler: "adminFunction.handler",
-      timeout: Duration.seconds(300),
+      timeout: Duration.seconds(60),
       vpc: vpcStack.vpc,
       environment: {
         SM_DB_CREDENTIALS: db.secretPathTableCreator.secretName,
         RDS_PROXY_ENDPOINT: db.rdsProxyEndpointTableCreator,
       },
       functionName: `${id}-adminFunction`,
-      memorySize: 512,
+      memorySize: 256,
       layers: [postgres],
       role: lambdaRole,
     });
@@ -731,7 +737,7 @@ export class ApiGatewayStack extends cdk.Stack {
       runtime: lambda.Runtime.NODEJS_22_X,
       code: lambda.Code.fromAsset("lambda/lib"),
       handler: "preSignup.handler",
-      timeout: Duration.seconds(300),
+      timeout: Duration.seconds(30),
       environment: {
         ALLOWED_EMAIL_DOMAINS: "/AILA/AllowedEmailDomains",
       },
@@ -750,7 +756,7 @@ export class ApiGatewayStack extends cdk.Stack {
       runtime: lambda.Runtime.NODEJS_22_X,
       code: lambda.Code.fromAsset("lambda/lib"),
       handler: "addStudentOnSignUp.handler",
-      timeout: Duration.seconds(300),
+      timeout: Duration.seconds(30),
       environment: {
         SM_DB_CREDENTIALS: db.secretPathTableCreator.secretName,
         RDS_PROXY_ENDPOINT: db.rdsProxyEndpointTableCreator,
@@ -766,14 +772,14 @@ export class ApiGatewayStack extends cdk.Stack {
       runtime: lambda.Runtime.NODEJS_22_X,
       code: lambda.Code.fromAsset("lambda/lib"),
       handler: "adjustUserRoles.handler",
-      timeout: Duration.seconds(300),
+      timeout: Duration.seconds(60),
       environment: {
         SM_DB_CREDENTIALS: db.secretPathTableCreator.secretName,
         RDS_PROXY_ENDPOINT: db.rdsProxyEndpointTableCreator,
       },
       vpc: vpcStack.vpc,
       functionName: `${id}-adjustUserRoles-v9`,
-      memorySize: 512,
+      memorySize: 256,
       layers: [postgres],
       role: coglambdaRole,
     });
@@ -809,13 +815,13 @@ export class ApiGatewayStack extends cdk.Stack {
         runtime: lambda.Runtime.NODEJS_22_X,
         code: lambda.Code.fromAsset("lambda/adminAuthorizerFunction"),
         handler: "adminAuthorizerFunction.handler",
-        timeout: Duration.seconds(300),
+        timeout: Duration.seconds(30),
         vpc: vpcStack.vpc,
         environment: {
           SM_COGNITO_CREDENTIALS: this.secret.secretName,
         },
         functionName: `${id}-adminLambdaAuthorizer`,
-        memorySize: 512,
+        memorySize: 256,
         layers: [jwt],
         role: lambdaRole,
       }
@@ -842,13 +848,13 @@ export class ApiGatewayStack extends cdk.Stack {
         runtime: lambda.Runtime.NODEJS_22_X,
         code: lambda.Code.fromAsset("lambda/studentAuthorizerFunction"),
         handler: "studentAuthorizerFunction.handler",
-        timeout: Duration.seconds(300),
+        timeout: Duration.seconds(30),
         vpc: vpcStack.vpc,
         environment: {
           SM_COGNITO_CREDENTIALS: this.secret.secretName,
         },
         functionName: `${id}-studentLambdaAuthorizer`,
-        memorySize: 512,
+        memorySize: 256,
         layers: [jwt],
         role: lambdaRole,
       }
@@ -877,13 +883,13 @@ export class ApiGatewayStack extends cdk.Stack {
         runtime: lambda.Runtime.NODEJS_22_X,
         code: lambda.Code.fromAsset("lambda/instructorAuthorizerFunction"),
         handler: "instructorAuthorizerFunction.handler",
-        timeout: Duration.seconds(300),
+        timeout: Duration.seconds(30),
         vpc: vpcStack.vpc,
         environment: {
           SM_COGNITO_CREDENTIALS: this.secret.secretName,
         },
         functionName: `${id}-instructorLambdaAuthorizer`,
-        memorySize: 512,
+        memorySize: 256,
         layers: [jwt],
         role: lambdaRole,
       }
@@ -1064,6 +1070,12 @@ export class ApiGatewayStack extends cdk.Stack {
       // When deleting the stack, need to empty the Bucket and delete it manually
       removalPolicy: cdk.RemovalPolicy.RETAIN,
       enforceSSL: true,
+      intelligentTieringConfigurations: [
+        {
+          name: "default-tiering",
+          archiveAccessTierTime: cdk.Duration.days(90),
+        },
+      ],
     });
 
     // Create the Lambda function for generating presigned URLs
@@ -1074,7 +1086,7 @@ export class ApiGatewayStack extends cdk.Stack {
         runtime: lambda.Runtime.PYTHON_3_11,
         code: lambda.Code.fromAsset("lambda/generatePreSignedURL"),
         handler: "generatePreSignedURL.lambda_handler",
-        timeout: Duration.seconds(300),
+        timeout: Duration.seconds(30),
         memorySize: 128,
         environment: {
           BUCKET: dataIngestionBucket.bucketName,
@@ -1223,7 +1235,7 @@ export class ApiGatewayStack extends cdk.Stack {
       runtime: lambda.Runtime.PYTHON_3_11,
       code: lambda.Code.fromAsset("lambda/getFilesFunction"),
       handler: "getFilesFunction.lambda_handler",
-      timeout: Duration.seconds(300),
+      timeout: Duration.seconds(30),
       memorySize: 128,
       vpc: vpcStack.vpc,
       environment: {
@@ -1273,7 +1285,7 @@ export class ApiGatewayStack extends cdk.Stack {
       runtime: lambda.Runtime.PYTHON_3_11,
       code: lambda.Code.fromAsset("lambda/deleteFile"),
       handler: "deleteFile.lambda_handler",
-      timeout: Duration.seconds(300),
+      timeout: Duration.seconds(30),
       memorySize: 128,
       vpc: vpcStack.vpc,
       environment: {
@@ -1322,7 +1334,7 @@ export class ApiGatewayStack extends cdk.Stack {
       runtime: lambda.Runtime.PYTHON_3_11,
       code: lambda.Code.fromAsset("lambda/deleteModule"),
       handler: "deleteModule.lambda_handler",
-      timeout: Duration.seconds(300),
+      timeout: Duration.seconds(60),
       memorySize: 128,
       environment: {
         BUCKET: dataIngestionBucket.bucketName,
@@ -1356,7 +1368,7 @@ export class ApiGatewayStack extends cdk.Stack {
       runtime: lambda.Runtime.PYTHON_3_11,
       code: lambda.Code.fromAsset("lambda/deleteLastMessage"),
       handler: "deleteLastMessage.lambda_handler",
-      timeout: Duration.seconds(300),
+      timeout: Duration.seconds(30),
       memorySize: 128,
       vpc: vpcStack.vpc,
       environment: {
@@ -1453,7 +1465,7 @@ export class ApiGatewayStack extends cdk.Stack {
           SES_FROM_EMAIL: 'noreply@ocelia.svc.ubc.ca',
         },
         functionName: `${id}-NotificationFunction`,
-        timeout: cdk.Duration.seconds(300),
+        timeout: cdk.Duration.seconds(60),
         memorySize: 128,
         vpc: vpcStack.vpc,
         role: lambdaRole,
@@ -1510,7 +1522,7 @@ export class ApiGatewayStack extends cdk.Stack {
       runtime: lambda.Runtime.NODEJS_22_X,
       code: lambda.Code.fromAsset("lambda/lib"),
       handler: "sqsFunction.handler",
-      timeout: Duration.seconds(300),
+      timeout: Duration.seconds(60),
       environment: {
         SQS_QUEUE_URL: messagesQueue.queueUrl,
         SM_DB_CREDENTIALS: db.secretPathUser.secretName,
@@ -1566,6 +1578,12 @@ export class ApiGatewayStack extends cdk.Stack {
         // When deleting the stack, need to empty the Bucket and delete it manually
         removalPolicy: cdk.RemovalPolicy.RETAIN,
         enforceSSL: true,
+        intelligentTieringConfigurations: [
+          {
+            name: "default-tiering",
+            archiveAccessTierTime: cdk.Duration.days(90),
+          },
+        ],
       }
     );
 
@@ -1649,7 +1667,7 @@ export class ApiGatewayStack extends cdk.Stack {
       runtime: lambda.Runtime.PYTHON_3_11,
       code: lambda.Code.fromAsset("lambda/getChatLogsFunction"),
       handler: "getChatLogsFunction.lambda_handler",
-      timeout: Duration.seconds(300),
+      timeout: Duration.seconds(60),
       memorySize: 128,
       vpc: vpcStack.vpc,
       environment: {

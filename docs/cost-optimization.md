@@ -2,6 +2,32 @@
 
 The following changes reduce AWS spend while maintaining or improving performance.
 
+## Implementation Status
+
+All changes have been applied to the codebase. Deploy to dev first, then prod.
+
+| File | Changes Applied |
+|---|---|
+| `cdk/lib/vpc-stack.ts` | Added `logs` import. Added S3 + DynamoDB gateway endpoints (CO-1). Removed RDS interface endpoint (CO-3). Replaced bare `addFlowLog()` with explicit log group using 6-month (prod) / 7-day (dev) retention (CO-8b). |
+| `cdk/lib/database-stack.ts` | `storageType`: gp2 → gp3 (both envs). `backupRetention`: 7 days → `isProduction ? 7 : 1` (CO-7). `deletionProtection`: `true` → `isProduction` (CO-7). `cloudwatchLogsRetention`: `INFINITE` → `isProduction ? SIX_MONTHS : TWO_WEEKS` (CO-8a). `monitoringInterval`: 60s → `isProduction ? 60 : 0` (CO-9). |
+| `cdk/lib/api-gateway-stack.ts` | Memory 512→256MB on: `studentFunction`, `instructorFunction`, `adminFunction`, `adminLambdaAuthorizer`, `studentLambdaAuthorizer`, `instructorLambdaAuthorizer`, `adjustUserRoles` (CO-2). Timeouts reduced on 14 functions per CO-5 table. `dataTraceEnabled`: `true` → `false` (CO-8c). Added `intelligentTieringConfigurations` to `dataIngestionBucket`, `embeddingStorageBucket`, `chatlogsBucket` (CO-6). |
+| `cdk/lib/dbFlow-stack.ts` | `initializerFunction` memory 512→256MB (CO-2). |
+
+**CO-7 storage reduction (20GB) — NOT applied.** RDS does not allow decreasing `allocatedStorage` in-place. Changing the construct ID to force a replacement failed because the ApiGatewayStack has cross-stack references to the RDS Proxy endpoints, creating a circular dependency during replacement. The dev instance remains at 100GB gp3. To achieve the 20GB reduction in the future, a full teardown and redeploy of all stacks would be required (`cdk destroy` all stacks in reverse dependency order, then `cdk deploy --all`).
+
+**CO-7 changes that WERE applied to dev:**
+- Storage type upgraded from gp2 → gp3 (better baseline IOPS: 3000 vs ~300 at 100GB)
+- Backup retention reduced to 1 day
+- Deletion protection disabled
+- Enhanced Monitoring disabled (CO-9)
+- CloudWatch log retention set to 14 days (CO-8a)
+
+**Prod deploy (later):**
+- Same code, no RDS replacement (storage values unchanged for prod)
+- Deploy with: `cdk deploy --all --parameters AILA-AmplifyStack:githubRepoName=AI-Learning-Assistant --context StackPrefix=AILA --context environment=prod`
+
+---
+
 ## Estimated Savings Summary
 
 | Item | Dev (monthly) | Prod (monthly) | Risk | Effort | Performance Impact |
@@ -12,11 +38,11 @@ The following changes reduce AWS spend while maintaining or improving performanc
 | CO-4: NAT Gateway | No change | No change | — | — | — |
 | CO-5: Lambda Timeout Right-Sizing | ~$0-5 (prevents waste) | ~$0-5 (prevents waste) | None | 15 min | Neutral — normal execution unaffected. Stuck functions get killed faster |
 | CO-6: S3 Intelligent-Tiering | Varies by data volume | Varies by data volume | None | 10 min | Neutral — retrieval latency identical across all tiers (millisecond access) |
-| CO-7: RDS Dev Storage 100→20GB | ~$9/mo | No change | Low — replaces dev DB instance, wipes data, auto-rebuilds | 15 min (2-step deploy) | Neutral — gp3 IOPS are independent of volume size |
+| CO-7: RDS Dev Storage 100→20GB | Not applied | No change | Blocked — cross-stack dependency prevents in-place replacement. Requires full teardown. | — | — |
 | CO-8: CloudWatch Logs Cleanup | ~$10-30 | ~$5-15 | None | 20 min | Neutral — only affects log storage |
 | CO-9: RDS Enhanced Monitoring (dev) | ~$3-5 | No change | None | 2 min | Neutral — standard metrics still available |
-| **Total (immediate, both accounts)** | **~$75-130/mo** | **~$65-115/mo** | | | |
-| **Combined annual savings** | **~$1,700-2,900/yr** | | | | |
+| **Total (immediate, both accounts)** | **~$66-121/mo** | **~$65-115/mo** | | | |
+| **Combined annual savings** | **~$1,570-2,830/yr** | | | | |
 
 Notes:
 - CO-1 savings depend on S3/DynamoDB traffic volume through NAT. Estimate assumes moderate usage.

@@ -95,16 +95,17 @@ export class DatabaseStack extends Stack {
             multiAz: isProduction,
             allocatedStorage: 100,
             maxAllocatedStorage: 115,
+            storageType: rds.StorageType.GP3,
             allowMajorVersionUpgrade: false,
             autoMinorVersionUpgrade: true,
-            backupRetention: Duration.days(7),
+            backupRetention: Duration.days(isProduction ? 7 : 1),
             deleteAutomatedBackups: true,
-            deletionProtection: true,/// To be changed
+            deletionProtection: isProduction,
             databaseName: "aila",
             publiclyAccessible: false,
-            cloudwatchLogsRetention: logs.RetentionDays.INFINITE,
+            cloudwatchLogsRetention: isProduction ? logs.RetentionDays.SIX_MONTHS : logs.RetentionDays.TWO_WEEKS,
             storageEncrypted: true, // storage encryption at rest
-            monitoringInterval: Duration.seconds(60), // enhanced monitoring interval
+            monitoringInterval: isProduction ? Duration.seconds(60) : Duration.seconds(0),
             parameterGroup: parameterGroup
         });
 
