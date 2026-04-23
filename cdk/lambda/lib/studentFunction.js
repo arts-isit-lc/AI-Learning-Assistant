@@ -855,7 +855,7 @@ exports.handler = async (event) => {
               const studentModuleInsertions = modulesResult.map((module) => {
                 return sqlConnection`
                       INSERT INTO "Student_Modules" (student_module_id, course_module_id, enrolment_id, module_score, last_accessed, module_context_embedding)
-                      VALUES (uuid_generate_v4(), ${module.module_id}, ${enrolment_id}, 0, CURRENT_TIMESTAMP, NULL);
+                      VALUES (uuid_generate_v4(), ${module.module_id}, ${enrolment_id}, 0, NULL, NULL);
                   `;
               });
 
