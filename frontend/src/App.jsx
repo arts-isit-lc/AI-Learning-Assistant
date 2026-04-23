@@ -12,14 +12,15 @@ import {
   Routes,
   Navigate,
 } from "react-router-dom";
-import { useEffect, useState, createContext } from "react";
-// pages
+import { useEffect, useState, createContext, lazy, Suspense } from "react";
+// pages — Login stays eagerly loaded (entry point)
 import Login from "./pages/Login";
-import StudentHomepage from "./pages/student/StudentHomepage";
-import StudentChat from "./pages/student/StudentChat";
-import AdminHomepage from "./pages/admin/AdminHomepage";
-import InstructorHomepage from "./pages/instructor/InstructorHomepage";
-import CourseView from "./pages/student/CourseView";
+// P-4: Role-specific pages lazy loaded for code splitting
+const StudentHomepage = lazy(() => import("./pages/student/StudentHomepage"));
+const StudentChat = lazy(() => import("./pages/student/StudentChat"));
+const AdminHomepage = lazy(() => import("./pages/admin/AdminHomepage"));
+const InstructorHomepage = lazy(() => import("./pages/instructor/InstructorHomepage"));
+const CourseView = lazy(() => import("./pages/student/CourseView"));
 import { NotificationProvider } from "./context/NotificationContext";
 
 export const UserContext = createContext();
@@ -92,35 +93,37 @@ function App() {
         value={{ isInstructorAsStudent, setIsInstructorAsStudent }}
       >
         <Router>
-          <Routes>
-            <Route
-              path="/"
-              element={user ? <Navigate to="/home" /> : <Login />}
-            />
-            <Route
-              path="/student_chat/*"
-              element={
-                <StudentChat
-                  course={course}
-                  module={module}
-                  setModule={setModule}
-                  setCourse={setCourse}
-                />
-              }
-            />
-            <Route
-              path="/student_course/*"
-              element={
-                <CourseView
-                  course={course}
-                  setModule={setModule}
-                  setCourse={setCourse}
-                />
-              }
-            />
-            <Route path="/home/*" element={getHomePage()} />
-            <Route path="/course/*" element={<InstructorHomepage />} />
-          </Routes>
+          <Suspense fallback={<div>Loading...</div>}>
+            <Routes>
+              <Route
+                path="/"
+                element={user ? <Navigate to="/home" /> : <Login />}
+              />
+              <Route
+                path="/student_chat/*"
+                element={
+                  <StudentChat
+                    course={course}
+                    module={module}
+                    setModule={setModule}
+                    setCourse={setCourse}
+                  />
+                }
+              />
+              <Route
+                path="/student_course/*"
+                element={
+                  <CourseView
+                    course={course}
+                    setModule={setModule}
+                    setCourse={setCourse}
+                  />
+                }
+              />
+              <Route path="/home/*" element={getHomePage()} />
+              <Route path="/course/*" element={<InstructorHomepage />} />
+            </Routes>
+          </Suspense>
         </Router>
       </UserContext.Provider>
     </NotificationProvider>

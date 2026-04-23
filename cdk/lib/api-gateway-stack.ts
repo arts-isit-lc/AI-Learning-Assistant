@@ -733,6 +733,7 @@ export class ApiGatewayStack extends cdk.Stack {
       })
     );
 
+    // P-8: preSignupLambda moved out of VPC — only accesses SSM (public service)
     const preSignupLambda = new lambda.Function(this, `${id}-preSignupLambda`, {
       runtime: lambda.Runtime.NODEJS_22_X,
       code: lambda.Code.fromAsset("lambda/lib"),
@@ -741,7 +742,6 @@ export class ApiGatewayStack extends cdk.Stack {
       environment: {
         ALLOWED_EMAIL_DOMAINS: "/AILA/AllowedEmailDomains",
       },
-      vpc: vpcStack.vpc,
       functionName: `${id}-preSignupLambda`,
       memorySize: 128,
       role: coglambdaRole,
@@ -808,6 +808,8 @@ export class ApiGatewayStack extends cdk.Stack {
     //  *
     //  * Create Lambda for Admin Authorization endpoints
     //  */
+    // P-3: Authorizers moved out of VPC — they only need Secrets Manager
+    // (public AWS service) and Cognito JWKS (public endpoint).
     const authorizationFunction = new lambda.Function(
       this,
       `${id}-admin-authorization-api-gateway`,
@@ -816,7 +818,6 @@ export class ApiGatewayStack extends cdk.Stack {
         code: lambda.Code.fromAsset("lambda/adminAuthorizerFunction"),
         handler: "adminAuthorizerFunction.handler",
         timeout: Duration.seconds(30),
-        vpc: vpcStack.vpc,
         environment: {
           SM_COGNITO_CREDENTIALS: this.secret.secretName,
         },
@@ -849,7 +850,6 @@ export class ApiGatewayStack extends cdk.Stack {
         code: lambda.Code.fromAsset("lambda/studentAuthorizerFunction"),
         handler: "studentAuthorizerFunction.handler",
         timeout: Duration.seconds(30),
-        vpc: vpcStack.vpc,
         environment: {
           SM_COGNITO_CREDENTIALS: this.secret.secretName,
         },
@@ -884,7 +884,6 @@ export class ApiGatewayStack extends cdk.Stack {
         code: lambda.Code.fromAsset("lambda/instructorAuthorizerFunction"),
         handler: "instructorAuthorizerFunction.handler",
         timeout: Duration.seconds(30),
-        vpc: vpcStack.vpc,
         environment: {
           SM_COGNITO_CREDENTIALS: this.secret.secretName,
         },

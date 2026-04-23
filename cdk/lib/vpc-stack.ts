@@ -205,6 +205,12 @@ export class VpcStack extends Stack {
       this.vpc.addGatewayEndpoint("DynamoDBEndpoint", {
         service: ec2.GatewayVpcEndpointAwsService.DYNAMODB,
       });
+
+      // P-1: Bedrock Runtime VPC endpoint — keeps all Bedrock calls (embeddings + LLM)
+      // on the AWS backbone instead of routing through NAT Gateway.
+      this.vpc.addInterfaceEndpoint("BedrockRuntimeEndpoint", {
+        service: ec2.InterfaceVpcEndpointAwsService.BEDROCK_RUNTIME,
+      });
     }
   }
 }

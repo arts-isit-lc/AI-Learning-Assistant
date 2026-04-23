@@ -37,6 +37,9 @@ TABLE_NAME = None
 # Cached embeddings instance
 embeddings = None
 
+# P-5: Guard to avoid redundant DynamoDB list_tables call on warm invocations
+_dynamodb_table_checked = False
+
 def get_secret(secret_name, expect_json=True):
     global db_secret
     if db_secret is None:
@@ -65,7 +68,7 @@ def get_parameter(param_name, cached_var):
     return cached_var
 
 def initialize_constants():
-    global BEDROCK_LLM_ID, EMBEDDING_MODEL_ID, TABLE_NAME, embeddings
+    global BEDROCK_LLM_ID, EMBEDDING_MODEL_ID, TABLE_NAME, embeddings, _dynamodb_table_checked
     BEDROCK_LLM_ID = get_parameter(BEDROCK_LLM_PARAM, BEDROCK_LLM_ID)
     EMBEDDING_MODEL_ID = get_parameter(EMBEDDING_MODEL_PARAM, EMBEDDING_MODEL_ID)
     TABLE_NAME = get_parameter(TABLE_NAME_PARAM, TABLE_NAME)
@@ -77,7 +80,10 @@ def initialize_constants():
             region_name=REGION,
         )
     
-    create_dynamodb_history_table(TABLE_NAME)
+    # P-5: Only check/create DynamoDB table once per container lifetime
+    if not _dynamodb_table_checked:
+        create_dynamodb_history_table(TABLE_NAME)
+        _dynamodb_table_checked = True
 
 def connect_to_db():
     global connection
@@ -102,165 +108,73 @@ def connect_to_db():
             raise
     return connection
 
-def get_module_name(module_id):
+def get_module_context(course_id, module_id):
+    """
+    P-2: Fetch course and module context in a single query instead of 4 separate ones.
+    Returns dict with system_prompt, llm_model_id, module_name, module_prompt
+    or None if the course/module combination is not found.
+    """
     connection = connect_to_db()
     if connection is None:
         logger.error("No database connection available.")
         return None
-    
+
     try:
         cur = connection.cursor()
-
         cur.execute("""
-            SELECT module_name 
-            FROM "Course_Modules" 
-            WHERE module_id = %s;
-        """, (module_id,))
-        
+            SELECT
+                c.system_prompt,
+                c.llm_model_id,
+                cm.module_name,
+                cm.module_prompt
+            FROM "Courses" c
+            JOIN "Course_Concepts" cc ON cc.course_id = c.course_id
+            JOIN "Course_Modules" cm ON cm.concept_id = cc.concept_id
+            WHERE c.course_id = %s AND cm.module_id = %s;
+        """, (course_id, module_id))
+
         result = cur.fetchone()
-        logger.info(f"Query result: {result}")
-        module_name = result[0] if result else None
-        
         cur.close()
-        
-        if module_name:
-            logger.info(f"Module name for module_id {module_id} found: {module_name}")
-        else:
-            logger.warning(f"No module name found for module_id {module_id}")
-        
-        return module_name
+
+        if result is None:
+            logger.warning(f"No context found for course_id={course_id}, module_id={module_id}")
+            return None
+
+        context = {
+            'system_prompt': result[0],
+            'llm_model_id': result[1] if result[1] else None,
+            'module_name': result[2],
+            'module_prompt': result[3] if result[3] else "",
+        }
+        logger.info(f"Module context fetched: module_name={context['module_name']}, "
+                     f"has_system_prompt={context['system_prompt'] is not None}, "
+                     f"llm_model_id={context['llm_model_id']}")
+        return context
 
     except Exception as e:
-        logger.error(f"Error fetching module name: {e}")
+        logger.error(f"Error fetching module context: {e}")
         if cur:
             cur.close()
         connection.rollback()
         return None
-
-def get_system_prompt(course_id):
-    connection = connect_to_db()
-    if connection is None:
-        logger.error("No database connection available.")
-        return None
-    
-    try:
-        cur = connection.cursor()
-        logger.info("Connected to RDS instance!")
-
-        cur.execute("""
-            SELECT system_prompt 
-            FROM "Courses" 
-            WHERE course_id = %s;
-        """, (course_id,))
-        
-        result = cur.fetchone()
-        logger.info(f"Query result: {result}")
-        system_prompt = result[0] if result else None
-        
-        cur.close()
-        
-        if system_prompt:
-            logger.info(f"System prompt for course_id {course_id} found: {system_prompt}")
-        else:
-            logger.warning(f"No system prompt found for course_id {course_id}")
-        
-        return system_prompt
-
-    except Exception as e:
-        logger.error(f"Error fetching system prompt: {e}")
-        if cur:
-            cur.close()
-        connection.rollback()
-        return None
-
-def get_course_llm_model_id(course_id):
-    connection = connect_to_db()
-    if connection is None:
-        logger.error("No database connection available.")
-        return None
-    
-    try:
-        cur = connection.cursor()
-        logger.info("Connected to RDS instance!")
-
-        cur.execute("""
-            SELECT llm_model_id 
-            FROM "Courses" 
-            WHERE course_id = %s;
-        """, (course_id,))
-        
-        result = cur.fetchone()
-        logger.info(f"LLM Model ID query result: {result}")
-        llm_model_id = result[0] if result and result[0] else None
-        
-        cur.close()
-        
-        if llm_model_id:
-            logger.info(f"LLM model ID for course_id {course_id} found: {llm_model_id}")
-        else:
-            logger.warning(f"No LLM model ID found for course_id {course_id}, will use default")
-        
-        return llm_model_id
-
-    except Exception as e:
-        logger.error(f"Error fetching LLM model ID: {e}")
-        if cur:
-            cur.close()
-        connection.rollback()
-        return None
-
-def get_module_prompt(module_id):
-    connection = connect_to_db()
-    if connection is None:
-        logger.error("No database connection available.")
-        return None
-    
-    try:
-        cur = connection.cursor()
-        cur.execute("""
-            SELECT module_prompt 
-            FROM "Course_Modules" 
-            WHERE module_id = %s;
-        """, (module_id,))
-        
-        result = cur.fetchone()
-        logger.info(f"Module prompt query result: {result}")
-        module_prompt = result[0] if result and result[0] else ""
-        
-        cur.close()
-        
-        if module_prompt:
-            logger.info(f"Module prompt for module_id {module_id} found: {module_prompt}")
-        else:
-            logger.info(f"No module prompt found for module_id {module_id}")
-        
-        return module_prompt
-
-    except Exception as e:
-        logger.error(f"Error fetching module prompt: {e}")
-        if cur:
-            cur.close()
-        connection.rollback()
-        return ""
 
 def get_allowed_file_ids(module_id):
+    """
+    P-2: Fetch all allowed file IDs for a module in a single query using UNION.
+    """
     connection = connect_to_db()
     try:
         cur = connection.cursor()
         cur.execute("""
             SELECT file_id FROM "Module_Files"
-            WHERE module_id = %s;
-        """, (module_id,))
-        own_ids = [str(row[0]) for row in cur.fetchall()]
-
-        cur.execute("""
+            WHERE module_id = %s
+            UNION
             SELECT referenced_file_id FROM "Module_File_References"
             WHERE source_module_id = %s;
-        """, (module_id,))
-        ref_ids = [str(row[0]) for row in cur.fetchall()]
-
+        """, (module_id, module_id))
+        ids = [str(row[0]) for row in cur.fetchall()]
         cur.close()
-        return own_ids + ref_ids
+        return ids
     except Exception as e:
         logger.error(f"Error fetching allowed_file_ids: {e}")
         return []
@@ -315,10 +229,25 @@ def handler(event, context):
             'body': json.dumps('Missing required parameter: module_id')
         }
     
-    system_prompt = get_system_prompt(course_id)
+    # P-2: Single combined query for course + module context
+    module_context = get_module_context(course_id, module_id)
 
+    if module_context is None:
+        logger.error(f"Error fetching context for course_id={course_id}, module_id={module_id}")
+        return {
+            'statusCode': 400,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Headers": "*",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "*",
+            },
+            'body': json.dumps('Error fetching course/module context')
+        }
+
+    system_prompt = module_context['system_prompt']
     if system_prompt is None:
-        logger.error(f"Error fetching system prompt for course_id: {course_id}")
+        logger.error(f"No system prompt found for course_id: {course_id}")
         return {
             'statusCode': 400,
             "headers": {
@@ -329,9 +258,9 @@ def handler(event, context):
             },
             'body': json.dumps('Error fetching system prompt')
         }
-    
+
     # Get course-specific LLM model ID, fallback to default if not set
-    course_llm_model_id = get_course_llm_model_id(course_id)
+    course_llm_model_id = module_context['llm_model_id']
     
     # Validate the model ID and fallback to default if invalid
     if course_llm_model_id and is_valid_model_id(course_llm_model_id):
@@ -343,9 +272,9 @@ def handler(event, context):
     
     logger.info(f"Using LLM model ID: {effective_llm_model_id} for course {course_id}")
     
-    module_prompt = get_module_prompt(module_id)
+    module_prompt = module_context['module_prompt']
     
-    topic = get_module_name(module_id)
+    topic = module_context['module_name']
 
     if topic is None:
         logger.error(f"Invalid module_id: {module_id}")
@@ -409,11 +338,13 @@ def handler(event, context):
 
         allowed_file_ids = get_allowed_file_ids(module_id)
 
+        # P-6: Pass the global connection to avoid creating new connections in hybrid_search
         history_aware_retriever = get_vectorstore_retriever(
             llm=llm,
             vectorstore_config_dict=vectorstore_config_dict,
             embeddings=embeddings,
-            allowed_file_ids=allowed_file_ids
+            allowed_file_ids=allowed_file_ids,
+            connection=connect_to_db()
         )
     except Exception as e:
         logger.error(f"Error creating history-aware retriever: {e}")

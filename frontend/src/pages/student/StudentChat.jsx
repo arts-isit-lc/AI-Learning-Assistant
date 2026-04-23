@@ -226,30 +226,6 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
           course.course_id
         )}&module_id=${encodeURIComponent(module.module_id)}`;
 
-        return fetch(messageUrl, {
-          method: "POST",
-          headers: {
-            Authorization: authToken,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            message_content: messageContent,
-          }),
-        });
-      })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`Failed to create message: ${response.statusText}`);
-        }
-        return response.json();
-      })
-      .then((messageData) => {
-        setNewMessage(messageData[0]);
-        setIsAItyping(true);
-        textareaRef.current.value = "";
-
-        const message = messageData[0].message_content;
-
         const textGenUrl = `${
           import.meta.env.VITE_API_ENDPOINT
         }student/text_generation?course_id=${encodeURIComponent(
@@ -260,18 +236,44 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
           module.module_id
         )}&session_name=${encodeURIComponent(newSession.session_name)}`;
 
-        return fetch(textGenUrl, {
+        // P-7: Show message optimistically and fire both calls in parallel
+        setNewMessage({
+          message_content: messageContent,
+          student_sent: true,
+          session_id: newSession.session_id,
+          time_sent: new Date().toISOString(),
+        });
+        setIsAItyping(true);
+        textareaRef.current.value = "";
+
+        const createMessagePromise = fetch(messageUrl, {
           method: "POST",
           headers: {
             Authorization: authToken,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            message_content: message,
+            message_content: messageContent,
           }),
         });
+
+        const textGenPromise = fetch(textGenUrl, {
+          method: "POST",
+          headers: {
+            Authorization: authToken,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            message_content: messageContent,
+          }),
+        });
+
+        return Promise.all([createMessagePromise, textGenPromise]);
       })
-      .then((textGenResponse) => {
+      .then(([createMsgResponse, textGenResponse]) => {
+        if (!createMsgResponse.ok) {
+          console.error("Failed to persist message, but continuing with AI response");
+        }
         if (!textGenResponse.ok) {
           throw new Error(
             `Failed to generate text: ${textGenResponse.statusText}`
