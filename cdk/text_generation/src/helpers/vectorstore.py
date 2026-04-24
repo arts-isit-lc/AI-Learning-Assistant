@@ -1,4 +1,6 @@
 import logging
+import re
+import os
 from typing import Dict, List, Optional
 
 import psycopg2
@@ -12,6 +14,43 @@ logger = logging.getLogger(__name__)
 VECTOR_WEIGHT = 0.7
 KEYWORD_WEIGHT = 0.3
 TOP_K = 6
+
+# ARCH-2: Heuristic patterns for detecting ambiguous messages that need LLM reformulation
+AMBIGUOUS_PATTERNS = [
+    r'^(yes|no|yeah|nah|sure|okay|ok)[\.\?\!]?$',
+    r'^(tell|explain|elaborate|say)\s+(me\s+)?more',
+    r'^(go on|continue|keep going|what else)',
+    r'^(why|how so|how come|what do you mean)[\?\.\!]?$',
+    r'^(can you|could you)\s+(explain|clarify|elaborate)',
+]
+CONTEXT_PRONOUNS = r'\b(it|that|this|these|those|they|them|its|their)\b'
+
+
+def needs_reformulation(query: str, chat_history) -> bool:
+    """
+    ARCH-2: Lightweight heuristic to decide if a question needs LLM reformulation.
+    Returns True if the question likely references previous context.
+    """
+    if not chat_history:
+        return False
+
+    # Strip the "user\n" prefix added by get_student_query()
+    cleaned = query.strip().lower()
+    if cleaned.startswith("user"):
+        cleaned = cleaned[4:].strip()
+
+    for pattern in AMBIGUOUS_PATTERNS:
+        if re.match(pattern, cleaned, re.IGNORECASE):
+            return True
+
+    word_count = len(cleaned.split())
+    if word_count < 4:
+        return True
+
+    if word_count < 15 and re.search(CONTEXT_PRONOUNS, cleaned):
+        return True
+
+    return False
 
 
 def hybrid_search(
@@ -153,6 +192,7 @@ def get_vectorstore_retriever(
 
     retriever = RunnableLambda(retrieve)
 
+    # Build the LLM-based reformulation chain (used only when heuristic triggers)
     contextualize_q_system_prompt = (
         "Given a chat history and the latest user question "
         "which might reference context in the chat history, "
@@ -167,4 +207,20 @@ def get_vectorstore_retriever(
             ("human", "{input}"),
         ]
     )
-    return create_history_aware_retriever(llm, retriever, contextualize_q_prompt)
+    history_aware_retriever = create_history_aware_retriever(llm, retriever, contextualize_q_prompt)
+
+    # ARCH-2: Conditional wrapper that skips LLM reformulation for standalone questions
+    always_reformulate = os.environ.get("ALWAYS_REFORMULATE", "").lower() == "true"
+
+    def conditional_retriever(input_dict):
+        query = input_dict.get("input", "")
+        chat_history = input_dict.get("chat_history", [])
+
+        if always_reformulate or needs_reformulation(query, chat_history):
+            logger.info("ARCH-2: Using LLM reformulation for query")
+            return history_aware_retriever.invoke(input_dict)
+        else:
+            logger.info("ARCH-2: Skipping LLM reformulation — query appears standalone")
+            return retriever.invoke(query)
+
+    return RunnableLambda(conditional_retriever)

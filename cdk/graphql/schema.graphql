@@ -1,6 +1,8 @@
 type Subscription {
   onNotify(request_id: String!): Notification
     @aws_subscribe(mutations: ["sendNotification"])
+  onChatChunk(session_id: String!): ChatChunk
+    @aws_subscribe(mutations: ["sendChatChunk"])
 }
 
 type Notification {
@@ -8,8 +10,15 @@ type Notification {
   request_id: String
 }
 
+type ChatChunk {
+  session_id: String!
+  chunk: String!
+  done: Boolean!
+}
+
 type Mutation {
   sendNotification(message: String!, request_id: String!): Notification
+  sendChatChunk(session_id: String!, chunk: String!, done: Boolean!): ChatChunk
 }
 
 type Query {

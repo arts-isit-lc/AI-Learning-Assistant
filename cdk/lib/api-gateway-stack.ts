@@ -1503,6 +1503,21 @@ export class ApiGatewayStack extends cdk.Stack {
       responseMappingTemplate: appsync.MappingTemplate.lambdaResult(),
     });
 
+    // ARCH-1: Add NONE data source for chat streaming chunks (direct passthrough)
+    const chatChunkDataSource = this.eventApi.addNoneDataSource("ChatChunkDataSource");
+    chatChunkDataSource.createResolver("ResolverChatChunk", {
+      typeName: "Mutation",
+      fieldName: "sendChatChunk",
+      requestMappingTemplate: appsync.MappingTemplate.fromString(`{
+        "version": "2017-02-28",
+        "payload": $util.toJson($context.arguments)
+      }`),
+      responseMappingTemplate: appsync.MappingTemplate.fromString("$util.toJson($context.result)"),
+    });
+
+    // ARCH-1: Add AppSync URL to text gen Lambda (must be after eventApi is created)
+    textGenLambdaDockerFunc.addEnvironment("APPSYNC_API_URL", this.eventApi.graphqlUrl);
+
     // Add permission to allow main.py Lambda to invoke eventNotification Lambda
     notificationFunction.grantInvoke(new iam.ServicePrincipal("lambda.amazonaws.com"));
 

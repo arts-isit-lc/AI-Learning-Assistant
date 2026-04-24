@@ -50,7 +50,83 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
   const [newMessage, setNewMessage] = useState(null);
   const [isAItyping, setIsAItyping] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [streamingText, setStreamingText] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
+  const wsRef = useRef(null);
   const navigate = useNavigate();
+
+  // ARCH-1: Subscribe to AppSync WebSocket for streaming chat chunks
+  const subscribeToChunks = (sessionId) => {
+    const tempUrl = import.meta.env.VITE_GRAPHQL_WS_URL;
+    if (!tempUrl) return;
+    const apiUrl = tempUrl.replace("https://", "wss://");
+    const urlObj = new URL(apiUrl);
+    urlObj.pathname = "/realtime";
+    urlObj.searchParams.set("header", btoa(JSON.stringify({
+      host: new URL(tempUrl).hostname,
+      Authorization: "API_KEY",
+    })));
+    urlObj.searchParams.set("payload", btoa("{}"));
+
+    const ws = new WebSocket(urlObj.toString(), "graphql-ws");
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: "connection_init" }));
+      const subscriptionMessage = {
+        id: sessionId,
+        type: "start",
+        payload: {
+          data: JSON.stringify({
+            query: `subscription OnChatChunk($session_id: String!) { onChatChunk(session_id: $session_id) { session_id chunk done } }`,
+            variables: { session_id: sessionId },
+          }),
+          extensions: {
+            authorization: {
+              Authorization: "API_KEY",
+              host: new URL(tempUrl).hostname,
+            },
+          },
+        },
+      };
+      ws.send(JSON.stringify(subscriptionMessage));
+      setIsStreaming(true);
+      setStreamingText("");
+    };
+
+    ws.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+      if (message.type === "data" && message.payload?.data?.onChatChunk) {
+        const { chunk, done } = message.payload.data.onChatChunk;
+        if (done) {
+          setIsStreaming(false);
+          ws.close();
+          wsRef.current = null;
+        } else if (chunk) {
+          setStreamingText((prev) => prev + chunk);
+        }
+      }
+    };
+
+    ws.onerror = () => {
+      setIsStreaming(false);
+      ws.close();
+      wsRef.current = null;
+    };
+
+    ws.onclose = () => {
+      wsRef.current = null;
+    };
+  };
+
+  // Clean up WebSocket on unmount
+  useEffect(() => {
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (
@@ -242,6 +318,9 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
         setIsAItyping(true);
         textareaRef.current.value = "";
 
+        // ARCH-1: Subscribe to streaming chunks before firing text_gen
+        subscribeToChunks(newSession.session_id);
+
         const createMessagePromise = fetch(messageUrl, {
           method: "POST",
           headers: {
@@ -278,9 +357,18 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
         return textGenResponse.json();
       })
       .then((textGenData) => {
+        // ARCH-1: Clear streaming state — final response has arrived
+        setIsStreaming(false);
+        setStreamingText("");
+
+        // ARCH-3: Generate session name client-side from AI response (Option 1a)
+        const autoName = textGenData.session_name !== "New Chat"
+          ? textGenData.session_name
+          : textGenData.llm_output.split(/[.!?]/)[0].substring(0, 30) || "New Chat";
+
         setSession((prevSession) => ({
           ...prevSession,
-          session_name: textGenData.session_name,
+          session_name: autoName,
         }));
         const updateSessionName = `${
           import.meta.env.VITE_API_ENDPOINT
@@ -291,7 +379,7 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
         setSessions((prevSessions) => {
           return prevSessions.map((s) =>
             s.session_id === newSession.session_id
-              ? { ...s, session_name: titleCase(textGenData.session_name) }
+              ? { ...s, session_name: titleCase(autoName) }
               : s
           );
         });
@@ -314,7 +402,7 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              session_name: textGenData.session_name,
+              session_name: autoName,
             }),
           }),
           fetch(updateModuleScore, {
@@ -410,6 +498,9 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
         setSessions((prevItems) => [...prevItems, sessionData]);
         setSession(sessionData);
         setCreatingSession(false);
+
+        // ARCH-1: Subscribe to streaming chunks before firing text_gen
+        subscribeToChunks(sessionData.session_id);
 
         const textGenUrl = `${
           import.meta.env.VITE_API_ENDPOINT
@@ -723,7 +814,12 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
               />
             )
           )}
-          {isAItyping &&
+          {/* ARCH-1: Show streaming text as it arrives */}
+          {isStreaming && streamingText && currentSessionId &&
+            session?.session_id && currentSessionId === session.session_id && (
+            <AIMessage message={streamingText} />
+          )}
+          {isAItyping && !isStreaming &&
             currentSessionId &&
             session?.session_id &&
             currentSessionId === session.session_id && <TypingIndicator />}

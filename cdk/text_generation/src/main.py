@@ -3,11 +3,11 @@ import json
 import boto3
 import logging
 import psycopg2
-import boto3
+import httpx
 from langchain_aws import BedrockEmbeddings
 
 from helpers.vectorstore import get_vectorstore_retriever
-from helpers.chat import get_bedrock_llm, get_initial_student_query, get_student_query, create_dynamodb_history_table, get_response, update_session_name
+from helpers.chat import get_bedrock_llm, get_initial_student_query, get_student_query, create_dynamodb_history_table, get_response_streaming
 from constants.llm_models import DEFAULT_LLM_MODEL_ID, is_valid_model_id
 
 # Set up basic logging
@@ -21,6 +21,7 @@ RDS_PROXY_ENDPOINT = os.environ["RDS_PROXY_ENDPOINT"]
 BEDROCK_LLM_PARAM = os.environ["BEDROCK_LLM_PARAM"]
 EMBEDDING_MODEL_PARAM = os.environ["EMBEDDING_MODEL_PARAM"]
 TABLE_NAME_PARAM = os.environ["TABLE_NAME_PARAM"]
+APPSYNC_API_URL = os.environ.get("APPSYNC_API_URL", "")
 
 # AWS Clients
 secrets_manager_client = boto3.client("secretsmanager")
@@ -36,6 +37,9 @@ TABLE_NAME = None
 
 # Cached embeddings instance
 embeddings = None
+
+# ARCH-4: Cache ChatBedrock instances per model ID
+_llm_cache = {}
 
 # P-5: Guard to avoid redundant DynamoDB list_tables call on warm invocations
 _dynamodb_table_checked = False
@@ -84,6 +88,34 @@ def initialize_constants():
     if not _dynamodb_table_checked:
         create_dynamodb_history_table(TABLE_NAME)
         _dynamodb_table_checked = True
+
+def send_chat_chunk(session_id, chunk, done=False):
+    """ARCH-1: Send a streaming chunk to AppSync for real-time delivery to the frontend."""
+    if not APPSYNC_API_URL:
+        return
+    try:
+        query = """
+        mutation SendChatChunk($session_id: String!, $chunk: String!, $done: Boolean!) {
+            sendChatChunk(session_id: $session_id, chunk: $chunk, done: $done) {
+                session_id
+                chunk
+                done
+            }
+        }
+        """
+        payload = {
+            "query": query,
+            "variables": {
+                "session_id": session_id,
+                "chunk": chunk,
+                "done": done,
+            }
+        }
+        headers = {"Content-Type": "application/json", "Authorization": "API_KEY"}
+        with httpx.Client(timeout=10.0) as client:
+            client.post(APPSYNC_API_URL, headers=headers, json=payload)
+    except Exception as e:
+        logger.warning(f"Failed to send chat chunk to AppSync: {e}")
 
 def connect_to_db():
     global connection
@@ -295,7 +327,8 @@ def handler(event, context):
     
     try:
         logger.info("Creating Bedrock LLM instance.")
-        llm = get_bedrock_llm(effective_llm_model_id)
+        # ARCH-4: Pass global bedrock_runtime client for caching
+        llm = get_bedrock_llm(effective_llm_model_id, client=bedrock_runtime)
     except Exception as e:
         logger.error(f"Error getting LLM from Bedrock: {e}")
         return {
@@ -365,7 +398,9 @@ def handler(event, context):
         if connection is None:
             logger.error("No database connection available.")
             raise Exception("No database connection available.")
-        response = get_response(
+
+        # ARCH-1: Stream response via AppSync, then return final result
+        response = get_response_streaming(
             query=student_query,
             topic=topic,
             llm=llm,
@@ -376,7 +411,9 @@ def handler(event, context):
             module_prompt=module_prompt,
             course_id=course_id,
             module_id=module_id,
-            connection=connection
+            connection=connection,
+            chunk_callback=lambda chunk: send_chat_chunk(session_id, chunk),
+            done_callback=lambda: send_chat_chunk(session_id, "", done=True),
         )
     except Exception as e:
         logger.error(f"Error getting response: {e}")
@@ -391,18 +428,8 @@ def handler(event, context):
             'body': json.dumps('Error getting response')
         }
     
-    try:
-        logger.info("Updating session name if this is the first exchange between the LLM and student")
-        potential_session_name = update_session_name(TABLE_NAME, session_id, effective_llm_model_id)
-        if potential_session_name:
-            logger.info("This is the first exchange between the LLM and student. Updating session name.")
-            session_name = potential_session_name
-        else:
-            logger.info("Not the first exchange between the LLM and student. Session name remains the same.")
-    except Exception as e:
-        logger.error(f"Error updating session name: {e}")
-        session_name = "New Chat"
-    
+    # ARCH-3: Session naming removed from critical path.
+    # The frontend generates a name client-side (Option 1a).
     logger.info("Returning the generated response.")
     return {
         "statusCode": 200,

@@ -8,18 +8,19 @@ The chatbot's perceived slowness is primarily architectural, not just a matter o
 
 ### End-to-End Timeline: Student Sends a Message (Warm Invocation)
 
+*Updated after OPT-1, OPT-3, OPT-8, OPT-10 implementations.*
+
 ```
 FRONTEND (browser)
-├─ fetchAuthSession()                                    ~20ms
-├─ fetchUserAttributes()                                 ~20ms
-├─ [P-7] POST create_message ──┐                         ~200-400ms (parallel with text_gen)
+├─ fetchAuthSession() + extract email from ID token      ~20ms (OPT-10: no fetchUserAttributes)
+├─ [P-7] POST create_message ──┐                         ~150-250ms (parallel with text_gen)
 │   ├─ API Gateway routing      │                         ~10ms
-│   ├─ Authorizer Lambda        │                         ~30-80ms (Cognito AdminGetUser!)
-│   ├─ studentFunction Lambda   │                         ~100-200ms (5 sequential DB queries)
+│   ├─ Authorizer Lambda        │                         ~5-15ms (OPT-1: email from cached context)
+│   ├─ studentFunction Lambda   │                         ~80-150ms (OPT-3: 3 queries, down from 5)
 │   └─ Response to frontend     │
 └─ POST text_generation ────────┘                         ~5-25 SECONDS (the bottleneck)
     ├─ API Gateway routing                                ~10ms
-    ├─ Authorizer Lambda                                  ~30-80ms (Cognito AdminGetUser!)
+    ├─ Authorizer Lambda                                  ~5-15ms (OPT-1: email from cached context)
     └─ TextGenLambdaDockerFunc                            ~5-25 SECONDS
         ├─ initialize_constants()                         ~0ms (warm, cached)
         ├─ get_module_context()                           ~10-15ms (1 DB query)
@@ -43,6 +44,7 @@ FRONTEND (browser)
         │   │   │   (generates answer from context)
         │   │   └─ DynamoDB: save chat history            ~20-50ms
         │   └─ get_llm_output() (string processing)      ~0ms
+        │   (OPT-8: max 3 retries if empty response)
         │
         └─ update_session_name()                          ~0ms (returns None on 2nd+ message)
             OR (first message only):                      ~3-8 SECONDS
@@ -52,9 +54,9 @@ FRONTEND (browser)
             └─ return session name
 
 FRONTEND (after text_gen returns)
-├─ [parallel] PUT update_session_name                     ~200ms
-├─ [parallel] POST update_module_score                    ~200ms
-└─ POST create_ai_message                                 ~200-400ms
+├─ [parallel] PUT update_session_name                     ~150ms (OPT-1: no Cognito call)
+├─ [parallel] POST update_module_score                    ~150ms (OPT-1: no Cognito call)
+└─ POST create_ai_message                                 ~150-250ms (OPT-1 + OPT-3)
 ```
 
 ### Total Wall Clock Time
@@ -126,104 +128,160 @@ For a 20-message conversation, the chat history could be 5,000+ tokens, which:
 
 ### What Would Actually Make the Chatbot Feel Fast
 
-In priority order:
+In priority order (remaining items after OPT-1 through OPT-11 and P-1 through P-8):
 
-1. **Response streaming** — The student sees tokens appearing within 1-2 seconds instead of waiting 5-20 seconds for the complete response. This is the single biggest perceived-latency improvement. Requires architectural change (Lambda response streaming or WebSocket).
+1. **Response streaming (ARCH-1)** — The student sees tokens appearing within 1-2 seconds instead of waiting 5-20 seconds for the complete response. This is the single biggest perceived-latency improvement. Requires Lambda Function URL with response streaming. **Status: Blocked — VPC constraint. Lambda Function URLs don't support streaming in VPC. Requires revised approach (see ARCH-1 for options).**
 
-2. **Remove or conditionally skip the history-aware retriever LLM call** — For standalone questions (no pronouns referencing previous messages), skip the reformulation and use the raw question directly for retrieval. This saves 2-8 seconds on most messages. Could use a simple heuristic (check for pronouns like "it", "that", "this") or make it configurable.
+2. **Conditionally skip the history-aware retriever LLM call (ARCH-2)** — For standalone questions (no pronouns referencing previous messages), skip the reformulation and use the raw question directly for retrieval. This saves 2-8 seconds on most messages. **Status: ✅ Implemented.**
 
-3. **Move session naming out of the critical path** — Don't block the response return on session name generation. Either do it asynchronously (invoke a separate Lambda) or let the frontend handle it in the post-response flow.
+3. **Move session naming out of the critical path (ARCH-3)** — Don't block the response return on session name generation. Let the frontend generate a name client-side. **Status: ✅ Implemented.**
 
-4. **Limit chat history window** — Only send the last N messages (e.g., 10) to the LLM instead of the full history. Keeps LLM call times consistent regardless of conversation length.
+4. **Cache ChatBedrock instance per model ID (ARCH-4)** — Avoid redundant boto3 client creation on every invocation. Saves ~15ms per request. **Status: ✅ Implemented.**
 
-5. **The optimizations we've already done (P-1 through P-8)** — VPC endpoint, combined queries, connection reuse, etc. These shave ~200-500ms total, which matters but is dwarfed by the 5-20 second LLM calls.
+5. **Already implemented**: P-1 through P-8 (VPC endpoint, combined queries, connection reuse, code splitting, etc.) + OPT-1 (Cognito AdminGetUser eliminated) + OPT-3 (sequential queries reduced) + OPT-8 (retry limit) + OPT-10 (fetchUserAttributes eliminated). These collectively save ~400-700ms per chat exchange.
 
 ### Summary
 
-The chatbot's slowness is fundamentally architectural. The synchronous request/response pattern with 2-3 sequential LLM calls means the student always waits 5-20+ seconds. No amount of query optimization or connection reuse will change this — the LLM inference time dominates everything else by 10-100x.
+After implementing ARCH-2, ARCH-3, and ARCH-4, the chatbot's per-message overhead is significantly reduced:
+- ARCH-2 saves 2-8 seconds on ~70-80% of messages (standalone questions skip the reformulation LLM call)
+- ARCH-3 saves 2-8 seconds on the first student reply (session naming removed from critical path)
+- ARCH-4 saves ~15ms per request (ChatBedrock cached)
 
-The highest-impact change is response streaming, which doesn't reduce total time but transforms the UX from "wait 15 seconds, see everything" to "see first words in 1-2 seconds, response builds in real-time." This is how ChatGPT, Claude, and every modern chatbot works.
+Combined with all OPT and P-item implementations, the non-LLM overhead is now minimal. The remaining bottleneck is the synchronous request/response pattern — the student still waits for the full RAG response (LLM Call #2: 2-10 seconds) before seeing anything.
+
+**The single remaining high-impact change is ARCH-1 (response streaming)**, which transforms the UX from "wait for complete response" to "see tokens in 1-2 seconds." This is currently blocked by a VPC constraint — Lambda Function URLs don't support streaming when the Lambda is in a VPC. See ARCH-1 for revised options that need further evaluation.
 
 ---
 
 ## ARCH-1: Switch Text Generation to Lambda Function URL with Response Streaming
 
-This is the single highest-impact change for chatbot UX. It transforms the student experience from "stare at a spinner for 5-20 seconds" to "see the first words in 1-2 seconds, response builds in real-time."
+**Status: Blocked — VPC constraint discovered during implementation.**
 
-### Why Lambda Function URL
+Lambda Function URLs do not support response streaming when the Lambda is in a VPC (confirmed in [AWS docs](https://docs.aws.amazon.com/lambda/latest/dg/configuration-response-streaming.html)). The `TextGenLambdaDockerFunc` must remain in VPC for RDS Proxy access (RDS Proxy has no public endpoint) and the Bedrock VPC endpoint.
 
-Three options were evaluated:
+Additionally, Python Docker Lambda functions don't natively support response streaming — they require the [Lambda Web Adapter](https://github.com/awslabs/aws-lambda-web-adapter) which wraps a web framework (FastAPI) inside the Lambda.
 
-| Option | Time-to-first-token | Per-request cost | Implementation effort | Auth approach |
-|--------|---------------------|------------------|----------------------|---------------|
-| Lambda Function URL | ~1-2s | Free | Low | JWT verification in Lambda |
-| AppSync WebSocket (existing) | ~1.5-2.5s | ~$0.00005/response | Medium | AppSync auth |
-| New WebSocket API Gateway | ~1.5-2.5s | ~$0.000002/response | High | Custom |
+### Deep Dive: Three Revised Options
 
-Lambda Function URL wins on every axis:
-- **Fewest network hops**: Browser → Lambda. No API Gateway routing (~10ms), no separate authorizer Lambda invocation (~30-80ms). The request hits the Lambda directly.
-- **Native streaming**: The Lambda writes to a response stream and bytes flow directly to the client. Options 2 and 3 require the Lambda to actively push chunks through a separate service (AppSync mutations or WebSocket API sends), adding per-chunk overhead.
-- **Zero per-request cost**: API Gateway REST API charges $3.50/million requests. Function URLs are free. At scale (e.g., 2.4M requests/semester for 1,000 students), this saves ~$8.40/semester — small but it's pure waste eliminated.
-- **Simpler implementation**: No new infrastructure. Add a Function URL to the existing Docker Lambda. The streaming logic (Bedrock streaming + writing chunks) is contained within the Lambda.
+#### Option A: Lambda Web Adapter + Non-VPC Proxy Lambda
 
-### Scaling Characteristics
+**Architecture:**
+```
+Browser → Non-VPC Proxy Lambda (Function URL, RESPONSE_STREAM)
+            → invokes VPC Text Gen Lambda via InvokeWithResponseStream API
+                → VPC Lambda streams response back through invoke API
+            → Proxy streams to browser
+```
 
-- Lambda Function URLs scale identically to API Gateway-invoked Lambdas — same concurrency pool, same burst limits, same provisioned concurrency options.
-- The scaling bottleneck is Bedrock model throughput limits and Lambda concurrent execution limits (default 1,000/account), not the transport layer. All three options hit the same bottleneck.
-- JWT verification inside the Lambda (`aws-jwt-verify` with cached JWKS) is actually more efficient at scale than the current separate authorizer Lambda — it eliminates one Lambda invocation per request.
+**What changes:**
+- New lightweight proxy Lambda (Node.js, non-VPC) with a Function URL (`InvokeMode: RESPONSE_STREAM`)
+- Proxy receives the request, validates JWT, invokes the VPC Lambda via `InvokeWithResponseStream`
+- VPC text gen Lambda refactored to use Lambda Web Adapter + FastAPI for streaming
+- Dockerfile changes: add `COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:1.0.0 /lambda-adapter /opt/extensions/lambda-adapter`
+- Handler rewritten from `def handler(event, context)` to FastAPI `StreamingResponse`
+- Frontend reads streaming response via `response.body.getReader()`
 
-### Auth Without API Gateway Authorizer
+**Pros:**
+- True end-to-end streaming — tokens appear in 1-2 seconds
+- VPC Lambda keeps all its VPC benefits (RDS Proxy, Bedrock VPC endpoint)
+- Proxy Lambda is tiny (~50 lines), cold starts in <500ms
 
-The current flow: API Gateway → Authorizer Lambda (fetches Cognito secret, verifies JWT) → Text Gen Lambda.
+**Cons:**
+- Two Lambda invocations per request (proxy + VPC Lambda) — adds ~50-100ms overhead
+- Significant refactor of the text gen handler (standard handler → FastAPI app)
+- New Lambda to maintain
+- `InvokeWithResponseStream` from a non-VPC Lambda to a VPC Lambda requires a Lambda interface VPC endpoint (additional cost ~$14.40/mo per AZ)
+- Complexity: three moving parts (proxy, adapter, VPC Lambda)
 
-With Function URL: Browser → Text Gen Lambda (verifies JWT internally).
+**Effort: High.** The FastAPI refactor alone is substantial — the entire handler, `get_response`, and the LangChain chain invocation need to be rewritten for streaming.
 
-The `aws-jwt-verify` library (already used by the authorizers) caches the JWKS after the first fetch. On warm invocations, JWT verification is pure local crypto (~5ms, no network call). This is faster than the current authorizer Lambda invocation (~30-80ms including the Cognito AdminGetUser call).
+---
 
-Implementation: Add JWT verification at the top of the text generation handler. The Function URL can use `AWS_IAM` auth type (frontend signs requests with Cognito Identity Pool credentials) or `NONE` auth type with manual JWT verification in the Lambda.
+#### Option B: AppSync WebSocket (Existing Infrastructure)
 
-### Rate Limiting / WAF
+**Architecture:**
+```
+Browser ← WebSocket subscription (AppSync) ← mutations
+Browser → POST text_generation (API Gateway, existing)
+            → VPC Text Gen Lambda
+                → generates tokens via LangChain .stream()
+                → sends each chunk as AppSync mutation via HTTP POST
+            → returns final JSON response (llm_verdict, session_name)
+Browser ← receives chunks in real-time via WebSocket
+```
 
-Function URLs don't have built-in throttling or WAF. For a university course platform with authenticated users, this is unlikely to be a concern. If needed later, add CloudFront in front of the Function URL — it provides WAF integration, is free for the first 10M requests/month, and doesn't lock you in.
+**What changes:**
+- Add a new subscription type to the GraphQL schema for chat streaming:
+  ```graphql
+  type ChatChunk {
+    session_id: String!
+    chunk: String!
+    done: Boolean!
+  }
+  type Subscription {
+    onChatChunk(session_id: String!): ChatChunk
+      @aws_subscribe(mutations: ["sendChatChunk"])
+  }
+  type Mutation {
+    sendChatChunk(session_id: String!, chunk: String!, done: Boolean!): ChatChunk
+  }
+  ```
+- Text gen Lambda switches from `chain.invoke()` to `chain.stream()`, sends each chunk as an AppSync mutation
+- Frontend subscribes to `onChatChunk(session_id)` before sending the text_gen request, displays chunks as they arrive
+- The existing API Gateway endpoint stays — the Lambda still returns the final JSON with `llm_verdict` after streaming completes
 
-### What Changes
+**Proven pattern:** The SQS trigger Lambda (`sqsTrigger/src/main.py`) already calls AppSync mutations from within VPC using `httpx.Client().post(APPSYNC_API_URL, ...)`. The text gen Lambda would use the same pattern.
 
-**Infrastructure (CDK):**
-- Add a Function URL to `TextGenLambdaDockerFunc` with `InvokeMode: RESPONSE_STREAM`
-- The existing API Gateway `text_generation` endpoint can remain as a fallback or be removed
-- No new Lambda functions, no new services
+**Pros:**
+- Uses existing AppSync infrastructure — no new services
+- VPC Lambda stays unchanged in terms of VPC placement
+- No proxy Lambda needed
+- AppSync handles WebSocket connection management, scaling, auth
+- Frontend already has WebSocket code in `InstructorHomepage.jsx` — can reuse the pattern
+- The API Gateway endpoint stays as the request trigger and returns the final response (verdict, etc.)
 
-**Backend (text_generation Lambda):**
-- Switch from `return { statusCode: 200, body: json.dumps(...) }` to writing chunks to the Lambda response stream
-- Switch Bedrock invocation from `invoke_model` to `invoke_model_with_response_stream` (or LangChain's `.stream()` instead of `.invoke()`)
-- Add JWT verification at the top of the handler (using `aws-jwt-verify` or PyJWT + JWKS)
-- Move `update_session_name` out of the critical path — either return the response first and run it after, or skip it entirely and let the frontend's existing `PUT update_session_name` handle it
+**Cons:**
+- Each token chunk is a separate AppSync mutation HTTP call from the Lambda (~5-10ms each). For a 200-token response, that's ~200 HTTP calls from the Lambda during generation. This adds CPU overhead and extends Lambda execution time.
+- AppSync has a 240KB payload limit per message — not an issue for individual token chunks
+- Slightly higher latency per chunk vs direct streaming (~10-30ms per chunk vs ~1ms for Function URL)
+- Time-to-first-token is ~1.5-2.5 seconds (vs ~1-2s for Function URL) due to AppSync mutation overhead
+- AppSync real-time updates cost: $2/million connection minutes + $1/million messages. For 200 chunks × 20 messages/day × 1000 students = 4M messages/month = ~$4/month
 
-**Frontend (StudentChat.jsx):**
-- Switch the `text_generation` fetch from reading a JSON response to reading a streaming response body (`response.body.getReader()`)
-- Display tokens as they arrive instead of waiting for the complete response
-- The Function URL endpoint replaces the API Gateway endpoint for this one call only
+**Effort: Medium.** The Lambda needs to switch from `.invoke()` to `.stream()` and add AppSync mutation calls per chunk. The frontend needs a WebSocket subscription. But no handler architecture change — it's still a standard Lambda handler.
 
-### Estimated Impact
+---
 
-| Metric | Current | With Streaming |
-|--------|---------|---------------|
-| Time to first visible token | 5-20s | 1-2s |
-| Total response time | 5-20s | 5-20s (unchanged) |
-| Perceived wait time | 5-20s | 1-2s |
-| Student experience | Spinner → wall of text | Tokens appear in real-time |
+#### Option C: Move Text Gen Lambda Out of VPC
 
-### Risk Assessment
+**Status: Not viable.** RDS Proxy has no public endpoint. The text gen Lambda connects to RDS Proxy for `get_module_context()`, `get_allowed_file_ids()`, `hybrid_search()` (vector + keyword queries), and `get_other_module_names()`. Without VPC access, these DB queries fail entirely.
 
-- **Breaking changes**: None if the API Gateway endpoint is kept as fallback. The frontend switches to the Function URL for text_generation only.
-- **Auth**: JWT verification in Lambda is the same crypto as the authorizer, just done in-process. No security regression.
-- **Rollback**: If streaming causes issues, the frontend can switch back to the API Gateway endpoint with a config change.
-- **No lock-in**: The streaming logic inside the Lambda (Bedrock streaming + chunk writing) works the same regardless of transport. Moving to WebSocket later is straightforward if needed.
-- **Docker Lambda compatibility**: Lambda Function URLs with response streaming are supported for Docker image Lambdas (the current `TextGenLambdaDockerFunc` is Docker-based). Confirmed in AWS docs.
+Moving out of VPC would also reverse P-1 (Bedrock VPC endpoint) and P-6 (connection reuse through VPC).
+
+**Eliminated.**
+
+---
+
+### Recommendation: Option B (AppSync WebSocket)
+
+Option B is the right choice for this application:
+
+1. **Lowest risk**: Uses existing AppSync infrastructure. The SQS trigger already proves AppSync mutations work from VPC Lambdas. The frontend already has WebSocket code.
+
+2. **No architectural rewrite**: The Lambda handler stays as a standard handler. The main change is switching from `chain.invoke()` to `chain.stream()` and adding AppSync mutation calls per chunk. No FastAPI, no Lambda Web Adapter, no proxy Lambda.
+
+3. **Good enough latency**: Time-to-first-token of ~1.5-2.5 seconds is a massive improvement over the current 5-20 seconds. The ~0.5-1 second difference vs a Function URL is negligible for this use case.
+
+4. **Clean separation**: The API Gateway endpoint still handles the request/response (parameters, auth, final verdict). AppSync handles only the streaming chunks. The frontend subscribes before sending the request and unsubscribes after receiving `done: true`.
+
+5. **Cost**: ~$4/month for AppSync messages at scale. Negligible.
+
+Option A is technically superior (lower per-chunk latency) but requires a significant architectural rewrite (FastAPI, Lambda Web Adapter, proxy Lambda, VPC endpoint for Lambda invoke) that isn't justified by the marginal latency improvement.
 
 ---
 
 ## ARCH-2: Conditionally Skip History-Aware Retriever Using Lightweight Heuristic
+
+**Status: ✅ Implemented** — `needs_reformulation()` heuristic added to `vectorstore.py`. Skips LLM Call #1 for standalone questions and first messages. Rollback via `ALWAYS_REFORMULATE=true` env var.
 
 Saves 2-8 seconds on most messages by avoiding a full LLM call that usually returns the question unchanged.
 
@@ -308,7 +366,10 @@ def needs_reformulation(query: str, chat_history) -> bool:
     if not chat_history:
         return False
 
+    # Strip the "user\n" prefix added by get_student_query()
     cleaned = query.strip().lower()
+    if cleaned.startswith("user"):
+        cleaned = cleaned[4:].strip()
 
     # Short ambiguous phrases
     for pattern in AMBIGUOUS_PATTERNS:
@@ -412,6 +473,8 @@ The first-message skip (Option A) is the highest-value case because it's the stu
 ---
 
 ## ARCH-3: Remove Session Naming from Text Generation Critical Path
+
+**Status: ✅ Implemented** — `update_session_name()` removed from handler. Frontend generates session names client-side from the first sentence of the AI response (Option 1a).
 
 Saves 2-8 seconds on the student's first reply by not blocking the AI response on a cosmetic LLM call.
 
@@ -553,10 +616,13 @@ from helpers.chat import get_bedrock_llm, get_initial_student_query, get_student
 - **Breaking changes**: The `session_name` field in the text_gen response will always be "New Chat" instead of an LLM-generated name. The frontend already handles this — it uses `textGenData.session_name` to update the sidebar, and "New Chat" is the default. With Option 1a, the frontend generates a better name client-side.
 - **Cost savings**: Eliminates one Bedrock LLM call on the first exchange of every conversation. At scale (1,000 students × 5 new conversations/week), that's 5,000 fewer Bedrock invocations per week.
 - **Rollback**: If LLM-generated names are needed, the `update_session_name` function still exists in git history and can be restored. Or use Option 1b to move it to the post-response flow.
+- **ARCH-1 interaction**: If ARCH-1 (streaming) is also implemented, the response format changes from JSON to a stream. Option 1a (client-side naming) is the cleanest approach for streaming since it doesn't require any session name in the streamed response. Implement ARCH-3 before or alongside ARCH-1.
 
 ---
 
 ## ARCH-4: Cache `ChatBedrock` Instance Per Model ID
+
+**Status: ✅ Implemented** — `_llm_cache` dict added to `chat.py`. `get_bedrock_llm()` now caches per model ID and reuses the global `bedrock_runtime` client.
 
 Saves ~10-15ms per invocation by avoiding redundant boto3 client creation and LangChain object construction on every request.
 
