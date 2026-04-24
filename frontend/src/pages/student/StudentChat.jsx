@@ -5,6 +5,7 @@ import StudentMessage from "../../components/StudentMessage";
 import { fetchAuthSession } from "aws-amplify/auth";
 import { useNavigate } from "react-router-dom";
 import { signOut } from "aws-amplify/auth";
+import ArrowCircleLeftRoundedIcon from "@mui/icons-material/ArrowCircleLeftRounded";
 
 const TypingIndicator = () => (
   <div className="flex items-center ml-28 mb-4">
@@ -726,11 +727,10 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
     <div className="flex flex-row h-screen">
       <div className="flex flex-col w-1/4 bg-gradient-to-tr from-purple-300 to-cyan-100">
         <div className="flex flex-row mt-3 mb-3 ml-4">
-          <img
+          <ArrowCircleLeftRoundedIcon
             onClick={() => handleBack()}
-            className="w-8 h-8 cursor-pointer"
-            src="./ArrowCircleDownRounded.png"
-            alt="back"
+            className="cursor-pointer"
+            sx={{ width: 32, height: 32 }}
           />
           <div className="ml-3 pt-0.5 text-black font-roboto font-bold text-lg">
             {titleCase(module.module_name)}
@@ -800,7 +800,7 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
           <img
             onClick={handleSubmit}
             className="cursor-pointer w-3 h-3 mr-4"
-            src="./send.png"
+            src="/send.png"
             alt="send"
           />
         </div>

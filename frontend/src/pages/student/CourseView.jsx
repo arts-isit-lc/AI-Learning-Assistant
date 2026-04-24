@@ -6,6 +6,7 @@ import { signOut } from "aws-amplify/auth";
 
 import { BiCheck } from "react-icons/bi";
 import { FaInfoCircle } from "react-icons/fa";
+import ArrowCircleLeftRoundedIcon from "@mui/icons-material/ArrowCircleLeftRounded";
 
 import {
   Button,
@@ -129,6 +130,7 @@ export const CourseView = ({ course, setModule, setCourse }) => {
 
   useEffect(() => {
     const fetchCoursePage = async () => {
+      if (!course) return;
       try {
         const session = await fetchAuthSession();
         const { email } = await fetchUserAttributes();
@@ -187,11 +189,10 @@ export const CourseView = ({ course, setModule, setCourse }) => {
     <div className="bg-[#F8F9FD] w-screen h-screen">
       <header className="bg-[#F8F9FD] p-4 flex justify-between items-center max-h-20">
         <div className="text-black text-xl font-roboto font-semibold p-2 flex flex-row">
-          <img
+          <ArrowCircleLeftRoundedIcon
             onClick={() => handleBack()}
-            className="mt-1 mr-2 w-6 h-6 cursor-pointer"
-            src="./ArrowCircleDownRounded.png"
-            alt="back"
+            className="mt-1 mr-2 cursor-pointer"
+            sx={{ width: 24, height: 24 }}
           />
           {course.course_department.toUpperCase()} {course.course_number}
         </div>
