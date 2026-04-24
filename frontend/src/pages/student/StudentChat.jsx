@@ -57,66 +57,76 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
 
   // ARCH-1: Subscribe to AppSync WebSocket for streaming chat chunks
   const subscribeToChunks = (sessionId) => {
-    const tempUrl = import.meta.env.VITE_GRAPHQL_WS_URL;
-    if (!tempUrl) return;
-    const apiUrl = tempUrl.replace("https://", "wss://");
-    const urlObj = new URL(apiUrl);
-    urlObj.pathname = "/realtime";
-    urlObj.searchParams.set("header", btoa(JSON.stringify({
-      host: new URL(tempUrl).hostname,
-      Authorization: "API_KEY",
-    })));
-    urlObj.searchParams.set("payload", btoa("{}"));
+    try {
+      const tempUrl = import.meta.env.VITE_GRAPHQL_WS_URL;
+      if (!tempUrl) return;
 
-    const ws = new WebSocket(urlObj.toString(), "graphql-ws");
-    wsRef.current = ws;
+      // Build the realtime URL using the same pattern as InstructorHomepage
+      const apiUrl = tempUrl.replace("https://", "wss://");
+      const urlObj = new URL(apiUrl);
+      const tmpObj = new URL(tempUrl);
+      urlObj.hostname = urlObj.hostname.replace("appsync-api", "appsync-realtime-api");
 
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ type: "connection_init" }));
-      const subscriptionMessage = {
-        id: sessionId,
-        type: "start",
-        payload: {
-          data: JSON.stringify({
-            query: `subscription OnChatChunk($session_id: String!) { onChatChunk(session_id: $session_id) { session_id chunk done } }`,
-            variables: { session_id: sessionId },
-          }),
-          extensions: {
-            authorization: {
-              Authorization: "API_KEY",
-              host: new URL(tempUrl).hostname,
+      const header = {
+        host: tmpObj.hostname,
+        Authorization: `API_KEY=${import.meta.env.VITE_API_KEY}`,
+      };
+      const encodedHeader = btoa(JSON.stringify(header));
+      const wsUrl = `${urlObj.toString()}?header=${encodedHeader}&payload=e30=`;
+
+      const ws = new WebSocket(wsUrl, "graphql-ws");
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ type: "connection_init" }));
+        const subscriptionMessage = {
+          id: sessionId,
+          type: "start",
+          payload: {
+            data: JSON.stringify({
+              query: `subscription OnChatChunk($session_id: String!) { onChatChunk(session_id: $session_id) { session_id chunk done } }`,
+              variables: { session_id: sessionId },
+            }),
+            extensions: {
+              authorization: {
+                Authorization: `API_KEY=${import.meta.env.VITE_API_KEY}`,
+                host: tmpObj.hostname,
+              },
             },
           },
-        },
+        };
+        ws.send(JSON.stringify(subscriptionMessage));
+        setIsStreaming(true);
+        setStreamingText("");
       };
-      ws.send(JSON.stringify(subscriptionMessage));
-      setIsStreaming(true);
-      setStreamingText("");
-    };
 
-    ws.onmessage = (event) => {
-      const message = JSON.parse(event.data);
-      if (message.type === "data" && message.payload?.data?.onChatChunk) {
-        const { chunk, done } = message.payload.data.onChatChunk;
-        if (done) {
-          setIsStreaming(false);
-          ws.close();
-          wsRef.current = null;
-        } else if (chunk) {
-          setStreamingText((prev) => prev + chunk);
+      ws.onmessage = (event) => {
+        const message = JSON.parse(event.data);
+        if (message.type === "data" && message.payload?.data?.onChatChunk) {
+          const { chunk, done } = message.payload.data.onChatChunk;
+          if (done) {
+            setIsStreaming(false);
+            ws.close();
+            wsRef.current = null;
+          } else if (chunk) {
+            setStreamingText((prev) => prev + chunk);
+          }
         }
-      }
-    };
+      };
 
-    ws.onerror = () => {
-      setIsStreaming(false);
-      ws.close();
-      wsRef.current = null;
-    };
+      ws.onerror = () => {
+        setIsStreaming(false);
+        if (ws) ws.close();
+        wsRef.current = null;
+      };
 
-    ws.onclose = () => {
-      wsRef.current = null;
-    };
+      ws.onclose = () => {
+        wsRef.current = null;
+      };
+    } catch (e) {
+      // Non-blocking — if WebSocket fails, the text_gen API call still works
+      console.error("Failed to subscribe to chat chunks:", e);
+    }
   };
 
   // Clean up WebSocket on unmount
