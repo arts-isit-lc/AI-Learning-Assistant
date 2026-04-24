@@ -4,7 +4,6 @@ import Session from "../../components/Session";
 import StudentMessage from "../../components/StudentMessage";
 import { fetchAuthSession } from "aws-amplify/auth";
 import { useNavigate } from "react-router-dom";
-import { fetchUserAttributes } from "aws-amplify/auth";
 import { signOut } from "aws-amplify/auth";
 
 const TypingIndicator = () => (
@@ -89,7 +88,7 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
 
       try {
         const session = await fetchAuthSession();
-        const { email } = await fetchUserAttributes();
+        const email = session.tokens.idToken.payload.email;
         const token = session.tokens.idToken
         const response = await fetch(
           `${
@@ -142,7 +141,7 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
   async function retrieveKnowledgeBase(message, sessionId) {
     try {
       const authSession = await fetchAuthSession();
-      const { email } = await fetchUserAttributes();
+      const email = authSession.tokens.idToken.payload.email;
       const token = authSession.tokens.idToken
       try {
         const response = await fetch(
@@ -212,10 +211,7 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
       })
       .then((authSession) => {
         authToken = authSession.tokens.idToken
-        return fetchUserAttributes();
-      })
-      .then(({ email }) => {
-        userEmail = email;
+        userEmail = authSession.tokens.idToken.payload.email;
         const messageUrl = `${
           import.meta.env.VITE_API_ENDPOINT
         }student/create_message?session_id=${encodeURIComponent(
@@ -382,10 +378,7 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
     return fetchAuthSession()
       .then((session) => {
         authToken = session.tokens.idToken
-        return fetchUserAttributes();
-      })
-      .then(({ email }) => {
-        userEmail = email;
+        userEmail = session.tokens.idToken.payload.email;
         const session_name = "New chat";
         const url = `${
           import.meta.env.VITE_API_ENDPOINT
@@ -464,7 +457,7 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
   const handleDeleteSession = async (sessionDelete) => {
     try {
       const authSession = await fetchAuthSession();
-      const { email } = await fetchUserAttributes();
+      const email = authSession.tokens.idToken.payload.email;
       const token = authSession.tokens.idToken
       const response = await fetch(
         `${
@@ -506,7 +499,7 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
   const handleDeleteMessage = async (message) => {
     // remember to set is submitting true/false
     const authSession = await fetchAuthSession();
-    const { email } = await fetchUserAttributes();
+    const email = authSession.tokens.idToken.payload.email;
     const token = authSession.tokens.idToken
     try {
       const response = await fetch(
@@ -590,7 +583,7 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
   const getMessages = async () => {
     try {
       const authSession = await fetchAuthSession();
-      const { email } = await fetchUserAttributes();
+      const email = authSession.tokens.idToken.payload.email;
       const token = authSession.tokens.idToken
       const response = await fetch(
         `${

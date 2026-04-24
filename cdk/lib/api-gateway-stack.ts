@@ -549,7 +549,6 @@ export class ApiGatewayStack extends cdk.Stack {
       environment: {
         SM_DB_CREDENTIALS: db.secretPathUser.secretName,
         RDS_PROXY_ENDPOINT: db.rdsProxyEndpoint,
-        USER_POOL: this.userPool.userPoolId,
       },
       functionName: `${id}-studentFunction`,
       memorySize: 256,
@@ -580,7 +579,6 @@ export class ApiGatewayStack extends cdk.Stack {
         environment: {
           SM_DB_CREDENTIALS: db.secretPathUser.secretName,
           RDS_PROXY_ENDPOINT: db.rdsProxyEndpoint,
-          USER_POOL: this.userPool.userPoolId,
         },
         functionName: `${id}-instructorFunction`,
         memorySize: 256,

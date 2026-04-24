@@ -163,13 +163,22 @@ def lambda_handler(event, context):
 
         document_files = list_files_in_s3_prefix(BUCKET, document_prefix)
 
-        # Retrieve metadata and generate presigned URLs for documents
+        # OPT-9: Batch query for all file metadata instead of per-file queries
+        connection = connect_to_db()
+        cur = connection.cursor()
+        cur.execute(
+            'SELECT filename, filetype, metadata FROM "Module_Files" WHERE module_id = %s;',
+            (module_id,)
+        )
+        all_metadata = {f"{row[0]}.{row[1]}": row[2] for row in cur.fetchall()}
+        cur.close()
+
+        # Generate presigned URLs and match metadata from batch query
         document_files_urls = {}
 
         for file_name in document_files:
-            file_type = file_name.split('.')[-1]  # Get the file extension
             presigned_url = generate_presigned_url(BUCKET, f"{document_prefix}{file_name}")
-            metadata = get_file_metadata_from_db(module_id, file_name.split('.')[0], file_type)
+            metadata = all_metadata.get(file_name)
             document_files_urls[f"{file_name}"] = {
                 "url": presigned_url,
                 "metadata": metadata

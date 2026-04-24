@@ -1,27 +1,12 @@
 const { initializeConnection } = require("./lib.js");
-let { SM_DB_CREDENTIALS, RDS_PROXY_ENDPOINT, USER_POOL } = process.env;
-const {
-  CognitoIdentityProviderClient,
-  AdminGetUserCommand,
-} = require("@aws-sdk/client-cognito-identity-provider");
+let { SM_DB_CREDENTIALS, RDS_PROXY_ENDPOINT } = process.env;
 
 // SQL conneciton from global variable at lib.js
 let sqlConnection = global.sqlConnection;
 
 exports.handler = async (event) => {
-  const cognito_id = event.requestContext.authorizer.userId;
-  const client = new CognitoIdentityProviderClient();
-  const userAttributesCommand = new AdminGetUserCommand({
-    UserPoolId: USER_POOL,
-    Username: cognito_id,
-  });
-  const userAttributesResponse = await client.send(userAttributesCommand);
-
-  const emailAttr = userAttributesResponse.UserAttributes.find(
-    (attr) => attr.Name === "email"
-  );
-  const userEmailAttribute = emailAttr ? emailAttr.Value : null;
-  console.log(userEmailAttribute);
+  // OPT-1: Read email from authorizer context instead of calling Cognito AdminGetUser
+  const userEmailAttribute = event.requestContext.authorizer.email;
   // Check for query string parameters
 
   const queryStringParams = event.queryStringParameters || {};
@@ -266,7 +251,8 @@ exports.handler = async (event) => {
                   "Student_Modules".student_module_id,
                   "Student_Modules".module_score,
                   "Student_Modules".last_accessed,
-                  "Student_Modules".module_context_embedding
+                  "Student_Modules".module_context_embedding,
+                  StudentEnrollment.enrolment_id
                 FROM
                   "Course_Concepts"
                 JOIN
@@ -281,12 +267,13 @@ exports.handler = async (event) => {
                   "Course_Modules".module_number;
               `;
 
+            // OPT-7: Fixed — use user_id (not user_email) and enrolment_id from CTE
             const enrolmentId = data[0]?.enrolment_id;
 
             if (enrolmentId) {
               await sqlConnection`
-                  INSERT INTO "User_Engagement_Log" (log_id, user_email, course_id, module_id, enrolment_id, timestamp, engagement_type)
-                  VALUES (uuid_generate_v4(), ${studentEmail}, ${courseId}, null, ${enrolmentId}, CURRENT_TIMESTAMP, 'course access');
+                  INSERT INTO "User_Engagement_Log" (log_id, user_id, course_id, module_id, enrolment_id, timestamp, engagement_type)
+                  VALUES (uuid_generate_v4(), ${userId}, ${courseId}, null, ${enrolmentId}, CURRENT_TIMESTAMP, 'course access');
                 `;
             }
 
@@ -667,32 +654,15 @@ exports.handler = async (event) => {
                 WHERE session_id = ${sessionId};
               `;
 
-            // Retrieve user_id based on studentEmail
-            const userData = await sqlConnection`
-                SELECT user_id
-                FROM "Users"
-                WHERE user_email = ${studentEmail};
+            // OPT-3: Single INSERT...SELECT replaces 3 sequential queries for engagement logging
+            await sqlConnection`
+                INSERT INTO "User_Engagement_Log" (log_id, user_id, course_id, module_id, enrolment_id, timestamp, engagement_type)
+                SELECT uuid_generate_v4(), e.user_id, ${courseId}, ${moduleId}, e.enrolment_id, CURRENT_TIMESTAMP, 'message creation'
+                FROM "Enrolments" e
+                JOIN "Users" u ON e.user_id = u.user_id
+                WHERE u.user_email = ${studentEmail} AND e.course_id = ${courseId}
+                LIMIT 1;
               `;
-
-            const userId = userData[0]?.user_id;
-
-            if (userId) {
-              // Retrieve the enrolment ID using user_id
-              const enrolmentData = await sqlConnection`
-                  SELECT enrolment_id
-                  FROM "Enrolments"
-                  WHERE user_id = ${userId} AND course_id = ${courseId};
-                `;
-
-              const enrolmentId = enrolmentData[0]?.enrolment_id;
-
-              if (enrolmentId) {
-                await sqlConnection`
-                    INSERT INTO "User_Engagement_Log" (log_id, user_id, course_id, module_id, enrolment_id, timestamp, engagement_type)
-                    VALUES (uuid_generate_v4(), ${userId}, ${courseId}, ${moduleId}, ${enrolmentId}, CURRENT_TIMESTAMP, 'message creation');
-                  `;
-              }
-            }
 
             response.body = JSON.stringify(messageData);
           } catch (err) {
@@ -742,32 +712,15 @@ exports.handler = async (event) => {
                 WHERE session_id = ${sessionId};
               `;
 
-            // Retrieve user_id based on studentEmail
-            const userData = await sqlConnection`
-                SELECT user_id
-                FROM "Users"
-                WHERE user_email = ${studentEmail};
+            // OPT-3: Single INSERT...SELECT replaces 3 sequential queries for engagement logging
+            await sqlConnection`
+                INSERT INTO "User_Engagement_Log" (log_id, user_id, course_id, module_id, enrolment_id, timestamp, engagement_type)
+                SELECT uuid_generate_v4(), e.user_id, ${courseId}, ${moduleId}, e.enrolment_id, CURRENT_TIMESTAMP, 'AI message creation'
+                FROM "Enrolments" e
+                JOIN "Users" u ON e.user_id = u.user_id
+                WHERE u.user_email = ${studentEmail} AND e.course_id = ${courseId}
+                LIMIT 1;
               `;
-
-            const userId = userData[0]?.user_id;
-
-            if (userId) {
-              // Retrieve the enrolment ID using user_id
-              const enrolmentData = await sqlConnection`
-                  SELECT enrolment_id
-                  FROM "Enrolments"
-                  WHERE user_id = ${userId} AND course_id = ${courseId};
-                `;
-
-              const enrolmentId = enrolmentData[0]?.enrolment_id;
-
-              if (enrolmentId) {
-                await sqlConnection`
-                    INSERT INTO "User_Engagement_Log" (log_id, user_id, course_id, module_id, enrolment_id, timestamp, engagement_type)
-                    VALUES (uuid_generate_v4(), ${userId}, ${courseId}, ${moduleId}, ${enrolmentId}, CURRENT_TIMESTAMP, 'AI message creation');
-                  `;
-              }
-            }
 
             response.body = JSON.stringify(messageData);
           } catch (err) {

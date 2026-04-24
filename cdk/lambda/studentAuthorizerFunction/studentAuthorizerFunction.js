@@ -65,7 +65,8 @@ exports.handler = async (event) => {
             "Resource": resource
         });
         responseStruct["context"] = {
-            "userId": payload.sub
+            "userId": payload.sub,
+            "email": payload.email
         };
 
         return responseStruct;

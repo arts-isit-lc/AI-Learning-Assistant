@@ -263,14 +263,22 @@ def get_response(
         output_messages_key="answer",
     )
     
-    # Generate the response until it's not empty
+    # OPT-8: Retry with limit instead of infinite loop
     response = ""
-    while not response:
+    max_retries = 3
+    for attempt in range(max_retries):
         response = generate_response(
             conversational_rag_chain,
             query,
             session_id
         )
+        if response:
+            break
+        logger.warning(f"Empty response from LLM on attempt {attempt + 1}/{max_retries}")
+
+    if not response:
+        logger.error(f"LLM returned empty response after {max_retries} attempts")
+        response = "I'm sorry, I wasn't able to generate a response. Please try again."
     
     return get_llm_output(response, course_id, module_id, connection)
 

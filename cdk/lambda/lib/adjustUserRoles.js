@@ -1,7 +1,10 @@
 const { initializeConnection } = require("./lib.js");
-const { CognitoIdentityProviderClient, AdminListGroupsForUserCommand, AdminGetUserCommand, AdminAddUserToGroupCommand, AdminRemoveUserFromGroupCommand } = require("@aws-sdk/client-cognito-identity-provider");
+const { CognitoIdentityProviderClient, AdminListGroupsForUserCommand, AdminAddUserToGroupCommand, AdminRemoveUserFromGroupCommand } = require("@aws-sdk/client-cognito-identity-provider");
 const { SM_DB_CREDENTIALS, RDS_PROXY_ENDPOINT } = process.env;
 let sqlConnection = global.sqlConnection;
+
+// OPT-11: Client at module level, AdminGetUserCommand removed (email from event)
+const client = new CognitoIdentityProviderClient();
 
 exports.handler = async (event) => {
   if (!sqlConnection) {
@@ -10,7 +13,7 @@ exports.handler = async (event) => {
   }
 
   const { userName, userPoolId } = event;
-  const client = new CognitoIdentityProviderClient();
+  const email = event.request.userAttributes.email;
 
   try {
     // Get user groups from Cognito
@@ -20,16 +23,6 @@ exports.handler = async (event) => {
     });
     const userGroupsResponse = await client.send(userGroupsCommand);
     const cognitoRoles = userGroupsResponse.Groups.map(group => group.GroupName);
-
-    // Get user attributes
-    const userAttributesCommand = new AdminGetUserCommand({
-      UserPoolId: userPoolId,
-      Username: userName,
-    });
-    const userAttributesResponse = await client.send(userAttributesCommand);
-
-    const emailAttr = userAttributesResponse.UserAttributes.find(attr => attr.Name === 'email');
-    const email = emailAttr ? emailAttr.Value : null;
 
     // Retrieve roles from the database
     const dbUser = await sqlConnection`

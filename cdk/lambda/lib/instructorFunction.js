@@ -1,26 +1,11 @@
 const { initializeConnection } = require("./lib.js");
-let { SM_DB_CREDENTIALS, RDS_PROXY_ENDPOINT, USER_POOL } = process.env;
-const {
-  CognitoIdentityProviderClient,
-  AdminGetUserCommand,
-} = require("@aws-sdk/client-cognito-identity-provider");
+let { SM_DB_CREDENTIALS, RDS_PROXY_ENDPOINT } = process.env;
 
 let sqlConnection = global.sqlConnection;
 
 exports.handler = async (event) => {
-  const cognito_id = event.requestContext.authorizer.userId;
-  const client = new CognitoIdentityProviderClient();
-  const userAttributesCommand = new AdminGetUserCommand({
-    UserPoolId: USER_POOL,
-    Username: cognito_id,
-  });
-  const userAttributesResponse = await client.send(userAttributesCommand);
-
-  const emailAttr = userAttributesResponse.UserAttributes.find(
-    (attr) => attr.Name === "email"
-  );
-  const userEmailAttribute = emailAttr ? emailAttr.Value : null;
-  console.log(userEmailAttribute);
+  // OPT-1: Read email from authorizer context instead of calling Cognito AdminGetUser
+  const userEmailAttribute = event.requestContext.authorizer.email;
 
   // Check for query string parameters
 
@@ -167,78 +152,55 @@ exports.handler = async (event) => {
           const courseId = event.queryStringParameters.course_id;
 
           try {
-            // Query to get all modules and their message counts, filtering by student role
-            const messageCreations = await sqlConnection`
-                  SELECT cm.module_id, cm.module_name, COUNT(m.message_id) AS message_count, cm.module_number, cc.concept_number
-                  FROM "Course_Modules" cm
-                  JOIN "Course_Concepts" cc ON cm.concept_id = cc.concept_id
-                  LEFT JOIN "Student_Modules" sm ON cm.module_id = sm.course_module_id
-                  LEFT JOIN "Sessions" s ON sm.student_module_id = s.student_module_id
-                  LEFT JOIN "Messages" m ON s.session_id = m.session_id
-                  LEFT JOIN "Enrolments" e ON sm.enrolment_id = e.enrolment_id
-                  LEFT JOIN "Users" u ON e.user_id = u.user_id
-                  WHERE cc.course_id = ${courseId}
-                  AND 'student' = ANY(u.roles)
-                  GROUP BY cm.module_id, cm.module_name, cm.module_number, cc.concept_number
-                  ORDER BY cc.concept_number ASC, cm.module_number ASC;
-                `;
+            // OPT-4: Run 3 queries in parallel (queries 3+4 combined into scoreData)
+            const [messageCreations, moduleAccesses, scoreData] = await Promise.all([
+              sqlConnection`
+                SELECT cm.module_id, cm.module_name, COUNT(m.message_id) AS message_count, cm.module_number, cc.concept_number
+                FROM "Course_Modules" cm
+                JOIN "Course_Concepts" cc ON cm.concept_id = cc.concept_id
+                LEFT JOIN "Student_Modules" sm ON cm.module_id = sm.course_module_id
+                LEFT JOIN "Sessions" s ON sm.student_module_id = s.student_module_id
+                LEFT JOIN "Messages" m ON s.session_id = m.session_id
+                LEFT JOIN "Enrolments" e ON sm.enrolment_id = e.enrolment_id
+                LEFT JOIN "Users" u ON e.user_id = u.user_id
+                WHERE cc.course_id = ${courseId}
+                AND 'student' = ANY(u.roles)
+                GROUP BY cm.module_id, cm.module_name, cm.module_number, cc.concept_number
+                ORDER BY cc.concept_number ASC, cm.module_number ASC;
+              `,
+              sqlConnection`
+                SELECT cm.module_id, COUNT(uel.log_id) AS access_count
+                FROM "Course_Modules" cm
+                JOIN "Course_Concepts" cc ON cm.concept_id = cc.concept_id
+                LEFT JOIN "User_Engagement_Log" uel ON cm.module_id = uel.module_id
+                LEFT JOIN "Enrolments" e ON uel.enrolment_id = e.enrolment_id
+                LEFT JOIN "Users" u ON e.user_id = u.user_id
+                WHERE cc.course_id = ${courseId}
+                AND uel.engagement_type = 'module access'
+                AND 'student' = ANY(u.roles)
+                GROUP BY cm.module_id;
+              `,
+              sqlConnection`
+                SELECT cm.module_id,
+                  AVG(sm.module_score) AS average_score,
+                  CASE
+                    WHEN COUNT(sm.student_module_id) = 0 THEN 0
+                    ELSE COUNT(CASE WHEN sm.module_score = 100 THEN 1 END) * 100.0 / COUNT(sm.student_module_id)
+                  END AS perfect_score_percentage
+                FROM "Course_Modules" cm
+                JOIN "Course_Concepts" cc ON cm.concept_id = cc.concept_id
+                LEFT JOIN "Student_Modules" sm ON cm.module_id = sm.course_module_id
+                LEFT JOIN "Enrolments" e ON sm.enrolment_id = e.enrolment_id
+                LEFT JOIN "Users" u ON e.user_id = u.user_id
+                WHERE cc.course_id = ${courseId}
+                AND 'student' = ANY(u.roles)
+                GROUP BY cm.module_id;
+              `,
+            ]);
 
-            // Query to get the number of module accesses using User_Engagement_Log, filtering by student role
-            const moduleAccesses = await sqlConnection`
-                  SELECT cm.module_id, COUNT(uel.log_id) AS access_count
-                  FROM "Course_Modules" cm
-                  JOIN "Course_Concepts" cc ON cm.concept_id = cc.concept_id
-                  LEFT JOIN "User_Engagement_Log" uel ON cm.module_id = uel.module_id
-                  LEFT JOIN "Enrolments" e ON uel.enrolment_id = e.enrolment_id
-                  LEFT JOIN "Users" u ON e.user_id = u.user_id
-                  WHERE cc.course_id = ${courseId} 
-                  AND uel.engagement_type = 'module access'
-                  AND 'student' = ANY(u.roles)
-                  GROUP BY cm.module_id;
-                `;
-
-            // Query to get the average score for each module, filtering by student role
-            const averageScores = await sqlConnection`
-                  SELECT cm.module_id, AVG(sm.module_score) AS average_score
-                  FROM "Course_Modules" cm
-                  JOIN "Course_Concepts" cc ON cm.concept_id = cc.concept_id
-                  LEFT JOIN "Student_Modules" sm ON cm.module_id = sm.course_module_id
-                  LEFT JOIN "Enrolments" e ON sm.enrolment_id = e.enrolment_id
-                  LEFT JOIN "Users" u ON e.user_id = u.user_id
-                  WHERE cc.course_id = ${courseId}
-                  AND 'student' = ANY(u.roles)
-                  GROUP BY cm.module_id;
-                `;
-
-            // Query to get the percentage of perfect scores for each module, filtering by student role
-            const perfectScores = await sqlConnection`
-                  SELECT cm.module_id, 
-                    CASE 
-                        WHEN COUNT(sm.student_module_id) = 0 THEN 0 
-                        ELSE COUNT(CASE WHEN sm.module_score = 100 THEN 1 END) * 100.0 / COUNT(sm.student_module_id)
-                    END AS perfect_score_percentage
-                  FROM "Course_Modules" cm
-                  JOIN "Course_Concepts" cc ON cm.concept_id = cc.concept_id
-                  LEFT JOIN "Student_Modules" sm ON cm.module_id = sm.course_module_id
-                  LEFT JOIN "Enrolments" e ON sm.enrolment_id = e.enrolment_id
-                  LEFT JOIN "Users" u ON e.user_id = u.user_id
-                  WHERE cc.course_id = ${courseId}
-                  AND 'student' = ANY(u.roles)
-                  GROUP BY cm.module_id;
-                `;
-
-            // Combine all data into a single response, ensuring all modules are included
             const analyticsData = messageCreations.map((module) => {
-              const accesses =
-                moduleAccesses.find(
-                  (ma) => ma.module_id === module.module_id
-                ) || {};
-              const scores =
-                averageScores.find((as) => as.module_id === module.module_id) ||
-                {};
-              const perfectScore =
-                perfectScores.find((ps) => ps.module_id === module.module_id) ||
-                {};
+              const accesses = moduleAccesses.find((ma) => ma.module_id === module.module_id) || {};
+              const scores = scoreData.find((s) => s.module_id === module.module_id) || {};
 
               return {
                 module_id: module.module_id,
@@ -248,8 +210,7 @@ exports.handler = async (event) => {
                 message_count: module.message_count || 0,
                 access_count: accesses.access_count || 0,
                 average_score: parseFloat(scores.average_score) || 0,
-                perfect_score_percentage:
-                  parseFloat(perfectScore.perfect_score_percentage) || 0,
+                perfect_score_percentage: parseFloat(scores.perfect_score_percentage) || 0,
               };
             });
 
@@ -1125,56 +1086,49 @@ exports.handler = async (event) => {
               break;
             }
 
-            // Step 2: Get all the modules the student has taken for the given course_id, ordered by concept and module
-            const studentModules = await sqlConnection`
-              SELECT cm.module_id, cm.module_name, cc.concept_name, cc.concept_number, cm.module_number
+            // OPT-2: Single query for all modules, sessions, and messages (replaces N+1 pattern)
+            const rows = await sqlConnection`
+              SELECT cm.module_name, cm.module_number, cc.concept_number,
+                     s.session_id, s.session_name,
+                     m.student_sent, m.message_content, m.time_sent
               FROM "Student_Modules" sm
               JOIN "Course_Modules" cm ON sm.course_module_id = cm.module_id
               JOIN "Course_Concepts" cc ON cm.concept_id = cc.concept_id
               JOIN "Enrolments" e ON sm.enrolment_id = e.enrolment_id
+              LEFT JOIN "Sessions" s ON s.student_module_id = sm.student_module_id
+              LEFT JOIN "Messages" m ON m.session_id = s.session_id
               WHERE e.user_id = ${userId} AND e.course_id = ${courseId}
-              ORDER BY cc.concept_number, cm.module_number;
+              ORDER BY cc.concept_number, cm.module_number, s.session_id, m.time_sent;
             `;
 
+            // Group flat rows into the nested structure the frontend expects
             const result = {};
+            for (const row of rows) {
+              if (!result[row.module_name]) {
+                result[row.module_name] = [];
+              }
+              if (!row.session_id) continue;
 
-            // Step 3: Iterate through the modules and get sessions for each module
-            for (const module of studentModules) {
-              const sessions = await sqlConnection`
-                SELECT s.session_id, s.session_name
-                FROM "Sessions" s
-                WHERE s.student_module_id IN (
-                  SELECT student_module_id 
-                  FROM "Student_Modules" 
-                  WHERE course_module_id = ${module.module_id} AND enrolment_id IN (
-                    SELECT enrolment_id FROM "Enrolments" WHERE user_id = ${userId} AND course_id = ${courseId}
-                  )
-                );
-              `;
-
-              result[module.module_name] = [];
-
-              // Step 4: For each session, retrieve the messages
-              for (const session of sessions) {
-                const messages = await sqlConnection`
-                  SELECT student_sent, message_content, time_sent
-                  FROM "Messages"
-                  WHERE session_id = ${session.session_id}
-                  ORDER BY time_sent ASC;
-                `;
-
-                result[module.module_name].push({
-                  sessionName: session.session_name,
-                  messages: messages.map((msg) => ({
-                    student_sent: msg.student_sent,
-                    message_content: msg.message_content,
-                    time_sent: msg.time_sent,
-                  })),
+              const moduleArr = result[row.module_name];
+              let session = moduleArr.find(s => s._sid === row.session_id);
+              if (!session) {
+                session = { _sid: row.session_id, sessionName: row.session_name, messages: [] };
+                moduleArr.push(session);
+              }
+              if (row.message_content !== null) {
+                session.messages.push({
+                  student_sent: row.student_sent,
+                  message_content: row.message_content,
+                  time_sent: row.time_sent,
                 });
               }
             }
 
-            // Step 5: Return the response
+            // Remove internal _sid before sending response
+            for (const moduleName of Object.keys(result)) {
+              result[moduleName] = result[moduleName].map(({ _sid, ...rest }) => rest);
+            }
+
             response.body = JSON.stringify(result);
           } catch (err) {
             console.error(err);
