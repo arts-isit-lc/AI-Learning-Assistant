@@ -6,7 +6,7 @@ import {
   useParams,
   useLocation,
 } from "react-router-dom";
-import { fetchAuthSession, fetchUserAttributes } from "aws-amplify/auth";
+import { fetchAuthSession } from "aws-amplify/auth";
 import {
   Typography,
   Box,
@@ -83,7 +83,7 @@ const removeCompletedNotification = async (course_id) => {
     console.log(course_id)
     const session = await fetchAuthSession();
     const token = session.tokens.idToken;
-    const { email } = await fetchUserAttributes();
+    const email = session.tokens.idToken.payload.email;
     const response = await fetch(
       `${import.meta.env.VITE_API_ENDPOINT}instructor/remove_completed_notification?course_id=${encodeURIComponent(course_id)}&instructor_email=${encodeURIComponent(email)}`,
       {
@@ -292,7 +292,7 @@ const InstructorHomepage = () => {
       try {
         const session = await fetchAuthSession();
         var token = session.tokens.idToken;
-        const { email } = await fetchUserAttributes();
+        const email = session.tokens.idToken.payload.email;
         const response = await fetch(
           `${import.meta.env.VITE_API_ENDPOINT
           }instructor/courses?email=${encodeURIComponent(email)}`,
@@ -328,7 +328,8 @@ const InstructorHomepage = () => {
   }, []);
 
   const checkNotificationStatus = async (courses, email, token) => {
-    for (const course of courses) {
+    // Parallelize notification checks instead of sequential for-loop
+    await Promise.all(courses.map(async (course) => {
       try {
         const response = await fetch(
           `${import.meta.env.VITE_API_ENDPOINT}instructor/check_notifications_status?course_id=${encodeURIComponent(course.course_id)}&instructor_email=${encodeURIComponent(email)}`,
@@ -341,18 +342,10 @@ const InstructorHomepage = () => {
           const data = await response.json();
           if (data.completionStatus === true) {
             console.log(`Getting chatlogs for ${course.course_name} is completed. Notifying the user and removing row from database.`);
-
-            // Sets icon to show new file on ChatLogs page
             setNotificationForCourse(course.course_id, true);
-
-            // Remove row from database
             removeCompletedNotification(course.course_id);
-
-            // Notify the Instructor
             alert(`Chat logs are available for course: ${course.course_name}`);
-
           } else if (data.completionStatus === false) {
-            // Reopen WebSocket to listen for notifications
             console.log(`Getting chatlogs for ${course.course_name} is not completed. Re-opening the websocket.`);
             openWebSocket(course.course_name, course.course_id, data.requestId, setNotificationForCourse);
           } else {
@@ -362,7 +355,7 @@ const InstructorHomepage = () => {
       } catch (error) {
         console.error("Error checking notification status for", course.course_id, error);
       }
-    }
+    }));
   };
 
   const handleSearchChange = (event) => {
