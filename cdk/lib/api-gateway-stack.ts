@@ -974,7 +974,7 @@ export class ApiGatewayStack extends cdk.Stack {
     // Custom policy statement for Bedrock access
     const bedrockPolicyStatement = new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
-      actions: ["bedrock:InvokeModel", "bedrock:InvokeEndpoint"],
+      actions: ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream", "bedrock:InvokeEndpoint"],
       resources: [
         "arn:aws:bedrock:" +
         this.region +

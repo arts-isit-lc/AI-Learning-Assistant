@@ -212,8 +212,11 @@ def get_allowed_file_ids(module_id):
         return []
 
 def handler(event, context):
+    import time
+    t_start = time.time()
     logger.info("Text Generation Lambda function is called!")
     initialize_constants()
+    logger.info(f"TIMING: initialize_constants took {(time.time() - t_start)*1000:.0f}ms")
 
     query_params = event.get("queryStringParameters", {})
 
@@ -262,7 +265,9 @@ def handler(event, context):
         }
     
     # P-2: Single combined query for course + module context
+    t0 = time.time()
     module_context = get_module_context(course_id, module_id)
+    logger.info(f"TIMING: get_module_context took {(time.time() - t0)*1000:.0f}ms")
 
     if module_context is None:
         logger.error(f"Error fetching context for course_id={course_id}, module_id={module_id}")
@@ -369,9 +374,12 @@ def handler(event, context):
     try:
         logger.info("Creating history-aware retriever.")
 
+        t0 = time.time()
         allowed_file_ids = get_allowed_file_ids(module_id)
+        logger.info(f"TIMING: get_allowed_file_ids took {(time.time() - t0)*1000:.0f}ms")
 
         # P-6: Pass the global connection to avoid creating new connections in hybrid_search
+        t0 = time.time()
         history_aware_retriever = get_vectorstore_retriever(
             llm=llm,
             vectorstore_config_dict=vectorstore_config_dict,
@@ -379,6 +387,7 @@ def handler(event, context):
             allowed_file_ids=allowed_file_ids,
             connection=connect_to_db()
         )
+        logger.info(f"TIMING: get_vectorstore_retriever took {(time.time() - t0)*1000:.0f}ms")
     except Exception as e:
         logger.error(f"Error creating history-aware retriever: {e}")
         return {
@@ -400,6 +409,7 @@ def handler(event, context):
             raise Exception("No database connection available.")
 
         # ARCH-1: Stream response via AppSync, then return final result
+        t0 = time.time()
         response = get_response_streaming(
             query=student_query,
             topic=topic,
@@ -415,6 +425,8 @@ def handler(event, context):
             chunk_callback=lambda chunk: send_chat_chunk(session_id, chunk),
             done_callback=lambda: send_chat_chunk(session_id, "", done=True),
         )
+        logger.info(f"TIMING: get_response_streaming took {(time.time() - t0)*1000:.0f}ms")
+        logger.info(f"TIMING: total handler time {(time.time() - t_start)*1000:.0f}ms")
     except Exception as e:
         logger.error(f"Error getting response: {e}")
         return {

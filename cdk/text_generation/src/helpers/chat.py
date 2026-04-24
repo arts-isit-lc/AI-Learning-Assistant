@@ -1,4 +1,4 @@
-import boto3, re
+import boto3, re, logging
 from langchain_aws import ChatBedrock
 from langchain_aws import BedrockLLM
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -7,6 +7,8 @@ from langchain_classic.chains import create_retrieval_chain
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import DynamoDBChatMessageHistory
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 class LLM_evaluation(BaseModel):
     response: str = Field(description="Assessment of the student's answer with a follow-up question.")
@@ -370,22 +372,26 @@ def get_response_streaming(
     )
 
     # Stream the response, sending chunks via callback
+    import time
+    t_stream_start = time.time()
     full_response = ""
     chunk_buffer = ""
-    CHUNK_SIZE = 80  # Send chunks of ~80 chars for smooth streaming
+    CHUNK_SIZE = 80
+    first_chunk_logged = False
 
     try:
         for chunk in conversational_rag_chain.stream(
             {"input": query},
             config={"configurable": {"session_id": session_id}},
         ):
-            # create_retrieval_chain streams the "answer" key incrementally
             answer_chunk = chunk.get("answer", "")
             if answer_chunk:
+                if not first_chunk_logged:
+                    logger.info(f"TIMING: first token arrived at {(time.time() - t_stream_start)*1000:.0f}ms")
+                    first_chunk_logged = True
                 full_response += answer_chunk
                 chunk_buffer += answer_chunk
 
-                # Send buffered chunks to avoid too many AppSync calls
                 if len(chunk_buffer) >= CHUNK_SIZE and chunk_callback:
                     chunk_callback(chunk_buffer)
                     chunk_buffer = ""
