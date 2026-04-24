@@ -829,7 +829,7 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
             session?.session_id && currentSessionId === session.session_id && (
             <AIMessage message={streamingText} />
           )}
-          {isAItyping && !isStreaming &&
+          {isAItyping && !streamingText &&
             currentSessionId &&
             session?.session_id &&
             currentSessionId === session.session_id && <TypingIndicator />}
