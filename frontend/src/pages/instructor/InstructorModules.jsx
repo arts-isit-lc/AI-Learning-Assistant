@@ -1,38 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button, Box, Toolbar, Typography, Paper } from "@mui/material";
-import { fetchAuthSession, fetchUserAttributes } from "aws-amplify/auth";
+import apiClient from "../../services/api";
 import {
   MRT_TableContainer,
   useMaterialReactTable,
 } from "material-react-table";
-import { toast, ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
-
-function courseTitleCase(str) {
-  if (typeof str !== 'string') {
-    return str;
-  }
-  const words = str.split(' ');
-  return words.map((word, index) => {
-    if (index === 0) {
-      return word.toUpperCase(); // First word entirely in uppercase
-    } else {
-      return word.charAt(0).toUpperCase() + word.slice(1); // Only capitalize first letter, keep the rest unchanged
-    }
-  }).join(' ');
-}
-
-
-function titleCase(str) {
-  if (typeof str !== 'string') {
-    return str;
-  }
-  return str.split(' ').map(function(word) {
-    return word.charAt(0).toUpperCase() + word.slice(1); // Capitalize only the first letter, leave the rest of the word unchanged
-  }).join(' ');
-}
-
+import { toast } from "react-toastify";
+import { titleCase, courseTitleCase } from "../../utils/formatters";
 
 
 const InstructorModules = ({ courseName, course_id }) => {
@@ -102,28 +77,10 @@ const InstructorModules = ({ courseName, course_id }) => {
   useEffect(() => {
     const fetchModules = async () => {
       try {
-        const session = await fetchAuthSession();
-        var token = session.tokens.idToken
-        const response = await fetch(
-          `${
-            import.meta.env.VITE_API_ENDPOINT
-          }instructor/view_modules?course_id=${encodeURIComponent(course_id)}`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: token,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-        if (response.ok) {
-          const moduleData = await response.json();
-          setData(moduleData);
-        } else {
-          console.error("Failed to fetch modules:", response.statusText);
-        }
+        const moduleData = await apiClient.get("instructor/view_modules", { course_id });
+        setData(moduleData);
       } catch (error) {
-        console.error("Error fetching modules:", error);
+        console.error("Error fetching modules:", error.message);
       }
     };
 
@@ -143,48 +100,23 @@ const InstructorModules = ({ courseName, course_id }) => {
   };
   const handleSaveChanges = async () => {
     try {
-      const session = await fetchAuthSession();
-      const token = session.tokens.idToken
-      const { email } = await fetchUserAttributes();
+      const { email } = await apiClient.getAuth();
 
       // Create an array of promises for updating modules
       const updatePromises = data.map((module, index) => {
         const moduleNumber = index + 1;
 
-        return fetch(
-          `${
-            import.meta.env.VITE_API_ENDPOINT
-          }instructor/reorder_module?module_id=${encodeURIComponent(
-            module.module_id
-          )}&module_number=${moduleNumber}&instructor_email=${encodeURIComponent(
-            email
-          )}`,
-          {
-            method: "PUT",
-            headers: {
-              Authorization: token,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              module_name: module.module_name,
-            }),
-          }
+        return apiClient.putRaw(
+          "instructor/reorder_module",
+          { module_id: module.module_id, module_number: moduleNumber, instructor_email: email },
+          { module_name: module.module_name }
         ).then((response) => {
           if (!response.ok) {
             console.error(
               `Failed to update module ${module.module_id}:`,
               response.statusText
             );
-            toast.error("Module Order Update Failed", {
-              position: "top-center",
-              autoClose: 1000,
-              hideProgressBar: false,
-              closeOnClick: true,
-              pauseOnHover: true,
-              draggable: true,
-              progress: undefined,
-              theme: "colored",
-            });
+            toast.error("Module Order Update Failed");
             return { success: false };
           } else {
             return response.json().then((updatedModule) => {
@@ -201,41 +133,13 @@ const InstructorModules = ({ courseName, course_id }) => {
       );
 
       if (allUpdatesSuccessful) {
-        toast.success("Module Order Updated Successfully", {
-          position: "top-center",
-          autoClose: 1000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-          theme: "colored",
-        });
+        toast.success("Module Order Updated Successfully");
       } else {
-        toast.error("Some module updates failed", {
-          position: "top-center",
-          autoClose: 1000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-          theme: "colored",
-        });
+        toast.error("Some module updates failed");
       }
     } catch (error) {
       console.error("Error saving changes:", error);
-      toast.error("An error occurred while saving changes", {
-        position: "top-center",
-        autoClose: 1000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-        theme: "colored",
-        transition: "Bounce",
-      });
+      toast.error("An error occurred while saving changes");
     }
   };
 
@@ -277,18 +181,6 @@ const InstructorModules = ({ courseName, course_id }) => {
           Save Changes
         </Button>
       </Box>
-      <ToastContainer
-        position="top-center"
-        autoClose={5000}
-        hideProgressBar={false}
-        newestOnTop={false}
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-        theme="colored"
-      />
     </Box>
   );
 };

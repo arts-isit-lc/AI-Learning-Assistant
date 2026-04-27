@@ -16,9 +16,8 @@ import {
   Toolbar,
   Autocomplete,
 } from "@mui/material";
-import { toast, ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
-import { fetchAuthSession } from "aws-amplify/auth";
+import { toast } from "react-toastify";
+import apiClient from "../../services/api";
 
 const CHARACTER_LIMIT = 1000;
 
@@ -68,29 +67,10 @@ export const AdminCreateCourse = ({ setSelectedComponent }) => {
   useEffect(() => {
     const fetchInstructors = async () => {
       try {
-        const session = await fetchAuthSession();
-        var token = session.tokens.idToken
-        //replace if analytics for admin actions is needed
-        const response = await fetch(
-          `${
-            import.meta.env.VITE_API_ENDPOINT
-          }admin/instructors?instructor_email=replace`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: token,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-        if (response.ok) {
-          const data = await response.json();
-          setInstructors(formatInstructors(data));
-        } else {
-          console.error("Failed to fetch instructors:", response.statusText);
-        }
+        const data = await apiClient.get("admin/instructors", { instructor_email: "replace" });
+        setInstructors(formatInstructors(data));
       } catch (error) {
-        console.error("Error fetching instructors:", error);
+        console.error("Error fetching instructors:", error.message);
       }
     };
 
@@ -100,147 +80,62 @@ export const AdminCreateCourse = ({ setSelectedComponent }) => {
     const access_code = generateAccessCode();
     // Handle the create course logic here
     try {
-      const session = await fetchAuthSession();
-      const token = session.tokens.idToken
       const numericCourseCode = Number(courseCode);
 
       if (isNaN(numericCourseCode)) {
-        toast.error("access code must be a number", {
-          position: "top-center",
-          autoClose: 1000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-          theme: "colored",
-        });
+        toast.error("access code must be a number");
         return;
       }
 
-      const response = await fetch(
-        `${
-          import.meta.env.VITE_API_ENDPOINT
-        }admin/create_course?course_name=${encodeURIComponent(
-          courseName
-        )}&course_department=${encodeURIComponent(
-          courseDepartment
-        )}&course_number=${encodeURIComponent(
-          courseCode
-        )}&course_access_code=${encodeURIComponent(
-          access_code
-        )}&course_student_access=${encodeURIComponent(isActive)}`,
+      const data = await apiClient.post(
+        "admin/create_course",
         {
-          method: "POST",
-          headers: {
-            Authorization: token,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            system_prompt: coursePrompt,
-          }),
-        }
+          course_name: courseName,
+          course_department: courseDepartment,
+          course_number: courseCode,
+          course_access_code: access_code,
+          course_student_access: isActive,
+        },
+        { system_prompt: coursePrompt }
       );
 
-      if (response.ok) {
-        const data = await response.json();
-        const { course_id } = data;   
-        const enrollPromises = selectedInstructors.map((instructor) =>
-          fetch(
-            `${
-              import.meta.env.VITE_API_ENDPOINT
-            }admin/enroll_instructor?course_id=${encodeURIComponent(
-              course_id
-            )}&instructor_email=${encodeURIComponent(instructor.email)}`,
-            {
-              method: "POST",
-              headers: {
-                Authorization: token,
-                "Content-Type": "application/json",
-              },
-            }
-          ).then((enrollResponse) => {
-            if (enrollResponse.ok) {
-              return enrollResponse.json().then((enrollData) => {
-                return { success: true };
-              });
-            } else {
-              console.error(
-                "Failed to enroll instructor:",
-                enrollResponse.statusText
-              );
-              toast.error("Enroll Instructor Failed", {
-                position: "top-center",
-                autoClose: 1000,
-                hideProgressBar: false,
-                closeOnClick: true,
-                pauseOnHover: true,
-                draggable: true,
-                progress: undefined,
-                theme: "colored",
-              });
-              return { success: false };
-            }
-          })
-        );
+      const { course_id } = data;   
+      const enrollPromises = selectedInstructors.map((instructor) =>
+        apiClient.postRaw(
+          "admin/enroll_instructor",
+          { course_id, instructor_email: instructor.email }
+        ).then((enrollResponse) => {
+          if (enrollResponse.ok) {
+            return enrollResponse.json().then((enrollData) => {
+              return { success: true };
+            });
+          } else {
+            console.error(
+              "Failed to enroll instructor:",
+              enrollResponse.statusText
+            );
+            toast.error("Enroll Instructor Failed");
+            return { success: false };
+          }
+        })
+      );
 
-        const enrollResults = await Promise.all(enrollPromises);
-        const allEnrolledSuccessfully = enrollResults.every(
-          (result) => result.success
-        );
+      const enrollResults = await Promise.all(enrollPromises);
+      const allEnrolledSuccessfully = enrollResults.every(
+        (result) => result.success
+      );
 
-        if (allEnrolledSuccessfully || selectedInstructors.length === 0) {
-          toast.success("🦄 Course Created!", {
-            position: "top-center",
-            autoClose: 1000,
-            hideProgressBar: false,
-            closeOnClick: true,
-            pauseOnHover: true,
-            draggable: true,
-            progress: undefined,
-            theme: "colored",
-          });
-          setTimeout(() => {
-            setSelectedComponent("AdminCourses");
-          }, 1000);
-        } else {
-          toast.error("Some instructors could not be enrolled", {
-            position: "top-center",
-            autoClose: 1000,
-            hideProgressBar: false,
-            closeOnClick: true,
-            pauseOnHover: true,
-            draggable: true,
-            progress: undefined,
-            theme: "colored",
-          });
-        }
+      if (allEnrolledSuccessfully || selectedInstructors.length === 0) {
+        toast.success("🦄 Course Created!");
+        setTimeout(() => {
+          setSelectedComponent("AdminCourses");
+        }, 1000);
       } else {
-        console.error("Failed to create course:", response.statusText);
-        toast.error("Course Creation Failed", {
-          position: "top-center",
-          autoClose: 1000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-          theme: "colored",
-        });
+        toast.error("Some instructors could not be enrolled");
       }
     } catch (error) {
-      console.error("Error creating course:", error);
-      toast.error("Course Creation Failed", {
-        position: "top-center",
-        autoClose: 1000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-        theme: "colored",
-        transition: "Bounce",
-      });
+      console.error("Error creating course:", error.message);
+      toast.error("Course Creation Failed");
     } finally {
       setSubmitting(false);
     }
@@ -397,18 +292,6 @@ export const AdminCreateCourse = ({ setSelectedComponent }) => {
             CREATE
           </Button>
         </form>
-        <ToastContainer
-          position="top-center"
-          autoClose={5000}
-          hideProgressBar={false}
-          newestOnTop={false}
-          closeOnClick
-          rtl={false}
-          pauseOnFocusLoss
-          draggable
-          pauseOnHover
-          theme="colored"
-        />
       </Paper>
     </Box>
   );

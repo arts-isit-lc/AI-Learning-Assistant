@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Routes, Route, useNavigate, useParams } from "react-router-dom";
-import { fetchAuthSession, fetchUserAttributes } from "aws-amplify/auth";
+import apiClient from "../../services/api";
 import { Typography, Box, AppBar } from "@mui/material";
 import PageContainer from "../Container";
 import InstructorHeader from "../../components/InstructorHeader";
@@ -21,32 +21,13 @@ const CourseDetails = ({ openWebSocket }) => {
   useEffect(() => {
     const fetchCourses = async () => {
       try {
-        const session = await fetchAuthSession();
-        var token = session.tokens.idToken
-        const userAtrributes = await fetchUserAttributes();
-        const email = userAtrributes.email;
-        const response = await fetch(
-          `${
-            import.meta.env.VITE_API_ENDPOINT
-          }instructor/courses?email=${encodeURIComponent(email)}`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: token,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-        if (response.ok) {
-          const data = await response.json();
-          const course_id = data.find((course) => course.course_id);
-          const course_name = data.find((course) => course.course_name);
-          setRows(formattedData);
-        } else {
-          console.error("Failed to fetch courses:", response.statusText);
-        }
+        const { email } = await apiClient.getAuth();
+        const data = await apiClient.get("instructor/courses", { email });
+        const course_id = data.find((course) => course.course_id);
+        const course_name = data.find((course) => course.course_name);
+        setRows(formattedData);
       } catch (error) {
-        console.error("Error fetching courses:", error);
+        console.error("Error fetching courses:", error.message);
       }
     };
 

@@ -1,9 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
-import { toast, ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
-import { fetchAuthSession } from "aws-amplify/auth";
-import { fetchUserAttributes } from "aws-amplify/auth";
+import { toast } from "react-toastify";
+import apiClient from "../../services/api";
 
 import {
   TextField,
@@ -20,15 +18,8 @@ import {
 } from "@mui/material";
 import PageContainer from "../Container";
 import FileManagement from "../../components/FileManagement";
-
-function titleCase(str) {
-  if (typeof str !== 'string') {
-    return str;
-  }
-  return str.toLowerCase().split(' ').map(function (word) {
-    return word.charAt(0).toUpperCase() + word.slice(1);
-  }).join(' ');
-}
+import { titleCase } from "../../utils/formatters";
+import { cleanFileName, removeFileExtension, getFileType } from "../../utils/fileHelpers";
 
 
 export const InstructorNewModule = ({ courseId }) => {
@@ -50,41 +41,17 @@ export const InstructorNewModule = ({ courseId }) => {
   const [referencedFileIds, setReferencedFileIds] = useState([]);
   const [courseFiles, setCourseFiles] = useState([]);
 
-  const cleanFileName = (fileName) => {
-    return fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
-  };
   const handleBackClick = () => {
     window.history.back();
-  };
-
-  function removeFileExtension(fileName) {
-    return fileName.replace(/\.[^/.]+$/, "");
-  }
-
-  const getFileType = (filename) => {
-    const parts = filename.split(".");
-    if (parts.length > 1) {
-      return parts.pop();
-    } else {
-      return "";
-    }
   };
 
   useEffect(() => {
     const fetchCourseFiles = async () => {
       try {
-        const session = await fetchAuthSession();
-        const token = session.tokens.idToken;
-        const response = await fetch(
-          `${import.meta.env.VITE_API_ENDPOINT}instructor/course_files?course_id=${encodeURIComponent(course_id)}`,
-          { method: "GET", headers: { Authorization: token, "Content-Type": "application/json" } }
-        );
-        if (response.ok) {
-          const data = await response.json();
-          setCourseFiles(data);
-        }
+        const data = await apiClient.get("instructor/course_files", { course_id });
+        setCourseFiles(data);
       } catch (error) {
-        console.error("Error fetching course files:", error);
+        console.error("Error fetching course files:", error.message);
       }
     };
     fetchCourseFiles();
@@ -93,27 +60,10 @@ export const InstructorNewModule = ({ courseId }) => {
   useEffect(() => {
     const fetchConcepts = async () => {
       try {
-        const session = await fetchAuthSession();
-        var token = session.tokens.idToken
-        const response = await fetch(
-          `${import.meta.env.VITE_API_ENDPOINT
-          }instructor/view_concepts?course_id=${encodeURIComponent(course_id)}`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: token,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-        if (response.ok) {
-          const conceptData = await response.json();
-          setAllConcept(conceptData);
-        } else {
-          console.error("Failed to fetch courses:", response.statusText);
-        }
+        const conceptData = await apiClient.get("instructor/view_concepts", { course_id });
+        setAllConcept(conceptData);
       } catch (error) {
-        console.error("Error fetching courses:", error);
+        console.error("Error fetching courses:", error.message);
       }
     };
     fetchConcepts();
@@ -130,26 +80,13 @@ export const InstructorNewModule = ({ courseId }) => {
     const newFilePromises = newFiles.map((file) => {
       const fileType = getFileType(file.name);
       const fileName = cleanFileName(removeFileExtension(file.name));
-      return fetch(
-        `${import.meta.env.VITE_API_ENDPOINT
-        }instructor/generate_presigned_url?course_id=${encodeURIComponent(
-          course_id
-        )}&module_id=${encodeURIComponent(
-          moduleid
-        )}&module_name=${encodeURIComponent(
-          moduleName
-        )}&file_type=${encodeURIComponent(
-          fileType
-        )}&file_name=${encodeURIComponent(fileName)}`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: token,
-            "Content-Type": "application/json",
-          },
-        }
-      )
-        .then((response) => response.json())
+      return apiClient.get("instructor/generate_presigned_url", {
+        course_id,
+        module_id: moduleid,
+        module_name: moduleName,
+        file_type: fileType,
+        file_name: fileName,
+      })
         .then((presignedUrl) => {
           return fetch(presignedUrl.presignedurl, {
             method: "PUT",
@@ -169,30 +106,13 @@ export const InstructorNewModule = ({ courseId }) => {
 
     // Validation check
     if (!moduleName || !concept) {
-      toast.error("Module Name and Concept are required.", {
-        position: "top-center",
-        autoClose: 2000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-        theme: "colored",
-      });
+      toast.error("Module Name and Concept are required.", { autoClose: 2000 });
       return;
     }
 
     // Check if at least one file is uploaded
     if (newFiles.length === 0) {
-      toast.error("At least one file must be uploaded.", {
-        position: "top-center",
-        autoClose: 2000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        theme: "colored",
-      });
+      toast.error("At least one file must be uploaded.", { autoClose: 2000 });
       return;
     }
 
@@ -201,76 +121,38 @@ export const InstructorNewModule = ({ courseId }) => {
 
     const selectedConcept = allConcepts.find((c) => c.concept_name === concept);
     try {
-      const session = await fetchAuthSession();
-      const token = session.tokens.idToken
-      const { email } = await fetchUserAttributes();
-      const response = await fetch(
-        `${import.meta.env.VITE_API_ENDPOINT
-        }instructor/create_module?course_id=${encodeURIComponent(
-          course_id
-        )}&concept_id=${encodeURIComponent(
-          selectedConcept.concept_id
-        )}&module_name=${encodeURIComponent(
-          moduleName
-        )}&module_number=${encodeURIComponent(
-          nextModuleNumber
-        )}&instructor_email=${encodeURIComponent(email)}`,
+      const { email } = await apiClient.getAuth();
+      const updatedModule = await apiClient.post(
+        "instructor/create_module",
         {
-          method: "POST",
-          headers: {
-            Authorization: token,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            module_prompt: modulePrompt,
-          }),
-        }
+          course_id,
+          concept_id: selectedConcept.concept_id,
+          module_name: moduleName,
+          module_number: nextModuleNumber,
+          instructor_email: email,
+        },
+        { module_prompt: modulePrompt }
       );
-      if (!response.ok) {
-        console.error(`Failed to create module`, response.statusText);
-        toast.error("Module Creation Failed", {
-          position: "top-center",
-          autoClose: 1000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-          theme: "colored",
-        });
-      } else {
-        const updatedModule = await response.json();
-        await uploadFiles(newFiles, token, updatedModule.module_id);
 
-        await fetch(
-          `${import.meta.env.VITE_API_ENDPOINT}instructor/module_file_references?module_id=${encodeURIComponent(updatedModule.module_id)}`,
-          {
-            method: "PUT",
-            headers: { Authorization: token, "Content-Type": "application/json" },
-            body: JSON.stringify({ referenced_file_ids: referencedFileIds }),
-          }
-        );
+      await uploadFiles(newFiles, null, updatedModule.module_id);
 
-        setFiles((prevFiles) =>
-          prevFiles.filter((file) => !deletedFiles.includes(file.fileName))
-        );
-        setSavedFiles((prevFiles) => [...prevFiles, ...newFiles]);
+      await apiClient.put(
+        "instructor/module_file_references",
+        { module_id: updatedModule.module_id },
+        { referenced_file_ids: referencedFileIds }
+      );
 
-        setDeletedFiles([]);
-        setNewFiles([]);
-        toast.success("Module Created Successfully", {
-          position: "top-center",
-          autoClose: 1000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-          theme: "colored",
-        });
-      }
+      setFiles((prevFiles) =>
+        prevFiles.filter((file) => !deletedFiles.includes(file.fileName))
+      );
+      setSavedFiles((prevFiles) => [...prevFiles, ...newFiles]);
+
+      setDeletedFiles([]);
+      setNewFiles([]);
+      toast.success("Module Created Successfully");
     } catch (error) {
-      console.error("Error saving changes:", error);
+      console.error("Error saving changes:", error.message);
+      toast.error("Module Creation Failed");
     } finally {
       setIsSaving(false);
       setNextModuleNumber(nextModuleNumber + 1);
@@ -386,18 +268,6 @@ export const InstructorNewModule = ({ courseId }) => {
           </Button>
         </Box>
       </Paper>
-      <ToastContainer
-        position="top-center"
-        autoClose={5000}
-        hideProgressBar={false}
-        newestOnTop={false}
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-        theme="colored"
-      />
     </PageContainer>
   );
 };

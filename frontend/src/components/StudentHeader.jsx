@@ -4,9 +4,9 @@ import { useNavigate } from "react-router-dom";
 import SettingsIcon from "@mui/icons-material/Settings";
 // amplify
 import { signOut } from "aws-amplify/auth";
-import { fetchAuthSession } from "aws-amplify/auth";
-import { fetchUserAttributes } from "aws-amplify/auth";
+import apiClient from "../services/api";
 import { UserContext } from "../App";
+import { handleSignOut } from "../utils/auth";
 
 const StudentHeader = () => {
   const [name, setName] = useState("");
@@ -14,48 +14,18 @@ const StudentHeader = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchName = () => {
-      fetchAuthSession()
-        .then((session) => {
-          return fetchUserAttributes().then((userAttributes) => {
-            const token = session.tokens.idToken
-            const email = userAttributes.email;
-            return fetch(
-              `${
-                import.meta.env.VITE_API_ENDPOINT
-              }student/get_name?user_email=${encodeURIComponent(email)}`,
-              {
-                method: "GET",
-                headers: {
-                  Authorization: token,
-                  "Content-Type": "application/json",
-                },
-              }
-            );
-          });
-        })
-        .then((response) => response.json())
-        .then((data) => {
-          setName(data.name);
-        })
-        .catch((error) => {
-          console.error("Error fetching name:", error);
-        });
+    const fetchName = async () => {
+      try {
+        const { email } = await apiClient.getAuth();
+        const data = await apiClient.get("student/get_name", { user_email: email });
+        setName(data.name);
+      } catch (error) {
+        console.error("Error fetching name:", error.message);
+      }
     };
 
     fetchName();
   }, []);
-
-  const handleSignOut = async (event) => {
-    event.preventDefault();
-    signOut()
-      .then(() => {
-        window.location.href = "/";
-      })
-      .catch((error) => {
-        console.error("Error signing out: ", error);
-      });
-  };
 
   // Button to switch back to instructor mode
   const handleSwitchToInstructor = () => {

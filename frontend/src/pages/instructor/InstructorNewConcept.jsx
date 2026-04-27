@@ -1,9 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "react-router-dom";
-import { toast, ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
-import { fetchAuthSession } from "aws-amplify/auth";
-import { fetchUserAttributes } from "aws-amplify/auth";
+import { toast } from "react-toastify";
+import apiClient from "../../services/api";
 import { TextField, Button, Paper, Typography, Grid, Box } from "@mui/material";
 import PageContainer from "../Container";
 const InstructorNewConcept = () => {
@@ -22,69 +20,22 @@ const InstructorNewConcept = () => {
 
   const handleSave = async () => {
     if (!conceptName.trim()) {
-      toast.error("Concept Name is required.", {
-        position: "top-center",
-        autoClose: 1000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-        theme: "colored",
-      });
+      toast.error("Concept Name is required.");
       return;
     }
     try {
-      const session = await fetchAuthSession();
-      const token = session.tokens.idToken
-      const { email } = await fetchUserAttributes();
-      const response = await fetch(
-        `${
-          import.meta.env.VITE_API_ENDPOINT
-        }instructor/create_concept?course_id=${encodeURIComponent(
-          course_id
-        )}&concept_number=${encodeURIComponent(nextConceptNumber)}`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: token,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            concept_name: conceptName,
-          }),
-        }
+      const data = await apiClient.post(
+        "instructor/create_concept",
+        { course_id, concept_number: nextConceptNumber },
+        { concept_name: conceptName }
       );
-      if (!response.ok) {
-        console.error(`Failed to create concept`, response.statusText);
-        toast.error("Concept Creation Failed", {
-          position: "top-center",
-          autoClose: 1000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-          theme: "colored",
-        });
-      } else {
-        const updatedModule = await response.json();
-        toast.success("Concept Created Successfully", {
-          position: "top-center",
-          autoClose: 1000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-          theme: "colored",
-        });
-        setTimeout(function () {
-          handleBackClick();
-        }, 1000);
-      }
+      toast.success("Concept Created Successfully");
+      setTimeout(function () {
+        handleBackClick();
+      }, 1000);
     } catch (error) {
-      console.error("Error saving changes:", error);
+      console.error("Error saving changes:", error.message);
+      toast.error("Concept Creation Failed");
     }
     setNextConceptNumber(nextConceptNumber + 1);
   };
@@ -120,18 +71,6 @@ const InstructorNewConcept = () => {
           </Button>
         </Box>
       </Paper>
-      <ToastContainer
-        position="top-center"
-        autoClose={5000}
-        hideProgressBar={false}
-        newestOnTop={false}
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-        theme="colored"
-      />
     </PageContainer>
   );
 };

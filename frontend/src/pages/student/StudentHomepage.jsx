@@ -1,10 +1,9 @@
 import { useEffect, useState, useContext } from "react";
 import StudentHeader from "../../components/StudentHeader";
 import Container from "../Container";
-import { fetchAuthSession } from "aws-amplify/auth";
+import apiClient from "../../services/api";
 
-import { ToastContainer, toast } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
+import { toast } from "react-toastify";
 import { helix } from "ldrs";
 
 helix.register();
@@ -27,9 +26,9 @@ import {
   TextField,
 } from "@mui/material";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
-import { fetchUserAttributes } from "aws-amplify/auth";
 import { useNavigate } from "react-router-dom";
 import { UserContext } from "../../App";
+import { titleCase } from "../../utils/formatters";
 // MUI theming
 const { palette } = createTheme();
 const { augmentColor } = palette;
@@ -40,19 +39,6 @@ const theme = createTheme({
     bg: createColor("#F8F9FD"),
   },
 });
-
-function titleCase(str) {
-  if (typeof str !== "string") {
-    return str;
-  }
-  return str
-    .toLowerCase()
-    .split(" ")
-    .map(function (word) {
-      return word.charAt(0).toUpperCase() + word.slice(1);
-    })
-    .join(" ");
-}
 
 export const StudentHomepage = ({ setCourse }) => {
   const navigate = useNavigate();
@@ -78,63 +64,17 @@ export const StudentHomepage = ({ setCourse }) => {
 
   const handleJoin = async (code) => {
     try {
-      const session = await fetchAuthSession();
-      const { email } = await fetchUserAttributes();
-
-      var token = session.tokens.idToken
-      const response = await fetch(
-        `${
-          import.meta.env.VITE_API_ENDPOINT
-        }student/enroll_student?student_email=${encodeURIComponent(
-          email
-        )}&course_access_code=${encodeURIComponent(code)}`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: token,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-      if (response.ok) {
-        const data = await response.json();
-        toast.success("🦄 Successfully Joined Course!", {
-          position: "top-center",
-          autoClose: 1000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-          theme: "colored",
-        });
-        fetchCourses();
-        handleClose();
-      } else {
-        console.error("Failed to fetch courses:", response.statusText);
-        toast.error("Failed to Join Course", {
-          position: "top-center",
-          autoClose: 1000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-          theme: "colored",
-        });
-      }
-    } catch (error) {
-      console.error("Error fetching courses:", error);
-      toast.error("Failed to Join Course", {
-        position: "top-center",
-        autoClose: 1000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-        theme: "colored",
+      const { email } = await apiClient.getAuth();
+      const data = await apiClient.post("student/enroll_student", {
+        student_email: email,
+        course_access_code: code,
       });
+      toast.success("🦄 Successfully Joined Course!");
+      fetchCourses();
+      handleClose();
+    } catch (error) {
+      console.error("Error fetching courses:", error.message);
+      toast.error("Failed to Join Course");
     }
   };
 
@@ -148,47 +88,17 @@ export const StudentHomepage = ({ setCourse }) => {
 
   const fetchCourses = async () => {
     try {
-      const session = await fetchAuthSession();
-      const { email } = await fetchUserAttributes();
-
-      var token = session.tokens.idToken
-      let response;
+      const { email } = await apiClient.getAuth();
+      let data;
       if (isInstructorAsStudent) {
-        response = await fetch(
-          `${
-            import.meta.env.VITE_API_ENDPOINT
-          }instructor/student_course?email=${encodeURIComponent(email)}`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: token,
-              "Content-Type": "application/json",
-            },
-          }
-        );
+        data = await apiClient.get("instructor/student_course", { email });
       } else {
-        response = await fetch(
-          `${
-            import.meta.env.VITE_API_ENDPOINT
-          }student/course?email=${encodeURIComponent(email)}`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: token,
-              "Content-Type": "application/json",
-            },
-          }
-        );
+        data = await apiClient.get("student/course", { email });
       }
-      if (response.ok) {
-        const data = await response.json();
-        setCourses(data);
-        setLoading(false);
-      } else {
-        console.error("Failed to fetch course:", response.statusText);
-      }
+      setCourses(data);
+      setLoading(false);
     } catch (error) {
-      console.error("Error fetching course:", error);
+      console.error("Error fetching course:", error.message);
     }
   };
 
@@ -418,18 +328,6 @@ export const StudentHomepage = ({ setCourse }) => {
           <Button type="submit">Join</Button>
         </DialogActions>
       </Dialog>
-      <ToastContainer
-        position="top-center"
-        autoClose={1000}
-        hideProgressBar={false}
-        newestOnTop={false}
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-        theme="colored"
-      />
     </ThemeProvider>
   );
 };

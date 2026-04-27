@@ -2,8 +2,6 @@ import "./App.css";
 // amplify
 import { Amplify } from "aws-amplify";
 import { fetchAuthSession } from "aws-amplify/auth";
-import { cognitoUserPoolsTokenProvider } from "aws-amplify/auth/cognito";
-import { CookieStorage } from "aws-amplify/utils";
 import "@aws-amplify/ui-react/styles.css";
 // react-router
 import {
@@ -22,6 +20,8 @@ const AdminHomepage = lazy(() => import("./pages/admin/AdminHomepage"));
 const InstructorHomepage = lazy(() => import("./pages/instructor/InstructorHomepage"));
 const CourseView = lazy(() => import("./pages/student/CourseView"));
 import { NotificationProvider } from "./context/NotificationContext";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 export const UserContext = createContext();
 
@@ -89,6 +89,18 @@ function App() {
 
   return (
     <NotificationProvider>
+      <ToastContainer
+        position="top-center"
+        autoClose={1000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="colored"
+      />
       <UserContext.Provider
         value={{ isInstructorAsStudent, setIsInstructorAsStudent }}
       >

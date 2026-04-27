@@ -16,42 +16,14 @@ import {
 } from "@mui/material";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { fetchAuthSession, fetchUserAttributes } from "aws-amplify/auth";
+import apiClient from "../../services/api";
 import { v4 as uuidv4 } from 'uuid';
+import { titleCase, courseTitleCase } from "../../utils/formatters";
 
 // populate with dummy data
 const createData = (name, email) => {
   return { name, email };
 };
-
-function titleCase(str) {
-  if (typeof str !== "string") {
-    return str;
-  }
-  return str
-    .toLowerCase()
-    .split(" ")
-    .map(function (word) {
-      return word.charAt(0).toUpperCase() + word.slice(1);
-    })
-    .join(" ");
-}
-
-function courseTitleCase(str) {
-  if (typeof str !== "string") {
-    return str;
-  }
-  const words = str.split(" ");
-  return words
-    .map((word, index) => {
-      if (index === 0) {
-        return word.toUpperCase();
-      } else {
-        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-      }
-    })
-    .join(" ");
-}
 
 const initialRows = [createData("loading...", "loading...")];
 
@@ -68,31 +40,10 @@ export const ViewStudents = ({ courseName, course_id }) => {
   useEffect(() => {
     const fetchCode = async () => {
       try {
-        const session = await fetchAuthSession();
-        var token = session.tokens.idToken;
-        console.log(course_id)
-        const response = await fetch(
-          `${
-            import.meta.env.VITE_API_ENDPOINT
-          }instructor/get_access_code?course_id=${encodeURIComponent(
-            course_id
-          )}`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: token,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-        if (response.ok) {
-          const codeData = await response.json();
-          setAccessCode(codeData.course_access_code);
-        } else {
-          console.error("Failed to fetch courses:", response.statusText);
-        }
+        const codeData = await apiClient.get("instructor/get_access_code", { course_id });
+        setAccessCode(codeData.course_access_code);
       } catch (error) {
-        console.error("Error fetching courses:", error);
+        console.error("Error fetching courses:", error.message);
       }
     };
 
@@ -103,38 +54,18 @@ export const ViewStudents = ({ courseName, course_id }) => {
   useEffect(() => {
     const fetchStudents = async () => {
       try {
-        console.log("checkpoint1")
-        const session = await fetchAuthSession();
-        console.log("checkpoint2")
-        var token = session.tokens.idToken;
-        const response = await fetch(
-          `${
-            import.meta.env.VITE_API_ENDPOINT
-          }instructor/view_students?course_id=${encodeURIComponent(course_id)}`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: token,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-        if (response.ok) {
-          const data = await response.json();
-          const formattedData = data.map((student) => {
-            return createData(
-              `${titleCase(student.first_name)} ${titleCase(
-                student.last_name
-              )}`,
-              student.user_email
-            );
-          });
-          setRows(formattedData);
-        } else {
-          console.error("Failed to fetch students:", response.statusText);
-        }
+        const data = await apiClient.get("instructor/view_students", { course_id });
+        const formattedData = data.map((student) => {
+          return createData(
+            `${titleCase(student.first_name)} ${titleCase(
+              student.last_name
+            )}`,
+            student.user_email
+          );
+        });
+        setRows(formattedData);
       } catch (error) {
-        console.error("Error fetching data:", error);
+        console.error("Error fetching data:", error.message);
       }
     };
 
@@ -143,33 +74,10 @@ export const ViewStudents = ({ courseName, course_id }) => {
   
   const handleGenerateAccessCode = async () => {
     try {
-      
-      const session = await fetchAuthSession();
-      
-      var token = session.tokens.idToken;
-      
-      const response = await fetch(
-        `${
-          import.meta.env.VITE_API_ENDPOINT
-        }instructor/generate_access_code?course_id=${encodeURIComponent(
-          course_id
-        )}`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: token,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-      if (response.ok) {
-        const codeData = await response.json();
-        setAccessCode(codeData.access_code);
-      } else {
-        console.error("Failed to fetch courses:", response.statusText);
-      }
+      const codeData = await apiClient.put("instructor/generate_access_code", { course_id });
+      setAccessCode(codeData.access_code);
     } catch (error) {
-      console.error("Error fetching courses:", error);
+      console.error("Error fetching courses:", error.message);
     }
   };
   const handleSearchChange = (event) => {

@@ -13,33 +13,18 @@ import {
   MenuItem,
   FormHelperText,
 } from "@mui/material";
-import { fetchAuthSession, fetchUserAttributes } from "aws-amplify/auth";
-import { toast, ToastContainer } from "react-toastify";
+import apiClient from "../../services/api";
+import { toast } from "react-toastify";
 import MobileStepper from "@mui/material/MobileStepper";
 import KeyboardArrowLeft from "@mui/icons-material/KeyboardArrowLeft";
 import KeyboardArrowRight from "@mui/icons-material/KeyboardArrowRight";
 import { useTheme } from "@mui/material/styles";
-import "react-toastify/dist/ReactToastify.css";
 import { useNavigate } from "react-router-dom";
 import { UserContext } from "../../App";
 import { LLM_MODELS, DEFAULT_LLM_MODEL_ID, getLLMModelOptions } from "../../constants/llmModels";
+import { courseTitleCase } from "../../utils/formatters";
 
 const CHARACTER_LIMIT = 1000;
-function courseTitleCase(str) {
-  if (typeof str !== "string") {
-    return str;
-  }
-  const words = str.split(" ");
-  return words
-    .map((word, index) => {
-      if (index === 0) {
-        return word.toUpperCase();
-      } else {
-        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-      }
-    })
-    .join(" ");
-}
 
 const PromptSettings = ({ courseName, course_id }) => {
   const theme = useTheme();
@@ -75,61 +60,23 @@ const PromptSettings = ({ courseName, course_id }) => {
 
   const fetchPreviousPrompts = async () => {
     try {
-      const session = await fetchAuthSession();
-      const token = session.tokens.idToken
-      const { email } = await fetchUserAttributes();
-      const response = await fetch(
-        `${
-          import.meta.env.VITE_API_ENDPOINT
-        }instructor/previous_prompts?course_id=${encodeURIComponent(
-          course_id
-        )}&instructor_email=${encodeURIComponent(email)}`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: token,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-      if (response.ok) {
-        const data = await response.json();
-        setPreviousPrompts(data);
-      } else {
-        console.error("Failed to fetch previous prompts:", response.statusText);
-      }
+      const { email } = await apiClient.getAuth();
+      const data = await apiClient.get("instructor/previous_prompts", { course_id, instructor_email: email });
+      setPreviousPrompts(data);
     } catch (error) {
-      console.error("Error fetching previous prompts:", error);
+      console.error("Error fetching previous prompts:", error.message);
     }
   };
 
   useEffect(() => {
     const fetchPrompt = async () => {
       try {
-        const session = await fetchAuthSession();
-        const token = session.tokens.idToken
-        const response = await fetch(
-          `${
-            import.meta.env.VITE_API_ENDPOINT
-          }instructor/get_prompt?course_id=${encodeURIComponent(course_id)}`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: token,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-        if (response.ok) {
-          const data = await response.json();
-          setUserPrompt(data.system_prompt);
-          // Set the selected model ID, defaulting to Llama 70B if not set
-          setSelectedModelId(data.llm_model_id || DEFAULT_LLM_MODEL_ID);
-        } else {
-          console.error("Failed to fetch prompt:", response.statusText);
-        }
+        const data = await apiClient.get("instructor/get_prompt", { course_id });
+        setUserPrompt(data.system_prompt);
+        // Set the selected model ID, defaulting to Llama 70B if not set
+        setSelectedModelId(data.llm_model_id || DEFAULT_LLM_MODEL_ID);
       } catch (error) {
-        console.error("Error fetching prompt:", error);
+        console.error("Error fetching prompt:", error.message);
       }
     };
 
@@ -139,65 +86,29 @@ const PromptSettings = ({ courseName, course_id }) => {
 
   const handleSave = async () => {
     try {
-      const session = await fetchAuthSession();
-      const token = session.tokens.idToken
-      const { email } = await fetchUserAttributes();
+      const { email } = await apiClient.getAuth();
 
       // Save current prompt and selected model ID
       const requestBody = {
         prompt: `${userPrompt}`,
         llm_model_id: selectedModelId,
       };
-      const response = await fetch(
-        `${
-          import.meta.env.VITE_API_ENDPOINT
-        }instructor/prompt?course_id=${encodeURIComponent(
-          course_id
-        )}&instructor_email=${encodeURIComponent(email)}`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: token,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(requestBody),
-        }
+      const data = await apiClient.put(
+        "instructor/prompt",
+        { course_id, instructor_email: email },
+        requestBody
       );
 
-      if (response.ok) {
-        const data = await response.json();
-
-        const newPrompt = {
-          timestamp: new Date().toISOString(),
-          previous_prompt: userPrompt,
-        };
-        setUserPrompt(data.system_prompt);
-        fetchPreviousPrompts();
-        toast.success("Settings updated successfully", {
-          position: "top-center",
-          autoClose: 1000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-          theme: "colored",
-        });
-      } else {
-        console.error("Failed to update settings:", response.statusText);
-        toast.error(`Failed to update settings: ${response.statusText}`, {
-          position: "top-center",
-          autoClose: 1000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-          theme: "colored",
-        });
-      }
+      const newPrompt = {
+        timestamp: new Date().toISOString(),
+        previous_prompt: userPrompt,
+      };
+      setUserPrompt(data.system_prompt);
+      fetchPreviousPrompts();
+      toast.success("Settings updated successfully");
     } catch (error) {
-      console.error("Error updating settings:", error);
+      console.error("Error updating settings:", error.message);
+      toast.error(`Failed to update settings: ${error.message}`);
     }
   };
 
@@ -354,18 +265,6 @@ const PromptSettings = ({ courseName, course_id }) => {
           </Button>
         </Box>
       </Paper>
-      <ToastContainer
-        position="top-center"
-        autoClose={5000}
-        hideProgressBar={false}
-        newestOnTop={false}
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-        theme="colored"
-      />
     </Container>
   );
 };

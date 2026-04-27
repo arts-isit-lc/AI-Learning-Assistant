@@ -20,50 +20,18 @@ import {
   Button,
 } from "@mui/material";
 import { useState, useEffect } from "react";
-import { fetchAuthSession, fetchUserAttributes } from "aws-amplify/auth";
+import apiClient from "../../services/api";
 
-import { toast, ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
-
-function titleCase(str) {
-  if (typeof str !== "string") {
-    return str;
-  }
-  return str
-    .toLowerCase()
-    .split(" ")
-    .map(function (word) {
-      return word.charAt(0).toUpperCase() + word.slice(1);
-    })
-    .join(" ");
-}
+import { toast } from "react-toastify";
+import { titleCase } from "../../utils/formatters";
 
 const fetchInstructors = async () => {
   try {
-    const session = await fetchAuthSession();
-    const userAtrributes = await fetchUserAttributes();
-    const token = session.tokens.idToken
-    const adminEmail = userAtrributes.email;
-
-    const response = await fetch(
-      `${
-        import.meta.env.VITE_API_ENDPOINT
-      }admin/instructors?instructor_email=${adminEmail}`,
-      {
-        method: "GET",
-        headers: {
-          Authorization: token,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
-    }
-    const data = await response.json();
+    const { email } = await apiClient.getAuth();
+    const data = await apiClient.get("admin/instructors", { instructor_email: email });
     return data;
   } catch (error) {
-    console.error("Error fetching instructors:", error);
+    console.error("Error fetching instructors:", error.message);
     return [];
   }
 };
@@ -117,30 +85,11 @@ export const AdminInstructors = ({ setSelectedInstructor }) => {
   useEffect(() => {
     const fetchInstructors = async () => {
       try {
-        const session = await fetchAuthSession();
-        var token = session.tokens.idToken
-        //replace if analytics for admin actions is needed
-        const response = await fetch(
-          `${
-            import.meta.env.VITE_API_ENDPOINT
-          }admin/instructors?instructor_email=replace`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: token,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-        if (response.ok) {
-          const data = await response.json();
-          setRows(getInstructorInfo(data));
-          setLoading(false);
-        } else {
-          console.error("Failed to fetch instructors:", response.statusText);
-        }
+        const data = await apiClient.get("admin/instructors", { instructor_email: "replace" });
+        setRows(getInstructorInfo(data));
+        setLoading(false);
       } catch (error) {
-        console.error("Error fetching instructors:", error);
+        console.error("Error fetching instructors:", error.message);
       }
     };
 
@@ -173,40 +122,12 @@ export const AdminInstructors = ({ setSelectedInstructor }) => {
 
   const handleAddInstructor = async (email) => {
     try {
-      const session = await fetchAuthSession();
-      const userAtrributes = await fetchUserAttributes();
-      const token = session.tokens.idToken
-      const adminEmail = userAtrributes.email;
       const existingInstructor = rows.find((row) => row.email === email);
       if (existingInstructor) {
-        toast.error(`Instructor with email ${email} already exists.`, {
-          position: "top-center",
-          autoClose: 1000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-          theme: "colored",
-        });
+        toast.error(`Instructor with email ${email} already exists.`);
         return;
       }
-      const response = await fetch(
-        `${
-          import.meta.env.VITE_API_ENDPOINT
-        }admin/elevate_instructor?email=${email}`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: token,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-      if (!response.ok) {
-        throw new Error(`Error Status: ${response.status}`);
-      }
-      const data = await response.json();
+      const data = await apiClient.post("admin/elevate_instructor", { email });
       setInstructors((prevInstructors) => [
         ...prevInstructors,
         {
@@ -225,18 +146,9 @@ export const AdminInstructors = ({ setSelectedInstructor }) => {
           email: email,
         },
       ]);
-      toast.success(`Instructor with email ${email} elevated`, {
-        position: "top-center",
-        autoClose: 1000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-        theme: "colored",
-      });
+      toast.success(`Instructor with email ${email} elevated`);
     } catch (error) {
-      console.error("Error elevating instructor", error);
+      console.error("Error elevating instructor", error.message);
     }
   };
 
@@ -393,18 +305,6 @@ export const AdminInstructors = ({ setSelectedInstructor }) => {
           <Button type="submit">Submit</Button>
         </DialogActions>
       </Dialog>
-      <ToastContainer
-        position="top-center"
-        autoClose={5000}
-        hideProgressBar={false}
-        newestOnTop={false}
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-        theme="colored"
-      />
     </div>
   );
 };

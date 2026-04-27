@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import PropTypes from "prop-types";
-import { fetchAuthSession } from "aws-amplify/auth";
+import apiClient from "../services/api";
 const Session = ({
   text,
   session,
@@ -77,7 +77,7 @@ const Session = ({
     }
   };
 
-  const updateSessionName = (sessionId, newName) => {
+  const updateSessionName = async (sessionId, newName) => {
     const updatedName = newName.trim() === "" ? "New Chat" : newName;
 
     // Update the sessions state first
@@ -89,35 +89,15 @@ const Session = ({
       )
     );
 
-    // Return the fetchAuthSession promise
-    return fetchAuthSession()
-      .then((authSession) => {
-        const token = authSession.tokens.idToken
-        // Return the fetch promise
-        return fetch(
-          `${
-            import.meta.env.VITE_API_ENDPOINT
-          }student/update_session_name?session_id=${encodeURIComponent(
-            sessionId
-          )}`,
-          {
-            method: "PUT",
-            headers: {
-              Authorization: token,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ session_name: updatedName }),
-          }
-        );
-      })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error("Failed to update session name");
-        }
-      })
-      .catch((error) => {
-        console.error("Error updating session name:", error);
-      });
+    try {
+      await apiClient.put(
+        "student/update_session_name",
+        { session_id: sessionId },
+        { session_name: updatedName }
+      );
+    } catch (error) {
+      console.error("Error updating session name:", error.message);
+    }
   };
 
   return (

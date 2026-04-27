@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { fetchAuthSession } from "aws-amplify/auth";
+import apiClient from "../../services/api";
 import {
   Container,
   Typography,
@@ -23,35 +23,7 @@ import {
   Tooltip,
   Legend,
 } from "recharts";
-
-
-function courseTitleCase(str) {
-  if (typeof str !== 'string') {
-    return str;
-  }
-  const words = str.split(' ');
-  return words.map((word, index) => {
-    if (index === 0) {
-      return word.toUpperCase(); // First word entirely in uppercase
-    } else {
-      return word.charAt(0).toUpperCase() + word.slice(1); // Only capitalize first letter, keep the rest unchanged
-    }
-  }).join(' ');
-}
-
-
-
-function titleCase(str) {
-  if (typeof str !== "string") {
-    return str;
-  }
-  return str
-    .split(" ")
-    .map(function (word) {
-      return word.charAt(0).toUpperCase() + word.slice(1); // Capitalize only the first letter, leave the rest of the word unchanged
-    })
-    .join(" ");
-}
+import { titleCase, courseTitleCase } from "../../utils/formatters";
 
 const InstructorAnalytics = ({ courseName, course_id }) => {
   const [value, setValue] = useState(0);
@@ -62,33 +34,15 @@ const InstructorAnalytics = ({ courseName, course_id }) => {
   useEffect(() => {
     const fetchAnalytics = async () => {
       try {
-        const session = await fetchAuthSession();
-        const token = session.tokens.idToken
-        const response = await fetch(
-          `${
-            import.meta.env.VITE_API_ENDPOINT
-          }instructor/analytics?course_id=${encodeURIComponent(course_id)}`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: token,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-        if (response.ok) {
-          const analytics_data = await response.json();
-          setData(analytics_data);
-          const graphDataFormatted = analytics_data.map((module) => ({
-            module: module.module_name,
-            Messages: module.message_count,
-          }));
-          setGraphData(graphDataFormatted);
-        } else {
-          console.error("Failed to fetch analytics:", response.statusText);
-        }
+        const analytics_data = await apiClient.get("instructor/analytics", { course_id });
+        setData(analytics_data);
+        const graphDataFormatted = analytics_data.map((module) => ({
+          module: module.module_name,
+          Messages: module.message_count,
+        }));
+        setGraphData(graphDataFormatted);
       } catch (error) {
-        console.error("Error fetching analytics:", error);
+        console.error("Error fetching analytics:", error.message);
       }
     };
 

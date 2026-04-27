@@ -21,7 +21,8 @@ import {
 import DeleteIcon from "@mui/icons-material/Delete";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import { toast } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
+
+import { cleanFileName } from "../utils/fileHelpers";
 
 const FileManagement = ({
   newFiles,
@@ -45,10 +46,6 @@ const FileManagement = ({
   const handleDownloadClick = (url) => {
     console.log(url.url)
     window.open(url.url, "_blank");
-  };
-
-  const cleanFileName = (fileName) => {
-    return fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
   };
 
   const handleFileUpload = async (event) => {
@@ -78,16 +75,7 @@ const FileManagement = ({
       if (fileSizeMB > 500) {
         toast.error(
           `File ${file.name} is larger than 500MB and was not uploaded.`,
-          {
-            position: "top-center",
-            autoClose: 3000,
-            hideProgressBar: false,
-            closeOnClick: true,
-            pauseOnHover: true,
-            draggable: true,
-            progress: undefined,
-            theme: "colored",
-          }
+          { autoClose: 3000 }
         );
         return false;
       }

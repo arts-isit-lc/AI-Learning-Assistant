@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { fetchAuthSession } from "aws-amplify/auth";
-import { fetchUserAttributes } from "aws-amplify/auth";
+import apiClient from "../../services/api";
 
 import { signOut } from "aws-amplify/auth";
 
 import { BiCheck } from "react-icons/bi";
 import { FaInfoCircle } from "react-icons/fa";
 import ArrowCircleLeftRoundedIcon from "@mui/icons-material/ArrowCircleLeftRounded";
+import { handleSignOut } from "../../utils/auth";
 
 import {
   Button,
@@ -19,6 +19,7 @@ import {
   Paper,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
+import { titleCase } from "../../utils/formatters";
 
 // Function to calculate the color based on the average score
 const calculateColor = (score) => {
@@ -89,17 +90,6 @@ function getUniqueConceptNames(data) {
   );
 }
 
-function titleCase(str) {
-  if (typeof str !== "string") {
-    return str;
-  }
-  return str
-    .split(" ")
-    .map(function (word) {
-      return word.charAt(0).toUpperCase() + word.slice(1); // Capitalize only the first letter, leave the rest of the word unchanged
-    })
-    .join(" ");
-}
 
 export const CourseView = ({ course, setModule, setCourse }) => {
   const [concepts, setConcepts] = useState([]);
@@ -118,48 +108,20 @@ export const CourseView = ({ course, setModule, setCourse }) => {
     navigate("/home");
   };
 
-  const handleSignOut = async (event) => {
-    event.preventDefault();
-    try {
-      await signOut();
-      window.location.href = "/";
-    } catch (error) {
-      console.error("Error signing out: ", error);
-    }
-  };
-
   useEffect(() => {
     const fetchCoursePage = async () => {
       if (!course) return;
       try {
-        const session = await fetchAuthSession();
-        const { email } = await fetchUserAttributes();
-
-        const token = session.tokens.idToken
-        const response = await fetch(
-          `${
-            import.meta.env.VITE_API_ENDPOINT
-          }student/course_page?email=${encodeURIComponent(
-            email
-          )}&course_id=${encodeURIComponent(course.course_id)}`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: token,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-        if (response.ok) {
-          const data = await response.json();
-          setData(data);
-          setConcepts(getUniqueConceptNames(data));
-          setLoading(false);
-        } else {
-          console.error("Failed to fetch name:", response.statusText);
-        }
+        const { email } = await apiClient.getAuth();
+        const data = await apiClient.get("student/course_page", {
+          email,
+          course_id: course.course_id,
+        });
+        setData(data);
+        setConcepts(getUniqueConceptNames(data));
+        setLoading(false);
       } catch (error) {
-        console.error("Error fetching name:", error);
+        console.error("Error fetching name:", error.message);
       }
     };
     fetchCoursePage();

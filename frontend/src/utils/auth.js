@@ -1,12 +1,15 @@
-import { fetchAuthSession } from "aws-amplify/auth";
+import { signOut } from "aws-amplify/auth";
 
 /**
- * OPT-10: Get auth session and email from the ID token payload
- * instead of making a separate Cognito GetUser API call via fetchUserAttributes().
+ * Sign out the current user and redirect to the login page.
+ * Shared across all header components and pages with sign-out buttons.
  */
-export async function getAuthSessionAndEmail() {
-  const session = await fetchAuthSession();
-  const token = session.tokens.idToken;
-  const email = token.payload.email;
-  return { token, email, session };
+export async function handleSignOut(event) {
+  event.preventDefault();
+  try {
+    await signOut();
+    window.location.href = "/";
+  } catch (error) {
+    console.error("Error signing out: ", error);
+  }
 }

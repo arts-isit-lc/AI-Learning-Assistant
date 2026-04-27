@@ -1,10 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
-import { toast, ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
-import { fetchAuthSession } from "aws-amplify/auth";
-import { getCurrentUser } from "aws-amplify/auth";
-import { fetchUserAttributes } from "aws-amplify/auth";
+import { toast } from "react-toastify";
+import apiClient from "../../services/api";
 
 import {
   TextField,
@@ -20,19 +17,7 @@ import {
   DialogContentText
 } from "@mui/material";
 import PageContainer from "../Container";
-
-function titleCase(str) {
-  if (typeof str !== "string") {
-    return str;
-  }
-  return str
-    .toLowerCase()
-    .split(" ")
-    .map(function (word) {
-      return word.charAt(0).toUpperCase() + word.slice(1);
-    })
-    .join(" ");
-}
+import { titleCase } from "../../utils/formatters";
 
 const InstructorEditConcept = () => {
   const location = useLocation();
@@ -43,31 +28,13 @@ const InstructorEditConcept = () => {
   useEffect(() => {
     const fetchModules = async () => {
       try {
-        const session = await fetchAuthSession();
-        var token = session.tokens.idToken
-        const response = await fetch(
-          `${
-            import.meta.env.VITE_API_ENDPOINT
-          }instructor/view_modules?course_id=${encodeURIComponent(course_id)}`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: token,
-              "Content-Type": "application/json",
-            },
-          }
+        const moduleData = await apiClient.get("instructor/view_modules", { course_id });
+        const filteredData = moduleData.filter(
+          (module) => module.concept_name === conceptData.concept_name
         );
-        if (response.ok) {
-          const moduleData = await response.json();
-          const filteredData = moduleData.filter(
-            (module) => module.concept_name === conceptData.concept_name
-          );
-          setData(filteredData);
-        } else {
-          console.error("Failed to fetch modules:", response.statusText);
-        }
+        setData(filteredData);
       } catch (error) {
-        console.error("Error fetching modules:", error);
+        console.error("Error fetching modules:", error.message);
       }
     };
     fetchModules();
@@ -90,85 +57,24 @@ const InstructorEditConcept = () => {
   };
 
   const handleDelete = async () => {
-    const session = await fetchAuthSession();
-    const authtoken = session.tokens.idToken
     const deletePromises = data.map((module) =>
-      fetch(
-        `${
-          import.meta.env.VITE_API_ENDPOINT
-        }instructor/delete_module_s3?course_id=${encodeURIComponent(
-          course_id
-        )}&module_id=${encodeURIComponent(
-          module.module_id
-        )}&module_name=${encodeURIComponent(module.module_name)}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: authtoken,
-            "Content-Type": "application/json",
-          },
-        }
+      apiClient.deleteRaw(
+        "instructor/delete_module_s3",
+        { course_id, module_id: module.module_id, module_name: module.module_name }
       )
     );
 
     // Execute all delete requests concurrently
     await Promise.all(deletePromises);
     try {
-      const session = await fetchAuthSession();
-      var token = session.tokens.idToken
-      const response = await fetch(
-        `${
-          import.meta.env.VITE_API_ENDPOINT
-        }instructor/delete_concept?concept_id=${encodeURIComponent(
-          conceptData.concept_id
-        )}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: token,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-      if (response.ok) {
-        toast.success("Successfully Deleted", {
-          position: "top-center",
-          autoClose: 1000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-          theme: "colored",
-        });
-        setTimeout(function () {
-          handleBackClick();
-        }, 1000);
-      } else {
-        console.error("Failed to delete concept");
-        toast.error("Failed to delete concept", {
-          position: "top-center",
-          autoClose: 1000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-          theme: "colored",
-        });
-      }
+      await apiClient.delete("instructor/delete_concept", { concept_id: conceptData.concept_id });
+      toast.success("Successfully Deleted");
+      setTimeout(function () {
+        handleBackClick();
+      }, 1000);
     } catch (error) {
       console.error("Failed to delete concept");
-      toast.error("Failed to delete concept", {
-        position: "top-center",
-        autoClose: 1000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-        theme: "colored",
-      });
+      toast.error("Failed to delete concept");
     }
   };
   const handleInputChange = (e) => {
@@ -177,75 +83,22 @@ const InstructorEditConcept = () => {
 
   const handleSave = async () => {
     if (!conceptName.trim()) {
-      toast.error("Concept Name is required.", {
-        position: "top-center",
-        autoClose: 1000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-        theme: "colored",
-      });
+      toast.error("Concept Name is required.");
       return;
     }
     try {
-      const session = await fetchAuthSession();
-      var token = session.tokens.idToken
-      const response = await fetch(
-        `${
-          import.meta.env.VITE_API_ENDPOINT
-        }instructor/edit_concept?concept_id=${encodeURIComponent(
-          conceptData.concept_id
-        )}&concept_number=${encodeURIComponent(conceptData.concept_number)}`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: token,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ concept_name: conceptName }),
-        }
+      await apiClient.put(
+        "instructor/edit_concept",
+        { concept_id: conceptData.concept_id, concept_number: conceptData.concept_number },
+        { concept_name: conceptName }
       );
-      if (response.ok) {
-        toast.success("Successfully Updated Concept", {
-          position: "top-center",
-          autoClose: 1000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-          theme: "colored",
-        });
-        setTimeout(function () {
-          handleBackClick();
-        }, 1000);
-      } else {
-        console.error("Failed to update concept");
-        toast.error("Failed to update concept", {
-          position: "top-center",
-          autoClose: 1000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-          theme: "colored",
-        });
-      }
+      toast.success("Successfully Updated Concept");
+      setTimeout(function () {
+        handleBackClick();
+      }, 1000);
     } catch (error) {
       console.error("Failed to update concept");
-      toast.error("Failed to update concept", {
-        position: "top-center",
-        autoClose: 1000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-        theme: "colored",
-      });
+      toast.error("Failed to update concept");
     }
   };
   return (
@@ -291,18 +144,6 @@ const InstructorEditConcept = () => {
           </Button>
         </Box>
       </Paper>
-      <ToastContainer
-        position="top-center"
-        autoClose={5000}
-        hideProgressBar={false}
-        newestOnTop={false}
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-        theme="colored"
-      />
       <Dialog open={dialogOpen} onClose={handleDialogClose}>
         <DialogTitle>{"Delete Concept"}</DialogTitle>
         <DialogContent>

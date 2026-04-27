@@ -1,37 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button, Box, Toolbar, Typography, Paper } from "@mui/material";
-import { fetchAuthSession } from "aws-amplify/auth";
+import apiClient from "../../services/api";
 import {
   MRT_TableContainer,
   useMaterialReactTable,
 } from "material-react-table";
-import { toast, ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
-
-function courseTitleCase(str) {
-  if (typeof str !== 'string') {
-    return str;
-  }
-  const words = str.split(' ');
-  return words.map((word, index) => {
-    if (index === 0) {
-      return word.toUpperCase(); // First word entirely in uppercase
-    } else {
-      return word.charAt(0).toUpperCase() + word.slice(1); // Only capitalize first letter, keep the rest unchanged
-    }
-  }).join(' ');
-}
-
-
-function titleCase(str) {
-  if (typeof str !== 'string') {
-    return str;
-  }
-  return str.split(' ').map(function(word) {
-    return word.charAt(0).toUpperCase() + word.slice(1); // Capitalize only the first letter, leave the rest of the word unchanged
-  }).join(' ');
-}
+import { toast } from "react-toastify";
+import { titleCase, courseTitleCase } from "../../utils/formatters";
 
 
 
@@ -41,28 +17,10 @@ const InstructorConcepts = ({ courseName, course_id }) => {
   useEffect(() => {
     const fetchConcepts = async () => {
       try {
-        const session = await fetchAuthSession();
-        var token = session.tokens.idToken
-        const response = await fetch(
-          `${
-            import.meta.env.VITE_API_ENDPOINT
-          }instructor/view_concepts?course_id=${encodeURIComponent(course_id)}`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: token,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-        if (response.ok) {
-          const data = await response.json();
-          setData(data);
-        } else {
-          console.error("Failed to fetch concepts:", response.statusText);
-        }
+        const data = await apiClient.get("instructor/view_concepts", { course_id });
+        setData(data);
       } catch (error) {
-        console.error("Error fetching concepts:", error);
+        console.error("Error fetching concepts:", error.message);
       }
     };
 
@@ -129,46 +87,21 @@ const InstructorConcepts = ({ courseName, course_id }) => {
 
   const handleSaveChanges = async () => {
     try {
-      const session = await fetchAuthSession();
-      const token = session.tokens.idToken
-
       // Create an array of promises for updating concepts
       const updatePromises = data.map((concept, index) => {
         const conceptNumber = index + 1;
 
-        return fetch(
-          `${
-            import.meta.env.VITE_API_ENDPOINT
-          }instructor/edit_concept?concept_id=${encodeURIComponent(
-            concept.concept_id
-          )}&concept_number=${encodeURIComponent(conceptNumber)}`,
-          {
-            method: "PUT",
-            headers: {
-              Authorization: token,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              concept_name: concept.concept_name,
-              concept_number: conceptNumber,
-            }),
-          }
+        return apiClient.putRaw(
+          "instructor/edit_concept",
+          { concept_id: concept.concept_id, concept_number: conceptNumber },
+          { concept_name: concept.concept_name, concept_number: conceptNumber }
         ).then((response) => {
           if (!response.ok) {
             console.error(
               `Failed to update concept ${concept.concept_id}:`,
               response.statusText
             );
-            toast.error("Concept Order Update Failed", {
-              position: "top-center",
-              autoClose: 1000,
-              hideProgressBar: false,
-              closeOnClick: true,
-              pauseOnHover: true,
-              draggable: true,
-              progress: undefined,
-              theme: "colored",
-            });
+            toast.error("Concept Order Update Failed");
             return { success: false };
           } else {
             return response.json().then((updatedConcept) => {
@@ -185,41 +118,13 @@ const InstructorConcepts = ({ courseName, course_id }) => {
       );
 
       if (allUpdatesSuccessful) {
-        toast.success("Concept Order Updated Successfully", {
-          position: "top-center",
-          autoClose: 1000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-          theme: "colored",
-        });
+        toast.success("Concept Order Updated Successfully");
       } else {
-        toast.error("Some concept updates failed", {
-          position: "top-center",
-          autoClose: 1000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-          theme: "colored",
-        });
+        toast.error("Some concept updates failed");
       }
     } catch (error) {
       console.error("Error saving changes:", error);
-      toast.error("An error occurred while saving changes", {
-        position: "top-center",
-        autoClose: 1000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-        theme: "colored",
-        transition: "Bounce",
-      });
+      toast.error("An error occurred while saving changes");
     }
   };
 
@@ -261,18 +166,6 @@ const InstructorConcepts = ({ courseName, course_id }) => {
           Save Changes
         </Button>
       </Box>
-      <ToastContainer
-        position="top-center"
-        autoClose={5000}
-        hideProgressBar={false}
-        newestOnTop={false}
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-        theme="colored"
-      />
     </Box>
   );
 };

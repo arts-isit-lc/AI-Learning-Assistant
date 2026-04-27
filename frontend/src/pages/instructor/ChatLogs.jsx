@@ -13,25 +13,10 @@ import {
 } from "@mui/material";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { fetchAuthSession, fetchUserAttributes } from "aws-amplify/auth";
+import apiClient from "../../services/api";
 import { v4 as uuidv4 } from 'uuid';
 import { useNotification } from "../../context/NotificationContext";
-
-function courseTitleCase(str) {
-    if (typeof str !== "string") {
-        return str;
-    }
-    const words = str.split(" ");
-    return words
-        .map((word, index) => {
-            if (index === 0) {
-                return word.toUpperCase();
-            } else {
-                return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-            }
-        })
-        .join(" ");
-}
+import { courseTitleCase } from "../../utils/formatters";
 
 export const ChatLogs = ({ courseName, course_id, openWebSocket }) => {
     const [loading, setLoading] = useState(false);
@@ -50,69 +35,39 @@ export const ChatLogs = ({ courseName, course_id, openWebSocket }) => {
 
     const checkNotificationStatus = async () => {
         try {
-            const session = await fetchAuthSession();
-            const token = session.tokens.idToken;
-            const { email } = await fetchUserAttributes();
-            const response = await fetch(
-                `${import.meta.env.VITE_API_ENDPOINT
-                }instructor/check_notifications_status?course_id=${encodeURIComponent(
-                    course_id
-                )}&instructor_email=${encodeURIComponent(email)}`,
-                {
-                    method: "GET",
-                    headers: {
-                        Authorization: token,
-                        "Content-Type": "application/json",
-                    },
-                }
-            );
-            if (response.ok) {
-                const data = await response.json();
-                console.log(`Download Chatlogs is ${data.isEnabled}`)
-                setIsDownloadButtonEnabled(data.isEnabled);
-            } else {
-                console.error("Failed to fetch notification status:", response.statusText);
-            }
+            const { email } = await apiClient.getAuth();
+            const data = await apiClient.get("instructor/check_notifications_status", {
+                course_id,
+                instructor_email: email,
+            });
+            console.log(`Download Chatlogs is ${data.isEnabled}`)
+            setIsDownloadButtonEnabled(data.isEnabled);
         } catch (error) {
-            console.error("Error checking notification status:", error);
+            console.error("Error checking notification status:", error.message);
         }
     };
 
     const fetchChatLogs = async () => {
         try {
             setLoading(true);
-            const session = await fetchAuthSession();
-            const token = session.tokens.idToken;
-            const { email } = await fetchUserAttributes();
+            const { email } = await apiClient.getAuth();
 
-            const response = await fetch(
-                `${import.meta.env.VITE_API_ENDPOINT}instructor/fetch_chatlogs?course_id=${encodeURIComponent(course_id)}&instructor_email=${encodeURIComponent(email)}`,
-                {
-                    method: "GET",
-                    headers: {
-                        Authorization: token,
-                        "Content-Type": "application/json",
-                    },
-                }
-            );
-
-            if (response.ok) {
-                const data = await response.json();
-                console.log("Chat logs fetched:", data);
-                if (data.log_files) {
-                    const formattedLogs = Object.entries(data.log_files).map(([fileName, presignedUrl]) => ({
-                        date: convertToLocalTime(fileName), // Using file name as the date
-                        presignedUrl: presignedUrl,
-                    }));
-                    setPreviousChatLogs(formattedLogs);
-                } else {
-                    setPreviousChatLogs([]);
-                }
+            const data = await apiClient.get("instructor/fetch_chatlogs", {
+                course_id,
+                instructor_email: email,
+            });
+            console.log("Chat logs fetched:", data);
+            if (data.log_files) {
+                const formattedLogs = Object.entries(data.log_files).map(([fileName, presignedUrl]) => ({
+                    date: convertToLocalTime(fileName), // Using file name as the date
+                    presignedUrl: presignedUrl,
+                }));
+                setPreviousChatLogs(formattedLogs);
             } else {
-                console.error("Failed to fetch chat logs:", response.statusText);
+                setPreviousChatLogs([]);
             }
         } catch (error) {
-            console.error("Error fetching chat logs:", error);
+            console.error("Error fetching chat logs:", error.message);
         } finally {
             setLoading(false);
         }
@@ -162,45 +117,27 @@ export const ChatLogs = ({ courseName, course_id, openWebSocket }) => {
                 return;
             }
             setIsDownloadButtonEnabled(false);
-            const session = await fetchAuthSession();
-            const token = session.tokens.idToken;
-            const { email } = await fetchUserAttributes();
+            const { email } = await apiClient.getAuth();
             const request_id = uuidv4();
 
-            const response = await fetch(
-                `${import.meta.env.VITE_API_ENDPOINT}instructor/course_messages`,
-                {
-                    method: "POST",
-                    headers: {
-                        Authorization: token,
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        course_id: course_id,
-                        instructor_email: email,
-                        request_id: request_id,
-                    }),
-                }
-            );
+            const data = await apiClient.post("instructor/course_messages", {}, {
+                course_id: course_id,
+                instructor_email: email,
+                request_id: request_id,
+            });
 
-            if (response.ok) {
-                console.log(response)
-                const data = await response.json();
-                console.log("Job submitted successfully:", data);
+            console.log("Job submitted successfully:", data);
 
-                // Invoke global WebSocket function from InstructorHomepage and delay checkNotificationStatus slightly
-                openWebSocket(courseName, course_id, request_id, setNotificationForCourse, () => {
-                    console.log("Waiting before checking notification status...");
-                    setTimeout(() => {
-                        checkNotificationStatus();
-                        fetchChatLogs(); // Fetch latest chat logs after WebSocket completes
-                    }, 2000); // Wait 2 seconds before checking
-                });
-            } else {
-                console.error("Failed to submit job:", response.statusText);
-            }
+            // Invoke global WebSocket function from InstructorHomepage and delay checkNotificationStatus slightly
+            openWebSocket(courseName, course_id, request_id, setNotificationForCourse, () => {
+                console.log("Waiting before checking notification status...");
+                setTimeout(() => {
+                    checkNotificationStatus();
+                    fetchChatLogs(); // Fetch latest chat logs after WebSocket completes
+                }, 2000); // Wait 2 seconds before checking
+            });
         } catch (error) {
-            console.error("Error submitting job:", error);
+            console.error("Error submitting job:", error.message);
         }
     };
 

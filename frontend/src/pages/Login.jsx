@@ -8,8 +8,8 @@ import {
   resendSignUpCode,
   resetPassword,
   confirmResetPassword,
-  fetchAuthSession,
 } from "aws-amplify/auth";
+import apiClient from "../services/api";
 // MUI
 import {
   Button,
@@ -22,8 +22,7 @@ import {
   Typography,
 } from "@mui/material";
 
-import { toast, ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
+import { toast } from "react-toastify";
 // login assets
 import loginframe from "../assets/loginframe.png";
 import PageContainer from "./Container";
@@ -111,16 +110,7 @@ export const Login = () => {
         window.location.reload();
       }
     } catch (error) {
-      toast.error(`Error logging in: ${error}`, {
-        position: "top-center",
-        autoClose: 3000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-        theme: "colored",
-      });
+      toast.error(`Error logging in: ${error}`, { autoClose: 3000 });
       console.log("Error logging in:", error);
       setLoading(false);
     }
@@ -131,47 +121,43 @@ export const Login = () => {
 
     // Check for empty fields
     if (!username || !password || !confirmPassword || !firstName || !lastName) {
-      toast.error("All fields are required", {
-        position: "top-center",
-        autoClose: 3000,
-        theme: "colored",
-      });
+      toast.error("All fields are required", { autoClose: 3000 });
       return;
     }
 
     // Password validation: match, length, uppercase, lowercase, and number
     if (password !== confirmPassword) {
       setPasswordError("Passwords do not match");
-      toast.error("Passwords do not match", { theme: "colored" });
+      toast.error("Passwords do not match");
       return;
     }
 
     if (password.length < 10) {
       setPasswordError("Password must be at least 10 characters long");
-      toast.error("Password must be at least 10 characters long", { theme: "colored" });
+      toast.error("Password must be at least 10 characters long");
       return;
     }
 
     if (!/[a-z]/.test(password)) {
       setPasswordError("Password must contain at least one lowercase letter");
-      toast.error("Password must contain at least one lowercase letter", { theme: "colored" });
+      toast.error("Password must contain at least one lowercase letter");
       return;
     }
 
     if (!/[A-Z]/.test(password)) {
       setPasswordError("Password must contain at least one uppercase letter");
-      toast.error("Password must contain at least one uppercase letter", { theme: "colored" });
+      toast.error("Password must contain at least one uppercase letter");
       return;
     }
 
     if (!/[0-9]/.test(password)) {
       setPasswordError("Password must contain at least one number");
-      toast.error("Password must contain at least one number", { theme: "colored" });
+      toast.error("Password must contain at least one number");
       return;
     }
     if (!/[^a-zA-Z0-9\s]/.test(password)) {
       setPasswordError("Password must contain at least one special character");
-      toast.error("Password must contain at least one special character", { theme: "colored" });
+      toast.error("Password must contain at least one special character");
       return;
     }
 
@@ -194,20 +180,14 @@ export const Login = () => {
       setNewSignUp(false);
       if (!isSignUpComplete && nextStep?.signUpStep === "CONFIRM_SIGN_UP") {
         setSignUpConfirmation(true); // Transition to confirmation UI
-        toast.success("Account created. Check your email for the confirmation code.", {
-          theme: "colored",
-        });
+        toast.success("Account created. Check your email for the confirmation code.");
       }
     } catch (error) {
       const errorMessage =
         error.message.includes("PreSignUp failed with error")
           ? "Your email domain is not allowed. Please use a valid email address."
           : `Error signing up: ${error.message}`;
-      toast.error(errorMessage, {
-        position: "top-center",
-        autoClose: 3000,
-        theme: "colored",
-      });
+      toast.error(errorMessage, { autoClose: 3000 });
       console.log("Error signing up:", error);
       setLoading(false);
       setError(error.message);
@@ -225,16 +205,7 @@ export const Login = () => {
 
     if (newPassword !== confirmNewPassword) {
       setPasswordError("Passwords do not match!");
-      toast.error(`Passwords do not match!`, {
-        position: "top-center",
-        autoClose: 3000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-        theme: "colored",
-      });
+      toast.error(`Passwords do not match!`, { autoClose: 3000 });
       return;
     }
     setPasswordError("");
@@ -251,16 +222,7 @@ export const Login = () => {
         window.location.reload();
       }
     } catch (error) {
-      toast.error(`Error: ${error}`, {
-        position: "top-center",
-        autoClose: 3000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-        theme: "colored",
-      });
+      toast.error(`Error: ${error}`, { autoClose: 3000 });
       console.log("Error setting new password:", error);
       setLoading(false);
       setNewUserPassword(false);
@@ -284,29 +246,13 @@ export const Login = () => {
       });
       if (user.isSignedIn) {
         // Send user data to backend
-        const session = await fetchAuthSession();
-        const token = session.tokens.idToken
-
-        const response = await fetch(
-          `${import.meta.env.VITE_API_ENDPOINT
-          }student/create_user?user_email=${encodeURIComponent(
-            username
-          )}&username=${encodeURIComponent(
-            username
-          )}&first_name=${encodeURIComponent(
-            firstName
-          )}&last_name=${encodeURIComponent(
-            lastName
-          )}&preferred_name=${encodeURIComponent(firstName)}`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: token,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-        const data = await response.json();
+        const data = await apiClient.post("student/create_user", {
+          user_email: username,
+          username: username,
+          first_name: firstName,
+          last_name: lastName,
+          preferred_name: firstName,
+        });
         setLoading(false);
         setNewSignUp(false);
         window.location.reload();
@@ -315,16 +261,7 @@ export const Login = () => {
         setError("Automatic login failed. Please try signing in manually.");
       }
     } catch (error) {
-      toast.error(`Error: ${error}`, {
-        position: "top-center",
-        autoClose: 3000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-        theme: "colored",
-      });
+      toast.error(`Error: ${error}`, { autoClose: 3000 });
       console.log("Error confirming sign-up:", error);
       setLoading(false);
       setConfirmationError(error.message);
@@ -338,16 +275,7 @@ export const Login = () => {
       setLoading(false);
       setConfirmationError("");
     } catch (error) {
-      toast.error(`Error: ${error}`, {
-        position: "top-center",
-        autoClose: 3000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-        theme: "colored",
-      });
+      toast.error(`Error: ${error}`, { autoClose: 3000 });
       console.log("Error resending confirmation code:", error);
       setLoading(false);
     }
@@ -359,16 +287,7 @@ export const Login = () => {
       const output = await resetPassword({ username });
       handleResetPasswordNextSteps(output);
     } catch (error) {
-      toast.error(`Error Reseting Password`, {
-        position: "top-center",
-        autoClose: 3000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-        theme: "colored",
-      });
+      toast.error(`Error Reseting Password`, { autoClose: 3000 });
       setMessage("");
     }
   }
@@ -403,16 +322,7 @@ export const Login = () => {
       setStep("done");
       setError("");
     } catch (error) {
-      toast.error(`Error: ${error}`, {
-        position: "top-center",
-        autoClose: 3000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-        theme: "colored",
-      });
+      toast.error(`Error: ${error}`, { autoClose: 3000 });
       setError(error.message);
     }
   }
@@ -917,18 +827,6 @@ export const Login = () => {
 
         </Grid>
       </PageContainer>
-      <ToastContainer
-        position="top-center"
-        autoClose={5000}
-        hideProgressBar={false}
-        newestOnTop={false}
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-        theme="colored"
-      />
     </ThemeProvider>
   );
 };

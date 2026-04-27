@@ -1,9 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
-import { toast, ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
-import { fetchAuthSession } from "aws-amplify/auth";
-import { fetchUserAttributes } from "aws-amplify/auth";
+import { toast } from "react-toastify";
+import apiClient from "../../services/api";
 
 import {
   TextField,
@@ -25,19 +23,8 @@ import {
 } from "@mui/material";
 import PageContainer from "../Container";
 import FileManagement from "../../components/FileManagement";
-
-function titleCase(str) {
-  if (typeof str !== "string") {
-    return str;
-  }
-  return str
-    .toLowerCase()
-    .split(" ")
-    .map(function (word) {
-      return word.charAt(0).toUpperCase() + word.slice(1);
-    })
-    .join(" ");
-}
+import { titleCase } from "../../utils/formatters";
+import { cleanFileName, removeFileExtension, getFileType } from "../../utils/fileHelpers";
 
 const InstructorEditCourse = () => {
   const [loading, setLoading] = useState(true);
@@ -95,61 +82,26 @@ const InstructorEditCourse = () => {
     return resultArray;
   }
 
-  function removeFileExtension(fileName) {
-    return fileName.replace(/\.[^/.]+$/, "");
-  }
   const fetchFiles = async () => {
     try {
-      const { token, email } = await getAuthSessionAndEmail();
-      const response = await fetch(
-        `${import.meta.env.VITE_API_ENDPOINT
-        }instructor/get_all_files?course_id=${encodeURIComponent(
-          course_id
-        )}&module_id=${encodeURIComponent(
-          module.module_id
-        )}&module_name=${encodeURIComponent(moduleName)}`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: token,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-      if (response.ok) {
-        const fileData = await response.json();
-        setFiles(convertDocumentFilesToArray(fileData));
-      } else {
-        console.error("Failed to fetch files:", response.statusText);
-      }
+      const fileData = await apiClient.get("instructor/get_all_files", {
+        course_id,
+        module_id: module.module_id,
+        module_name: moduleName,
+      });
+      setFiles(convertDocumentFilesToArray(fileData));
     } catch (error) {
-      console.error("Error fetching Files:", error);
+      console.error("Error fetching Files:", error.message);
     }
     setLoading(false);
   };
 
   const fetchConcepts = async () => {
     try {
-      const { token, email } = await getAuthSessionAndEmail();
-      const response = await fetch(
-        `${import.meta.env.VITE_API_ENDPOINT
-        }instructor/view_concepts?course_id=${encodeURIComponent(course_id)}`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: token,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-      if (response.ok) {
-        const conceptData = await response.json();
-        setAllConcept(conceptData);
-      } else {
-        console.error("Failed to fetch courses:", response.statusText);
-      }
+      const conceptData = await apiClient.get("instructor/view_concepts", { course_id });
+      setAllConcept(conceptData);
     } catch (error) {
-      console.error("Error fetching courses:", error);
+      console.error("Error fetching courses:", error.message);
     }
   };
   useEffect(() => {
@@ -167,28 +119,14 @@ const InstructorEditCourse = () => {
       fetchFiles();
       const fetchCrossFileData = async () => {
         try {
-          const session = await fetchAuthSession();
-          const token = session.tokens.idToken;
-          const [filesRes, refsRes] = await Promise.all([
-            fetch(
-              `${import.meta.env.VITE_API_ENDPOINT}instructor/course_files?course_id=${encodeURIComponent(course_id)}`,
-              { method: "GET", headers: { Authorization: token, "Content-Type": "application/json" } }
-            ),
-            fetch(
-              `${import.meta.env.VITE_API_ENDPOINT}instructor/module_file_references?module_id=${encodeURIComponent(module.module_id)}`,
-              { method: "GET", headers: { Authorization: token, "Content-Type": "application/json" } }
-            )
+          const [filesData, refsData] = await Promise.all([
+            apiClient.get("instructor/course_files", { course_id }),
+            apiClient.get("instructor/module_file_references", { module_id: module.module_id }),
           ]);
-          if (filesRes.ok) {
-            const data = await filesRes.json();
-            setCourseFiles(data.filter(f => f.module_id !== module.module_id));
-          }
-          if (refsRes.ok) {
-            const refs = await refsRes.json();
-            setReferencedFileIds(refs);
-          }
+          setCourseFiles(filesData.filter(f => f.module_id !== module.module_id));
+          setReferencedFileIds(refsData);
         } catch (error) {
-          console.error("Error fetching cross-file data:", error);
+          console.error("Error fetching cross-file data:", error.message);
         }
       };
       fetchCrossFileData();
@@ -197,70 +135,21 @@ const InstructorEditCourse = () => {
 
   const handleDelete = async () => {
     try {
-      const session = await fetchAuthSession();
-      const token = session.tokens.idToken
-      const s3Response = await fetch(
-        `${import.meta.env.VITE_API_ENDPOINT
-        }instructor/delete_module_s3?course_id=${encodeURIComponent(
-          course_id
-        )}&module_id=${encodeURIComponent(
-          module.module_id
-        )}&module_name=${encodeURIComponent(module.module_name)}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: token,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      await apiClient.delete("instructor/delete_module_s3", {
+        course_id,
+        module_id: module.module_id,
+        module_name: module.module_name,
+      });
 
-      if (!s3Response.ok) {
-        throw new Error("Failed to delete module from S3");
-      }
-      const moduleResponse = await fetch(
-        `${import.meta.env.VITE_API_ENDPOINT
-        }instructor/delete_module?module_id=${encodeURIComponent(
-          module.module_id
-        )}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: token,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      await apiClient.delete("instructor/delete_module", { module_id: module.module_id });
 
-      if (moduleResponse.ok) {
-        toast.success("Successfully Deleted", {
-          position: "top-center",
-          autoClose: 1000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-          theme: "colored",
-        });
-        setTimeout(() => {
-          handleBackClick();
-        }, 1000);
-      } else {
-        throw new Error("Failed to delete module");
-      }
+      toast.success("Successfully Deleted");
+      setTimeout(() => {
+        handleBackClick();
+      }, 1000);
     } catch (error) {
       console.error(error.message);
-      toast.error("Failed to delete module", {
-        position: "top-center",
-        autoClose: 1000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-        theme: "colored",
-      });
+      toast.error("Failed to delete module");
     }
   };
 
@@ -271,78 +160,35 @@ const InstructorEditCourse = () => {
   const handleConceptInputChange = (e) => {
     setConcept(e.target.value);
   };
-  const getFileType = (filename) => {
-    // Get the file extension by splitting the filename on '.' and taking the last part
-    const parts = filename.split(".");
-
-    // Check if there's at least one '.' in the filename and return the last part
-    if (parts.length > 1) {
-      return parts.pop();
-    } else {
-      return "";
-    }
-  };
-
   const updateModule = async () => {
     const selectedConcept = allConcepts.find((c) => c.concept_name === concept);
-    const { token, email } = await getAuthSessionAndEmail();
+    const { email } = await apiClient.getAuth();
 
-    const editModuleResponse = await fetch(
-      `${import.meta.env.VITE_API_ENDPOINT
-      }instructor/edit_module?module_id=${encodeURIComponent(
-        module.module_id
-      )}&instructor_email=${encodeURIComponent(
-        email
-      )}&concept_id=${encodeURIComponent(selectedConcept.concept_id)}`,
-      {
-        method: "PUT",
-        headers: {
-          Authorization: token,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          module_name: moduleName,
-          module_prompt: modulePrompt,
-        }),
+    return apiClient.putRaw(
+      "instructor/edit_module",
+      { module_id: module.module_id, instructor_email: email, concept_id: selectedConcept.concept_id },
+      { module_name: moduleName, module_prompt: modulePrompt }
+    ).then((response) => {
+      if (!response.ok) {
+        throw new Error(response.statusText);
       }
-    );
-
-    if (!editModuleResponse.ok) {
-      throw new Error(editModuleResponse.statusText);
-    }
-
-    return editModuleResponse;
+      return response;
+    });
   };
 
   const deleteFiles = async (deletedFiles, token) => {
     const deletedFilePromises = deletedFiles.map((file_name) => {
       const fileType = getFileType(file_name);
       const fileName = cleanFileName(removeFileExtension(file_name));
-      return fetch(
-        `${import.meta.env.VITE_API_ENDPOINT
-        }instructor/delete_file?course_id=${encodeURIComponent(
-          course_id
-        )}&module_id=${encodeURIComponent(
-          module.module_id
-        )}&module_name=${encodeURIComponent(
-          moduleName
-        )}&file_type=${encodeURIComponent(
-          fileType
-        )}&file_name=${encodeURIComponent(fileName)}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: token,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      return apiClient.deleteRaw("instructor/delete_file", {
+        course_id,
+        module_id: module.module_id,
+        module_name: moduleName,
+        file_type: fileType,
+        file_name: fileName,
+      });
     });
   };
-  const cleanFileName = (fileName) => {
-    return fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
-  };
-
   const uploadFiles = async (newFiles, token) => {
     const successfullyUploadedFiles = [];
     // add meta data to this request
@@ -351,31 +197,14 @@ const InstructorEditCourse = () => {
       const fileName = cleanFileName(removeFileExtension(file.name));
 
       try {
-        const response = await fetch(
-          `${import.meta.env.VITE_API_ENDPOINT
-          }instructor/generate_presigned_url?course_id=${encodeURIComponent(
-            course_id
-          )}&module_id=${encodeURIComponent(
-            module.module_id
-          )}&module_name=${encodeURIComponent(
-            moduleName
-          )}&file_type=${encodeURIComponent(
-            fileType
-          )}&file_name=${encodeURIComponent(fileName)}`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: token,
-              "Content-Type": "application/json",
-            },
-          }
-        );
+        const presignedUrl = await apiClient.get("instructor/generate_presigned_url", {
+          course_id,
+          module_id: module.module_id,
+          module_name: moduleName,
+          file_type: fileType,
+          file_name: fileName,
+        });
 
-        if (!response.ok) {
-          throw new Error("Failed to fetch presigned URL");
-        }
-
-        const presignedUrl = await response.json();
         const uploadResponse = await fetch(presignedUrl.presignedurl, {
           method: "PUT",
           headers: {
@@ -409,43 +238,27 @@ const InstructorEditCourse = () => {
 
     const totalFiles = files.length + newFiles.length;
     if (totalFiles === 0) {
-      toast.error("At least one file is required to save the module.", {
-        position: "top-center",
-        autoClose: 2000,
-        theme: "colored",
-      });
+      toast.error("At least one file is required to save the module.", { autoClose: 2000 });
       setIsSaving(false);
       return;
     }
 
     if (!moduleName || !concept) {
-      toast.error("Module Name and Concept are required.", {
-        position: "top-center",
-        autoClose: 1000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-        theme: "colored",
-      });
+      toast.error("Module Name and Concept are required.");
       return;
     }
 
 
     try {
       await updateModule();
-      const { token } = await getAuthSessionAndEmail();
-      await deleteFiles(deletedFiles, token);
-      await uploadFiles(newFiles, token);
-      await fetch(
-        `${import.meta.env.VITE_API_ENDPOINT}instructor/module_file_references?module_id=${encodeURIComponent(module.module_id)}`,
-        {
-          method: "PUT",
-          headers: { Authorization: token, "Content-Type": "application/json" },
-          body: JSON.stringify({ referenced_file_ids: referencedFileIds }),
-        }
+      await deleteFiles(deletedFiles);
+      await uploadFiles(newFiles);
+      await apiClient.put(
+        "instructor/module_file_references",
+        { module_id: module.module_id },
+        { referenced_file_ids: referencedFileIds }
       );
+      const { token } = await apiClient.getAuth();
       await Promise.all([
         updateMetaData(files, token),
         updateMetaData(savedFiles, token),
@@ -457,28 +270,10 @@ const InstructorEditCourse = () => {
 
       setDeletedFiles([]);
       setNewFiles([]);
-      toast.success("Module updated successfully", {
-        position: "top-center",
-        autoClose: 1000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-        theme: "colored",
-      });
+      toast.success("Module updated successfully");
     } catch (error) {
       console.error("Error fetching courses:", error);
-      toast.error("Module failed to update", {
-        position: "top-center",
-        autoClose: 1000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-        theme: "colored",
-      });
+      toast.error("Module failed to update");
     } finally {
       setIsSaving(false);
     }
@@ -492,29 +287,12 @@ const InstructorEditCourse = () => {
         removeFileExtension(fileNameWithExtension)
       );
       const fileType = getFileType(fileNameWithExtension);
-      return fetch(
-        `${import.meta.env.VITE_API_ENDPOINT
-        }instructor/update_metadata?module_id=${encodeURIComponent(
-          module.module_id
-        )}&filename=${encodeURIComponent(
-          fileName
-        )}&filetype=${encodeURIComponent(fileType)}`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: token,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ metadata: fileMetadata }),
-        }
+      return apiClient.putRaw(
+        "instructor/update_metadata",
+        { module_id: module.module_id, filename: fileName, filetype: fileType },
+        { metadata: fileMetadata }
       );
     });
-  };
-  const getAuthSessionAndEmail = async () => {
-    const session = await fetchAuthSession();
-    const token = session.tokens.idToken
-    const { email } = await fetchUserAttributes();
-    return { token, email };
   };
 
   if (!module) return <Typography>Loading...</Typography>;
@@ -636,18 +414,6 @@ const InstructorEditCourse = () => {
           </Button>
         </Box>
       </Paper>
-      <ToastContainer
-        position="top-center"
-        autoClose={5000}
-        hideProgressBar={false}
-        newestOnTop={false}
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-        theme="colored"
-      />
       <Dialog open={dialogOpen} onClose={handleDialogClose}>
         <DialogTitle>{"Delete Module"}</DialogTitle>
         <DialogContent>

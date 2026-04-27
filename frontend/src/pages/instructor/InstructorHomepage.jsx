@@ -6,7 +6,7 @@ import {
   useParams,
   useLocation,
 } from "react-router-dom";
-import { fetchAuthSession } from "aws-amplify/auth";
+import apiClient from "../../services/api";
 import {
   Typography,
   Box,
@@ -41,19 +41,7 @@ import InstructorEditConcept from "./InstructorEditConcept";
 import ChatLogs from "./ChatLogs";
 import { useNotification } from "../../context/NotificationContext";
 import { UserContext } from "../../App";
-
-function titleCase(str) {
-  if (typeof str !== "string") {
-    return str;
-  }
-  return str
-    .toLowerCase()
-    .split(" ")
-    .map(function (word) {
-      return word.charAt(0).toUpperCase() + word.slice(1);
-    })
-    .join(" ");
-}
+import { titleCase } from "../../utils/formatters";
 
 function constructWebSocketUrl() {
   const tempUrl = import.meta.env.VITE_GRAPHQL_WS_URL; // Replace with your WebSocket URL
@@ -81,24 +69,14 @@ function constructWebSocketUrl() {
 const removeCompletedNotification = async (course_id) => {
   try {
     console.log(course_id)
-    const session = await fetchAuthSession();
-    const token = session.tokens.idToken;
-    const email = session.tokens.idToken.payload.email;
-    const response = await fetch(
-      `${import.meta.env.VITE_API_ENDPOINT}instructor/remove_completed_notification?course_id=${encodeURIComponent(course_id)}&instructor_email=${encodeURIComponent(email)}`,
-      {
-        method: "DELETE",
-        headers: { Authorization: token, "Content-Type": "application/json" },
-      }
-    );
-
-    if (response.ok) {
-        console.log("Notification removed successfully.");
-    } else {
-        console.error("Failed to remove notification:", response.statusText);
-    }
+    const { email } = await apiClient.getAuth();
+    await apiClient.delete("instructor/remove_completed_notification", {
+      course_id,
+      instructor_email: email,
+    });
+    console.log("Notification removed successfully.");
   } catch (error) {
-    console.error("Error removing completed notification:", error);
+    console.error("Error removing completed notification:", error.message);
   }
 };
 
@@ -290,36 +268,19 @@ const InstructorHomepage = () => {
 
     const fetchCourses = async () => {
       try {
-        const session = await fetchAuthSession();
-        var token = session.tokens.idToken;
-        const email = session.tokens.idToken.payload.email;
-        const response = await fetch(
-          `${import.meta.env.VITE_API_ENDPOINT
-          }instructor/courses?email=${encodeURIComponent(email)}`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: token,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-        if (response.ok) {
-          const data = await response.json();
-          setCourseData(data);
-          const formattedData = data.map((course) => ({
-            course: course.course_name,
-            date: new Date().toLocaleDateString(), // REPLACE
-            status: course.course_student_access ? "Active" : "Inactive",
-            id: course.course_id,
-          }));
-          setRows(formattedData);
-          checkNotificationStatus(data, email, token);
-        } else {
-          console.error("Failed to fetch courses:", response.statusText);
-        }
+        const { email } = await apiClient.getAuth();
+        const data = await apiClient.get("instructor/courses", { email });
+        setCourseData(data);
+        const formattedData = data.map((course) => ({
+          course: course.course_name,
+          date: new Date().toLocaleDateString(), // REPLACE
+          status: course.course_student_access ? "Active" : "Inactive",
+          id: course.course_id,
+        }));
+        setRows(formattedData);
+        checkNotificationStatus(data, email);
       } catch (error) {
-        console.error("Error fetching courses:", error);
+        console.error("Error fetching courses:", error.message);
       }
     };
 
@@ -327,33 +288,27 @@ const InstructorHomepage = () => {
     hasFetched.current = true;
   }, []);
 
-  const checkNotificationStatus = async (courses, email, token) => {
+  const checkNotificationStatus = async (courses, email) => {
     // Parallelize notification checks instead of sequential for-loop
     await Promise.all(courses.map(async (course) => {
       try {
-        const response = await fetch(
-          `${import.meta.env.VITE_API_ENDPOINT}instructor/check_notifications_status?course_id=${encodeURIComponent(course.course_id)}&instructor_email=${encodeURIComponent(email)}`,
-          {
-            method: "GET",
-            headers: { Authorization: token, "Content-Type": "application/json" },
-          }
-        );
-        if (response.ok) {
-          const data = await response.json();
-          if (data.completionStatus === true) {
-            console.log(`Getting chatlogs for ${course.course_name} is completed. Notifying the user and removing row from database.`);
-            setNotificationForCourse(course.course_id, true);
-            removeCompletedNotification(course.course_id);
-            alert(`Chat logs are available for course: ${course.course_name}`);
-          } else if (data.completionStatus === false) {
-            console.log(`Getting chatlogs for ${course.course_name} is not completed. Re-opening the websocket.`);
-            openWebSocket(course.course_name, course.course_id, data.requestId, setNotificationForCourse);
-          } else {
-            console.log(`Either chatlogs for ${course.course_name} were not requested or instructor already received notification. No need to notify instructor or re-open websocket.`);
-          }
+        const data = await apiClient.get("instructor/check_notifications_status", {
+          course_id: course.course_id,
+          instructor_email: email,
+        });
+        if (data.completionStatus === true) {
+          console.log(`Getting chatlogs for ${course.course_name} is completed. Notifying the user and removing row from database.`);
+          setNotificationForCourse(course.course_id, true);
+          removeCompletedNotification(course.course_id);
+          alert(`Chat logs are available for course: ${course.course_name}`);
+        } else if (data.completionStatus === false) {
+          console.log(`Getting chatlogs for ${course.course_name} is not completed. Re-opening the websocket.`);
+          openWebSocket(course.course_name, course.course_id, data.requestId, setNotificationForCourse);
+        } else {
+          console.log(`Either chatlogs for ${course.course_name} were not requested or instructor already received notification. No need to notify instructor or re-open websocket.`);
         }
       } catch (error) {
-        console.error("Error checking notification status for", course.course_id, error);
+        console.error("Error checking notification status for", course.course_id, error.message);
       }
     }));
   };

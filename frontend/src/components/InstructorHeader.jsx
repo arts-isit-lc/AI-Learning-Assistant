@@ -1,23 +1,12 @@
 import React, { useContext } from "react";
 import { useNavigate } from "react-router-dom";
 // amplify
-import { signOut } from "aws-amplify/auth";
 import { UserContext } from "../App";
+import { handleSignOut } from "../utils/auth";
 
 const InstructorHeader = () => {
   const navigate = useNavigate();
   const { setIsInstructorAsStudent } = useContext(UserContext);
-
-  const handleSignOut = (event) => {
-    event.preventDefault();
-    signOut()
-      .then(() => {
-        window.location.href = "/";
-      })
-      .catch((error) => {
-        console.error("Error signing out: ", error);
-      });
-  };
 
   // This will set the context value to true (i.e., switch to "Instructor as Student" mode)
   const handleViewAsStudent = () => {

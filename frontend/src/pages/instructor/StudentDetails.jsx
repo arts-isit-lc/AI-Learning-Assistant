@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useLocation } from "react-router-dom";
-import { fetchAuthSession, fetchUserAttributes } from "aws-amplify/auth";
-import { toast, ToastContainer } from "react-toastify";
+import apiClient from "../../services/api";
+import { toast } from "react-toastify";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import "react-toastify/dist/ReactToastify.css";
 import PageContainer from "../Container";
 import {
   Box,
@@ -145,31 +144,14 @@ const StudentDetails = () => {
   useEffect(() => {
     const fetchHistory = async () => {
       try {
-        const session = await fetchAuthSession();
-        const token = session.tokens.idToken;
-        const response = await fetch(
-          `${
-            import.meta.env.VITE_API_ENDPOINT
-          }instructor/student_modules_messages?course_id=${encodeURIComponent(
-            course_id
-          )}&student_email=${encodeURIComponent(student.email)}`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: token,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-        if (response.ok) {
-          const data = await response.json();
-          setSessions(data);
-          setTabs(Object.keys(data));
-        } else {
-          console.error("Failed to fetch students:", response.statusText);
-        }
+        const data = await apiClient.get("instructor/student_modules_messages", {
+          course_id,
+          student_email: student.email,
+        });
+        setSessions(data);
+        setTabs(Object.keys(data));
       } catch (error) {
-        console.error("Error fetching data:", error);
+        console.error("Error fetching data:", error.message);
       }
     };
 
@@ -184,54 +166,19 @@ const StudentDetails = () => {
 
   const handleUnenroll = async () => {
     try {
-      const session = await fetchAuthSession();
-      const token = session.tokens.idToken;
-      const { email } = await fetchUserAttributes();
-      const response = await fetch(
-        `${
-          import.meta.env.VITE_API_ENDPOINT
-        }instructor/delete_student?course_id=${encodeURIComponent(
-          course_id
-        )}&user_email=${encodeURIComponent(
-          student.email
-        )}&instructor_email=${encodeURIComponent(email)}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: token,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-      if (response.ok) {
-        toast.success("Student unenrolled successfully", {
-          position: "top-center",
-          autoClose: 1000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-          theme: "colored",
-        });
-        setTimeout(function () {
-          handleBackClick();
-        }, 1000);
-      } else {
-        console.error("Failed to fetch students:", response.statusText);
-        toast.error("Failed to unenroll student", {
-          position: "top-center",
-          autoClose: 1000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-          theme: "colored",
-        });
-      }
+      const { email } = await apiClient.getAuth();
+      await apiClient.delete("instructor/delete_student", {
+        course_id,
+        user_email: student.email,
+        instructor_email: email,
+      });
+      toast.success("Student unenrolled successfully");
+      setTimeout(function () {
+        handleBackClick();
+      }, 1000);
     } catch (error) {
-      console.error("Error fetching data:", error);
+      console.error("Error fetching data:", error.message);
+      toast.error("Failed to unenroll student");
     }
   };
 
@@ -364,7 +311,6 @@ const StudentDetails = () => {
           </Box>
         </Paper>
       </PageContainer>
-      <ToastContainer />
     </>
   );
 };

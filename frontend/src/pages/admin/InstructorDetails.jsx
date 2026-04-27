@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchAuthSession } from "aws-amplify/auth";
+import apiClient from "../../services/api";
 
 import {
   Typography,
@@ -24,8 +24,8 @@ import {
   TextField
 } from "@mui/material";
 
-import { toast, ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
+import { toast } from "react-toastify";
+import { titleCase } from "../../utils/formatters";
 
 const MenuProps = {
   slotProps: {
@@ -38,19 +38,6 @@ const MenuProps = {
   },
 };
 
-function titleCase(str) {
-  if (typeof str !== "string") {
-    return str;
-  }
-  return str
-    .toLowerCase()
-    .split(" ")
-    .map(function (word) {
-      return word.charAt(0).toUpperCase() + word.slice(1);
-    })
-    .join(" ");
-}
-
 const InstructorDetails = ({ instructorData, onBack }) => {
   const instructor = instructorData;
   const [activeCourses, setActiveCourses] = useState([]);
@@ -61,57 +48,23 @@ const InstructorDetails = ({ instructorData, onBack }) => {
   useEffect(() => {
     const fetchCourses = async () => {
       try {
-        const session = await fetchAuthSession();
-        var token = session.tokens.idToken
-        const response = await fetch(
-          `${import.meta.env.VITE_API_ENDPOINT}admin/courses`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: token,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-        if (response.ok) {
-          const data = await response.json();
-          setAllCourses(data);
-          setCourseLoading(false);
-        } else {
-          console.error("Failed to fetch courses:", response.statusText);
-        }
+        const data = await apiClient.get("admin/courses");
+        setAllCourses(data);
+        setCourseLoading(false);
       } catch (error) {
-        console.error("Error fetching courses:", error);
+        console.error("Error fetching courses:", error.message);
       }
     };
 
     const fetchActiveCourses = async () => {
       try {
-        const session = await fetchAuthSession();
-        var token = session.tokens.idToken
-        const response = await fetch(
-          `${
-            import.meta.env.VITE_API_ENDPOINT
-          }admin/instructorCourses?instructor_email=${encodeURIComponent(
-            instructorData.email
-          )}`,
-          {
-            method: "GET",
-            headers: {
-              Authorization: token,
-              "Content-Type": "application/json",
-            },
-          }
-        );
-        if (response.ok) {
-          const data = await response.json();
-          setActiveCourses(data);
-          setActiveCourseLoading(false);
-        } else {
-          console.error("Failed to fetch courses:", response.statusText);
-        }
+        const data = await apiClient.get("admin/instructorCourses", {
+          instructor_email: instructorData.email,
+        });
+        setActiveCourses(data);
+        setActiveCourseLoading(false);
       } catch (error) {
-        console.error("Error fetching courses:", error);
+        console.error("Error fetching courses:", error.message);
       }
     };
     fetchActiveCourses();
@@ -145,94 +98,28 @@ const InstructorDetails = ({ instructorData, onBack }) => {
 
   const handleDelete = async () => {
     try {
-      const session = await fetchAuthSession();
-      var token = session.tokens.idToken
-      const response = await fetch(
-        `${
-          import.meta.env.VITE_API_ENDPOINT
-        }admin/lower_instructor?email=${encodeURIComponent(
-          instructorData.email
-        )}`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: token,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-      if (response.ok) {
-        const data = await response.json();
-        toast.success("Instructor Demoted Successfully", {
-          position: "top-center",
-          autoClose: 1000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-          theme: "colored",
-        });
-        setTimeout(function () {
-          onBack();
-        }, 1000);
-      } else {
-        console.error("Failed to demote instructor:", response.statusText);
-      }
+      const data = await apiClient.post("admin/lower_instructor", { email: instructorData.email });
+      toast.success("Instructor Demoted Successfully");
+      setTimeout(function () {
+        onBack();
+      }, 1000);
     } catch (error) {
-      console.error("Error demoting instructor:", error);
+      console.error("Error demoting instructor:", error.message);
     }
   };
 
   const handleSave = async () => {
     try {
-      const session = await fetchAuthSession();
-      const token = session.tokens.idToken
-      const deleteResponse = await fetch(
-        `${
-          import.meta.env.VITE_API_ENDPOINT
-        }admin/delete_instructor_enrolments?instructor_email=${encodeURIComponent(
-          instructor.email
-        )}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: token,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      await apiClient.delete("admin/delete_instructor_enrolments", {
+        instructor_email: instructor.email,
+      });
 
-      if (!deleteResponse.ok) {
-        console.error("Failed to update enrolment:", deleteResponse.statusText);
-        toast.error("Update enrolment Failed", {
-          position: "top-center",
-          autoClose: 1000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-          theme: "colored",
-        });
-        return;
-      }
       // Enroll instructor in multiple courses in parallel
       const enrollPromises = activeCourses.map((course) =>
-        fetch(
-          `${
-            import.meta.env.VITE_API_ENDPOINT
-          }admin/enroll_instructor?course_id=${encodeURIComponent(
-            course.course_id
-          )}&instructor_email=${encodeURIComponent(instructor.email)}`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: token,
-              "Content-Type": "application/json",
-            },
-          }
-        ).then((enrollResponse) => {
+        apiClient.postRaw("admin/enroll_instructor", {
+          course_id: course.course_id,
+          instructor_email: instructor.email,
+        }).then((enrollResponse) => {
           if (enrollResponse.ok) {
             return enrollResponse.json().then((enrollData) => {
               return { success: true };
@@ -242,16 +129,7 @@ const InstructorDetails = ({ instructorData, onBack }) => {
               "Failed to enroll instructor:",
               enrollResponse.statusText
             );
-            toast.error("Enroll Instructor Failed", {
-              position: "top-center",
-              autoClose: 1000,
-              hideProgressBar: false,
-              closeOnClick: true,
-              pauseOnHover: true,
-              draggable: true,
-              progress: undefined,
-              theme: "colored",
-            });
+            toast.error("Enroll Instructor Failed");
             return { success: false };
           }
         })
@@ -263,41 +141,13 @@ const InstructorDetails = ({ instructorData, onBack }) => {
       );
 
       if (allEnrolledSuccessfully) {
-        toast.success("🦄 Enrolment Updated!", {
-          position: "top-center",
-          autoClose: 1000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-          theme: "colored",
-        });
+        toast.success("🦄 Enrolment Updated!");
       } else {
-        toast.error("Some enrolments failed", {
-          position: "top-center",
-          autoClose: 1000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-          theme: "colored",
-        });
+        toast.error("Some enrolments failed");
       }
     } catch (error) {
-      console.error("Error in handleSave:", error);
-      toast.error("An error occurred", {
-        position: "top-center",
-        autoClose: 1000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-        theme: "colored",
-        transition: "Bounce",
-      });
+      console.error("Error in handleSave:", error.message);
+      toast.error("An error occurred");
     }
   };
 
@@ -396,18 +246,6 @@ const InstructorDetails = ({ instructorData, onBack }) => {
           </DialogActions>
         </Dialog>
       </Box>
-      <ToastContainer
-        position="top-center"
-        autoClose={1000}
-        hideProgressBar={false}
-        newestOnTop={false}
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-        theme="colored"
-      />
     </>
   );
 };
