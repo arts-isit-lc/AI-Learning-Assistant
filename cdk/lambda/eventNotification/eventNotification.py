@@ -1,12 +1,9 @@
-import json
-import os
-import boto3
 from aws_lambda_powertools import Logger
 
 logger = Logger(service="event-notification")
 
 
-@logger.inject_lambda_context(clear_state=True, log_uncaught_exceptions=True)
+@logger.inject_lambda_context(clear_state=True)
 def lambda_handler(event, context):
     logger.info("Event received", extra={"event": event})
     try:

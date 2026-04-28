@@ -26,8 +26,6 @@
     "@aws-cdk/aws-amplify-alpha": "2.249.0-alpha.0",
     "aws-cdk-lib": "^2.249.0",
     "constructs": "^10.4.2",
-    "postgres": "^3.4.5",
-    "readline-sync": "^1.4.10",
     "source-map-support": "^0.5.21",
     "yaml": "^2.4.5"
   }

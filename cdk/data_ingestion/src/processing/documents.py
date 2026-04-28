@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 s3 = boto3.client('s3')
 
 EMBEDDING_BUCKET_NAME = os.environ["EMBEDDING_BUCKET_NAME"]
-print('EMBEDDING_BUCKET_NAME',EMBEDDING_BUCKET_NAME)
 
 def extract_txt(
     bucket: str, 
@@ -97,7 +96,7 @@ def store_doc_texts(
                     lines = raw_text.split("\n")
                     cleaned_lines = [clean_text(line) for line in lines if clean_text(line)]
                     text = "\n".join(cleaned_lines)
-                    print(f"OCR used for page {page_num} of {filename}")
+                    logger.info(f"OCR used for page {page_num} of {filename}")
                 except Exception as e:
                     logging.warning(f"OCR failed on page {page_num} of {filename}: {e}\n{traceback.format_exc()}")
                     text = ""
@@ -144,7 +143,7 @@ def add_document(
     List[Document]: A list of all document chunks for this document that were added to the vectorstore.
     """
     
-    print("output_bucket", output_bucket)
+    logger.info("output_bucket: %s", output_bucket)
     output_filenames = store_doc_texts(
         bucket=bucket,
         course=course,
@@ -208,7 +207,7 @@ def store_doc_chunks(
                 logger.warning(f"Empty chunk for {filename}")
         
         s3.delete_object(Bucket=bucket, Key=filename)
-        print(f"Deleting {filename} from {bucket}")
+        logger.info(f"Deleting {filename} from {bucket}")
         
         this_doc_chunks.extend(doc_chunks)
        
@@ -264,7 +263,6 @@ def process_documents(
             cleanup="full",
             source_id_key="source"
         )
-        print(f"Indexing updates: \n {idx}")
         logger.info(f"Indexing updates: \n {idx}")
     else:
         idx = index(
@@ -275,4 +273,3 @@ def process_documents(
             source_id_key="source"
         )
         logger.info("No documents found for indexing.")
-        print("No documents found for indexing.")

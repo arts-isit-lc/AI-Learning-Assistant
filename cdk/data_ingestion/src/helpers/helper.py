@@ -1,14 +1,11 @@
 import logging
-import boto3
 from typing import Dict, Optional
-import psycopg2
 
 from langchain_aws import BedrockEmbeddings
 from langchain_postgres import PGVector
 from langchain_classic.indexes import SQLRecordManager
 
 from processing.documents import process_documents
-s3 = boto3.client('s3')
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)

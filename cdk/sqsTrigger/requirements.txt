@@ -1,8 +1,5 @@
 boto3
 botocore
-sqlalchemy
-Pillow
-PyMuPDF==1.25.5
 psycopg[binary,pool]
 psycopg2-binary
 httpx

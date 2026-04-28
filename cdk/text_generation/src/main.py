@@ -221,7 +221,7 @@ def get_allowed_file_ids(module_id):
         logger.error(f"Error fetching allowed_file_ids: {e}")
         return []
 
-@logger.inject_lambda_context(clear_state=True, log_uncaught_exceptions=True)
+@logger.inject_lambda_context(clear_state=True)
 def handler(event, context):
     import time
     t_start = time.time()

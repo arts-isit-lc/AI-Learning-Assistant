@@ -113,7 +113,7 @@ def delete_last_two_db_messages(session_id):
         connection.rollback()
         return False
 
-@logger.inject_lambda_context(clear_state=True, log_uncaught_exceptions=True)
+@logger.inject_lambda_context(clear_state=True)
 def lambda_handler(event, context):
     query_params = event.get("queryStringParameters", {})
     session_id = query_params.get("session_id", "")

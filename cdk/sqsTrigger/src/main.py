@@ -242,7 +242,7 @@ def invoke_event_notification(request_id, message="Chat logs successfully upload
         raise
 
 
-@logger.inject_lambda_context(clear_state=True, log_uncaught_exceptions=True)
+@logger.inject_lambda_context(clear_state=True)
 def handler(event, context):
     try:
         if "Records" not in event:

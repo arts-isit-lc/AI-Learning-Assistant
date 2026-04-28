@@ -221,7 +221,7 @@ def update_vectorstore_from_s3(bucket, course_id, module_id, file_id):
         logger.error(f"Error updating vectorstore for module {module_id} in course {course_id}: {e}")
         raise
 
-@logger.inject_lambda_context(clear_state=True, log_uncaught_exceptions=True)
+@logger.inject_lambda_context(clear_state=True)
 def handler(event, context):
     records = event.get('Records', [])
     if not records:

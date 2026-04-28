@@ -15,13 +15,6 @@ s3 = boto3.client(
 )
 logger = Logger()
 
-def s3_key_exists(bucket, key):
-    try:
-        s3.head_object(Bucket=bucket, Key=key)
-        return True
-    except:
-        return False
-
 @logger.inject_lambda_context(log_event=True)
 def lambda_handler(event, context):
     # Use .get() to safely extract query string parameters
