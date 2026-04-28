@@ -1,6 +1,5 @@
 import os
 import json
-import logging
 import boto3
 import psycopg2
 import csv
@@ -8,10 +7,20 @@ import httpx
 import time
 from datetime import datetime
 from botocore.exceptions import ClientError
+from aws_lambda_powertools import Logger
 
-# Set up basic logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger()
+# Structured logging via Powertools
+logger = Logger(service="sqs-trigger")
+
+# X-Ray SDK: patch boto3 and httpx for distributed tracing
+try:
+    from aws_xray_sdk.core import xray_recorder, patch_all
+    xray_recorder.configure(context_missing='LOG_ERROR')
+    patch_all()
+except ImportError:
+    logger.warning("aws-xray-sdk not available, skipping X-Ray patching")
+except Exception as exc:
+    logger.warning(f"X-Ray SDK patching failed: {exc}")
 
 # Environment variables
 DB_SECRET_NAME = os.environ["SM_DB_CREDENTIALS"]
@@ -49,12 +58,12 @@ def connect_to_db():
                 'user': secret["username"],
                 'password': secret["password"],
                 'host': RDS_PROXY_ENDPOINT,
-                'port': secret["port"]
+                'port': secret["port"],
+                'sslmode': 'require'
             }
             connection_string = " ".join([f"{key}={value}" for key, value in connection_params.items()])
             connection = psycopg2.connect(connection_string)
             logger.info("Connected to the database!")
-            print("Connected to the database!")
         except Exception as e:
             logger.error(f"Failed to connect to database: {e}")
             if connection:
@@ -111,7 +120,6 @@ def query_chat_logs(course_id):
         cur.execute(query, (course_id,))
         results = cur.fetchall()
         logger.info(f"Fetched {len(results)} chat log records for course_id: {course_id}.")
-        print(f"Fetched {len(results)} chat log records for course_id: {course_id}.")
         cur.close()
         return results
     except Exception as e:
@@ -145,7 +153,6 @@ def write_to_csv(data, course_id, instructor_email):
             writer.writerows(data)
 
         logger.info(f"CSV file created successfully: {file_path}")
-        print(f"CSV file created successfully: {file_path}")
         return file_path, file_name
     except Exception as e:
         logger.error(f"Error writing to CSV file {file_name}: {e}")
@@ -162,7 +169,6 @@ def upload_to_s3(file_path, course_id, instructor_email, file_name):
     try:
         s3_client.upload_file(file_path, CHATLOGS_BUCKET, s3_key)
         logger.info(f"File uploaded successfully to S3: s3://{CHATLOGS_BUCKET}/{s3_key}")
-        print(f"File uploaded successfully to S3: s3://{CHATLOGS_BUCKET}/{s3_key}")
         return f"s3://{CHATLOGS_BUCKET}/{s3_key}"
     except Exception as e:
         logger.error(f"Error uploading file to S3: {e}")
@@ -189,7 +195,6 @@ def update_completion_status(course_id, instructor_email, request_id):
         connection.commit()
         cur.close()
         logger.info(f"Completion status updated for course_id: {course_id}, instructor_email: {instructor_email}, request_id: {request_id}.")
-        print(f"Completion status updated for course_id: {course_id}, instructor_email: {instructor_email}, request_id: {request_id}.")
     except Exception as e:
         if cur:
             cur.close()
@@ -226,19 +231,18 @@ def invoke_event_notification(request_id, message="Chat logs successfully upload
             response_data = response.json()
 
             logger.info(f"RESPONSE: {response}")
-            print(f"RESPONSE: {response}")
 
             if response.status_code != 200 or "errors" in response_data:
                 logger.error(f"Failed to send notification to AppSync: {response_data}")
                 raise Exception(f"Failed to send notification: {response_data}")
 
             logger.info(f"Notification sent successfully: {response_data}")
-            print(f"Notification sent successfully: {response_data}")
     except Exception as e:
         logger.error(f"Error invoking AppSync notification: {e}")
         raise
 
 
+@logger.inject_lambda_context(clear_state=True, log_uncaught_exceptions=True)
 def handler(event, context):
     try:
         if "Records" not in event:
@@ -256,16 +260,19 @@ def handler(event, context):
                     logger.error("Missing required parameters: course_id or instructor_email or request_id.")
                     continue
 
+                # Append request-scoped correlation keys
+                logger.append_keys(course_id=course_id, request_id=request_id)
+
                 chat_logs = query_chat_logs(course_id)
-                print("GOT chat_logs")
+                logger.info("Retrieved chat logs")
                 csv_path, csv_name = write_to_csv(chat_logs, course_id, instructor_email)
-                print("GOT got csv_path and csv_name")
+                logger.info("Generated CSV file")
                 s3_uri = upload_to_s3(csv_path, course_id, instructor_email, csv_name)
-                print("GOT s3_uri")
+                logger.info(f"Uploaded to S3: {s3_uri}")
                 update_completion_status(course_id, instructor_email, request_id)
-                print("Updating completion status")
+                logger.info("Updated completion status")
                 invoke_event_notification(request_id, message=f"Chat logs uploaded to {s3_uri}")
-                print("FINALLY SENT NOTIFICATION")
+                logger.info("Sent notification successfully")
 
             except Exception as e:
                 logger.error(f"Error processing SQS message: {e}")

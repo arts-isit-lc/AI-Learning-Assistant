@@ -68,7 +68,7 @@ export class DatabaseStack extends Stack {
             }),
             description: "Empty parameter group", // Might need to change this later
             parameters: {
-              'rds.force_ssl': '0'
+              'rds.force_ssl': '1'
             }
           });
 
@@ -139,7 +139,7 @@ export class DatabaseStack extends Stack {
         });
 
         rdsProxyRole.addToPolicy(new iam.PolicyStatement({
-            resources: ['*'],
+            resources: [`arn:aws:rds-db:${this.region}:${this.account}:dbuser:${this.dbInstance.instanceResourceId}/*`],
             actions: [
               'rds-db:connect',
             ],
@@ -154,14 +154,14 @@ export class DatabaseStack extends Stack {
             vpc: vpcStack.vpc,
             role: rdsProxyRole,
             securityGroups: this.dbInstance.connections.securityGroups,
-            requireTLS: false,
+            requireTLS: true,
         });
         const rdsProxyTableCreator = this.dbInstance.addProxy(id+'+proxy', {
             secrets: [this.secretPathTableCreator!],
             vpc: vpcStack.vpc,
             role: rdsProxyRole,
             securityGroups: this.dbInstance.connections.securityGroups,
-            requireTLS: false,
+            requireTLS: true,
         });
 
         const secretPathAdmin = secretmanager.Secret.fromSecretNameV2(this, 'AdminSecret', this.secretPathAdminName);
@@ -171,7 +171,7 @@ export class DatabaseStack extends Stack {
             vpc: vpcStack.vpc,
             role: rdsProxyRole,
             securityGroups: this.dbInstance.connections.securityGroups,
-            requireTLS: false,
+            requireTLS: true,
         });
         // Workaround for bug where TargetGroupName is not set but required
         let targetGroup = rdsProxy.node.children.find((child:any) => {

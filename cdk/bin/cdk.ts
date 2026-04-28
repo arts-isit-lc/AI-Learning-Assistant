@@ -6,6 +6,7 @@ import { AmplifyStack } from '../lib/amplify-stack';
 import { ApiGatewayStack } from '../lib/api-gateway-stack';
 import { DatabaseStack } from '../lib/database-stack';
 import { DBFlowStack } from '../lib/dbFlow-stack';
+import { ObservabilityStack } from '../lib/observability-stack';
 import { VpcStack } from '../lib/vpc-stack';
 const app = new cdk.App();
 
@@ -18,6 +19,25 @@ const environment = app.node.tryGetContext("environment");
 const vpcStack = new VpcStack(app, `${StackPrefix}-VpcStack`, { env, environment });
 const dbStack = new DatabaseStack(app, `${StackPrefix}-DatabaseStack`, vpcStack, { env, environment });
 const apiStack = new ApiGatewayStack(app, `${StackPrefix}-ApiGatewayStack`, dbStack, vpcStack, { env, environment });
+const observabilityStack = new ObservabilityStack(app, `${StackPrefix}-ObservabilityStack`, {
+  env,
+  environment: environment || 'dev',
+  apiGatewayRestApiId: `${StackPrefix}-ApiGatewayStack-API`,
+  apiGatewayStageName: 'prod',
+  lambdaFunctions: apiStack.lambdaFunctionInfos,
+  rdsInstanceId: dbStack.dbInstance.instanceIdentifier,
+  rdsAllocatedStorage: 100,
+  rdsInstanceClass: environment === 'prod' ? 'db.t3.medium' : 'db.t3.micro',
+  messagesQueueName: apiStack.messagesQueue.queueName,
+  messagesQueueArn: apiStack.messagesQueue.queueArn,
+  dlqName: apiStack.messagesQueueDlq.queueName,
+  dlqArn: apiStack.messagesQueueDlq.queueArn,
+  appSyncApiId: apiStack.appSyncApiId,
+  containerLambdaNames: apiStack.lambdaFunctionInfos
+    .filter((fn) => fn.isContainer)
+    .map((fn) => fn.functionName),
+});
+observabilityStack.addDependency(apiStack);
 const dbFlowStack = new DBFlowStack(app, `${StackPrefix}-DBFlowStack`, vpcStack, dbStack, apiStack, { env });
 const amplifyStack = new AmplifyStack(app, `${StackPrefix}-AmplifyStack`, apiStack, { env });
 Tags.of(app).add("app", "AI-Learning-Assistant");

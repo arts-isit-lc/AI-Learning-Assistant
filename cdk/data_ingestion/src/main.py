@@ -3,14 +3,23 @@ import json
 import boto3
 import psycopg2
 from datetime import datetime, timezone
-import logging
+from aws_lambda_powertools import Logger
 
 from helpers.vectorstore import update_vectorstore
 from langchain_aws import BedrockEmbeddings
 
-# Set up basic logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger()
+# Structured logging via Powertools
+logger = Logger(service="data-ingestion")
+
+# X-Ray SDK: patch boto3 for distributed tracing
+try:
+    from aws_xray_sdk.core import xray_recorder, patch_all
+    xray_recorder.configure(context_missing='LOG_ERROR')
+    patch_all()
+except ImportError:
+    logger.warning("aws-xray-sdk not available, skipping X-Ray patching")
+except Exception as exc:
+    logger.warning(f"X-Ray SDK patching failed: {exc}")
 
 # Environment variables
 DB_SECRET_NAME = os.environ["SM_DB_CREDENTIALS"]
@@ -65,7 +74,8 @@ def connect_to_db():
                 'user': secret["username"],
                 'password': secret["password"],
                 'host': RDS_PROXY_ENDPOINT,
-                'port': secret["port"]
+                'port': secret["port"],
+                'sslmode': 'require'
             }
             connection_string = " ".join([f"{key}={value}" for key, value in connection_params.items()])
             connection = psycopg2.connect(connection_string)
@@ -80,7 +90,7 @@ def connect_to_db():
 
 def parse_s3_file_path(file_key):
     # Assuming the file path is of the format: {course_id}/{module_id}/{documents}/{file_name}.{file_type}
-    print(f"file_key: {file_key}")
+    logger.info(f"file_key: {file_key}")
     try:
         course_id, module_id, file_category, filename_with_ext = file_key.split('/')
         file_name, file_type = filename_with_ext.rsplit('.', 1)
@@ -211,6 +221,7 @@ def update_vectorstore_from_s3(bucket, course_id, module_id, file_id):
         logger.error(f"Error updating vectorstore for module {module_id} in course {course_id}: {e}")
         raise
 
+@logger.inject_lambda_context(clear_state=True, log_uncaught_exceptions=True)
 def handler(event, context):
     records = event.get('Records', [])
     if not records:
@@ -225,7 +236,7 @@ def handler(event, context):
 
         # Only process files from the AILA_DATA_INGESTION_BUCKET
         if bucket_name != AILA_DATA_INGESTION_BUCKET:
-            print(f"Ignoring event from non-target bucket: {bucket_name}")
+            logger.info(f"Ignoring event from non-target bucket: {bucket_name}")
             continue  # Ignore this event and move to the next one
         file_key = record['s3']['object']['key']
 

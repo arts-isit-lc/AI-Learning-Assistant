@@ -1,18 +1,27 @@
 import os
 import json
 import boto3
-import logging
 import psycopg2
 import httpx
 from langchain_aws import BedrockEmbeddings
+from aws_lambda_powertools import Logger
 
 from helpers.vectorstore import get_vectorstore_retriever
 from helpers.chat import get_bedrock_llm, get_initial_student_query, get_student_query, create_dynamodb_history_table, get_response_streaming
 from constants.llm_models import DEFAULT_LLM_MODEL_ID, is_valid_model_id
 
-# Set up basic logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger()
+# Structured logging via Powertools
+logger = Logger(service="text-generation")
+
+# X-Ray SDK: patch boto3 and httpx for distributed tracing
+try:
+    from aws_xray_sdk.core import xray_recorder, patch_all
+    xray_recorder.configure(context_missing='LOG_ERROR')
+    patch_all()
+except ImportError:
+    logger.warning("aws-xray-sdk not available, skipping X-Ray patching")
+except Exception as exc:
+    logger.warning(f"X-Ray SDK patching failed: {exc}")
 
 # Environment variables
 DB_SECRET_NAME = os.environ["SM_DB_CREDENTIALS"]
@@ -127,7 +136,8 @@ def connect_to_db():
                 'user': secret["username"],
                 'password': secret["password"],
                 'host': RDS_PROXY_ENDPOINT,
-                'port': secret["port"]
+                'port': secret["port"],
+                'sslmode': 'require'
             }
             connection_string = " ".join([f"{key}={value}" for key, value in connection_params.items()])
             connection = psycopg2.connect(connection_string)
@@ -211,6 +221,7 @@ def get_allowed_file_ids(module_id):
         logger.error(f"Error fetching allowed_file_ids: {e}")
         return []
 
+@logger.inject_lambda_context(clear_state=True, log_uncaught_exceptions=True)
 def handler(event, context):
     import time
     t_start = time.time()
@@ -224,6 +235,9 @@ def handler(event, context):
     session_id = query_params.get("session_id", "")
     module_id = query_params.get("module_id", "")
     session_name = query_params.get("session_name", "New Chat")
+
+    # Append request-scoped correlation keys
+    logger.append_keys(session_id=session_id, course_id=course_id)
 
     if not course_id:
         logger.error("Missing required parameter: course_id")

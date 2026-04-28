@@ -19,7 +19,7 @@ async function initializeConnection(SM_DB_CREDENTIALS, RDS_PROXY_ENDPOINT) {
             username: credentials.username,
             password: credentials.password,
             database: credentials.dbname,
-            ssl: false,
+            ssl: 'require',
         };
 
         // Create the PostgreSQL connection

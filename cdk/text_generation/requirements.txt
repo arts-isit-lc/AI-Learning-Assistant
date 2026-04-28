@@ -13,3 +13,5 @@ psycopg[binary,pool]
 psycopg2-binary
 python-dotenv
 httpx
+aws-xray-sdk
+aws-lambda-powertools

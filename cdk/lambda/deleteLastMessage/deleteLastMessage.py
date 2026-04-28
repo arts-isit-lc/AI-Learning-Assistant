@@ -1,11 +1,10 @@
 import os
 import boto3
 import json
-import logging
 import psycopg2
+from aws_lambda_powertools import Logger
 
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger = Logger(service="delete-last-message")
 
 # AWS Clients
 dynamodb_client = boto3.client('dynamodb')
@@ -58,7 +57,8 @@ def connect_to_db():
                 'user': secret["username"],
                 'password': secret["password"],
                 'host': RDS_PROXY_ENDPOINT,
-                'port': secret["port"]
+                'port': secret["port"],
+                'sslmode': 'require'
             }
             connection_string = " ".join([f"{key}={value}" for key, value in connection_params.items()])
             connection = psycopg2.connect(connection_string)
@@ -113,9 +113,11 @@ def delete_last_two_db_messages(session_id):
         connection.rollback()
         return False
 
+@logger.inject_lambda_context(clear_state=True, log_uncaught_exceptions=True)
 def lambda_handler(event, context):
     query_params = event.get("queryStringParameters", {})
     session_id = query_params.get("session_id", "")
+    logger.append_keys(session_id=session_id)
 
     if not session_id:
         logger.error("Missing required parameter: session_id")

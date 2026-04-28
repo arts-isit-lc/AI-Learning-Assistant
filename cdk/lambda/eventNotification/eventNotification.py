@@ -1,9 +1,14 @@
 import json
 import os
 import boto3
+from aws_lambda_powertools import Logger
 
+logger = Logger(service="event-notification")
+
+
+@logger.inject_lambda_context(clear_state=True, log_uncaught_exceptions=True)
 def lambda_handler(event, context):
-    print(f"Event Received: {json.dumps(event)}")
+    logger.info("Event received", extra={"event": event})
     try:
         # Extract arguments from the AppSync payload
         arguments = event.get("arguments", {})
@@ -11,7 +16,7 @@ def lambda_handler(event, context):
         message = arguments.get("message", "Default message")
 
         # Log the extracted values for debugging
-        print(f"Extracted request_id: {request_id}, message: {message}")
+        logger.info("Extracted arguments", extra={"request_id": request_id, "message": message})
 
         # Return the values back to AppSync
         return {
@@ -20,7 +25,7 @@ def lambda_handler(event, context):
         }
 
     except Exception as e:
-        print(f"Error: {str(e)}")
+        logger.exception("Error processing event notification")
         return {
             "error": str(e)
         }

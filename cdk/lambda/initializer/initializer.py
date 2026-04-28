@@ -25,7 +25,7 @@ def createConnection():
         password=dbSecret["password"],
         host=dbSecret["host"],
         dbname=dbSecret["dbname"],
-        # sslmode="require"
+        sslmode="require",
     )
     return connection
 

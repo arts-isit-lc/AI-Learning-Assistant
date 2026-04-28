@@ -8,7 +8,10 @@
     "build": "tsc",
     "watch": "tsc -w",
     "test": "jest",
-    "cdk": "cdk"
+    "cdk": "cdk",
+    "predeploy": "npm test",
+    "deploy": "cdk deploy --all",
+    "deploy:prod": "cdk deploy --all -c environment=prod"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",

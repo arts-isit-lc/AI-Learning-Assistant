@@ -1,0 +1,321 @@
+import { createTestStacks } from './helpers/stack-setup';
+import { Template } from 'aws-cdk-lib/assertions';
+
+/**
+ * IAM Policy Guardrail Tests
+ *
+ * These tests verify that IAM policies across all stacks follow least-privilege
+ * rules and prevent future regressions that reintroduce overly broad permissions.
+ *
+ * Validates: Requirements 21.1, 21.2, 21.3, 21.4, 21.5
+ */
+
+let apiTemplate: Template;
+let dbTemplate: Template;
+let dbFlowTemplate: Template;
+
+beforeAll(() => {
+  const stacks = createTestStacks();
+  apiTemplate = stacks.apiTemplate;
+  dbTemplate = stacks.dbTemplate;
+  dbFlowTemplate = stacks.dbFlowTemplate;
+});
+
+/**
+ * Helper: collect all inline policy statements from AWS::IAM::Policy resources
+ * in a given template.
+ */
+function collectPolicyStatements(template: Template): Array<{ logicalId: string; statement: Record<string, unknown> }> {
+  const json = template.toJSON();
+  const resources = json.Resources ?? {};
+  const results: Array<{ logicalId: string; statement: Record<string, unknown> }> = [];
+
+  for (const [logicalId, resource] of Object.entries(resources)) {
+    const res = resource as Record<string, unknown>;
+    if (res.Type !== 'AWS::IAM::Policy') continue;
+    const props = res.Properties as Record<string, unknown> | undefined;
+    if (!props) continue;
+    const doc = props.PolicyDocument as Record<string, unknown> | undefined;
+    if (!doc) continue;
+    const statements = doc.Statement as Array<Record<string, unknown>> | undefined;
+    if (!Array.isArray(statements)) continue;
+    for (const stmt of statements) {
+      results.push({ logicalId, statement: stmt });
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Helper: collect all managed policy ARNs from AWS::IAM::Role resources
+ * in a given template.
+ */
+function collectManagedPolicyArns(template: Template): Array<{ logicalId: string; arn: unknown }> {
+  const json = template.toJSON();
+  const resources = json.Resources ?? {};
+  const results: Array<{ logicalId: string; arn: unknown }> = [];
+
+  for (const [logicalId, resource] of Object.entries(resources)) {
+    const res = resource as Record<string, unknown>;
+    if (res.Type !== 'AWS::IAM::Role') continue;
+    const props = res.Properties as Record<string, unknown> | undefined;
+    if (!props) continue;
+    const arns = props.ManagedPolicyArns as unknown[] | undefined;
+    if (!Array.isArray(arns)) continue;
+    for (const arn of arns) {
+      results.push({ logicalId, arn });
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Helper: check if a resource value matches a wildcard secret ARN pattern.
+ * Handles plain strings, Fn::Join, and Fn::Sub intrinsic functions.
+ */
+function isWildcardSecretResource(resource: unknown): boolean {
+  const wildcardPattern = 'arn:aws:secretsmanager:*:*:secret:*';
+
+  if (typeof resource === 'string') {
+    return resource === wildcardPattern;
+  }
+
+  if (Array.isArray(resource)) {
+    return resource.some((r) => isWildcardSecretResource(r));
+  }
+
+  if (typeof resource === 'object' && resource !== null) {
+    const obj = resource as Record<string, unknown>;
+    // Fn::Join
+    if (obj['Fn::Join']) {
+      const joinArgs = obj['Fn::Join'] as [string, unknown[]];
+      if (Array.isArray(joinArgs) && joinArgs.length === 2) {
+        const parts = joinArgs[1];
+        if (Array.isArray(parts)) {
+          const joined = parts
+            .filter((p) => typeof p === 'string')
+            .join(joinArgs[0]);
+          if (joined === wildcardPattern) return true;
+        }
+      }
+    }
+    // Fn::Sub
+    if (typeof obj['Fn::Sub'] === 'string') {
+      return obj['Fn::Sub'] === wildcardPattern;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Helper: check if a resource value matches the wildcard logs ARN pattern.
+ */
+function isWildcardLogsResource(resource: unknown): boolean {
+  const wildcardPattern = 'arn:aws:logs:*:*:*';
+
+  if (typeof resource === 'string') {
+    return resource === wildcardPattern;
+  }
+
+  if (Array.isArray(resource)) {
+    return resource.some((r) => isWildcardLogsResource(r));
+  }
+
+  if (typeof resource === 'object' && resource !== null) {
+    const obj = resource as Record<string, unknown>;
+    if (obj['Fn::Join']) {
+      const joinArgs = obj['Fn::Join'] as [string, unknown[]];
+      if (Array.isArray(joinArgs) && joinArgs.length === 2) {
+        const parts = joinArgs[1];
+        if (Array.isArray(parts)) {
+          const joined = parts
+            .filter((p) => typeof p === 'string')
+            .join(joinArgs[0]);
+          if (joined === wildcardPattern) return true;
+        }
+      }
+    }
+    if (typeof obj['Fn::Sub'] === 'string') {
+      return obj['Fn::Sub'] === wildcardPattern;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Helper: check if a statement's Action includes a specific action string.
+ */
+function statementHasAction(statement: Record<string, unknown>, action: string): boolean {
+  const stmtAction = statement.Action;
+  if (typeof stmtAction === 'string') {
+    return stmtAction === action;
+  }
+  if (Array.isArray(stmtAction)) {
+    return stmtAction.includes(action);
+  }
+  return false;
+}
+
+/**
+ * Helper: check if a statement's Action includes any CloudWatch Logs action.
+ */
+function statementHasLogsAction(statement: Record<string, unknown>): boolean {
+  const logsActions = ['logs:CreateLogGroup', 'logs:CreateLogStream', 'logs:PutLogEvents'];
+  const stmtAction = statement.Action;
+  if (typeof stmtAction === 'string') {
+    return logsActions.includes(stmtAction) || stmtAction.startsWith('logs:');
+  }
+  if (Array.isArray(stmtAction)) {
+    return stmtAction.some(
+      (a: unknown) => typeof a === 'string' && (logsActions.includes(a) || a.startsWith('logs:'))
+    );
+  }
+  return false;
+}
+
+/**
+ * Helper: check if a managed policy ARN matches a specific AWS managed policy name.
+ * Handles plain strings and Fn::Join intrinsic functions.
+ */
+function isManagedPolicy(arn: unknown, policyName: string): boolean {
+  const fullArn = `arn:aws:iam::aws:policy/${policyName}`;
+
+  if (typeof arn === 'string') {
+    return arn.includes(policyName);
+  }
+
+  if (typeof arn === 'object' && arn !== null) {
+    const obj = arn as Record<string, unknown>;
+    // Fn::Join pattern used by CDK for managed policy ARNs
+    if (obj['Fn::Join']) {
+      const joinArgs = obj['Fn::Join'] as [string, unknown[]];
+      if (Array.isArray(joinArgs) && joinArgs.length === 2) {
+        const parts = joinArgs[1];
+        if (Array.isArray(parts)) {
+          const stringParts = parts.filter((p) => typeof p === 'string') as string[];
+          const joined = stringParts.join(joinArgs[0]);
+          if (joined.includes(policyName)) return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+const allTemplates = () => [
+  { name: 'ApiGatewayStack', template: apiTemplate },
+  { name: 'DatabaseStack', template: dbTemplate },
+  { name: 'DBFlowStack', template: dbFlowTemplate },
+];
+
+describe('IAM Policy Guardrails', () => {
+  /**
+   * Validates: Requirements 21.1
+   * No policy should grant secretsmanager:GetSecretValue on a wildcard secret resource.
+   */
+  test('no policy grants secretsmanager:GetSecretValue on wildcard secret resource', () => {
+    for (const { name, template } of allTemplates()) {
+      const statements = collectPolicyStatements(template);
+      for (const { logicalId, statement } of statements) {
+        if (!statementHasAction(statement, 'secretsmanager:GetSecretValue')) continue;
+
+        const resource = statement.Resource;
+        expect({
+          stack: name,
+          policy: logicalId,
+          resource,
+          wildcardDetected: isWildcardSecretResource(resource),
+        }).toEqual(
+          expect.objectContaining({ wildcardDetected: false })
+        );
+      }
+    }
+  });
+
+  /**
+   * Validates: Requirements 21.2
+   * No role should have the AmazonS3FullAccess managed policy attached.
+   */
+  test('no role has AmazonS3FullAccess managed policy', () => {
+    for (const { name, template } of allTemplates()) {
+      const arns = collectManagedPolicyArns(template);
+      for (const { logicalId, arn } of arns) {
+        expect({
+          stack: name,
+          role: logicalId,
+          arn,
+          hasS3FullAccess: isManagedPolicy(arn, 'AmazonS3FullAccess'),
+        }).toEqual(
+          expect.objectContaining({ hasS3FullAccess: false })
+        );
+      }
+    }
+  });
+
+  /**
+   * Validates: Requirements 21.3
+   * No role should have the AmazonSSMReadOnlyAccess managed policy attached.
+   */
+  test('no role has AmazonSSMReadOnlyAccess managed policy', () => {
+    for (const { name, template } of allTemplates()) {
+      const arns = collectManagedPolicyArns(template);
+      for (const { logicalId, arn } of arns) {
+        expect({
+          stack: name,
+          role: logicalId,
+          arn,
+          hasSSMReadOnly: isManagedPolicy(arn, 'AmazonSSMReadOnlyAccess'),
+        }).toEqual(
+          expect.objectContaining({ hasSSMReadOnly: false })
+        );
+      }
+    }
+  });
+
+  /**
+   * Validates: Requirements 21.4
+   * No policy should grant iam:AddUserToGroup.
+   */
+  test('no policy grants iam:AddUserToGroup', () => {
+    for (const { name, template } of allTemplates()) {
+      const statements = collectPolicyStatements(template);
+      for (const { logicalId, statement } of statements) {
+        expect({
+          stack: name,
+          policy: logicalId,
+          hasAddUserToGroup: statementHasAction(statement, 'iam:AddUserToGroup'),
+        }).toEqual(
+          expect.objectContaining({ hasAddUserToGroup: false })
+        );
+      }
+    }
+  });
+
+  /**
+   * Validates: Requirements 21.5
+   * No policy should grant CloudWatch Logs actions on arn:aws:logs:*:*:*.
+   */
+  test('no policy grants CloudWatch Logs actions on arn:aws:logs:*:*:*', () => {
+    for (const { name, template } of allTemplates()) {
+      const statements = collectPolicyStatements(template);
+      for (const { logicalId, statement } of statements) {
+        if (!statementHasLogsAction(statement)) continue;
+
+        const resource = statement.Resource;
+        expect({
+          stack: name,
+          policy: logicalId,
+          resource,
+          wildcardLogsDetected: isWildcardLogsResource(resource),
+        }).toEqual(
+          expect.objectContaining({ wildcardLogsDetected: false })
+        );
+      }
+    }
+  });
+});

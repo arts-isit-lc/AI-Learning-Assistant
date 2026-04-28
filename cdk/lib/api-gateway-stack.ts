@@ -28,7 +28,14 @@ import * as ssm from "aws-cdk-lib/aws-ssm";
 import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as appsync from "aws-cdk-lib/aws-appsync";
 import * as ses from "aws-cdk-lib/aws-ses";
+import * as logs from "aws-cdk-lib/aws-logs";
 
+
+export interface LambdaFunctionInfo {
+  functionName: string;
+  timeoutSeconds: number;
+  isContainer: boolean;
+}
 
 export class ApiGatewayStack extends cdk.Stack {
   private readonly api: apigateway.SpecRestApi;
@@ -40,6 +47,10 @@ export class ApiGatewayStack extends cdk.Stack {
   public readonly stageARN_APIGW: string;
   public readonly apiGW_basedURL: string;
   public readonly secret: secretsmanager.ISecret;
+  public readonly messagesQueueDlq: sqs.Queue;
+  public readonly messagesQueue: sqs.Queue;
+  public readonly appSyncApiId: string;
+  public readonly lambdaFunctionInfos: LambdaFunctionInfo[];
   public getEndpointUrl = () => this.api.url;
   public getUserPoolId = () => this.userPool.userPoolId;
   public getUserPoolClientId = () => this.appClient.userPoolClientId;
@@ -58,6 +69,7 @@ export class ApiGatewayStack extends cdk.Stack {
     super(scope, id, props);
 
     const environment = props?.environment || 'dev';
+    const logRetention = environment === 'prod' ? logs.RetentionDays.THREE_MONTHS : logs.RetentionDays.ONE_MONTH;
     this.layerList = {};
 
     const embeddingStorageBucket = new s3.Bucket(
@@ -81,10 +93,13 @@ export class ApiGatewayStack extends cdk.Stack {
         // When deleting the stack, need to empty the Bucket and delete it manually
         removalPolicy: cdk.RemovalPolicy.RETAIN,
         enforceSSL: true,
-        intelligentTieringConfigurations: [
+        encryption: s3.BucketEncryption.S3_MANAGED,
+        lifecycleRules: [
           {
-            name: "default-tiering",
-            archiveAccessTierTime: cdk.Duration.days(90),
+            abortIncompleteMultipartUploadAfter: Duration.days(1),
+          },
+          {
+            expiration: Duration.days(7),
           },
         ],
       }
@@ -139,19 +154,31 @@ export class ApiGatewayStack extends cdk.Stack {
       identity: ses.Identity.domain('ocelia.svc.ubc.ca'),
     });
 
+    // Create FIFO Dead Letter Queue for messagesQueue
+    const messagesQueueDlq = new sqs.Queue(this, `${id}-MessagesQueueDLQ`, {
+      queueName: `${id}-messages-queue-dlq.fifo`,
+      fifo: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+    this.messagesQueueDlq = messagesQueueDlq;
+
     // Create FIFO SQS Queue for jobs that get classroom chatlogs for a course
-    const messagesQueue = new sqs.Queue(this, `${id}-MessagesQueue`, {
+    this.messagesQueue = new sqs.Queue(this, `${id}-MessagesQueue`, {
       queueName: `${id}-messages-queue.fifo`,
       fifo: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       visibilityTimeout: Duration.seconds(300),
+      deadLetterQueue: {
+        queue: messagesQueueDlq,
+        maxReceiveCount: 3,
+      },
     });
 
-    messagesQueue.addToResourcePolicy(
+    this.messagesQueue.addToResourcePolicy(
       new iam.PolicyStatement({
         actions: ["sqs:SendMessage"],
         principals: [new iam.ServicePrincipal("lambda.amazonaws.com")],
-        resources: [messagesQueue.queueArn],
+        resources: [this.messagesQueue.queueArn],
       })
     );
 
@@ -282,6 +309,7 @@ export class ApiGatewayStack extends cdk.Stack {
         metricsEnabled: true,
         loggingLevel: apigateway.MethodLoggingLevel.ERROR,
         dataTraceEnabled: false,
+        tracingEnabled: true,
         stageName: "prod",
         methodOptions: {
           "/*/*": {
@@ -458,79 +486,6 @@ export class ApiGatewayStack extends cdk.Stack {
       ),
     });
 
-    const lambdaRole = new iam.Role(this, `${id}-postgresLambdaRole`, {
-      roleName: `${id}-postgresLambdaRole`,
-      assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
-    });
-
-    // Grant access to Secret Manager
-    lambdaRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          //Secrets Manager
-          "secretsmanager:GetSecretValue",
-        ],
-        resources: [
-          `arn:aws:secretsmanager:${this.region}:${this.account}:secret:*`,
-        ],
-      })
-    );
-
-    // Grant access to EC2
-    lambdaRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          "ec2:CreateNetworkInterface",
-          "ec2:DescribeNetworkInterfaces",
-          "ec2:DeleteNetworkInterface",
-          "ec2:AssignPrivateIpAddresses",
-          "ec2:UnassignPrivateIpAddresses",
-        ],
-        resources: ["*"], // must be *
-      })
-    );
-
-    // Grant access to log
-    lambdaRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          //Logs
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents",
-        ],
-        resources: ["arn:aws:logs:*:*:*"],
-      })
-    );
-
-    // Inline policy to allow AdminAddUserToGroup action
-    const adminAddUserToGroupPolicyLambda = new iam.Policy(
-      this,
-      `${id}-adminAddUserToGroupPolicyLambda`,
-      {
-        statements: [
-          new iam.PolicyStatement({
-            effect: iam.Effect.ALLOW,
-            actions: [
-              "cognito-idp:AdminAddUserToGroup",
-              "cognito-idp:AdminRemoveUserFromGroup",
-              "cognito-idp:AdminGetUser",
-              "cognito-idp:AdminListGroupsForUser",
-            ],
-            resources: [
-              `arn:aws:cognito-idp:${this.region}:${this.account}:userpool/${this.userPool.userPoolId}`,
-            ],
-          }),
-        ],
-      }
-    );
-
-    // Attach the inline policy to the role
-    lambdaRole.attachInlinePolicy(adminAddUserToGroupPolicyLambda);
-
     // Attach roles to the identity pool
     new cognito.CfnIdentityPoolRoleAttachment(this, `${id}-IdentityPoolRoles`, {
       identityPoolId: this.identityPool.ref,
@@ -540,11 +495,71 @@ export class ApiGatewayStack extends cdk.Stack {
       },
     });
 
+    // Per-function-group IAM role for studentFunction and instructorFunction
+    const dbLambdaRole = new iam.Role(this, `${id}-dbLambdaRole`, {
+      roleName: `${id}-dbLambdaRole`,
+      assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
+    });
+
+    // Grant access to Secret Manager scoped to secretPathUser
+    dbLambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ["secretsmanager:GetSecretValue"],
+        resources: [db.secretPathUser.secretArn],
+      })
+    );
+
+    // Grant access to EC2 VPC networking
+    dbLambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "ec2:CreateNetworkInterface",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DeleteNetworkInterface",
+          "ec2:AssignPrivateIpAddresses",
+          "ec2:UnassignPrivateIpAddresses",
+        ],
+        resources: ["*"],
+      })
+    );
+
+    // Grant access to CloudWatch Logs scoped to specific function log groups
+    dbLambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+        ],
+        resources: [
+          `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${id}-studentFunction:*`,
+          `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${id}-instructorFunction:*`,
+        ],
+      })
+    );
+
+    // Grant X-Ray tracing permissions
+    dbLambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "xray:PutTraceSegments",
+          "xray:PutTelemetryRecords",
+        ],
+        resources: ["*"],
+      })
+    );
+
     const lambdaStudentFunction = new lambda.Function(this, `${id}-studentFunction`, {
       runtime: lambda.Runtime.NODEJS_22_X,
       code: lambda.Code.fromAsset("lambda/lib"),
       handler: "studentFunction.handler",
       timeout: Duration.seconds(60),
+      tracing: lambda.Tracing.ACTIVE,
+      logRetention: logRetention,
       vpc: vpcStack.vpc,
       environment: {
         SM_DB_CREDENTIALS: db.secretPathUser.secretName,
@@ -553,7 +568,7 @@ export class ApiGatewayStack extends cdk.Stack {
       functionName: `${id}-studentFunction`,
       memorySize: 256,
       layers: [postgres],
-      role: lambdaRole,
+      role: dbLambdaRole,
     });
 
     // Add the permission to the Lambda function's policy to allow API Gateway access
@@ -575,6 +590,8 @@ export class ApiGatewayStack extends cdk.Stack {
         code: lambda.Code.fromAsset("lambda/lib"),
         handler: "instructorFunction.handler",
         timeout: Duration.seconds(60),
+        tracing: lambda.Tracing.ACTIVE,
+        logRetention: logRetention,
         vpc: vpcStack.vpc,
         environment: {
           SM_DB_CREDENTIALS: db.secretPathUser.secretName,
@@ -583,7 +600,7 @@ export class ApiGatewayStack extends cdk.Stack {
         functionName: `${id}-instructorFunction`,
         memorySize: 256,
         layers: [postgres],
-        role: lambdaRole,
+        role: dbLambdaRole,
       }
     );
 
@@ -598,11 +615,86 @@ export class ApiGatewayStack extends cdk.Stack {
       .defaultChild as lambda.CfnFunction;
     cfnLambda_Instructor.overrideLogicalId("instructorFunction");
 
+    // Per-function-group IAM role for adminFunction
+    const adminLambdaRole = new iam.Role(this, `${id}-adminLambdaRole`, {
+      roleName: `${id}-adminLambdaRole`,
+      assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
+    });
+
+    // Grant access to Secrets Manager scoped to secretPathTableCreator
+    adminLambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ["secretsmanager:GetSecretValue"],
+        resources: [db.secretPathTableCreator.secretArn],
+      })
+    );
+
+    // Grant access to EC2 VPC networking
+    adminLambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "ec2:CreateNetworkInterface",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DeleteNetworkInterface",
+          "ec2:AssignPrivateIpAddresses",
+          "ec2:UnassignPrivateIpAddresses",
+        ],
+        resources: ["*"],
+      })
+    );
+
+    // Grant access to CloudWatch Logs scoped to adminFunction log group
+    adminLambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+        ],
+        resources: [
+          `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${id}-adminFunction:*`,
+        ],
+      })
+    );
+
+    // Grant X-Ray tracing permissions
+    adminLambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "xray:PutTraceSegments",
+          "xray:PutTelemetryRecords",
+        ],
+        resources: ["*"],
+      })
+    );
+
+    // Grant Cognito admin permissions scoped to the user pool
+    adminLambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "cognito-idp:AdminAddUserToGroup",
+          "cognito-idp:AdminRemoveUserFromGroup",
+          "cognito-idp:AdminGetUser",
+          "cognito-idp:AdminListGroupsForUser",
+        ],
+        resources: [
+          `arn:aws:cognito-idp:${this.region}:${this.account}:userpool/${this.userPool.userPoolId}`,
+        ],
+      })
+    );
+
     const lambdaAdminFunction = new lambda.Function(this, `${id}-adminFunction`, {
       runtime: lambda.Runtime.NODEJS_22_X,
       code: lambda.Code.fromAsset("lambda/adminFunction"),
       handler: "adminFunction.handler",
       timeout: Duration.seconds(60),
+      tracing: lambda.Tracing.ACTIVE,
+      logRetention: logRetention,
       vpc: vpcStack.vpc,
       environment: {
         SM_DB_CREDENTIALS: db.secretPathTableCreator.secretName,
@@ -611,7 +703,7 @@ export class ApiGatewayStack extends cdk.Stack {
       functionName: `${id}-adminFunction`,
       memorySize: 256,
       layers: [postgres],
-      role: lambdaRole,
+      role: adminLambdaRole,
     });
 
     // Add the permission to the Lambda function's policy to allow API Gateway access
@@ -625,109 +717,45 @@ export class ApiGatewayStack extends cdk.Stack {
       .defaultChild as lambda.CfnFunction;
     cfnLambda_Admin.overrideLogicalId("adminFunction");
 
-    const coglambdaRole = new iam.Role(this, `${id}-cognitoLambdaRole`, {
-      roleName: `${id}-cognitoLambdaRole`,
+    // Per-function-group IAM role for preSignupLambda (no VPC, no Secrets Manager)
+    const preSignupRole = new iam.Role(this, `${id}-preSignupRole`, {
+      roleName: `${id}-preSignupRole`,
       assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
     });
 
-    // Grant access to Secret Manager
-    coglambdaRole.addToPolicy(
+    // Grant SSM access scoped to the AllowedEmailDomains parameter
+    preSignupRole.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
-        actions: [
-          //Secrets Manager
-          "secretsmanager:GetSecretValue",
-        ],
-        resources: [
-          `arn:aws:secretsmanager:${this.region}:${this.account}:secret:*`,
-        ],
+        actions: ["ssm:GetParameter"],
+        resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter/AILA/AllowedEmailDomains`],
       })
     );
 
-    // Grant access to EC2
-    coglambdaRole.addToPolicy(
+    // Grant access to CloudWatch Logs scoped to preSignupLambda log group
+    preSignupRole.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: [
-          "ec2:CreateNetworkInterface",
-          "ec2:DescribeNetworkInterfaces",
-          "ec2:DeleteNetworkInterface",
-          "ec2:AssignPrivateIpAddresses",
-          "ec2:UnassignPrivateIpAddresses",
-        ],
-        resources: ["*"], // must be *
-      })
-    );
-
-    // Grant access to log
-    coglambdaRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          //Logs
           "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents",
         ],
-        resources: ["arn:aws:logs:*:*:*"],
-      })
-    );
-
-    // Grant permission to add users to an IAM group
-    coglambdaRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ["iam:AddUserToGroup"],
         resources: [
-          `arn:aws:iam::${this.account}:user/*`,
-          `arn:aws:iam::${this.account}:group/*`,
+          `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${id}-preSignupLambda:*`,
         ],
       })
     );
 
-    // Inline policy to allow AdminAddUserToGroup action
-    const adminAddUserToGroupPolicy = new iam.Policy(
-      this,
-      `${id}-AdminAddUserToGroupPolicy`,
-      {
-        statements: [
-          new iam.PolicyStatement({
-            effect: iam.Effect.ALLOW,
-            actions: [
-              "cognito-idp:AdminAddUserToGroup",
-              "cognito-idp:AdminRemoveUserFromGroup",
-              "cognito-idp:AdminGetUser",
-              "cognito-idp:AdminListGroupsForUser",
-            ],
-            resources: [
-              `arn:aws:cognito-idp:${this.region}:${this.account}:userpool/${this.userPool.userPoolId}`,
-            ],
-          }),
-        ],
-      }
-    );
-
-    // Attach the inline policy to the role
-    coglambdaRole.attachInlinePolicy(adminAddUserToGroupPolicy);
-
-    coglambdaRole.addToPolicy(
+    // Grant X-Ray tracing permissions
+    preSignupRole.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: [
-          // Secrets Manager
-          "secretsmanager:GetSecretValue",
-          "secretsmanager:PutSecretValue",
+          "xray:PutTraceSegments",
+          "xray:PutTelemetryRecords",
         ],
-        resources: [
-          `arn:aws:secretsmanager:${this.region}:${this.account}:secret:*`,
-        ],
-      })
-    );
-
-    coglambdaRole.addToPolicy(
-      new iam.PolicyStatement({
-        actions: ["ssm:GetParameter"],
-        resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter/*`],
+        resources: ["*"],
       })
     );
 
@@ -737,12 +765,14 @@ export class ApiGatewayStack extends cdk.Stack {
       code: lambda.Code.fromAsset("lambda/lib"),
       handler: "preSignup.handler",
       timeout: Duration.seconds(30),
+      tracing: lambda.Tracing.ACTIVE,
+      logRetention: logRetention,
       environment: {
         ALLOWED_EMAIL_DOMAINS: "/AILA/AllowedEmailDomains",
       },
       functionName: `${id}-preSignupLambda`,
       memorySize: 128,
-      role: coglambdaRole,
+      role: preSignupRole,
     });
 
     this.userPool.addTrigger(
@@ -750,11 +780,90 @@ export class ApiGatewayStack extends cdk.Stack {
       preSignupLambda
     );
 
+    // Per-function-group IAM role for addStudentOnSignUp and adjustUserRoles
+    const cognitoTriggerRole = new iam.Role(this, `${id}-cognitoTriggerRole`, {
+      roleName: `${id}-cognitoTriggerRole`,
+      assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
+    });
+
+    // Grant access to Secrets Manager scoped to secretPathTableCreator
+    cognitoTriggerRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ["secretsmanager:GetSecretValue"],
+        resources: [db.secretPathTableCreator.secretArn],
+      })
+    );
+
+    // Grant access to EC2 VPC networking
+    cognitoTriggerRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "ec2:CreateNetworkInterface",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DeleteNetworkInterface",
+          "ec2:AssignPrivateIpAddresses",
+          "ec2:UnassignPrivateIpAddresses",
+        ],
+        resources: ["*"],
+      })
+    );
+
+    // Grant access to CloudWatch Logs scoped to addStudentOnSignUp and adjustUserRoles log groups
+    cognitoTriggerRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+        ],
+        resources: [
+          `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${id}-addStudentOnSignUp:*`,
+          `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${id}-adjustUserRoles-v9:*`,
+        ],
+      })
+    );
+
+    // Grant X-Ray tracing permissions
+    cognitoTriggerRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "xray:PutTraceSegments",
+          "xray:PutTelemetryRecords",
+        ],
+        resources: ["*"],
+      })
+    );
+
+    // Grant Cognito admin permissions scoped to the user pool
+    // Scope Cognito permissions to all user pools in this account/region to avoid
+    // a CloudFormation cyclic dependency (UserPool → adjustUserRoles → cognitoTriggerRole → UserPool).
+    // This is acceptable because there is only one user pool in the stack.
+    cognitoTriggerRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "cognito-idp:AdminAddUserToGroup",
+          "cognito-idp:AdminRemoveUserFromGroup",
+          "cognito-idp:AdminGetUser",
+          "cognito-idp:AdminListGroupsForUser",
+        ],
+        resources: [
+          `arn:aws:cognito-idp:${this.region}:${this.account}:userpool/*`,
+        ],
+      })
+    );
+
     const AutoSignupLambda = new lambda.Function(this, `${id}-addStudentOnSignUp`, {
       runtime: lambda.Runtime.NODEJS_22_X,
       code: lambda.Code.fromAsset("lambda/lib"),
       handler: "addStudentOnSignUp.handler",
       timeout: Duration.seconds(30),
+      tracing: lambda.Tracing.ACTIVE,
+      logRetention: logRetention,
       environment: {
         SM_DB_CREDENTIALS: db.secretPathTableCreator.secretName,
         RDS_PROXY_ENDPOINT: db.rdsProxyEndpointTableCreator,
@@ -763,7 +872,7 @@ export class ApiGatewayStack extends cdk.Stack {
       functionName: `${id}-addStudentOnSignUp`,
       memorySize: 128,
       layers: [postgres],
-      role: coglambdaRole,
+      role: cognitoTriggerRole,
     });
 
     const adjustUserRoles = new lambda.Function(this, `${id}-adjustUserRoles`, {
@@ -771,6 +880,8 @@ export class ApiGatewayStack extends cdk.Stack {
       code: lambda.Code.fromAsset("lambda/lib"),
       handler: "adjustUserRoles.handler",
       timeout: Duration.seconds(60),
+      tracing: lambda.Tracing.ACTIVE,
+      logRetention: logRetention,
       environment: {
         SM_DB_CREDENTIALS: db.secretPathTableCreator.secretName,
         RDS_PROXY_ENDPOINT: db.rdsProxyEndpointTableCreator,
@@ -779,7 +890,7 @@ export class ApiGatewayStack extends cdk.Stack {
       functionName: `${id}-adjustUserRoles-v9`,
       memorySize: 256,
       layers: [postgres],
-      role: coglambdaRole,
+      role: cognitoTriggerRole,
     });
 
     this.userPool.addTrigger(
@@ -802,6 +913,50 @@ export class ApiGatewayStack extends cdk.Stack {
       description: "The ID of the Cognito User Pool",
     });
 
+    // Per-function-group IAM role for authorizer functions (no VPC access needed)
+    const authorizerRole = new iam.Role(this, `${id}-authorizerRole`, {
+      roleName: `${id}-authorizerRole`,
+      assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
+    });
+
+    // Grant access to Secrets Manager scoped to the Cognito secret
+    authorizerRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ["secretsmanager:GetSecretValue"],
+        resources: [this.secret.secretArn],
+      })
+    );
+
+    // Grant access to CloudWatch Logs scoped to the three authorizer function log groups
+    authorizerRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+        ],
+        resources: [
+          `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${id}-adminLambdaAuthorizer:*`,
+          `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${id}-studentLambdaAuthorizer:*`,
+          `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${id}-instructorLambdaAuthorizer:*`,
+        ],
+      })
+    );
+
+    // Grant X-Ray tracing permissions
+    authorizerRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "xray:PutTraceSegments",
+          "xray:PutTelemetryRecords",
+        ],
+        resources: ["*"],
+      })
+    );
+
     // **
     //  *
     //  * Create Lambda for Admin Authorization endpoints
@@ -816,13 +971,15 @@ export class ApiGatewayStack extends cdk.Stack {
         code: lambda.Code.fromAsset("lambda/adminAuthorizerFunction"),
         handler: "adminAuthorizerFunction.handler",
         timeout: Duration.seconds(30),
+        tracing: lambda.Tracing.ACTIVE,
+        logRetention: logRetention,
         environment: {
           SM_COGNITO_CREDENTIALS: this.secret.secretName,
         },
         functionName: `${id}-adminLambdaAuthorizer`,
         memorySize: 256,
         layers: [jwt],
-        role: lambdaRole,
+        role: authorizerRole,
       }
     );
 
@@ -848,13 +1005,15 @@ export class ApiGatewayStack extends cdk.Stack {
         code: lambda.Code.fromAsset("lambda/studentAuthorizerFunction"),
         handler: "studentAuthorizerFunction.handler",
         timeout: Duration.seconds(30),
+        tracing: lambda.Tracing.ACTIVE,
+        logRetention: logRetention,
         environment: {
           SM_COGNITO_CREDENTIALS: this.secret.secretName,
         },
         functionName: `${id}-studentLambdaAuthorizer`,
         memorySize: 256,
         layers: [jwt],
-        role: lambdaRole,
+        role: authorizerRole,
       }
     );
 
@@ -882,13 +1041,15 @@ export class ApiGatewayStack extends cdk.Stack {
         code: lambda.Code.fromAsset("lambda/instructorAuthorizerFunction"),
         handler: "instructorAuthorizerFunction.handler",
         timeout: Duration.seconds(30),
+        tracing: lambda.Tracing.ACTIVE,
+        logRetention: logRetention,
         environment: {
           SM_COGNITO_CREDENTIALS: this.secret.secretName,
         },
         functionName: `${id}-instructorLambdaAuthorizer`,
         memorySize: 256,
         layers: [jwt],
-        role: lambdaRole,
+        role: authorizerRole,
       }
     );
 
@@ -946,6 +1107,8 @@ export class ApiGatewayStack extends cdk.Stack {
         code: lambda.DockerImageCode.fromImageAsset("./text_generation"),
         memorySize: 1024,
         timeout: cdk.Duration.seconds(300),
+        tracing: lambda.Tracing.ACTIVE,
+        logRetention: logRetention,
         vpc: vpcStack.vpc, // Pass the VPC
         functionName: `${id}-TextGenLambdaDockerFunc`,
         environment: {
@@ -988,24 +1151,10 @@ export class ApiGatewayStack extends cdk.Stack {
       ],
     });
 
-    // Custom policy statement for AWS Marketplace access (required for Anthropic models)
-    const marketplacePolicyStatement = new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        "aws-marketplace:ViewSubscriptions",
-        "aws-marketplace:Subscribe",
-        "aws-marketplace:Unsubscribe"
-      ],
-      resources: ["*"],
-    });
-
     // Attach the custom Bedrock policy to Lambda function
     textGenLambdaDockerFunc.addToRolePolicy(bedrockPolicyStatement);
-    
-    // Attach the AWS Marketplace policy to Lambda function (required for Anthropic models)
-    textGenLambdaDockerFunc.addToRolePolicy(marketplacePolicyStatement);
 
-    // Grant access to Secret Manager
+    // Grant access to Secret Manager scoped to secretPathTableCreator
     textGenLambdaDockerFunc.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
@@ -1014,12 +1163,12 @@ export class ApiGatewayStack extends cdk.Stack {
           "secretsmanager:GetSecretValue",
         ],
         resources: [
-          `arn:aws:secretsmanager:${this.region}:${this.account}:secret:*`,
+          db.secretPathTableCreator.secretArn,
         ],
       })
     );
 
-    // Grant access to DynamoDB actions
+    // Grant DynamoDB management actions on all tables (required for table discovery and creation)
     textGenLambdaDockerFunc.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
@@ -1027,11 +1176,21 @@ export class ApiGatewayStack extends cdk.Stack {
           "dynamodb:ListTables",
           "dynamodb:CreateTable",
           "dynamodb:DescribeTable",
+        ],
+        resources: [`arn:aws:dynamodb:${this.region}:${this.account}:table/*`],
+      })
+    );
+
+    // Grant DynamoDB data actions scoped to the specific conversation table
+    textGenLambdaDockerFunc.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
           "dynamodb:PutItem",
           "dynamodb:GetItem",
           "dynamodb:UpdateItem",
         ],
-        resources: [`arn:aws:dynamodb:${this.region}:${this.account}:table/*`],
+        resources: [`arn:aws:dynamodb:${this.region}:${this.account}:table/DynamoDB-Conversation-Table`],
       })
     );
 
@@ -1045,6 +1204,18 @@ export class ApiGatewayStack extends cdk.Stack {
           embeddingModelParameter.parameterArn,
           tableNameParameter.parameterArn,
         ],
+      })
+    );
+
+    // Grant X-Ray tracing permissions
+    textGenLambdaDockerFunc.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "xray:PutTraceSegments",
+          "xray:PutTelemetryRecords",
+        ],
+        resources: ["*"],
       })
     );
 
@@ -1067,10 +1238,10 @@ export class ApiGatewayStack extends cdk.Stack {
       // When deleting the stack, need to empty the Bucket and delete it manually
       removalPolicy: cdk.RemovalPolicy.RETAIN,
       enforceSSL: true,
-      intelligentTieringConfigurations: [
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      lifecycleRules: [
         {
-          name: "default-tiering",
-          archiveAccessTierTime: cdk.Duration.days(90),
+          abortIncompleteMultipartUploadAfter: Duration.days(1),
         },
       ],
     });
@@ -1084,6 +1255,8 @@ export class ApiGatewayStack extends cdk.Stack {
         code: lambda.Code.fromAsset("lambda/generatePreSignedURL"),
         handler: "generatePreSignedURL.lambda_handler",
         timeout: Duration.seconds(30),
+        tracing: lambda.Tracing.ACTIVE,
+        logRetention: logRetention,
         memorySize: 128,
         environment: {
           BUCKET: dataIngestionBucket.bucketName,
@@ -1118,6 +1291,18 @@ export class ApiGatewayStack extends cdk.Stack {
       sourceArn: `arn:aws:execute-api:${this.region}:${this.account}:${this.api.restApiId}/*/*/instructor*`,
     });
 
+    // Grant X-Ray tracing permissions
+    generatePreSignedURL.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "xray:PutTraceSegments",
+          "xray:PutTelemetryRecords",
+        ],
+        resources: ["*"],
+      })
+    );
+
     /**
      *
      * Create Lambda with container image for data ingestion workflow in RAG pipeline
@@ -1130,6 +1315,8 @@ export class ApiGatewayStack extends cdk.Stack {
         code: lambda.DockerImageCode.fromImageAsset("./data_ingestion"),
         memorySize: 512,
         timeout: cdk.Duration.seconds(600),
+        tracing: lambda.Tracing.ACTIVE,
+        logRetention: logRetention,
         vpc: vpcStack.vpc, // Pass the VPC
         functionName: `${id}-DataIngestLambdaDockerFunc`,
         environment: {
@@ -1186,9 +1373,6 @@ export class ApiGatewayStack extends cdk.Stack {
 
     // Attach the custom Bedrock policy to Lambda function
     dataIngestLambdaDockerFunc.addToRolePolicy(bedrockPolicyStatement);
-    
-    // Attach the AWS Marketplace policy to Lambda function (required for Anthropic models)
-    dataIngestLambdaDockerFunc.addToRolePolicy(marketplacePolicyStatement);
 
     // Add the S3 event source trigger to the Lambda function
     dataIngestLambdaDockerFunc.addEventSource(
@@ -1201,7 +1385,7 @@ export class ApiGatewayStack extends cdk.Stack {
       })
     );
 
-    // Grant access to Secret Manager
+    // Grant access to Secret Manager scoped to secretPathAdminName
     dataIngestLambdaDockerFunc.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
@@ -1210,7 +1394,7 @@ export class ApiGatewayStack extends cdk.Stack {
           "secretsmanager:GetSecretValue",
         ],
         resources: [
-          `arn:aws:secretsmanager:${this.region}:${this.account}:secret:*`,
+          `arn:aws:secretsmanager:${this.region}:${this.account}:secret:${db.secretPathAdminName}-*`,
         ],
       })
     );
@@ -1224,6 +1408,18 @@ export class ApiGatewayStack extends cdk.Stack {
       })
     );
 
+    // Grant X-Ray tracing permissions
+    dataIngestLambdaDockerFunc.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "xray:PutTraceSegments",
+          "xray:PutTelemetryRecords",
+        ],
+        resources: ["*"],
+      })
+    );
+
     /**
      *
      * Create Lambda function that will return all file names for a specified course, concept, and module
@@ -1233,6 +1429,8 @@ export class ApiGatewayStack extends cdk.Stack {
       code: lambda.Code.fromAsset("lambda/getFilesFunction"),
       handler: "getFilesFunction.lambda_handler",
       timeout: Duration.seconds(30),
+      tracing: lambda.Tracing.ACTIVE,
+      logRetention: logRetention,
       memorySize: 128,
       vpc: vpcStack.vpc,
       environment: {
@@ -1253,7 +1451,7 @@ export class ApiGatewayStack extends cdk.Stack {
     // Grant the Lambda function read-only permissions to the S3 bucket
     dataIngestionBucket.grantRead(getFilesFunction);
 
-    // Grant access to Secret Manager
+    // Grant access to Secret Manager scoped to secretPathUser
     getFilesFunction.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
@@ -1262,7 +1460,7 @@ export class ApiGatewayStack extends cdk.Stack {
           "secretsmanager:GetSecretValue",
         ],
         resources: [
-          `arn:aws:secretsmanager:${this.region}:${this.account}:secret:*`,
+          db.secretPathUser.secretArn,
         ],
       })
     );
@@ -1274,6 +1472,18 @@ export class ApiGatewayStack extends cdk.Stack {
       sourceArn: `arn:aws:execute-api:${this.region}:${this.account}:${this.api.restApiId}/*/*/instructor*`,
     });
 
+    // Grant X-Ray tracing permissions
+    getFilesFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "xray:PutTraceSegments",
+          "xray:PutTelemetryRecords",
+        ],
+        resources: ["*"],
+      })
+    );
+
     /**
      *
      * Create Lambda function to delete certain file
@@ -1283,6 +1493,8 @@ export class ApiGatewayStack extends cdk.Stack {
       code: lambda.Code.fromAsset("lambda/deleteFile"),
       handler: "deleteFile.lambda_handler",
       timeout: Duration.seconds(30),
+      tracing: lambda.Tracing.ACTIVE,
+      logRetention: logRetention,
       memorySize: 128,
       vpc: vpcStack.vpc,
       environment: {
@@ -1302,7 +1514,7 @@ export class ApiGatewayStack extends cdk.Stack {
     // Grant the Lambda function the necessary permissions
     dataIngestionBucket.grantDelete(deleteFile);
 
-    // Grant access to Secret Manager
+    // Grant access to Secret Manager scoped to secretPathUser
     deleteFile.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
@@ -1311,7 +1523,7 @@ export class ApiGatewayStack extends cdk.Stack {
           "secretsmanager:GetSecretValue",
         ],
         resources: [
-          `arn:aws:secretsmanager:${this.region}:${this.account}:secret:*`,
+          db.secretPathUser.secretArn,
         ],
       })
     );
@@ -1323,6 +1535,18 @@ export class ApiGatewayStack extends cdk.Stack {
       sourceArn: `arn:aws:execute-api:${this.region}:${this.account}:${this.api.restApiId}/*/*/instructor*`,
     });
 
+    // Grant X-Ray tracing permissions
+    deleteFile.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "xray:PutTraceSegments",
+          "xray:PutTelemetryRecords",
+        ],
+        resources: ["*"],
+      })
+    );
+
     /**
      *
      * Create Lambda function to delete an entire module directory
@@ -1332,6 +1556,8 @@ export class ApiGatewayStack extends cdk.Stack {
       code: lambda.Code.fromAsset("lambda/deleteModule"),
       handler: "deleteModule.lambda_handler",
       timeout: Duration.seconds(60),
+      tracing: lambda.Tracing.ACTIVE,
+      logRetention: logRetention,
       memorySize: 128,
       environment: {
         BUCKET: dataIngestionBucket.bucketName,
@@ -1357,6 +1583,18 @@ export class ApiGatewayStack extends cdk.Stack {
       sourceArn: `arn:aws:execute-api:${this.region}:${this.account}:${this.api.restApiId}/*/*/instructor*`,
     });
 
+    // Grant X-Ray tracing permissions
+    deleteModuleFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "xray:PutTraceSegments",
+          "xray:PutTelemetryRecords",
+        ],
+        resources: ["*"],
+      })
+    );
+
     /**
      *
      * Create a Lambda function that deletes the last message in a conversation
@@ -1366,6 +1604,8 @@ export class ApiGatewayStack extends cdk.Stack {
       code: lambda.Code.fromAsset("lambda/deleteLastMessage"),
       handler: "deleteLastMessage.lambda_handler",
       timeout: Duration.seconds(30),
+      tracing: lambda.Tracing.ACTIVE,
+      logRetention: logRetention,
       memorySize: 128,
       vpc: vpcStack.vpc,
       environment: {
@@ -1383,7 +1623,7 @@ export class ApiGatewayStack extends cdk.Stack {
       .defaultChild as lambda.CfnFunction;
     cfnDeleteLastMessage.overrideLogicalId("DeleteLastMessage");
 
-    // Grant access to Secret Manager
+    // Grant access to Secret Manager scoped to secretPathUser
     deleteLastMessage.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
@@ -1392,7 +1632,7 @@ export class ApiGatewayStack extends cdk.Stack {
           "secretsmanager:GetSecretValue",
         ],
         resources: [
-          `arn:aws:secretsmanager:${this.region}:${this.account}:secret:*`,
+          db.secretPathUser.secretArn,
         ],
       })
     );
@@ -1402,7 +1642,7 @@ export class ApiGatewayStack extends cdk.Stack {
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ["dynamodb:GetItem", "dynamodb:UpdateItem"],
-        resources: [`arn:aws:dynamodb:${this.region}:${this.account}:table/*`],
+        resources: [`arn:aws:dynamodb:${this.region}:${this.account}:table/DynamoDB-Conversation-Table`],
       })
     );
 
@@ -1422,6 +1662,18 @@ export class ApiGatewayStack extends cdk.Stack {
       })
     );
 
+    // Grant X-Ray tracing permissions
+    deleteLastMessage.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "xray:PutTraceSegments",
+          "xray:PutTelemetryRecords",
+        ],
+        resources: ["*"],
+      })
+    );
+
     //////////////////////////////
     //////////////////////////////
 
@@ -1429,8 +1681,22 @@ export class ApiGatewayStack extends cdk.Stack {
       runtime: lambda.Runtime.NODEJS_22_X,
       code: lambda.Code.fromAsset("lambda/lib"),
       handler: "appsync.handler",
+      tracing: lambda.Tracing.ACTIVE,
+      logRetention: logRetention,
       functionName: `${id}-AuthHandler`,
     });
+
+    // Grant X-Ray tracing permissions
+    authHandler.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "xray:PutTraceSegments",
+          "xray:PutTelemetryRecords",
+        ],
+        resources: ["*"],
+      })
+    );
 
     // Create AppSync API
     this.eventApi = new appsync.GraphqlApi(this,
@@ -1448,6 +1714,74 @@ export class ApiGatewayStack extends cdk.Stack {
       xrayEnabled: true,
     });
 
+    this.appSyncApiId = this.eventApi.apiId;
+
+    // Per-function IAM role for notificationFunction
+    const notificationLambdaRole = new iam.Role(this, `${id}-notificationLambdaRole`, {
+      roleName: `${id}-notificationLambdaRole`,
+      assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
+    });
+
+    // Grant access to Secrets Manager scoped to secretPathUser
+    notificationLambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ["secretsmanager:GetSecretValue"],
+        resources: [db.secretPathUser.secretArn],
+      })
+    );
+
+    // Grant access to EC2 VPC networking
+    notificationLambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "ec2:CreateNetworkInterface",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DeleteNetworkInterface",
+          "ec2:AssignPrivateIpAddresses",
+          "ec2:UnassignPrivateIpAddresses",
+        ],
+        resources: ["*"],
+      })
+    );
+
+    // Grant access to CloudWatch Logs scoped to NotificationFunction log group
+    notificationLambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+        ],
+        resources: [
+          `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${id}-NotificationFunction:*`,
+        ],
+      })
+    );
+
+    // Grant X-Ray tracing permissions
+    notificationLambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "xray:PutTraceSegments",
+          "xray:PutTelemetryRecords",
+        ],
+        resources: ["*"],
+      })
+    );
+
+    // Grant AppSync permissions scoped to the event API
+    notificationLambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ["appsync:GraphQL"],
+        resources: [`arn:aws:appsync:${this.region}:${this.account}:apis/${this.eventApi.apiId}/*`],
+      })
+    );
+
     const notificationFunction = new lambda.Function(
       this,
       `${id}-NotificationFunction`,
@@ -1455,6 +1789,9 @@ export class ApiGatewayStack extends cdk.Stack {
         runtime: lambda.Runtime.PYTHON_3_11,
         code: lambda.Code.fromAsset("lambda/eventNotification"),
         handler: "eventNotification.lambda_handler",
+        tracing: lambda.Tracing.ACTIVE,
+        logRetention: logRetention,
+        layers: [powertoolsLayer],
         environment: {
           APPSYNC_API_URL: this.eventApi.graphqlUrl,
           APPSYNC_API_ID: this.eventApi.apiId,
@@ -1465,7 +1802,7 @@ export class ApiGatewayStack extends cdk.Stack {
         timeout: cdk.Duration.seconds(60),
         memorySize: 128,
         vpc: vpcStack.vpc,
-        role: lambdaRole,
+        role: notificationLambdaRole,
       });
 
     notificationFunction.addToRolePolicy(
@@ -1473,15 +1810,6 @@ export class ApiGatewayStack extends cdk.Stack {
         effect: iam.Effect.ALLOW,
         actions: ['appsync:GraphQL'],
         resources: [`arn:aws:appsync:${this.region}:${this.account}:apis/${this.eventApi.apiId}/*`],
-      })
-    );
-
-    // Grant SES permissions to send emails
-    notificationFunction.addToRolePolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ['ses:SendEmail', 'ses:SendRawEmail'],
-        resources: ['*'],
       })
     );
 
@@ -1526,6 +1854,72 @@ export class ApiGatewayStack extends cdk.Stack {
       .defaultChild as lambda.CfnFunction;
     cfnNotificationFunction.overrideLogicalId("NotificationFunction");
 
+    // Per-function-group IAM role for sqsFunction
+    const sqsLambdaRole = new iam.Role(this, `${id}-sqsLambdaRole`, {
+      roleName: `${id}-sqsLambdaRole`,
+      assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
+    });
+
+    // Grant access to Secrets Manager scoped to secretPathUser
+    sqsLambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ["secretsmanager:GetSecretValue"],
+        resources: [db.secretPathUser.secretArn],
+      })
+    );
+
+    // Grant access to EC2 VPC networking
+    sqsLambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "ec2:CreateNetworkInterface",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DeleteNetworkInterface",
+          "ec2:AssignPrivateIpAddresses",
+          "ec2:UnassignPrivateIpAddresses",
+        ],
+        resources: ["*"],
+      })
+    );
+
+    // Grant access to CloudWatch Logs scoped to sqsFunction log group
+    sqsLambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+        ],
+        resources: [
+          `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${id}-sqsFunction:*`,
+        ],
+      })
+    );
+
+    // Grant X-Ray tracing permissions
+    sqsLambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "xray:PutTraceSegments",
+          "xray:PutTelemetryRecords",
+        ],
+        resources: ["*"],
+      })
+    );
+
+    // Grant SQS SendMessage permission scoped to messagesQueue
+    sqsLambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ["sqs:SendMessage"],
+        resources: [this.messagesQueue.queueArn],
+      })
+    );
+
     /**
      *
      * Create a Lambda function that populates SQS with parameters to start new job
@@ -1535,8 +1929,10 @@ export class ApiGatewayStack extends cdk.Stack {
       code: lambda.Code.fromAsset("lambda/lib"),
       handler: "sqsFunction.handler",
       timeout: Duration.seconds(60),
+      tracing: lambda.Tracing.ACTIVE,
+      logRetention: logRetention,
       environment: {
-        SQS_QUEUE_URL: messagesQueue.queueUrl,
+        SQS_QUEUE_URL: this.messagesQueue.queueUrl,
         SM_DB_CREDENTIALS: db.secretPathUser.secretName,
         RDS_PROXY_ENDPOINT: db.rdsProxyEndpoint,
       },
@@ -1544,15 +1940,15 @@ export class ApiGatewayStack extends cdk.Stack {
       functionName: `${id}-sqsFunction`,
       memorySize: 128,
       layers: [postgres],
-      role: coglambdaRole,
+      role: sqsLambdaRole,
     });
 
-    messagesQueue.grantSendMessages(sqsFunction);
+    this.messagesQueue.grantSendMessages(sqsFunction);
 
     sqsFunction.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ["sqs:SendMessage"],
-        resources: [messagesQueue.queueArn],
+        resources: [this.messagesQueue.queueArn],
         effect: iam.Effect.ALLOW,
       })
     );
@@ -1590,10 +1986,10 @@ export class ApiGatewayStack extends cdk.Stack {
         // When deleting the stack, need to empty the Bucket and delete it manually
         removalPolicy: cdk.RemovalPolicy.RETAIN,
         enforceSSL: true,
-        intelligentTieringConfigurations: [
+        encryption: s3.BucketEncryption.S3_MANAGED,
+        lifecycleRules: [
           {
-            name: "default-tiering",
-            archiveAccessTierTime: cdk.Duration.days(90),
+            abortIncompleteMultipartUploadAfter: Duration.days(1),
           },
         ],
       }
@@ -1607,6 +2003,8 @@ export class ApiGatewayStack extends cdk.Stack {
       code: lambda.DockerImageCode.fromImageAsset("./sqsTrigger"),
       memorySize: 512,
       timeout: cdk.Duration.seconds(300),
+      tracing: lambda.Tracing.ACTIVE,
+      logRetention: logRetention,
       vpc: vpcStack.vpc, // Pass the VPC
       functionName: `${id}-SQSTriggerDockerFunc`,
       environment: {
@@ -1619,7 +2017,7 @@ export class ApiGatewayStack extends cdk.Stack {
     });
 
     sqsTrigger.addEventSource(
-      new lambdaEventSources.SqsEventSource(messagesQueue, {
+      new lambdaEventSources.SqsEventSource(this.messagesQueue, {
         batchSize: 1, // Process messages one at a time
       })
     );
@@ -1657,7 +2055,7 @@ export class ApiGatewayStack extends cdk.Stack {
       })
     );
 
-    // Grant access to Secret Manager
+    // Grant access to Secret Manager scoped to secretPathUser
     sqsTrigger.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
@@ -1666,8 +2064,20 @@ export class ApiGatewayStack extends cdk.Stack {
           "secretsmanager:GetSecretValue",
         ],
         resources: [
-          `arn:aws:secretsmanager:${this.region}:${this.account}:secret:*`,
+          db.secretPathUser.secretArn,
         ],
+      })
+    );
+
+    // Grant X-Ray tracing permissions
+    sqsTrigger.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "xray:PutTraceSegments",
+          "xray:PutTelemetryRecords",
+        ],
+        resources: ["*"],
       })
     );
 
@@ -1680,6 +2090,8 @@ export class ApiGatewayStack extends cdk.Stack {
       code: lambda.Code.fromAsset("lambda/getChatLogsFunction"),
       handler: "getChatLogsFunction.lambda_handler",
       timeout: Duration.seconds(60),
+      tracing: lambda.Tracing.ACTIVE,
+      logRetention: logRetention,
       memorySize: 128,
       vpc: vpcStack.vpc,
       environment: {
@@ -1704,6 +2116,18 @@ export class ApiGatewayStack extends cdk.Stack {
       action: "lambda:InvokeFunction",
       sourceArn: `arn:aws:execute-api:${this.region}:${this.account}:${this.api.restApiId}/*/*/instructor*`,
     });
+
+    // Grant X-Ray tracing permissions
+    getChatLogsFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "xray:PutTraceSegments",
+          "xray:PutTelemetryRecords",
+        ],
+        resources: ["*"],
+      })
+    );
 
     // Waf Firewall
     const waf = new wafv2.CfnWebACL(this, `${id}-waf`, {
@@ -1776,6 +2200,31 @@ export class ApiGatewayStack extends cdk.Stack {
         webAclArn: waf.attrArn,
       }
     );
+
+    // Populate Lambda function metadata for ObservabilityStack
+    this.lambdaFunctionInfos = [
+      { functionName: `${id}-studentFunction`, timeoutSeconds: 60, isContainer: false },
+      { functionName: `${id}-instructorFunction`, timeoutSeconds: 60, isContainer: false },
+      { functionName: `${id}-adminFunction`, timeoutSeconds: 60, isContainer: false },
+      { functionName: `${id}-preSignupLambda`, timeoutSeconds: 30, isContainer: false },
+      { functionName: `${id}-addStudentOnSignUp`, timeoutSeconds: 30, isContainer: false },
+      { functionName: `${id}-adjustUserRoles-v9`, timeoutSeconds: 60, isContainer: false },
+      { functionName: `${id}-adminLambdaAuthorizer`, timeoutSeconds: 30, isContainer: false },
+      { functionName: `${id}-studentLambdaAuthorizer`, timeoutSeconds: 30, isContainer: false },
+      { functionName: `${id}-instructorLambdaAuthorizer`, timeoutSeconds: 30, isContainer: false },
+      { functionName: `${id}-TextGenLambdaDockerFunc`, timeoutSeconds: 300, isContainer: true },
+      { functionName: `${id}-GeneratePreSignedURLFunc`, timeoutSeconds: 30, isContainer: false },
+      { functionName: `${id}-DataIngestLambdaDockerFunc`, timeoutSeconds: 600, isContainer: true },
+      { functionName: `${id}-GetFilesFunction`, timeoutSeconds: 30, isContainer: false },
+      { functionName: `${id}-DeleteFileFunc`, timeoutSeconds: 30, isContainer: false },
+      { functionName: `${id}-DeleteModuleFunc`, timeoutSeconds: 60, isContainer: false },
+      { functionName: `${id}-DeleteLastMessage`, timeoutSeconds: 30, isContainer: false },
+      { functionName: `${id}-AuthHandler`, timeoutSeconds: 3, isContainer: false },
+      { functionName: `${id}-NotificationFunction`, timeoutSeconds: 60, isContainer: false },
+      { functionName: `${id}-sqsFunction`, timeoutSeconds: 60, isContainer: false },
+      { functionName: `${id}-SQSTriggerDockerFunc`, timeoutSeconds: 300, isContainer: true },
+      { functionName: `${id}-GetChatLogsFunction`, timeoutSeconds: 60, isContainer: false },
+    ];
 
   }
 }

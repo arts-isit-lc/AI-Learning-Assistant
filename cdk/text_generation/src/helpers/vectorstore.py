@@ -176,7 +176,8 @@ def get_vectorstore_retriever(
         f"user={vectorstore_config_dict['user']} "
         f"password={vectorstore_config_dict['password']} "
         f"host={vectorstore_config_dict['host']} "
-        f"port={vectorstore_config_dict['port']}"
+        f"port={vectorstore_config_dict['port']} "
+        f"sslmode=require"
     )
 
     def retrieve(query: str) -> List[Document]:

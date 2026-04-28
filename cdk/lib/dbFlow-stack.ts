@@ -34,7 +34,9 @@ export class DBFlowStack extends Stack {
               "secretsmanager:PutSecretValue"
             ],
             resources: [
-              `arn:aws:secretsmanager:${this.region}:${this.account}:secret:*`,
+              `arn:aws:secretsmanager:${this.region}:${this.account}:secret:${db.secretPathAdminName}-*`,
+              db.secretPathUser.secretArn,
+              db.secretPathTableCreator.secretArn,
             ],
           })
         );
@@ -47,7 +49,7 @@ export class DBFlowStack extends Stack {
               "logs:CreateLogStream",
               "logs:PutLogEvents",
             ],
-            resources: ["arn:aws:logs:*:*:*"],
+            resources: [`arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${id}-initializerFunction:*`],
           })
         );
         lambdaRole.addToPolicy(
@@ -61,12 +63,7 @@ export class DBFlowStack extends Stack {
             resources: ["*"],
           })
         );
-        lambdaRole.addManagedPolicy(
-          iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonSSMReadOnlyAccess")
-        );
-        lambdaRole.addManagedPolicy(
-          iam.ManagedPolicy.fromAwsManagedPolicyName("AmazonS3FullAccess")
-        );
+
         // Create an initilizer for the RDS instance, only invoke during deployment
         const initializerLambda = new triggers.TriggerFunction(this, `${id}-triggerLambda`, {
             functionName: `${id}-initializerFunction`,

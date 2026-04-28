@@ -40,7 +40,7 @@ def get_vectorstore(
     """
     try:
         connection_string = (
-            f"postgresql+psycopg://{user}:{password}@{host}:{port}/{dbname}"
+            f"postgresql+psycopg://{user}:{password}@{host}:{port}/{dbname}?sslmode=require"
         )
 
         logger.info("Initializing the VectorStore")
