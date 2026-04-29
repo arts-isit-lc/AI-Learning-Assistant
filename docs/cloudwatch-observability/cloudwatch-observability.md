@@ -17,9 +17,17 @@ This document describes all CloudWatch resources created by the ObservabilitySta
 
 ## CloudWatch Alarms
 
-### Lambda Alarms (per function, 21 functions × 4 alarms = 84 total)
+### Lambda Alarms (tiered, 38 total)
 
-#### Error Rate — Warning
+Lambda functions are classified into three tiers based on criticality:
+
+| Tier | Functions | Alarms |
+|------|-----------|--------|
+| **Tier 1** (critical path) | `TextGenLambdaDockerFunc`, `DataIngestLambdaDockerFunc`, `SQSTriggerDockerFunc`, `studentFunction`, `instructorFunction` | Error Rate Warning + Critical, Duration, Throttle (4 each = 20) |
+| **Tier 2** (supporting) | `adminFunction`, `NotificationFunction`, `sqsFunction`, `GetFilesFunction`, `GetChatLogsFunction`, `DeleteLastMessage`, `DeleteFileFunc`, `DeleteModuleFunc`, `GeneratePreSignedURLFunc` | Error Rate Warning + Critical only (2 each = 18) |
+| **Tier 3** (low priority) | `adminLambdaAuthorizer`, `studentLambdaAuthorizer`, `instructorLambdaAuthorizer`, `preSignupLambda`, `addStudentOnSignUp`, `adjustUserRoles-v9`, `AuthHandler` | No direct alarms — covered by API Gateway 5xx alarm and composite alarms |
+
+#### Error Rate — Warning (Tier 1 + Tier 2: 14 functions)
 
 | Field | Value |
 |-------|-------|
@@ -32,7 +40,7 @@ This document describes all CloudWatch resources created by the ObservabilitySta
 | SNS Target | Warning Topic |
 | Runbook | Check CloudWatch Logs `/aws/lambda/{function-name}`. Review recent deployments. Check downstream service health. |
 
-#### Error Rate — Critical
+#### Error Rate — Critical (Tier 1 + Tier 2: 14 functions)
 
 | Field | Value |
 |-------|-------|
@@ -44,7 +52,7 @@ This document describes all CloudWatch resources created by the ObservabilitySta
 | SNS Target | Critical Topic (prod) / Warning Topic (dev) |
 | Runbook | Check CloudWatch Logs `/aws/lambda/{function-name}`. Review recent deployments. Check downstream service health. |
 
-#### Duration — Warning
+#### Duration — Warning (Tier 1 only: 5 functions)
 
 | Field | Value |
 |-------|-------|
@@ -56,33 +64,17 @@ This document describes all CloudWatch resources created by the ObservabilitySta
 | SNS Target | Warning Topic |
 | Runbook | Check X-Ray traces for slow downstream calls. Review memory allocation. Check for cold start impact. |
 
-**Duration thresholds per function:**
+**Duration thresholds (Tier 1 functions only):**
 
 | Function | Timeout | Alarm Threshold (80%) |
 |----------|---------|----------------------|
 | studentFunction | 60s | 48,000ms |
 | instructorFunction | 60s | 48,000ms |
-| adminFunction | 60s | 48,000ms |
-| preSignupLambda | 30s | 24,000ms |
-| addStudentOnSignUp | 30s | 24,000ms |
-| adjustUserRoles-v9 | 60s | 48,000ms |
-| adminLambdaAuthorizer | 30s | 24,000ms |
-| studentLambdaAuthorizer | 30s | 24,000ms |
-| instructorLambdaAuthorizer | 30s | 24,000ms |
 | TextGenLambdaDockerFunc | 300s | 240,000ms |
-| GeneratePreSignedURLFunc | 30s | 24,000ms |
 | DataIngestLambdaDockerFunc | 600s | 480,000ms |
-| GetFilesFunction | 30s | 24,000ms |
-| DeleteFileFunc | 30s | 24,000ms |
-| DeleteModuleFunc | 60s | 48,000ms |
-| DeleteLastMessage | 30s | 24,000ms |
-| AuthHandler | 3s | 2,400ms |
-| NotificationFunction | 60s | 48,000ms |
-| sqsFunction | 60s | 48,000ms |
 | SQSTriggerDockerFunc | 300s | 240,000ms |
-| GetChatLogsFunction | 60s | 48,000ms |
 
-#### Throttle
+#### Throttle (Tier 1 only: 5 functions)
 
 | Field | Value |
 |-------|-------|
@@ -210,7 +202,7 @@ This document describes all CloudWatch resources created by the ObservabilitySta
 
 ---
 
-### SQS / DLQ Alarms (4 total)
+### SQS / DLQ Alarms (3 total)
 
 #### DLQ Depth — Critical
 
@@ -246,18 +238,6 @@ This document describes all CloudWatch resources created by the ObservabilitySta
 | Metric | `ApproximateAgeOfOldestMessage` Maximum |
 | Dimension | messagesQueue name |
 | Threshold | **> 600 seconds** (10 minutes) |
-| Evaluation | 3 of 5 datapoints, 1-minute period |
-| Missing Data | Not Breaching |
-| SNS Target | Warning Topic |
-
-#### Consumer Delay — Warning
-
-| Field | Value |
-|-------|-------|
-| Name | `AILA-{env}-SQS-ConsumerDelay-Warning` |
-| Metric | `ApproximateAgeOfOldestMessage` Maximum |
-| Dimension | messagesQueue name |
-| Threshold | **> 300 seconds** (5 minutes) |
 | Evaluation | 3 of 5 datapoints, 1-minute period |
 | Missing Data | Not Breaching |
 | SNS Target | Warning Topic |
@@ -319,9 +299,9 @@ This document describes all CloudWatch resources created by the ObservabilitySta
 
 | Category | Warning | Critical | Total |
 |----------|---------|----------|-------|
-| Lambda Error Rate | 21 | 21 | 42 |
-| Lambda Duration | 21 | — | 21 |
-| Lambda Throttle | — | 21 | 21 |
+| Lambda Error Rate (Tier 1 + 2) | 14 | 14 | 28 |
+| Lambda Duration (Tier 1 only) | 5 | — | 5 |
+| Lambda Throttle (Tier 1 only) | — | 5 | 5 |
 | API Gateway 5xx | 1 | 1 | 2 |
 | API Gateway Traffic | — | 1 | 1 |
 | RDS CPU | 1 | 1 | 2 |
@@ -331,11 +311,10 @@ This document describes all CloudWatch resources created by the ObservabilitySta
 | SQS DLQ | — | 1 | 1 |
 | SQS Queue Depth | 1 | — | 1 |
 | SQS Queue Age | 1 | — | 1 |
-| SQS Consumer Delay | 1 | — | 1 |
 | AppSync 5xx | 1 | — | 1 |
 | AppSync Latency | 1 | — | 1 |
 | Composite | — | 2 | 2 |
-| **Total** | **52** | **49** | **101** |
+| **Total** | **28** | **26** | **54** |
 
 ---
 
@@ -354,8 +333,8 @@ This document describes all CloudWatch resources created by the ObservabilitySta
 | 3 | SQS Queue Depth | 12 | `ApproximateNumberOfMessagesVisible` for messagesQueue and DLQ |
 | 3 | AppSync Errors & Latency | 12 | `5XXError` Sum (left), `Latency` p99 (right) |
 | 4 | Lambda Init Duration | 12 | `InitDuration` Average for 3 container functions |
-| 5 | Lambda Alarm Status | 24 | Status of all 84 Lambda alarms |
-| 6 | Infrastructure Alarm Status | 24 | Status of all 17 infrastructure + composite alarms |
+| 5 | Lambda Alarm Status | 24 | Status of all 38 Lambda alarms (Tier 1 + Tier 2) |
+| 6 | Infrastructure Alarm Status | 24 | Status of all 16 infrastructure + composite alarms |
 
 ---
 

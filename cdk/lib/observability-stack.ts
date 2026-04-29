@@ -87,9 +87,40 @@ export class ObservabilityStack extends cdk.Stack {
     const lambdaDurationAlarms: cloudwatch.Alarm[] = [];
     const lambdaThrottleAlarms: cloudwatch.Alarm[] = [];
 
-    // --- Lambda error rate alarms (warning + critical per function) ---
+    // --- Lambda function tiering for alarm granularity ---
+    // Tier 1 (critical path): Full alarms (error rate warning + critical, duration, throttle)
+    // Tier 2 (supporting): Error rate alarms only (warning + critical)
+    // Tier 3 (low priority): No direct alarms — covered by API Gateway 5xx and composite alarms
+    const tier1Suffixes = [
+      'TextGenLambdaDockerFunc',
+      'DataIngestLambdaDockerFunc',
+      'SQSTriggerDockerFunc',
+      'studentFunction',
+      'instructorFunction',
+    ];
+    const tier3Suffixes = [
+      'adminLambdaAuthorizer',
+      'studentLambdaAuthorizer',
+      'instructorLambdaAuthorizer',
+      'preSignupLambda',
+      'addStudentOnSignUp',
+      'adjustUserRoles',
+      'AuthHandler',
+    ];
+
+    function getFunctionTier(functionName: string): 1 | 2 | 3 {
+      if (tier1Suffixes.some(s => functionName.endsWith(s))) return 1;
+      if (tier3Suffixes.some(s => functionName.includes(s))) return 3;
+      return 2;
+    }
+
+    // --- Lambda alarms (tiered per function) ---
     for (const fn of props.lambdaFunctions) {
       const sanitizedName = fn.functionName.replace(/[^a-zA-Z0-9]/g, "");
+      const tier = getFunctionTier(fn.functionName);
+
+      // Tier 3 functions get no direct alarms
+      if (tier === 3) continue;
 
       const errorsMetric = new cloudwatch.Metric({
         namespace: "AWS/Lambda",
@@ -176,8 +207,9 @@ export class ObservabilityStack extends cdk.Stack {
       }
       this.lambdaErrorCriticalAlarms.push(criticalAlarm);
 
-      // --- Lambda duration alarm (p99, 80% of timeout) ---
-      const durationThresholdMs = fn.timeoutSeconds * 1000 * 0.80;
+      // --- Lambda duration alarm (p99, 80% of timeout) — Tier 1 only ---
+      if (tier === 1) {
+        const durationThresholdMs = fn.timeoutSeconds * 1000 * 0.80;
 
       const durationMetric = new cloudwatch.Metric({
         namespace: "AWS/Lambda",
@@ -207,8 +239,10 @@ export class ObservabilityStack extends cdk.Stack {
 
       durationAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.warningTopic));
       lambdaDurationAlarms.push(durationAlarm);
+      } // end tier 1 duration alarm
 
-      // --- Lambda throttle alarm (any throttle) ---
+      // --- Lambda throttle alarm (any throttle) — Tier 1 only ---
+      if (tier === 1) {
       const throttleMetric = new cloudwatch.Metric({
         namespace: "AWS/Lambda",
         metricName: "Throttles",
@@ -242,6 +276,7 @@ export class ObservabilityStack extends cdk.Stack {
         throttleAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.warningTopic));
       }
       lambdaThrottleAlarms.push(throttleAlarm);
+      } // end tier 1 throttle alarm
     }
 
     // --- API Gateway 5xx error rate alarms (Req 6.1, 6.2, 6.3, 6.4, 6.5) ---
@@ -658,35 +693,6 @@ export class ObservabilityStack extends cdk.Stack {
 
     this.sqsQueueAgeAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.warningTopic));
 
-    // --- SQS Consumer Delay Alarm (Req 5.1, 5.2, 5.3) ---
-    const sqsConsumerDelayMetric = new cloudwatch.Metric({
-      namespace: "AWS/SQS",
-      metricName: "ApproximateAgeOfOldestMessage",
-      dimensionsMap: { QueueName: props.messagesQueueName },
-      statistic: "Maximum",
-      period: cdk.Duration.minutes(1),
-    });
-
-    const sqsConsumerDelayAlarm = sqsConsumerDelayMetric.createAlarm(this, "SqsConsumerDelayAlarm", {
-      alarmName: `AILA-${this.appEnvironment}-SQS-ConsumerDelay-Warning`,
-      alarmDescription: [
-        `SQS consumer processing delay exceeded ${thresholds.sqsConsumerDelaySeconds} seconds on queue ${props.messagesQueueName}.`,
-        `Metric: ApproximateAgeOfOldestMessage Maximum over 1-minute periods.`,
-        `Threshold: > ${thresholds.sqsConsumerDelaySeconds} seconds (3 of 5 datapoints, warning).`,
-        `Investigation steps:`,
-        `  - Check consumer Lambda logs for slow processing.`,
-        `  - Review consumer Lambda memory and timeout settings.`,
-        `  - Check for downstream service latency issues.`,
-      ].join("\n"),
-      threshold: thresholds.sqsConsumerDelaySeconds,
-      evaluationPeriods: 5,
-      datapointsToAlarm: 3,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
-    });
-
-    sqsConsumerDelayAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.warningTopic));
-
     // --- AppSync Alarms (Req 9.1, 9.2) ---
 
     // AppSync 5xx Error Alarm (Req 9.1)
@@ -971,7 +977,6 @@ export class ObservabilityStack extends cdk.Stack {
       this.dlqAlarm,
       this.sqsQueueDepthAlarm,
       this.sqsQueueAgeAlarm,
-      sqsConsumerDelayAlarm,
       appSync5xxAlarm,
       appSyncLatencyAlarm,
       systemHealthCriticalAlarm,
@@ -1088,7 +1093,6 @@ export class ObservabilityStack extends cdk.Stack {
       rdsStorageCriticalPercent: 10,
       rdsConnectionsPercent: 80,
       rdsLatencyMs: 100,
-      sqsConsumerDelaySeconds: 300,
       sqsQueueDepth: 100,
       sqsQueueAgeSeconds: 600,
       appSync5xxThreshold: 0,
