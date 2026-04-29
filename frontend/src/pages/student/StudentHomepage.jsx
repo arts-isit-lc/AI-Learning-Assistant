@@ -199,7 +199,7 @@ export const StudentHomepage = ({ setCourse }) => {
                 height: "calc(90vh - 100px)",
                 overflowY: "auto",
                 overflowX: "hidden",
-                marginLeft: "14px",
+                marginLeft: "30px",
               }}
             >
               {courses.length === 0 ? (
