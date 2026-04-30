@@ -13,7 +13,7 @@ def lambda_handler(event, context):
         message = arguments.get("message", "Default message")
 
         # Log the extracted values for debugging
-        logger.info("Extracted arguments", extra={"request_id": request_id, "message": message})
+        logger.info("Extracted arguments", extra={"request_id": request_id, "notification_message": message})
 
         # Return the values back to AppSync
         return {
