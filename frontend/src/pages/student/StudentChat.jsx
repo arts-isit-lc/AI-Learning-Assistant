@@ -629,8 +629,10 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
               />
             )
           )}
-          {/* ARCH-1: Show streaming text as it arrives */}
-          {isStreaming && streamingText && currentSessionId &&
+          {/* ARCH-1: Show streaming text as it arrives, and keep it visible
+              until the persisted message replaces it (streamingText is cleared
+              in the newMessage useEffect, not when the WebSocket closes). */}
+          {streamingText && currentSessionId &&
             session?.session_id && currentSessionId === session.session_id && (
             <AIMessage message={streamingText} />
           )}
