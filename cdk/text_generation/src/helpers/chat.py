@@ -293,20 +293,22 @@ def get_llm_output(
     # competion_sentence = " Congratulations! You have achieved competency over this module! Please try other modules to continue your learning journey! :)"
     
     # New completion phrase to detect
-    completion_phrase = "Thank you for chatting with me about this topic, you are ready to go discuss this with your class."
+    full_completion_phrase = "Thank you for chatting with me about this topic, you are ready to go discuss this with your class.";
+    completion_phrase = "you are ready to go discuss this with your class"
+    response_lower = response.lower()
     
-    if completion_phrase not in response:
+    if completion_phrase not in response_lower:
         return dict(
             llm_output=response,
             llm_verdict=False
         )
     
-    elif completion_phrase in response:
+    elif completion_phrase in response_lower:
         sentences = split_into_sentences(response)
         
         for i in range(len(sentences)):
             
-            if completion_phrase in sentences[i]:
+            if completion_phrase in sentences[i].lower():
                 llm_response=' '.join(sentences[0:i-1])
                 
                 if sentences[i-1][-1] == '?':
@@ -320,7 +322,7 @@ def get_llm_output(
                     if other_modules:
                         recommendation = " You may also want to explore these modules next: " + ", ".join(other_modules) + "."
                     return dict(
-                        llm_output=llm_response + completion_phrase + recommendation,
+                        llm_output=llm_response + full_completion_phrase + recommendation,
                         llm_verdict=True
                     )
     
@@ -332,7 +334,7 @@ def get_llm_output(
             recommendation = " You may also want to explore these modules next: " + ", ".join(other_modules) + "."
         
         return dict(
-            llm_output=response + completion_phrase + recommendation,
+            llm_output=response + full_completion_phrase + recommendation,
             llm_verdict=True
         )
     
