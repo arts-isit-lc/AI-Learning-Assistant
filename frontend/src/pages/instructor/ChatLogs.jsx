@@ -120,6 +120,17 @@ export const ChatLogs = ({ courseName, course_id, openWebSocket }) => {
             const { email } = await apiClient.getAuth();
             const request_id = uuidv4();
 
+            // Open WebSocket and wait for subscription to be confirmed BEFORE submitting the job
+            await openWebSocket(courseName, course_id, request_id, setNotificationForCourse, () => {
+                console.log("Waiting before checking notification status...");
+                setTimeout(() => {
+                    checkNotificationStatus();
+                    fetchChatLogs(); // Fetch latest chat logs after WebSocket completes
+                }, 2000); // Wait 2 seconds before checking
+            });
+
+            console.log("WebSocket subscription confirmed, submitting job...");
+
             const data = await apiClient.post("instructor/course_messages", {}, {
                 course_id: course_id,
                 instructor_email: email,
@@ -127,15 +138,6 @@ export const ChatLogs = ({ courseName, course_id, openWebSocket }) => {
             });
 
             console.log("Job submitted successfully:", data);
-
-            // Invoke global WebSocket function from InstructorHomepage and delay checkNotificationStatus slightly
-            openWebSocket(courseName, course_id, request_id, setNotificationForCourse, () => {
-                console.log("Waiting before checking notification status...");
-                setTimeout(() => {
-                    checkNotificationStatus();
-                    fetchChatLogs(); // Fetch latest chat logs after WebSocket completes
-                }, 2000); // Wait 2 seconds before checking
-            });
         } catch (error) {
             console.error("Error submitting job:", error.message);
         }

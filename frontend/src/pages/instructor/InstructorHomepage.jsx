@@ -81,83 +81,84 @@ const removeCompletedNotification = async (course_id) => {
 };
 
 function openWebSocket(courseName, course_id, requestId, setNotificationForCourse, onComplete) {
-  // Open WebSocket connection
-  const wsUrl = constructWebSocketUrl();
-  const ws = new WebSocket(wsUrl, "graphql-ws");
+  // Returns a Promise that resolves once the subscription is confirmed (start_ack),
+  // so callers can wait before triggering backend work.
+  return new Promise((resolve, reject) => {
+    const wsUrl = constructWebSocketUrl();
+    const ws = new WebSocket(wsUrl, "graphql-ws");
 
-  // Handle WebSocket connection
-  ws.onopen = () => {
-    console.log("WebSocket connection established");
+    ws.onopen = () => {
+      console.log("WebSocket connection established");
 
-    // Initialize WebSocket connection
-    const initMessage = { type: "connection_init" };
-    ws.send(JSON.stringify(initMessage));
+      const initMessage = { type: "connection_init" };
+      ws.send(JSON.stringify(initMessage));
 
-    // Subscribe to notifications
-    const subscriptionId = uuidv4();
-    const subscriptionMessage = {
-        id: subscriptionId,
-        type: "start",
-        payload: {
-            data: `{"query":"subscription OnNotify($request_id: String!) { onNotify(request_id: $request_id) { message request_id } }","variables":{"request_id":"${requestId}"}}`,
-            extensions: {
-                authorization: {
-                    Authorization: `API_KEY=${import.meta.env.VITE_API_KEY}`,
-                    host: new URL(import.meta.env.VITE_GRAPHQL_WS_URL).hostname,
-                },
-            },
-        },
+      const subscriptionId = uuidv4();
+      const subscriptionMessage = {
+          id: subscriptionId,
+          type: "start",
+          payload: {
+              data: `{"query":"subscription OnNotify($request_id: String!) { onNotify(request_id: $request_id) { message request_id } }","variables":{"request_id":"${requestId}"}}`,
+              extensions: {
+                  authorization: {
+                      Authorization: `API_KEY=${import.meta.env.VITE_API_KEY}`,
+                      host: new URL(import.meta.env.VITE_GRAPHQL_WS_URL).hostname,
+                  },
+              },
+          },
+      };
+
+      ws.send(JSON.stringify(subscriptionMessage));
+      console.log("Subscribed to WebSocket notifications");
     };
 
-    ws.send(JSON.stringify(subscriptionMessage));
-    console.log("Subscribed to WebSocket notifications");
-  };
+    ws.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+      console.log("WebSocket message received:", message);
 
-  ws.onmessage = (event) => {
-    const message = JSON.parse(event.data);
-    console.log("WebSocket message received:", message);
+      // Resolve the promise once subscription is confirmed
+      if (message.type === "start_ack") {
+        console.log("Subscription confirmed (start_ack), ready to receive notifications");
+        resolve();
+      }
 
-    // Handle notification
-    if (message.type === "data" && message.payload?.data?.onNotify) {
-      const receivedMessage = message.payload.data.onNotify.message;
-      console.log("Notification received:", receivedMessage);
-      
-      // Sets icon to show new file on ChatLogs page
-      setNotificationForCourse(course_id, true);
-      
-      // Remove row from database
-      removeCompletedNotification(course_id);
+      // Handle notification
+      if (message.type === "data" && message.payload?.data?.onNotify) {
+        const receivedMessage = message.payload.data.onNotify.message;
+        console.log("Notification received:", receivedMessage);
+        
+        setNotificationForCourse(course_id, true);
+        removeCompletedNotification(course_id);
 
-      // Notify the instructor
-      alert(`Chat logs are now available for ${courseName}`);
+        alert(`Chat logs are now available for ${courseName}`);
 
-      // Close WebSocket after receiving the notification
+        ws.close();
+        console.log("WebSocket connection closed after handling notification");
+
+        if (typeof onComplete === "function") {
+          onComplete();
+        }
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error("WebSocket error:", error);
       ws.close();
-      console.log("WebSocket connection closed after handling notification");
+      reject(error);
+    };
 
-      // Call the callback function after WebSocket completes
-      if (typeof onComplete === "function") {
-        onComplete();
-      }
-    }
-  };
+    ws.onclose = () => {
+      console.log("WebSocket closed");
+    };
 
-  ws.onerror = (error) => {
-    console.error("WebSocket error:", error);
-    ws.close();
-  };
-
-  ws.onclose = () => {
-    console.log("WebSocket closed");
-  };
-
-  // Set a timeout to close the WebSocket if no message is received
-  setTimeout(() => {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-          console.warn("WebSocket timeout reached, closing connection");
-          ws.close();
-      }
-  }, 180000);
+    // Set a timeout to close the WebSocket if no message is received
+    setTimeout(() => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            console.warn("WebSocket timeout reached, closing connection");
+            ws.close();
+        }
+    }, 180000);
+  });
 };
 
 // course details page
