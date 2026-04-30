@@ -150,6 +150,11 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
   useEffect(() => {
     if (newMessage !== null) {
       if (currentSessionId === session.session_id) {
+        // Clear streaming state only when the persisted message is ready,
+        // so there's no gap between the streaming text disappearing and
+        // the final message appearing (prevents the "double flash").
+        setStreamingText("");
+        setIsStreaming(false);
         setMessages((prevItems) => [...prevItems, newMessage]);
       }
       setNewMessage(null);
@@ -287,9 +292,8 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
         return textGenResponse.json();
       })
       .then((textGenData) => {
-        // ARCH-1: Clear streaming state — final response has arrived
-        setIsStreaming(false);
-        setStreamingText("");
+        // ARCH-1: Streaming state is now cleared in the newMessage useEffect
+        // to avoid a visual gap between streaming text and the persisted message.
 
         // ARCH-3: Generate session name client-side from AI response (Option 1a)
         const autoName = textGenData.session_name !== "New Chat"
