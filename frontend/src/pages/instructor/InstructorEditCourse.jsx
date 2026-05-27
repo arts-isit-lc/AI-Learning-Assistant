@@ -271,6 +271,9 @@ const InstructorEditCourse = () => {
       setDeletedFiles([]);
       setNewFiles([]);
       toast.success("Module updated successfully");
+      setTimeout(() => {
+        handleBackClick();
+      }, 1000);
     } catch (error) {
       console.error("Error fetching courses:", error);
       toast.error("Module failed to update");

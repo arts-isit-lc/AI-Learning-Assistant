@@ -142,6 +142,9 @@ const InstructorDetails = ({ instructorData, onBack }) => {
 
       if (allEnrolledSuccessfully) {
         toast.success("🦄 Enrolment Updated!");
+        setTimeout(() => {
+          onBack();
+        }, 1000);
       } else {
         toast.error("Some enrolments failed");
       }

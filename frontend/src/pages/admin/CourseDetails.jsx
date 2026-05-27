@@ -134,6 +134,9 @@ const CourseDetails = ({ course, onBack }) => {
         toast.error("Some instructors could not be enrolled");
       } else {
         toast.success("🦄 Enrolment Updated!");
+        setTimeout(() => {
+          onBack();
+        }, 1000);
       }
 
       // Update course access

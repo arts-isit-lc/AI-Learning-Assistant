@@ -57,7 +57,7 @@ def hybrid_search(
     query: str,
     query_embedding: List[float],
     connection_string: str,
-    collection_name: str,
+    collection_names: List[str],
     allowed_file_ids: Optional[List[str]],
     k: int = TOP_K,
     connection=None,
@@ -70,7 +70,9 @@ def hybrid_search(
         cur = conn.cursor()
 
         file_id_filter = ""
-        params_base = [collection_name]
+        collection_placeholders = ",".join(["%s"] * len(collection_names))
+        collection_filter = f"c.name IN ({collection_placeholders})"
+        params_base = list(collection_names)
 
         if allowed_file_ids:
             placeholders = ",".join(["%s"] * len(allowed_file_ids))
@@ -85,7 +87,7 @@ def hybrid_search(
                 1 - (e.embedding <=> %s::vector) AS vector_score
             FROM langchain_pg_embedding e
             JOIN langchain_pg_collection c ON e.collection_id = c.uuid
-            WHERE c.name = %s
+            WHERE {collection_filter}
             {file_id_filter}
             ORDER BY vector_score DESC
             LIMIT 20;
@@ -102,13 +104,14 @@ def hybrid_search(
                 ) AS keyword_score
             FROM langchain_pg_embedding e
             JOIN langchain_pg_collection c ON e.collection_id = c.uuid
-            WHERE c.name = %s
+            WHERE {collection_filter}
             AND to_tsvector('english', e.document) @@ plainto_tsquery('english', %s)
             {file_id_filter}
             ORDER BY keyword_score DESC
             LIMIT 20;
         """
-        cur.execute(keyword_sql, [query, collection_name, query] + (allowed_file_ids or []))
+        keyword_params = [query] + list(collection_names) + [query] + (allowed_file_ids or [])
+        cur.execute(keyword_sql, keyword_params)
         keyword_rows = cur.fetchall()
 
         cur.close()
@@ -166,11 +169,13 @@ def get_vectorstore_retriever(
     vectorstore_config_dict: Dict[str, str],
     embeddings,
     allowed_file_ids: Optional[List[str]] = None,
+    collection_names: Optional[List[str]] = None,
     connection=None,
 ):
     # P-6: Removed unused get_vectorstore() call — hybrid_search uses raw SQL directly
 
-    collection_name = vectorstore_config_dict['collection_name']
+    # Use provided collection_names or fall back to the single collection_name from config
+    search_collection_names = collection_names if collection_names else [vectorstore_config_dict['collection_name']]
     psycopg2_connection_string = (
         f"dbname={vectorstore_config_dict['dbname']} "
         f"user={vectorstore_config_dict['user']} "
@@ -186,7 +191,7 @@ def get_vectorstore_retriever(
             query=query,
             query_embedding=query_embedding,
             connection_string=psycopg2_connection_string,
-            collection_name=collection_name,
+            collection_names=search_collection_names,
             allowed_file_ids=allowed_file_ids,
             connection=connection,
         )

@@ -43,6 +43,7 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
   const [loading, setLoading] = useState(true);
   const [streamingText, setStreamingText] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [retryError, setRetryError] = useState(null); // { sessionId, sessionName, messageContent, source }
   const wsRef = useRef(null);
   const navigate = useNavigate();
 
@@ -339,11 +340,82 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
       .catch((error) => {
         setIsSubmitting(false);
         setIsAItyping(false);
+        setRetryError({
+          sessionId: newSession?.session_id,
+          sessionName: newSession?.session_name,
+          messageContent,
+          source: "submit",
+        });
         console.error("Error:", error);
       })
       .finally(() => {
         setIsSubmitting(false);
         setIsAItyping(false);
+      });
+  };
+
+  const handleRetry = () => {
+    if (!retryError) return;
+    const { sessionId, sessionName, messageContent, source } = retryError;
+    setRetryError(null);
+    setIsAItyping(true);
+
+    subscribeToChunks(sessionId);
+
+    const textGenPromise = apiClient.postRaw(
+      "student/text_generation",
+      { course_id: course.course_id, session_id: sessionId, module_id: module.module_id, session_name: sessionName },
+      messageContent ? { message_content: messageContent } : undefined
+    );
+
+    textGenPromise
+      .then((textGenResponse) => {
+        if (!textGenResponse.ok) {
+          throw new Error(`Failed to generate text: ${textGenResponse.statusText}`);
+        }
+        return textGenResponse.json();
+      })
+      .then(async (textGenData) => {
+        const autoName = textGenData.session_name !== "New Chat"
+          ? textGenData.session_name
+          : textGenData.llm_output.split(/[.!?]/)[0].substring(0, 30) || "New Chat";
+
+        setSession((prevSession) => ({
+          ...prevSession,
+          session_name: autoName,
+        }));
+
+        setSessions((prevSessions) =>
+          prevSessions.map((s) =>
+            s.session_id === sessionId
+              ? { ...s, session_name: titleCase(autoName) }
+              : s
+          )
+        );
+
+        const { email } = await apiClient.getAuth();
+
+        await Promise.all([
+          apiClient.putRaw(
+            "student/update_session_name",
+            { session_id: sessionId },
+            { session_name: autoName }
+          ),
+          apiClient.postRaw(
+            "student/update_module_score",
+            { module_id: module.module_id, student_email: email, course_id: course.course_id, llm_verdict: textGenData.llm_verdict }
+          ),
+        ]);
+
+        await retrieveKnowledgeBase(textGenData.llm_output, sessionId);
+      })
+      .catch((error) => {
+        console.error("Retry failed:", error);
+        setRetryError({ sessionId, sessionName, messageContent, source });
+      })
+      .finally(() => {
+        setIsAItyping(false);
+        setIsSubmitting(false);
       });
   };
 
@@ -415,6 +487,14 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
         console.error("Error creating new chat:", error);
         setCreatingSession(false);
         setIsAItyping(false);
+        if (sessionData) {
+          setRetryError({
+            sessionId: sessionData.session_id,
+            sessionName: "New chat",
+            messageContent: null,
+            source: "newChat",
+          });
+        }
       })
       .finally(() => {
         setIsAItyping(false);
@@ -640,6 +720,17 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
             currentSessionId &&
             session?.session_id &&
             currentSessionId === session.session_id && <TypingIndicator />}
+          {retryError && !isAItyping && (
+            <div className="flex items-center ml-28 mb-4 gap-3">
+              <span className="text-sm text-red-600">Something went wrong generating a response.</span>
+              <button
+                onClick={handleRetry}
+                className="text-sm font-medium text-white bg-red-500 hover:bg-red-600 px-3 py-1 rounded transition duration-200"
+              >
+                Retry
+              </button>
+            </div>
+          )}
           <div ref={messagesEndRef} />
         </div>
         <div className="font-roboto font-bold text-2xl text-center mt-6 ml-12 mb-6 text-black">

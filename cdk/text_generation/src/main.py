@@ -203,23 +203,32 @@ def get_module_context(course_id, module_id):
 def get_allowed_file_ids(module_id):
     """
     P-2: Fetch all allowed file IDs for a module in a single query using UNION.
+    Also returns the set of collection names (module IDs) that own those files,
+    so cross-module referenced files can be found in their respective collections.
     """
     connection = connect_to_db()
     try:
         cur = connection.cursor()
         cur.execute("""
-            SELECT file_id FROM "Module_Files"
+            SELECT file_id, module_id FROM "Module_Files"
             WHERE module_id = %s
             UNION
-            SELECT referenced_file_id FROM "Module_File_References"
-            WHERE source_module_id = %s;
+            SELECT mfr.referenced_file_id, mf.module_id
+            FROM "Module_File_References" mfr
+            JOIN "Module_Files" mf ON mf.file_id = mfr.referenced_file_id
+            WHERE mfr.source_module_id = %s;
         """, (module_id, module_id))
-        ids = [str(row[0]) for row in cur.fetchall()]
+        rows = cur.fetchall()
         cur.close()
-        return ids
+        file_ids = [str(row[0]) for row in rows]
+        collection_names = list(set(str(row[1]) for row in rows))
+        # Ensure the current module's collection is always included
+        if str(module_id) not in collection_names:
+            collection_names.append(str(module_id))
+        return file_ids, collection_names
     except Exception as e:
         logger.error(f"Error fetching allowed_file_ids: {e}")
-        return []
+        return [], [module_id]
 
 @logger.inject_lambda_context(clear_state=True)
 def handler(event, context):
@@ -389,8 +398,9 @@ def handler(event, context):
         logger.info("Creating history-aware retriever.")
 
         t0 = time.time()
-        allowed_file_ids = get_allowed_file_ids(module_id)
+        allowed_file_ids, collection_names = get_allowed_file_ids(module_id)
         logger.info(f"TIMING: get_allowed_file_ids took {(time.time() - t0)*1000:.0f}ms")
+        logger.info(f"Searching {len(collection_names)} collection(s) with {len(allowed_file_ids)} allowed file(s)")
 
         # P-6: Pass the global connection to avoid creating new connections in hybrid_search
         t0 = time.time()
@@ -399,6 +409,7 @@ def handler(event, context):
             vectorstore_config_dict=vectorstore_config_dict,
             embeddings=embeddings,
             allowed_file_ids=allowed_file_ids,
+            collection_names=collection_names,
             connection=connect_to_db()
         )
         logger.info(f"TIMING: get_vectorstore_retriever took {(time.time() - t0)*1000:.0f}ms")
