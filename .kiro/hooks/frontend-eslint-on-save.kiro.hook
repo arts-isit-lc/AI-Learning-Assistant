@@ -1,0 +1,18 @@
+{
+  "enabled": true,
+  "name": "Frontend ESLint on Save",
+  "description": "Runs ESLint on the frontend whenever a JSX or JS source file is saved, since ESLint is the only automated quality gate in the frontend",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "frontend/src/**/*.jsx",
+      "frontend/src/**/*.js"
+    ]
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "bash -c 'cd /Users/user/projects/AI-Learning-Assistant/frontend && npm run lint'",
+    "timeout": 30
+  }
+}

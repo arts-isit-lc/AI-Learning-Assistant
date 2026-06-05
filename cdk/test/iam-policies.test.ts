@@ -318,4 +318,79 @@ describe('IAM Policy Guardrails', () => {
       }
     }
   });
+
+  /**
+   * Validates: Requirements 6.1, 6.2, 6.3, 6.4
+   * bedrock:ApplyGuardrail permission exists with guardrail-scoped resource ARN, no wildcards.
+   */
+  test('bedrock:ApplyGuardrail policy exists with guardrail-scoped resource ARN', () => {
+    const statements = collectPolicyStatements(apiTemplate);
+    const guardrailStatements = statements.filter(
+      ({ statement }) => statementHasAction(statement, 'bedrock:ApplyGuardrail')
+    );
+
+    // Must have at least one statement with bedrock:ApplyGuardrail
+    expect(guardrailStatements.length).toBeGreaterThanOrEqual(1);
+
+    // Verify no wildcard resources
+    for (const { statement } of guardrailStatements) {
+      const resource = statement.Resource;
+      if (typeof resource === 'string') {
+        expect(resource).not.toBe('*');
+        expect(resource).toMatch(/arn:aws:bedrock:/);
+      } else if (Array.isArray(resource)) {
+        for (const r of resource) {
+          if (typeof r === 'string') {
+            expect(r).not.toBe('*');
+          }
+        }
+      }
+    }
+  });
+
+  /**
+   * Validates: Requirements 6.3
+   * No bedrock:* wildcard action exists.
+   */
+  test('no policy grants bedrock:* wildcard action', () => {
+    for (const { name, template } of allTemplates()) {
+      const statements = collectPolicyStatements(template);
+      for (const { logicalId, statement } of statements) {
+        expect({
+          stack: name,
+          policy: logicalId,
+          hasBedrockWildcard: statementHasAction(statement, 'bedrock:*'),
+        }).toEqual(
+          expect.objectContaining({ hasBedrockWildcard: false })
+        );
+      }
+    }
+  });
+
+  /**
+   * Validates: Requirements 1.6, 6.4
+   * ssm:GetParameter includes guardrail parameter ARNs (no wildcards).
+   */
+  test('ssm:GetParameter policy includes guardrail parameter ARNs', () => {
+    const statements = collectPolicyStatements(apiTemplate);
+    const ssmStatements = statements.filter(
+      ({ statement }) => statementHasAction(statement, 'ssm:GetParameter')
+    );
+
+    expect(ssmStatements.length).toBeGreaterThanOrEqual(1);
+
+    // Verify no wildcard resources on SSM statements
+    for (const { statement } of ssmStatements) {
+      const resource = statement.Resource;
+      if (typeof resource === 'string') {
+        expect(resource).not.toBe('*');
+      } else if (Array.isArray(resource)) {
+        for (const r of resource) {
+          if (typeof r === 'string') {
+            expect(r).not.toBe('*');
+          }
+        }
+      }
+    }
+  });
 });

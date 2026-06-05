@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "Python Lambda Syntax Check",
+  "description": "Checks any edited Python Lambda file for syntax errors immediately, since there is no Python test runner configured",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "cdk/**/*.py"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Run python3 -m py_compile on the edited Python file to check for syntax errors. Report the result concisely — either confirm syntax is OK or show the error."
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "IAM Security Guardrail",
+  "description": "Before writing to any CDK TypeScript stack or bin file (cdk/lib/*.ts or cdk/bin/*.ts), checks that the change complies with the IAM security policy rules. Skips all other file types silently.",
+  "version": "1",
+  "when": {
+    "type": "preToolUse",
+    "toolTypes": [
+      "write"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Check the path of the file being written. If it has a .md extension OR is NOT a CDK TypeScript file under cdk/lib/ or cdk/bin/ with a .ts extension, respond only with \"Not a CDK stack file — skipping IAM check.\" and stop immediately.\n\nOnly if the file IS under cdk/lib/ or cdk/bin/ and has a .ts extension, verify the planned change does not violate any of these rules:\n1. No wildcard Secrets Manager ARNs (resources: ['*'] or resources: ['arn:aws:secretsmanager:*:*:secret:*'])\n2. No wildcard CloudWatch Logs ARNs (resources: ['arn:aws:logs:*:*:*'])\n3. No banned managed policies: AmazonS3FullAccess or AmazonSSMReadOnlyAccess\n4. No shared Lambda execution roles — each function group must have its own scoped role\n5. No dangerous IAM actions: iam:AddUserToGroup or iam:*\n6. RDS proxy connect must not use resources: ['*']\n7. SSM parameter access must be scoped to the specific parameter path\n\nIf a rule is violated, explain which one and suggest the correct alternative. If compliant, confirm it is safe to proceed."
+  }
+}

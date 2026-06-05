@@ -7,7 +7,7 @@ from langchain_aws import BedrockEmbeddings
 from aws_lambda_powertools import Logger
 
 from helpers.vectorstore import get_vectorstore_retriever
-from helpers.chat import get_bedrock_llm, get_initial_student_query, get_student_query, create_dynamodb_history_table, get_response_streaming
+from helpers.chat import get_bedrock_llm, get_initial_student_query, get_student_query, create_dynamodb_history_table, get_response_streaming, wrap_user_message_with_guardrail_tags
 from constants.llm_models import DEFAULT_LLM_MODEL_ID, is_valid_model_id
 
 # Structured logging via Powertools
@@ -32,6 +32,10 @@ EMBEDDING_MODEL_PARAM = os.environ["EMBEDDING_MODEL_PARAM"]
 TABLE_NAME_PARAM = os.environ["TABLE_NAME_PARAM"]
 APPSYNC_API_URL = os.environ.get("APPSYNC_API_URL", "")
 
+# Guardrail SSM parameter names (from CDK environment variables)
+GUARDRAIL_ID_PARAM = os.environ.get("GUARDRAIL_ID_PARAM", "")
+GUARDRAIL_VERSION_PARAM = os.environ.get("GUARDRAIL_VERSION_PARAM", "")
+
 # AWS Clients
 secrets_manager_client = boto3.client("secretsmanager")
 ssm_client = boto3.client("ssm", region_name=REGION)
@@ -52,6 +56,37 @@ _llm_cache = {}
 
 # P-5: Guard to avoid redundant DynamoDB list_tables call on warm invocations
 _dynamodb_table_checked = False
+
+# Cached guardrail config (None = not yet loaded, "" = load failed — skip guardrails)
+_guardrail_id: str | None = None
+_guardrail_version: str | None = None
+
+
+def initialize_guardrail_config():
+    """Retrieve guardrail ID and version from SSM. Cache for container lifetime.
+    On failure, log WARNING and set empty strings to signal 'proceed without guardrails'."""
+    global _guardrail_id, _guardrail_version
+    if _guardrail_id is not None:
+        return  # already cached
+    if not GUARDRAIL_ID_PARAM or not GUARDRAIL_VERSION_PARAM:
+        logger.warning("Guardrail SSM parameter env vars not set, proceeding without guardrails")
+        _guardrail_id = ""
+        _guardrail_version = ""
+        return
+    try:
+        _guardrail_id = ssm_client.get_parameter(
+            Name=GUARDRAIL_ID_PARAM, WithDecryption=True
+        )["Parameter"]["Value"]
+        _guardrail_version = ssm_client.get_parameter(
+            Name=GUARDRAIL_VERSION_PARAM, WithDecryption=True
+        )["Parameter"]["Value"]
+        logger.info("Guardrail config loaded",
+                    extra={"guardrail_id": _guardrail_id, "guardrail_version": _guardrail_version})
+    except Exception as e:
+        logger.warning("Failed to retrieve guardrail SSM parameters, proceeding without guardrails",
+                       extra={"parameter_name": GUARDRAIL_ID_PARAM, "error": str(e)})
+        _guardrail_id = ""
+        _guardrail_version = ""
 
 def get_secret(secret_name, expect_json=True):
     global db_secret
@@ -236,6 +271,7 @@ def handler(event, context):
     t_start = time.time()
     logger.info("Text Generation Lambda function is called!")
     initialize_constants()
+    initialize_guardrail_config()
     logger.info(f"TIMING: initialize_constants took {(time.time() - t_start)*1000:.0f}ms")
 
     query_params = event.get("queryStringParameters", {})
@@ -356,7 +392,13 @@ def handler(event, context):
     try:
         logger.info("Creating Bedrock LLM instance.")
         # ARCH-4: Pass global bedrock_runtime client for caching
-        llm = get_bedrock_llm(effective_llm_model_id, client=bedrock_runtime)
+        # Pass guardrail config — empty strings result in LLM without guardrails
+        llm = get_bedrock_llm(
+            effective_llm_model_id,
+            client=bedrock_runtime,
+            guardrail_id=_guardrail_id or "",
+            guardrail_version=_guardrail_version or "",
+        )
     except Exception as e:
         logger.error(f"Error getting LLM from Bedrock: {e}")
         return {
@@ -435,21 +477,78 @@ def handler(event, context):
 
         # ARCH-1: Stream response via AppSync, then return final result
         t0 = time.time()
-        response = get_response_streaming(
-            query=student_query,
-            topic=topic,
-            llm=llm,
-            history_aware_retriever=history_aware_retriever,
-            table_name=TABLE_NAME,
-            session_id=session_id,
-            course_system_prompt=system_prompt,
-            module_prompt=module_prompt,
-            course_id=course_id,
-            module_id=module_id,
-            connection=connection,
-            chunk_callback=lambda chunk: send_chat_chunk(session_id, chunk),
-            done_callback=lambda: send_chat_chunk(session_id, "", done=True),
-        )
+        try:
+            response = get_response_streaming(
+                query=student_query,
+                topic=topic,
+                llm=llm,
+                history_aware_retriever=history_aware_retriever,
+                table_name=TABLE_NAME,
+                session_id=session_id,
+                course_system_prompt=system_prompt,
+                module_prompt=module_prompt,
+                course_id=course_id,
+                module_id=module_id,
+                connection=connection,
+                chunk_callback=lambda chunk: send_chat_chunk(session_id, chunk),
+                done_callback=lambda: send_chat_chunk(session_id, "", done=True),
+            )
+        except Exception as guardrail_err:
+            # Check if this is a guardrail intervention (input/output blocked)
+            err_msg = str(guardrail_err)
+            if "GUARDRAIL_INTERVENED" in err_msg or "GuardrailIntervention" in err_msg:
+                # Guardrail blocked the content — return blocked message
+                blocked_msg = (
+                    "I'm not able to help with that topic. Let's focus on your course material."
+                    if "input" in err_msg.lower()
+                    else "I'm not able to provide that response. Let me redirect our discussion back to the course material."
+                )
+                logger.info("Guardrail intervention triggered",
+                            extra={"intervention_type": "input" if "input" in err_msg.lower() else "output",
+                                   "session_id": session_id, "course_id": course_id})
+                response = {"llm_output": blocked_msg, "llm_verdict": False}
+            elif _guardrail_id and _guardrail_version:
+                # Guardrail service error — retry without guardrails
+                logger.error("Bedrock Guardrails service error, retrying without guardrails",
+                             extra={"session_id": session_id, "guardrail_id": _guardrail_id,
+                                    "exception_type": type(guardrail_err).__name__, "error": str(guardrail_err)})
+                try:
+                    llm_no_guardrail = get_bedrock_llm(
+                        effective_llm_model_id, client=bedrock_runtime,
+                        guardrail_id="", guardrail_version=""
+                    )
+                    response = get_response_streaming(
+                        query=student_query,
+                        topic=topic,
+                        llm=llm_no_guardrail,
+                        history_aware_retriever=history_aware_retriever,
+                        table_name=TABLE_NAME,
+                        session_id=session_id,
+                        course_system_prompt=system_prompt,
+                        module_prompt=module_prompt,
+                        course_id=course_id,
+                        module_id=module_id,
+                        connection=connection,
+                        chunk_callback=lambda chunk: send_chat_chunk(session_id, chunk),
+                        done_callback=lambda: send_chat_chunk(session_id, "", done=True),
+                    )
+                except Exception as fallback_err:
+                    logger.error("Fallback invocation without guardrails also failed",
+                                 extra={"session_id": session_id, "error": str(fallback_err)})
+                    return {
+                        'statusCode': 500,
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "Access-Control-Allow-Headers": "*",
+                            "Access-Control-Allow-Origin": "*",
+                            "Access-Control-Allow-Methods": "*",
+                        },
+                        'body': json.dumps('Error getting response')
+                    }
+            else:
+                # No guardrails were active, this is a regular error
+                raise
+
         logger.info(f"TIMING: get_response_streaming took {(time.time() - t0)*1000:.0f}ms")
         logger.info(f"TIMING: total handler time {(time.time() - t_start)*1000:.0f}ms")
     except Exception as e:

@@ -1,0 +1,18 @@
+{
+  "enabled": true,
+  "name": "CDK Jest Tests on Edit",
+  "description": "Runs the full Jest CDK assertion test suite whenever a CDK stack or test file is saved, keeping tests green during development",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "cdk/lib/**/*.ts",
+      "cdk/test/**/*.ts"
+    ]
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "bash -c 'cd /Users/user/projects/AI-Learning-Assistant/cdk && npm test'",
+    "timeout": 120
+  }
+}

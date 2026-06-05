@@ -4,6 +4,7 @@ import * as snsSubscriptions from "aws-cdk-lib/aws-sns-subscriptions";
 import * as kms from "aws-cdk-lib/aws-kms";
 import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
 import * as cloudwatchActions from "aws-cdk-lib/aws-cloudwatch-actions";
+import * as logs from "aws-cdk-lib/aws-logs";
 import * as xray from "aws-cdk-lib/aws-xray";
 import { Construct } from "constructs";
 import { LambdaFunctionInfo } from "./api-gateway-stack";
@@ -1055,6 +1056,66 @@ export class ObservabilityStack extends cdk.Stack {
         [infraAlarmStatusWidget],
       ],
     });
+
+    // --- Bedrock Guardrail Failure Alarm (Req 10.6, 10.7) ---
+    // Detect guardrail service errors and SSM parameter retrieval failures in the text generation Lambda
+    const textGenFunctionName = props.containerLambdaNames.find(
+      (name) => name.includes("TextGen") || name.includes("textGen")
+    ) || props.containerLambdaNames[0];
+
+    const guardrailLogGroup = logs.LogGroup.fromLogGroupName(
+      this,
+      "TextGenGuardrailLogGroup",
+      `/aws/lambda/${textGenFunctionName}`
+    );
+
+    const guardrailMetricFilter = new logs.MetricFilter(
+      this,
+      "GuardrailFailureMetricFilter",
+      {
+        logGroup: guardrailLogGroup,
+        filterPattern: logs.FilterPattern.any(
+          logs.FilterPattern.all(
+            logs.FilterPattern.stringValue("$.level", "=", "ERROR"),
+            logs.FilterPattern.stringValue("$.message", "=", "*Bedrock Guardrails service error*")
+          ),
+          logs.FilterPattern.all(
+            logs.FilterPattern.stringValue("$.level", "=", "WARNING"),
+            logs.FilterPattern.stringValue("$.message", "=", "*Failed to retrieve guardrail SSM parameters*")
+          )
+        ),
+        metricNamespace: "AILA/Guardrails",
+        metricName: "GuardrailFailureCount",
+        metricValue: "1",
+        defaultValue: 0,
+      }
+    );
+
+    const guardrailAlarm = new cloudwatch.Alarm(this, "GuardrailFailureAlarm", {
+      alarmName: `AILA-${this.appEnvironment}-Guardrail-Failure`,
+      alarmDescription: [
+        `Bedrock Guardrails failure detected in ${textGenFunctionName}.`,
+        `The text generation Lambda is operating without guardrail enforcement.`,
+        `Investigation steps:`,
+        `  - Check CloudWatch Logs group /aws/lambda/${textGenFunctionName}.`,
+        `  - Look for ERROR logs with "Bedrock Guardrails service error".`,
+        `  - Look for WARNING logs with "Failed to retrieve guardrail SSM parameters".`,
+        `  - Verify SSM parameters exist and are accessible.`,
+        `  - Check Bedrock service health in the region.`,
+      ].join("\n"),
+      metric: guardrailMetricFilter.metric({
+        statistic: "Sum",
+        period: cdk.Duration.minutes(1),
+      }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      comparisonOperator:
+        cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    guardrailAlarm.addAlarmAction(
+      new cloudwatchActions.SnsAction(this.criticalTopic)
+    );
 
     // --- X-Ray Sampling Rule (Req 13.1, 13.2, 13.3) ---
     new xray.CfnSamplingRule(this, 'SamplingRule', {
