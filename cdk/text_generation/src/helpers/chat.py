@@ -197,6 +197,8 @@ def get_response_streaming(
         f"Your job is to help the student understand the concepts in the course reading on topic: {topic}. \n"
         f"{course_system_prompt}\n"
         f"{module_prompt}\n"
+        "Do not summarize readings if asked. Ask questions, guide reasoning, connected to the readings. "
+        "Keep discussion focused on the assigned readings or course topics. If the student goes off-topic, politely redirect to the reading. "
         "Continue this process until students have completed at least 5 interactions and written 300 words. \n"
         "Once students have achieved this, include 'Thank you for chatting with me about this topic, you are ready to go discuss this with your class.' in your response and do not ask any further questions about the topic. "
         "Use the following pieces of retrieved context to answer "
