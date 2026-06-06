@@ -8,7 +8,7 @@ const VALIDATION_MODEL_ID =
   process.env.VALIDATION_MODEL_ID ||
   "anthropic.claude-3-haiku-20240307-v1:0";
 const REGION = process.env.REGION || "ca-central-1";
-const BEDROCK_TIMEOUT_MS = 10000;
+const BEDROCK_TIMEOUT_MS = 30000;
 const RETRY_DELAY_MS = 2000;
 const BATCH_SIZE = 10;
 
@@ -87,6 +87,8 @@ async function validateCoursePrompt(coursePrompt, modulePrompts) {
       service: "instructor-function",
       event: "validation_system_check_failed",
       error: err.message,
+      errorName: err.name,
+      errorStack: err.stack?.split("\n").slice(0, 3).join(" | "),
       timestamp: new Date().toISOString(),
     }));
     return buildReport("validation_failed", [], "course", "System prompt validation failed. You may save your prompt without validation.");

@@ -97,22 +97,27 @@ const PromptSettings = ({ courseName, course_id }) => {
 
   // --- Conflict Validation ---
   const handleValidate = async () => {
+    console.log("[ConflictChecker] Starting validation...");
     setIsValidating(true);
     setConflictReport(null);
     try {
       const { email } = await apiClient.getAuth();
+      console.log("[ConflictChecker] Calling POST /instructor/validate_prompt", { course_id, email, promptLength: userPrompt.length });
       const data = await apiClient.post(
         "instructor/validate_prompt",
         { course_id, instructor_email: email },
         { prompt: userPrompt, scope: "course" }
       );
+      console.log("[ConflictChecker] Response received:", JSON.stringify(data, null, 2));
       setConflictReport(data);
       // If validation came back clean, clear stored conflicts
       if (data.validation_status === "clean") {
         setStoredConflicts(null);
       }
     } catch (error) {
-      console.error("Error validating prompt:", error.message);
+      console.error("[ConflictChecker] Request threw an error:", error);
+      console.error("[ConflictChecker] Error message:", error.message);
+      console.error("[ConflictChecker] Error response:", error.response);
       setConflictReport({
         validation_status: "validation_failed",
         conflicts: [],
@@ -121,6 +126,7 @@ const PromptSettings = ({ courseName, course_id }) => {
       });
     } finally {
       setIsValidating(false);
+      console.log("[ConflictChecker] Validation complete.");
     }
   };
 
