@@ -248,6 +248,32 @@ def handler(event, context):
                 cursor.execute('ALTER TABLE "Courses" ADD COLUMN "llm_model_id" varchar DEFAULT \'meta.llama3-70b-instruct-v1:0\'')
                 connection.commit()
 
+        # Check if Courses table has conflict_metadata column, add if missing
+        cursor.execute("""
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public'
+                AND table_name = 'Courses'
+                AND column_name = 'conflict_metadata'
+            )
+        """)
+        if not cursor.fetchone()[0]:
+            cursor.execute('ALTER TABLE "Courses" ADD COLUMN "conflict_metadata" jsonb DEFAULT NULL')
+            connection.commit()
+
+        # Check if Course_Modules table has conflict_metadata column, add if missing
+        cursor.execute("""
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public'
+                AND table_name = 'Course_Modules'
+                AND column_name = 'conflict_metadata'
+            )
+        """)
+        if not cursor.fetchone()[0]:
+            cursor.execute('ALTER TABLE "Course_Modules" ADD COLUMN "conflict_metadata" jsonb DEFAULT NULL')
+            connection.commit()
+
         # Backfill file_id into existing vectorstore chunks
         cursor.execute("""
             SELECT EXISTS (

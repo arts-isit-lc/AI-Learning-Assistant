@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from "react";
+import { useEffect, useState, useContext } from "react";
 import {
   Container,
   Typography,
@@ -12,29 +12,46 @@ import {
   Select,
   MenuItem,
   FormHelperText,
+  Alert,
+  CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Tooltip,
+  Chip,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
 } from "@mui/material";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import apiClient from "../../services/api";
 import { toast } from "react-toastify";
 import MobileStepper from "@mui/material/MobileStepper";
 import KeyboardArrowLeft from "@mui/icons-material/KeyboardArrowLeft";
 import KeyboardArrowRight from "@mui/icons-material/KeyboardArrowRight";
-import { useTheme } from "@mui/material/styles";
 import { useNavigate } from "react-router-dom";
 import { UserContext } from "../../App";
-import { LLM_MODELS, DEFAULT_LLM_MODEL_ID, getLLMModelOptions } from "../../constants/llmModels";
+import { DEFAULT_LLM_MODEL_ID, getLLMModelOptions } from "../../constants/llmModels";
 import { courseTitleCase } from "../../utils/formatters";
 
 const CHARACTER_LIMIT = 1000;
 
 const PromptSettings = ({ courseName, course_id }) => {
-  const theme = useTheme();
   const [userPrompt, setUserPrompt] = useState("");
   const [selectedModelId, setSelectedModelId] = useState(DEFAULT_LLM_MODEL_ID);
   const [previousPrompts, setPreviousPrompts] = useState([]);
   const [activeStep, setActiveStep] = useState(0);
-  const maxSteps = previousPrompts.length;
   const { isInstructorAsStudent } = useContext(UserContext);
   const navigate = useNavigate();
+
+  // Conflict checker state
+  const [conflictReport, setConflictReport] = useState(null);
+  const [isValidating, setIsValidating] = useState(false);
+  const [storedConflicts, setStoredConflicts] = useState(null);
+  const [showLowConfidence, setShowLowConfidence] = useState(false);
+  const [overrideDialogOpen, setOverrideDialogOpen] = useState(false);
 
   const modelOptions = getLLMModelOptions();
 
@@ -44,18 +61,9 @@ const PromptSettings = ({ courseName, course_id }) => {
     }
   }, [isInstructorAsStudent, navigate]);
 
-  // Function to convert UTC timestamp to local time
   const convertToLocalTime = (timestamp) => {
     const date = new Date(timestamp);
-    return date.toLocaleString(); // or use .toLocaleDateString() and .toLocaleTimeString() for custom formatting
-  };
-
-  const handleNext = () => {
-    setActiveStep((prevActiveStep) => prevActiveStep + 1);
-  };
-
-  const handleBack = () => {
-    setActiveStep((prevActiveStep) => prevActiveStep - 1);
+    return date.toLocaleString();
   };
 
   const fetchPreviousPrompts = async () => {
@@ -73,8 +81,11 @@ const PromptSettings = ({ courseName, course_id }) => {
       try {
         const data = await apiClient.get("instructor/get_prompt", { course_id });
         setUserPrompt(data.system_prompt);
-        // Set the selected model ID, defaulting to Llama 70B if not set
         setSelectedModelId(data.llm_model_id || DEFAULT_LLM_MODEL_ID);
+        // Load stored conflict metadata for persistent warning
+        if (data.conflict_metadata) {
+          setStoredConflicts(data.conflict_metadata);
+        }
       } catch (error) {
         console.error("Error fetching prompt:", error.message);
       }
@@ -84,14 +95,66 @@ const PromptSettings = ({ courseName, course_id }) => {
     fetchPreviousPrompts();
   }, [course_id]);
 
+  // --- Conflict Validation ---
+  const handleValidate = async () => {
+    setIsValidating(true);
+    setConflictReport(null);
+    try {
+      const { email } = await apiClient.getAuth();
+      const data = await apiClient.post(
+        "instructor/validate_prompt",
+        { course_id, instructor_email: email },
+        { prompt: userPrompt, scope: "course" }
+      );
+      setConflictReport(data);
+      // If validation came back clean, clear stored conflicts
+      if (data.validation_status === "clean") {
+        setStoredConflicts(null);
+      }
+    } catch (error) {
+      console.error("Error validating prompt:", error.message);
+      setConflictReport({
+        validation_status: "validation_failed",
+        conflicts: [],
+        has_conflicts: false,
+        summary: "Validation is temporarily unavailable. You can still save your prompt.",
+      });
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
+  // --- Save Logic ---
   const handleSave = async () => {
+    const hasUnresolvedConflicts =
+      (conflictReport && conflictReport.has_conflicts) ||
+      (storedConflicts && storedConflicts.has_conflicts && !conflictReport);
+
+    if (hasUnresolvedConflicts && !overrideDialogOpen) {
+      setOverrideDialogOpen(true);
+      return;
+    }
+
+    await performSave();
+  };
+
+  const performSave = async () => {
+    setOverrideDialogOpen(false);
     try {
       const { email } = await apiClient.getAuth();
 
-      // Save current prompt and selected model ID
+      // Determine conflict_metadata to send
+      let conflictMetadataToSend = null;
+      if (conflictReport && conflictReport.has_conflicts) {
+        conflictMetadataToSend = conflictReport;
+      } else if (conflictReport && conflictReport.validation_status === "clean") {
+        conflictMetadataToSend = null;
+      }
+
       const requestBody = {
         prompt: `${userPrompt}`,
         llm_model_id: selectedModelId,
+        conflict_metadata: conflictMetadataToSend,
       };
       const data = await apiClient.put(
         "instructor/prompt",
@@ -99,17 +162,132 @@ const PromptSettings = ({ courseName, course_id }) => {
         requestBody
       );
 
-      const newPrompt = {
-        timestamp: new Date().toISOString(),
-        previous_prompt: userPrompt,
-      };
       setUserPrompt(data.system_prompt);
       fetchPreviousPrompts();
+
+      // Update stored conflicts state
+      if (conflictMetadataToSend && conflictMetadataToSend.has_conflicts) {
+        setStoredConflicts(conflictMetadataToSend);
+      } else if (conflictReport && conflictReport.validation_status === "clean") {
+        setStoredConflicts(null);
+      }
+
       toast.success("Settings updated successfully");
     } catch (error) {
       console.error("Error updating settings:", error.message);
       toast.error(`Failed to update settings: ${error.message}`);
     }
+  };
+
+  // --- Conflict Display Helpers ---
+  const getActiveConflicts = () => {
+    const report = conflictReport || storedConflicts;
+    if (!report || !report.conflicts) return [];
+    return report.conflicts.filter(
+      (c) => showLowConfidence || c.confidence >= 0.5
+    );
+  };
+
+  const getCourseConflicts = () => {
+    return getActiveConflicts().filter(
+      (c) => c.prompt_b_source === "course_prompt" || c.prompt_a_source === "course_prompt"
+    );
+  };
+
+  const getModuleConflicts = () => {
+    return getActiveConflicts().filter(
+      (c) =>
+        (c.prompt_a_source && c.prompt_a_source.startsWith("module_prompt:")) ||
+        (c.prompt_b_source && c.prompt_b_source.startsWith("module_prompt:"))
+    );
+  };
+
+  const getLowConfidenceCount = () => {
+    const report = conflictReport || storedConflicts;
+    if (!report || !report.conflicts) return 0;
+    return report.conflicts.filter((c) => c.confidence < 0.5).length;
+  };
+
+  const getConflictTypeColor = (type) => {
+    if (type === "HARD_CONTRADICTION") return "error";
+    return "warning";
+  };
+
+  // --- Highlight conflicting text in the prompt ---
+  const renderHighlightedPrompt = () => {
+    const conflicts = getCourseConflicts();
+    if (conflicts.length === 0) return null;
+
+    const excerpts = conflicts.map((c) => {
+      if (c.prompt_b_source === "course_prompt") return { text: c.prompt_b_text, conflict: c };
+      if (c.prompt_a_source === "course_prompt") return { text: c.prompt_a_text, conflict: c };
+      return null;
+    }).filter(Boolean);
+
+    if (excerpts.length === 0) return null;
+
+    let promptText = userPrompt;
+    const highlights = [];
+
+    for (const { text, conflict } of excerpts) {
+      const idx = promptText.toLowerCase().indexOf(text.toLowerCase());
+      if (idx !== -1) {
+        highlights.push({ start: idx, end: idx + text.length, conflict });
+      }
+    }
+
+    highlights.sort((a, b) => a.start - b.start);
+
+    const parts = [];
+    let lastIdx = 0;
+    for (const h of highlights) {
+      if (h.start > lastIdx) {
+        parts.push(
+          <span key={`text-${lastIdx}`}>{promptText.slice(lastIdx, h.start)}</span>
+        );
+      }
+      const tooltipText = `Conflicts with: "${h.conflict.prompt_a_source === "course_prompt" ? h.conflict.prompt_b_text : h.conflict.prompt_a_text}"\n\n${h.conflict.explanation}`;
+      parts.push(
+        <Tooltip key={`hl-${h.start}`} title={tooltipText} arrow placement="top">
+          <span
+            style={{
+              backgroundColor: "rgba(211, 47, 47, 0.15)",
+              borderRadius: 3,
+              padding: "1px 2px",
+              borderBottom: "2px solid #d32f2f",
+              cursor: "help",
+            }}
+          >
+            {promptText.slice(h.start, h.end)}
+          </span>
+        </Tooltip>
+      );
+      lastIdx = h.end;
+    }
+    if (lastIdx < promptText.length) {
+      parts.push(<span key={`text-end`}>{promptText.slice(lastIdx)}</span>);
+    }
+
+    return (
+      <Box
+        sx={{
+          mt: 2,
+          p: 2,
+          border: "1px solid",
+          borderColor: "error.light",
+          borderRadius: 1,
+          whiteSpace: "pre-wrap",
+          fontFamily: "monospace",
+          fontSize: "0.875rem",
+          backgroundColor: "grey.50",
+        }}
+      >
+        <Typography variant="caption" color="error" sx={{ display: "block", mb: 1, fontFamily: "inherit" }}>
+          Conflicting text highlighted below (hover for details):
+        </Typography>
+        {parts}
+      </Box>
+    );
   };
 
   return (
@@ -133,7 +311,7 @@ const PromptSettings = ({ courseName, course_id }) => {
           >
             {courseTitleCase(courseName)} Settings
           </Typography>
-          <Typography variant="h8">
+          <Typography variant="body2">
             Changes to the settings will be applied to the LLM for this specific
             course.
           </Typography>
@@ -172,7 +350,7 @@ const PromptSettings = ({ courseName, course_id }) => {
           <Typography variant="h6">
             Prompt Settings
           </Typography>
-          <Typography variant="h8">
+          <Typography variant="body2">
             Example
           </Typography>
           <TextField
@@ -190,12 +368,42 @@ const PromptSettings = ({ courseName, course_id }) => {
 
         <Box sx={{ mb: 1, flexGrow: 1, p: 3, textAlign: "left" }}>
           <Typography variant="h6">Your Prompt</Typography>
-          <Typography variant="h8">
+          <Typography variant="body2">
             Warning:
             <br />
             Modifying the prompt in the text area below can significantly impact
             the quality and accuracy of the responses.
           </Typography>
+
+          {/* Persistent conflict warning from stored metadata */}
+          {storedConflicts && storedConflicts.has_conflicts && !conflictReport && (
+            <Alert severity="warning" variant="filled" sx={{ mt: 2, mb: 1 }}>
+              This prompt was saved with {storedConflicts.conflicts?.length || 0} unresolved conflict(s).
+              Click &quot;Check for Conflicts&quot; to re-validate.
+            </Alert>
+          )}
+
+          {/* Active conflict warning from current validation */}
+          {conflictReport && conflictReport.has_conflicts && (
+            <Alert severity="warning" variant="filled" sx={{ mt: 2, mb: 1 }}>
+              {conflictReport.conflicts.length} conflict(s) detected. Your prompt may cause degraded chatbot behavior.
+            </Alert>
+          )}
+
+          {/* Validation failed indicator */}
+          {conflictReport && conflictReport.validation_status === "validation_failed" && (
+            <Alert severity="info" sx={{ mt: 2, mb: 1 }}>
+              Conflict validation is temporarily unavailable. You can still save your prompt.
+            </Alert>
+          )}
+
+          {/* Clean validation success */}
+          {conflictReport && conflictReport.validation_status === "clean" && (
+            <Alert severity="success" sx={{ mt: 2, mb: 1 }}>
+              No conflicts detected. All prompts are consistent.
+            </Alert>
+          )}
+
           <TextField
             fullWidth
             multiline
@@ -207,10 +415,119 @@ const PromptSettings = ({ courseName, course_id }) => {
             inputProps={{ maxLength: 1000 }}
             helperText={`${userPrompt.length}/${CHARACTER_LIMIT}`}
           />
+
+          {/* Conflict highlighting overlay */}
+          {renderHighlightedPrompt()}
         </Box>
 
+        {/* Module Prompt Conflicts Section */}
+        {getModuleConflicts().length > 0 && (
+          <Box sx={{ mb: 2, p: 3 }}>
+            <Typography variant="h6" gutterBottom>
+              Module Prompt Conflicts
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              The following module prompts conflict with the system-level instructions or the course prompt:
+            </Typography>
+            {getModuleConflicts().map((conflict, idx) => {
+              const moduleName =
+                conflict.prompt_a_source.startsWith("module_prompt:")
+                  ? conflict.prompt_a_source.replace("module_prompt:", "")
+                  : conflict.prompt_b_source.replace("module_prompt:", "");
+              const moduleText =
+                conflict.prompt_a_source.startsWith("module_prompt:")
+                  ? conflict.prompt_a_text
+                  : conflict.prompt_b_text;
+              const otherText =
+                conflict.prompt_a_source.startsWith("module_prompt:")
+                  ? conflict.prompt_b_text
+                  : conflict.prompt_a_text;
+              const otherSource =
+                conflict.prompt_a_source.startsWith("module_prompt:")
+                  ? conflict.prompt_b_source
+                  : conflict.prompt_a_source;
+
+              return (
+                <Accordion key={idx} sx={{ mb: 1 }}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Typography variant="subtitle1">{moduleName}</Typography>
+                      <Chip
+                        label={conflict.type.replace(/_/g, " ")}
+                        size="small"
+                        color={getConflictTypeColor(conflict.type)}
+                      />
+                    </Box>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">
+                          Module prompt text:
+                        </Typography>
+                        <Box
+                          sx={{
+                            p: 1.5,
+                            backgroundColor: "rgba(211, 47, 47, 0.08)",
+                            borderRadius: 1,
+                            mt: 0.5,
+                          }}
+                        >
+                          <Typography variant="body2">{moduleText}</Typography>
+                        </Box>
+                      </Box>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">
+                          Conflicts with ({otherSource.replace(/_/g, " ")}):
+                        </Typography>
+                        <Box
+                          sx={{
+                            p: 1.5,
+                            backgroundColor: "grey.100",
+                            borderRadius: 1,
+                            mt: 0.5,
+                          }}
+                        >
+                          <Typography variant="body2">{otherText}</Typography>
+                        </Box>
+                      </Box>
+                      <Typography variant="body2" color="text.secondary">
+                        {conflict.explanation}
+                      </Typography>
+                    </Box>
+                  </AccordionDetails>
+                </Accordion>
+              );
+            })}
+          </Box>
+        )}
+
+        {/* Low confidence toggle */}
+        {getLowConfidenceCount() > 0 && !showLowConfidence && (
+          <Box sx={{ px: 3, mb: 2 }}>
+            <Button
+              size="small"
+              variant="text"
+              onClick={() => setShowLowConfidence(true)}
+            >
+              Show {getLowConfidenceCount()} low-confidence conflict(s)
+            </Button>
+          </Box>
+        )}
+        {showLowConfidence && getLowConfidenceCount() > 0 && (
+          <Box sx={{ px: 3, mb: 2 }}>
+            <Button
+              size="small"
+              variant="text"
+              onClick={() => setShowLowConfidence(false)}
+            >
+              Hide low-confidence conflicts
+            </Button>
+          </Box>
+        )}
+
         <Box sx={{ mb: 1 }}>
-          <Typography variant="h6">Previous Prompts</Typography>
+          <Typography variant="h6" sx={{ px: 3 }}>Previous Prompts</Typography>
           <MobileStepper
             steps={previousPrompts.length}
             position="static"
@@ -254,17 +571,60 @@ const PromptSettings = ({ courseName, course_id }) => {
           </Box>
         </Box>
 
-        <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+        <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 2, p: 3 }}>
+          <Button
+            variant="outlined"
+            color="primary"
+            onClick={handleValidate}
+            disabled={isValidating || !userPrompt.trim()}
+          >
+            {isValidating ? (
+              <>
+                <CircularProgress size={20} sx={{ mr: 1 }} />
+                Checking...
+              </>
+            ) : (
+              "Check for Conflicts"
+            )}
+          </Button>
           <Button
             variant="contained"
             color="primary"
             onClick={handleSave}
-            width="100%"
           >
             Save
           </Button>
         </Box>
       </Paper>
+
+      {/* Override Confirmation Dialog */}
+      <Dialog
+        open={overrideDialogOpen}
+        onClose={() => setOverrideDialogOpen(false)}
+      >
+        <DialogTitle>Save with Conflicts?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            You have {getActiveConflicts().length} unresolved conflict(s). Saving may cause
+            degraded chatbot behavior. Are you sure you want to proceed?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setOverrideDialogOpen(false)}
+            variant="outlined"
+          >
+            Go Back
+          </Button>
+          <Button
+            onClick={performSave}
+            variant="contained"
+            color="error"
+          >
+            Save Anyway
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };

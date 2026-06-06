@@ -368,6 +368,41 @@ describe('IAM Policy Guardrails', () => {
   });
 
   /**
+   * Validates: Prompt Conflict Checker - Req 8
+   * dbLambdaRole has bedrock:InvokeModel scoped to Claude 3 Haiku model ARN for validation.
+   */
+  test('dbLambdaRole has bedrock:InvokeModel permission for Claude 3 Haiku', () => {
+    const statements = collectPolicyStatements(apiTemplate);
+    const bedrockInvokeStatements = statements.filter(
+      ({ statement }) => statementHasAction(statement, 'bedrock:InvokeModel')
+    );
+
+    // Find resources across all InvokeModel statements
+    const allResources: string[] = [];
+    for (const { statement } of bedrockInvokeStatements) {
+      const resource = statement.Resource;
+      if (typeof resource === 'string') {
+        allResources.push(resource);
+      } else if (Array.isArray(resource)) {
+        for (const r of resource) {
+          if (typeof r === 'string') {
+            allResources.push(r);
+          } else if (typeof r === 'object' && r['Fn::Join']) {
+            // Handle CloudFormation Fn::Join intrinsic
+            allResources.push(r['Fn::Join'][1].join(''));
+          }
+        }
+      }
+    }
+
+    // Verify Claude 3 Haiku model is included
+    const hasHaiku = allResources.some((r) =>
+      r.includes('anthropic.claude-3-haiku-20240307-v1:0')
+    );
+    expect(hasHaiku).toBe(true);
+  });
+
+  /**
    * Validates: Requirements 1.6, 6.4
    * ssm:GetParameter includes guardrail parameter ARNs (no wildcards).
    */

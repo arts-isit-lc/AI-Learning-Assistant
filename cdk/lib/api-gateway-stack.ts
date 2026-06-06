@@ -549,6 +549,17 @@ export class ApiGatewayStack extends cdk.Stack {
       })
     );
 
+    // Grant Bedrock InvokeModel permission for prompt conflict validation (Claude 3 Haiku)
+    dbLambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ["bedrock:InvokeModel"],
+        resources: [
+          `arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-3-haiku-20240307-v1:0`,
+        ],
+      })
+    );
+
     const lambdaStudentFunction = new lambda.Function(this, `${id}-studentFunction`, {
       runtime: lambda.Runtime.NODEJS_22_X,
       code: lambda.Code.fromAsset("lambda/lib"),
@@ -592,6 +603,8 @@ export class ApiGatewayStack extends cdk.Stack {
         environment: {
           SM_DB_CREDENTIALS: db.secretPathUser.secretName,
           RDS_PROXY_ENDPOINT: db.rdsProxyEndpoint,
+          REGION: this.region,
+          VALIDATION_MODEL_ID: "anthropic.claude-3-haiku-20240307-v1:0",
         },
         functionName: `${id}-instructorFunction`,
         memorySize: 256,

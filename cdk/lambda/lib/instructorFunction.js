@@ -1,4 +1,5 @@
 const { initializeConnection } = require("./lib.js");
+const { validatePrompt } = require("./validatePrompt.js");
 let { SM_DB_CREDENTIALS, RDS_PROXY_ENDPOINT } = process.env;
 
 let sqlConnection = global.sqlConnection;
@@ -545,7 +546,7 @@ exports.handler = async (event) => {
         ) {
           const { module_id, instructor_email, concept_id } =
             event.queryStringParameters;
-          const { module_name, module_prompt } = JSON.parse(event.body || "{}");
+          const { module_name, module_prompt, conflict_metadata } = JSON.parse(event.body || "{}");
           console.log("EDIT MODULE - module_prompt:", module_prompt);
           console.log("EDIT MODULE - event.body:", event.body);
 
@@ -571,7 +572,7 @@ exports.handler = async (event) => {
               // Update the module in the Course_Modules table
               await sqlConnection`
                     UPDATE "Course_Modules"
-                    SET module_name = ${module_name}, concept_id = ${concept_id}, module_prompt = ${module_prompt}
+                    SET module_name = ${module_name}, concept_id = ${concept_id}, module_prompt = ${module_prompt}, conflict_metadata = ${conflict_metadata ? JSON.stringify(conflict_metadata) : null}
                     WHERE module_id = ${module_id};
                   `;
 
@@ -615,7 +616,7 @@ exports.handler = async (event) => {
         ) {
           try {
             const { course_id, instructor_email } = event.queryStringParameters;
-            const { prompt, llm_model_id } = JSON.parse(event.body);
+            const { prompt, llm_model_id, conflict_metadata } = JSON.parse(event.body);
 
             // Retrieve the current system prompt
             const currentPromptResult = await sqlConnection`
@@ -632,13 +633,27 @@ exports.handler = async (event) => {
 
             const oldPrompt = currentPromptResult[0].system_prompt;
 
-            // Update system prompt and llm_model_id for the course in Courses table
+            // Update system prompt, llm_model_id, and conflict_metadata for the course
             const updatedCourse = await sqlConnection`
                       UPDATE "Courses"
-                      SET system_prompt = ${prompt}, llm_model_id = ${llm_model_id}
+                      SET system_prompt = ${prompt}, llm_model_id = ${llm_model_id}, conflict_metadata = ${conflict_metadata ? JSON.stringify(conflict_metadata) : null}
                       WHERE course_id = ${course_id}
                       RETURNING *;
                     `;
+
+            // Log override event if saving with known conflicts
+            if (conflict_metadata && conflict_metadata.has_conflicts) {
+              console.log(JSON.stringify({
+                level: "INFO",
+                service: "instructor-function",
+                event: "validation_override",
+                instructor_email,
+                course_id,
+                conflict_count: conflict_metadata.conflicts?.length || 0,
+                conflict_types: conflict_metadata.conflicts?.map(c => c.type) || [],
+                timestamp: new Date().toISOString(),
+              }));
+            }
 
             // Insert into User Engagement Log with old prompt in engagement_details
             await sqlConnection`
@@ -890,9 +905,9 @@ exports.handler = async (event) => {
           try {
             const { course_id } = event.queryStringParameters;
 
-            // Retrieve the system prompt and llm_model_id from the Courses table
+            // Retrieve the system prompt, llm_model_id, and conflict_metadata from the Courses table
             const coursePrompt = await sqlConnection`
-                    SELECT system_prompt, llm_model_id 
+                    SELECT system_prompt, llm_model_id, conflict_metadata 
                     FROM "Courses"
                     WHERE course_id = ${course_id};
                   `;
@@ -1292,6 +1307,78 @@ exports.handler = async (event) => {
         } else {
           response.statusCode = 400;
           response.body = JSON.stringify({ error: "module_id is required" });
+        }
+        break;
+      case "POST /instructor/validate_prompt":
+        if (
+          event.queryStringParameters?.course_id &&
+          event.queryStringParameters?.instructor_email &&
+          event.body
+        ) {
+          const { course_id, instructor_email } = event.queryStringParameters;
+          const { prompt, scope, module_id } = JSON.parse(event.body || "{}");
+
+          if (!scope || !["course", "module"].includes(scope)) {
+            response.statusCode = 400;
+            response.body = JSON.stringify({ error: "scope must be 'course' or 'module'" });
+            break;
+          }
+
+          if (scope === "module" && !module_id) {
+            response.statusCode = 400;
+            response.body = JSON.stringify({ error: "module_id required for module scope" });
+            break;
+          }
+
+          const startTime = Date.now();
+          try {
+            const conflictReport = await validatePrompt({
+              prompt,
+              scope,
+              course_id,
+              module_id,
+              sqlConnection,
+            });
+            console.log(JSON.stringify({
+              level: "INFO",
+              service: "instructor-function",
+              event: "validation_completed",
+              course_id,
+              scope,
+              duration_ms: Date.now() - startTime,
+              has_conflicts: conflictReport.has_conflicts,
+              conflict_count: conflictReport.conflicts?.length || 0,
+              timestamp: new Date().toISOString(),
+            }));
+            response.statusCode = 200;
+            response.body = JSON.stringify(conflictReport);
+          } catch (err) {
+            console.log(JSON.stringify({
+              level: "ERROR",
+              service: "instructor-function",
+              event: "validation_error",
+              course_id,
+              scope,
+              duration_ms: Date.now() - startTime,
+              error: err.message,
+              timestamp: new Date().toISOString(),
+            }));
+            response.statusCode = 200;
+            response.body = JSON.stringify({
+              validation_status: "validation_failed",
+              conflicts: [],
+              summary: "Validation is temporarily unavailable. You may save your prompt without validation.",
+              has_conflicts: false,
+              validated_at: new Date().toISOString(),
+              validation_scope: scope,
+              model_version: process.env.VALIDATION_MODEL_ID || "anthropic.claude-3-haiku-20240307-v1:0",
+            });
+          }
+        } else {
+          response.statusCode = 400;
+          response.body = JSON.stringify({
+            error: "course_id, instructor_email, and request body are required",
+          });
         }
         break;
       default:
