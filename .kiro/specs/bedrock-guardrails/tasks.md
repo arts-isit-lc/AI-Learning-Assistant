@@ -7,7 +7,7 @@ Migrate content safety enforcement from inline prompt text to AWS Bedrock Guardr
 ## Tasks
 
 - [x] 1. Provision Bedrock Guardrail resource and SSM parameters in ApiGatewayStack
-  - [x] 1.1 Add CfnGuardrail resource with content filters, topic policies, word filters, and contextual grounding
+  - [ ] 1.1 Add CfnGuardrail resource with content filters, topic policies, word filters, and contextual grounding
     - Add `import * as bedrock from 'aws-cdk-lib/aws-bedrock'` to api-gateway-stack.ts
     - Create `CfnGuardrail` with name `${id}-TextGenGuardrail`
     - Configure `blockedInputMessaging` and `blockedOutputMessaging` per requirements
