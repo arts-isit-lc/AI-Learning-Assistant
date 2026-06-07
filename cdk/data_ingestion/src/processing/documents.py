@@ -1,4 +1,4 @@
-import os, tempfile, logging, uuid
+import os, tempfile, logging, uuid, hashlib
 from io import BytesIO
 from typing import List
 import boto3
@@ -261,7 +261,8 @@ def process_documents(
             record_manager, 
             vectorstore, 
             cleanup="full",
-            source_id_key="source"
+            source_id_key="source",
+            key_encoder=lambda key: hashlib.sha256(key.encode()).hexdigest()
         )
         logger.info(f"Indexing updates: \n {idx}")
     else:
@@ -270,6 +271,7 @@ def process_documents(
             record_manager, 
             vectorstore, 
             cleanup="full",
-            source_id_key="source"
+            source_id_key="source",
+            key_encoder=lambda key: hashlib.sha256(key.encode()).hexdigest()
         )
         logger.info("No documents found for indexing.")
