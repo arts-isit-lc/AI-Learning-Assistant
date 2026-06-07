@@ -251,6 +251,20 @@ export const InstructorNewModule = ({ courseId }) => {
           setMetadata={setMetadata}
         />
 
+        {/* Generate Topics - disabled on new module (needs save first) */}
+        <Box sx={{ marginTop: 3, marginBottom: 2 }}>
+          <Button
+            variant="contained"
+            color="secondary"
+            disabled
+          >
+            Generate Topics
+          </Button>
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", marginTop: 0.5 }}>
+            Save the module first, then generate topics from the edit page.
+          </Typography>
+        </Box>
+
         <Box sx={{ display: "flex", justifyContent: "space-between", marginTop: 2, width: '100%' }}>
           <Button
             variant="contained"

@@ -1,5 +1,6 @@
 const { initializeConnection } = require("./lib.js");
 const { validatePrompt } = require("./validatePrompt.js");
+const { generateModuleTopics } = require("./generateTopics.js");
 let { SM_DB_CREDENTIALS, RDS_PROXY_ENDPOINT } = process.env;
 
 let sqlConnection = global.sqlConnection;
@@ -1381,6 +1382,13 @@ exports.handler = async (event) => {
           });
         }
         break;
+      case "POST /instructor/generate_topics": {
+        const moduleId = event.queryStringParameters?.module_id;
+        const result = await generateModuleTopics(moduleId, sqlConnection);
+        response.statusCode = result.statusCode;
+        response.body = JSON.stringify(result.body);
+        break;
+      }
       default:
         throw new Error(`Unsupported route: "${pathData}"`);
     }

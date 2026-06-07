@@ -7,6 +7,12 @@ from aws_lambda_powertools import Logger
 
 from helpers.vectorstore import update_vectorstore
 from langchain_aws import BedrockEmbeddings
+from topic_extraction import (
+    should_extract_topics,
+    extract_text_from_pdf,
+    call_haiku_for_topics,
+    update_file_metadata,
+)
 
 # Structured logging via Powertools
 logger = Logger(service="data-ingestion")
@@ -161,7 +167,7 @@ def insert_file_into_db(module_id, file_name, file_type, file_path, bucket_name)
                 file_path,  # filepath
                 file_name,  # filename
                 timestamp,  # time_uploaded
-                ""  # metadata
+                None  # metadata (JSONB NULL)
         ))
         logger.info(f"Successfully inserted file {file_name}.{file_type} into database for module {module_id}.")
 
@@ -270,6 +276,22 @@ def handler(event, context):
             logger.info(f"File {file_name}.{file_type} is being deleted. Deleting files from database does not occur here.")
 
         file_id = get_file_id_from_db(module_id, file_name, file_type)
+
+        # Topic extraction — non-blocking, runs before vectorstore update
+        if event_name.startswith('ObjectCreated:'):
+            s3_etag = record['s3']['object'].get('eTag', '')
+            try:
+                conn = connect_to_db()
+                if should_extract_topics(file_id, s3_etag, conn):
+                    full_text = extract_text_from_pdf(bucket_name, file_key)
+                    if full_text:
+                        topics = call_haiku_for_topics(full_text, bedrock_runtime)
+                        update_file_metadata(file_id, topics, s3_etag, conn)
+                        logger.info(f"Topic extraction completed for file_id={file_id}")
+                    else:
+                        logger.info(f"No text extracted from file, skipping topic extraction")
+            except Exception as e:
+                logger.warning(f"Topic extraction failed (non-blocking) for file_id={file_id}: {e}")
 
         # Update embeddings for course after the file is successfully inserted into the database
         try:

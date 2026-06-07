@@ -274,6 +274,39 @@ def handler(event, context):
             cursor.execute('ALTER TABLE "Course_Modules" ADD COLUMN "conflict_metadata" jsonb DEFAULT NULL')
             connection.commit()
 
+        # Topic Extraction: Alter Module_Files.metadata from TEXT to JSONB
+        cursor.execute("""
+            SELECT data_type FROM information_schema.columns
+            WHERE table_schema = 'public'
+            AND table_name = 'Module_Files'
+            AND column_name = 'metadata'
+        """)
+        row = cursor.fetchone()
+        if row and row[0] == 'text':
+            cursor.execute("""
+                ALTER TABLE "Module_Files"
+                ALTER COLUMN metadata TYPE jsonb
+                USING CASE
+                    WHEN metadata = '' THEN NULL
+                    WHEN metadata IS NULL THEN NULL
+                    ELSE metadata::jsonb
+                END
+            """)
+            connection.commit()
+
+        # Topic Extraction: Add generated_topics JSONB column to Course_Modules
+        cursor.execute("""
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public'
+                AND table_name = 'Course_Modules'
+                AND column_name = 'generated_topics'
+            )
+        """)
+        if not cursor.fetchone()[0]:
+            cursor.execute('ALTER TABLE "Course_Modules" ADD COLUMN "generated_topics" jsonb DEFAULT NULL')
+            connection.commit()
+
         # Backfill file_id into existing vectorstore chunks
         cursor.execute("""
             SELECT EXISTS (

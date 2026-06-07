@@ -560,6 +560,20 @@ export class ApiGatewayStack extends cdk.Stack {
       })
     );
 
+    // Grant AWS Marketplace permissions for Bedrock model subscription (one-time auto-subscription)
+    // Resource '*' required: Marketplace actions do not support resource-level permissions
+    dbLambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "aws-marketplace:Subscribe",
+          "aws-marketplace:Unsubscribe",
+          "aws-marketplace:ViewSubscriptions",
+        ],
+        resources: ["*"],
+      })
+    );
+
     const lambdaStudentFunction = new lambda.Function(this, `${id}-studentFunction`, {
       runtime: lambda.Runtime.NODEJS_22_X,
       code: lambda.Code.fromAsset("lambda/lib"),

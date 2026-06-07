@@ -97,3 +97,47 @@ npx cdk synth          # full synthesis before PRs (requires Docker)
 npm run deploy         # always use npm scripts — runs test gate first
 npm run deploy:prod    # prod deploy with -c environment=prod
 ```
+
+## Adding a New Bedrock Model
+
+When adding a new foundation model (e.g., a new Anthropic or Meta model), the following changes are required:
+
+### 1. Bedrock Console — Model Access (one-time per account)
+- Open the Bedrock console in your deployment region (ca-central-1)
+- Navigate to **Model catalog** → find the model → open in playground (confirms access)
+- For **Anthropic models**: the First Time Use (FTU) form must be submitted once per account. If you've used any Anthropic model before, this is already done.
+
+### 2. IAM — `bedrock:InvokeModel` Permission
+Add the model ARN to the appropriate role's Bedrock policy in `cdk/lib/api-gateway-stack.ts`:
+```typescript
+resources: [
+  `arn:aws:bedrock:${this.region}::foundation-model/<model-id>`,
+]
+```
+- For text_generation Lambda: add to the `bedrockPolicyStatement` resources array
+- For instructorFunction (validation): add to the `dbLambdaRole` Bedrock policy
+
+### 3. IAM — AWS Marketplace Permissions (first invocation only)
+The role invoking the model needs these Marketplace permissions for the one-time auto-subscription:
+```typescript
+actions: ["aws-marketplace:Subscribe", "aws-marketplace:Unsubscribe", "aws-marketplace:ViewSubscriptions"]
+resources: ["*"]  // Marketplace actions do not support resource-level permissions
+```
+This is already on `dbLambdaRole`. If adding a model to a different role, add these permissions there too. After the first successful invocation, the subscription is permanent for the account — but the permissions must remain for the initial call.
+
+**Note:** Amazon and Meta models do NOT require Marketplace permissions (they're not sold through Marketplace). Only third-party models (Anthropic, Cohere, AI21, etc.) need them.
+
+### 4. Constants — Model Registry
+- **Python** (`cdk/text_generation/src/constants/llm_models.py`): Add the model to `LLM_MODELS` dict
+- **Frontend** (`frontend/src/constants/llmModels.js`): Add to the model options if instructors can select it
+- **SSM Parameter**: If the model is configurable at runtime, store the model ID in an SSM parameter
+
+### 5. IAM Tests
+Add the new model ARN to the assertion in `cdk/test/iam-policies.test.ts` that verifies Bedrock InvokeModel permissions are scoped to specific models.
+
+### Troubleshooting
+If you see `"Model access is denied due to IAM user or service role is not authorized to perform the required AWS Marketplace actions"`:
+1. Verify the role has `aws-marketplace:Subscribe/ViewSubscriptions` permissions
+2. Wait 2 minutes after deploying the permissions
+3. Invoke the model again — the auto-subscription should complete
+4. Subsequent invocations will work without the Marketplace permissions being needed again

@@ -1,4 +1,4 @@
-import boto3, re, secrets, string
+import boto3, json, re, secrets, string
 from langchain_aws import ChatBedrock
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_classic.chains.combine_documents import create_stuff_documents_chain
@@ -174,6 +174,68 @@ def wrap_user_message_with_guardrail_tags(user_message: str) -> str:
     return f"{open_tag}{user_message}{close_tag}"
 
 
+def get_module_topics(module_id: str, connection) -> str:
+    """
+    Fetch aggregated module topics from Course_Modules.generated_topics.
+    Returns a formatted string for prompt injection, or empty string if unavailable.
+
+    Args:
+        module_id: The module ID to fetch topics for.
+        connection: Active database connection.
+
+    Returns:
+        Formatted topic string for system prompt injection, or empty string.
+    """
+    try:
+        cur = connection.cursor()
+        cur.execute("""
+            SELECT generated_topics FROM "Course_Modules"
+            WHERE module_id = %s;
+        """, (module_id,))
+        result = cur.fetchone()
+        cur.close()
+
+        if not result or not result[0]:
+            return ""
+
+        topics_data = result[0] if isinstance(result[0], dict) else {}
+        topics = topics_data.get("topics", [])
+        objectives = topics_data.get("learning_objectives", [])
+
+        if not topics:
+            return ""
+
+        # Cap at 7 each
+        topics = topics[:7]
+        objectives = objectives[:7]
+
+        section = "Primary concepts covered by this module:\n"
+        section += "\n".join(f"- {t}" for t in topics)
+        if objectives:
+            section += "\n\nKey learning objectives:\n"
+            section += "\n".join(f"- {o}" for o in objectives)
+        section += "\n\nWhen answering questions, prioritize explanations that relate to these concepts."
+        return section
+
+    except Exception as e:
+        logger.warning(f"Failed to fetch module topics for module_id={module_id}: {e}")
+        return ""
+
+
+def should_inject_topics(module_prompt: str) -> bool:
+    """
+    Determine if extracted topics should be injected into the system prompt.
+    Inject only when no module prompt exists — if the instructor wrote one, trust it.
+
+    Args:
+        module_prompt: The instructor's module-level prompt string.
+
+    Returns:
+        True if topics should be injected, False otherwise.
+    """
+    return not module_prompt or not module_prompt.strip()
+
+
 def get_response_streaming(
     query: str,
     topic: str,
@@ -193,13 +255,22 @@ def get_response_streaming(
     ARCH-1: Streaming version of get_response. Sends chunks via callback
     (AppSync mutation) as they arrive, then returns the final result.
     """
+    # Topic injection: add module topics when no module prompt exists
+    module_topics_section = ""
+    if should_inject_topics(module_prompt):
+        module_topics_section = get_module_topics(module_id, connection)
+
     system_prompt = (
-        f"Your job is to help the student understand the concepts in the course reading on topic: {topic}. \n"
+        f"{SYSTEM_LEVEL_PROMPT}\n"
+        f"Your job is to help the student understand the concepts in the course reading on topic: {topic}.\n"
+        f"{module_topics_section}\n"
         f"{course_system_prompt}\n"
         f"{module_prompt}\n"
-        f"{SYSTEM_LEVEL_PROMPT}"
-        "\n{context}"
+        "\nRetrieved Context:\n"
+        "{context}"
     )
+
+    
 
     # Wrap user message in guardrail input tags so only the user content is evaluated
     tagged_query = wrap_user_message_with_guardrail_tags(query)

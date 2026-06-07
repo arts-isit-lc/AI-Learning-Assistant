@@ -46,6 +46,9 @@ const InstructorEditCourse = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [referencedFileIds, setReferencedFileIds] = useState([]);
   const [courseFiles, setCourseFiles] = useState([]);
+  const [isGeneratingTopics, setIsGeneratingTopics] = useState(false);
+  const [moduleTopics, setModuleTopics] = useState(null);
+  const [isTopicsStale, setIsTopicsStale] = useState(false);
 
   const handleBackClick = () => {
     window.history.back();
@@ -68,9 +71,12 @@ const InstructorEditCourse = () => {
     const documentFiles = files.document_files;
     const resultArray = Object.entries({
       ...documentFiles,
-    }).map(([fileName, url]) => ({
+    }).map(([fileName, fileData]) => ({
       fileName,
-      url,
+      url: fileData,
+      hasTopics: !!(fileData.metadata && typeof fileData.metadata === 'object' && fileData.metadata.topic_extraction && fileData.metadata.topic_extraction.topics && fileData.metadata.topic_extraction.topics.length > 0),
+      file_id: fileData.metadata && typeof fileData.metadata === 'object' ? fileData.metadata.file_id : null,
+      topic_etag: fileData.metadata && typeof fileData.metadata === 'object' && fileData.metadata.topic_extraction ? fileData.metadata.topic_extraction.s3_etag : null,
     }));
 
     const metadata = resultArray.reduce((acc, { fileName, url }) => {
@@ -110,9 +116,70 @@ const InstructorEditCourse = () => {
       setModuleName(moduleData.module_name);
       setModulePrompt(moduleData.module_prompt || "");
       setConcept(moduleData.concept_name);
+      // Load existing generated topics if available
+      if (moduleData.generated_topics) {
+        setModuleTopics(moduleData.generated_topics);
+      }
     }
     fetchConcepts();
   }, [moduleData]);
+
+  // Check staleness when files or moduleTopics change
+  useEffect(() => {
+    if (!moduleTopics || !moduleTopics.source_file_ids) {
+      setIsTopicsStale(false);
+      return;
+    }
+    const currentFileIds = files.map(f => f.file_id).filter(Boolean).sort();
+    const sourceFileIds = [...(moduleTopics.source_file_ids || [])].sort();
+    const idsMatch = JSON.stringify(currentFileIds) === JSON.stringify(sourceFileIds);
+
+    if (!idsMatch) {
+      setIsTopicsStale(true);
+      return;
+    }
+
+    // Check ETags if available
+    if (moduleTopics.source_file_etags) {
+      const hasEtagMismatch = files.some(f => {
+        if (!f.file_id || !f.topic_etag) return false;
+        const storedEtag = moduleTopics.source_file_etags[f.file_id];
+        return storedEtag && storedEtag !== f.topic_etag;
+      });
+      setIsTopicsStale(hasEtagMismatch);
+    } else {
+      setIsTopicsStale(false);
+    }
+  }, [files, moduleTopics]);
+
+  const handleGenerateTopics = async () => {
+    setIsGeneratingTopics(true);
+    try {
+      const result = await apiClient.post("instructor/generate_topics", {
+        module_id: module.module_id,
+      });
+
+      if (result.status === "processing") {
+        toast.info(
+          `Topic extraction is still processing (${result.ready}/${result.total} files ready). Please try again shortly.`,
+          { autoClose: 4000 }
+        );
+      } else if (result.status === "no_files") {
+        toast.info("No files uploaded yet.", { autoClose: 2000 });
+      } else if (result.status === "error") {
+        toast.error(result.message || "Failed to generate topics", { autoClose: 3000 });
+      } else {
+        setModuleTopics(result);
+        setIsTopicsStale(false);
+        toast.success("Topics generated successfully", { autoClose: 2000 });
+      }
+    } catch (error) {
+      console.error("Error generating topics:", error.message);
+      toast.error("Failed to generate topics", { autoClose: 3000 });
+    } finally {
+      setIsGeneratingTopics(false);
+    }
+  };
 
   useEffect(() => {
     if (module) {
@@ -390,6 +457,45 @@ const InstructorEditCourse = () => {
           metadata={metadata}
           setMetadata={setMetadata}
         />
+
+        {/* Generate Topics Section */}
+        <Box sx={{ marginTop: 3, marginBottom: 2 }}>
+          <Button
+            variant="contained"
+            color="secondary"
+            onClick={handleGenerateTopics}
+            disabled={isGeneratingTopics || files.length === 0}
+          >
+            {isGeneratingTopics ? "Generating..." : "Generate Topics"}
+          </Button>
+
+          {isTopicsStale && moduleTopics && (
+            <Typography variant="caption" color="warning.main" sx={{ display: "block", marginTop: 1 }}>
+              ⚠ Topics may be outdated — files have been added or removed since last generation.
+            </Typography>
+          )}
+
+          {moduleTopics && moduleTopics.topics && moduleTopics.topics.length > 0 && (
+            <Box sx={{ marginTop: 2 }}>
+              <Typography variant="subtitle2">Generated Topics (use as reference for module prompt):</Typography>
+              <ul style={{ margin: "4px 0", paddingLeft: 20 }}>
+                {moduleTopics.topics.map((topic, i) => (
+                  <li key={i}><Typography variant="body2">{topic}</Typography></li>
+                ))}
+              </ul>
+              {moduleTopics.learning_objectives && moduleTopics.learning_objectives.length > 0 && (
+                <>
+                  <Typography variant="subtitle2" sx={{ marginTop: 1 }}>Learning Objectives:</Typography>
+                  <ul style={{ margin: "4px 0", paddingLeft: 20 }}>
+                    {moduleTopics.learning_objectives.map((obj, i) => (
+                      <li key={i}><Typography variant="body2">{obj}</Typography></li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </Box>
+          )}
+        </Box>
 
         <Box sx={{ display: "flex", justifyContent: "space-between", marginTop: 2, width: '100%' }}>
           <Box sx={{ display: "flex", gap: 2 }}>
