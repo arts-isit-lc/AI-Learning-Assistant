@@ -82,12 +82,26 @@ const InstructorEditCourse = () => {
     // For the description field, extract only the user-editable description
     // (not the topic_extraction data which is system-managed)
     const metadataDescriptions = resultArray.reduce((acc, { fileName, url }) => {
-      const rawMeta = url.metadata;
+      let rawMeta = url.metadata;
+
+      // Handle case where metadata is a JSON string (legacy TEXT column or serialization)
+      if (rawMeta && typeof rawMeta === 'string') {
+        try {
+          const parsed = JSON.parse(rawMeta);
+          if (typeof parsed === 'object' && parsed !== null) {
+            rawMeta = parsed;
+          }
+        } catch {
+          // Not valid JSON — treat as plain text description
+          acc[fileName] = rawMeta;
+          return acc;
+        }
+      }
+
       if (rawMeta && typeof rawMeta === 'object') {
-        // If metadata is a JSONB object, use the 'description' field (if any)
+        // JSONB object — use the 'description' field (if any), ignore topic_extraction
         acc[fileName] = rawMeta.description || "";
       } else {
-        // Legacy: metadata was a plain text string
         acc[fileName] = rawMeta || "";
       }
       return acc;
