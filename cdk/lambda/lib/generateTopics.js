@@ -52,7 +52,17 @@ async function generateModuleTopics(moduleId, sqlConnection) {
   const sourceFileEtags = {};
 
   for (const file of files) {
-    const metadata = file.metadata;
+    let metadata = file.metadata;
+
+    // Handle case where metadata is returned as a JSON string instead of object
+    if (metadata && typeof metadata === 'string') {
+      try {
+        metadata = JSON.parse(metadata);
+      } catch {
+        metadata = null;
+      }
+    }
+
     if (metadata && metadata.topic_extraction && metadata.topic_extraction.topics && metadata.topic_extraction.topics.length > 0) {
       filesWithTopics++;
       allTopics.push(...metadata.topic_extraction.topics);
