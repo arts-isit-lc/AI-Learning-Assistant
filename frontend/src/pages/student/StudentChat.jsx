@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import AIMessage from "../../components/AIMessage";
 import Session from "../../components/Session";
 import StudentMessage from "../../components/StudentMessage";
+import PdfViewerPanel from "../../components/PdfViewerPanel";
 import apiClient from "../../services/api";
 import { useNavigate } from "react-router-dom";
 import { signOut } from "aws-amplify/auth";
 import ArrowCircleLeftRoundedIcon from "@mui/icons-material/ArrowCircleLeftRounded";
+import { FileText } from "lucide-react";
 import { titleCase } from "../../utils/formatters";
 import { handleSignOut } from "../../utils/auth";
 
@@ -44,6 +46,13 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
   const [streamingText, setStreamingText] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [retryError, setRetryError] = useState(null); // { sessionId, sessionName, messageContent, source }
+  const [moduleFiles, setModuleFiles] = useState(null); // null = not yet fetched
+  const [filesLoading, setFilesLoading] = useState(false);
+  const [filesPopoverOpen, setFilesPopoverOpen] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [pdfUrl, setPdfUrl] = useState(null);
+  const [pdfPanelOpen, setPdfPanelOpen] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
   const wsRef = useRef(null);
   const navigate = useNavigate();
 
@@ -540,6 +549,69 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
       console.error("Error deleting message:", error.message);
     }
   };
+
+  // PDF Viewer handlers
+  const handleFetchFiles = async () => {
+    if (moduleFiles !== null) {
+      // Already fetched — use cached list
+      setFilesPopoverOpen(true);
+      return;
+    }
+    setFilesLoading(true);
+    setFilesPopoverOpen(true);
+    try {
+      const data = await apiClient.get("student/files", {
+        course_id: course.course_id,
+        module_id: module.module_id,
+      });
+      setModuleFiles(data || []);
+    } catch (error) {
+      console.error("Error fetching module files:", error.message);
+      setModuleFiles([]);
+    } finally {
+      setFilesLoading(false);
+    }
+  };
+
+  const handleFileSelect = async (fileId) => {
+    const file = moduleFiles?.find((f) => f.file_id === fileId);
+    setSelectedFile(file);
+    setPdfLoading(true);
+    setPdfPanelOpen(true);
+    setFilesPopoverOpen(false);
+    try {
+      const data = await apiClient.get("student/file_url", {
+        file_id: fileId,
+      });
+      setPdfUrl(data.presignedurl);
+    } catch (error) {
+      console.error("Error fetching file URL:", error.message);
+      setPdfUrl(null);
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
+  const handlePdfClose = () => {
+    setPdfPanelOpen(false);
+    setSelectedFile(null);
+    setPdfUrl(null);
+  };
+
+  const handlePdfRetry = async () => {
+    if (!selectedFile) return;
+    setPdfLoading(true);
+    try {
+      const data = await apiClient.get("student/file_url", {
+        file_id: selectedFile.file_id,
+      });
+      setPdfUrl(data.presignedurl);
+    } catch (error) {
+      console.error("Error fetching file URL on retry:", error.message);
+    } finally {
+      setPdfLoading(false);
+    }
+  };
   useEffect(() => {
     const handleResize = () => {
       const textarea = textareaRef.current;
@@ -610,7 +682,7 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
 
   return (
     <div className="flex flex-row h-screen">
-      <div className="flex flex-col w-1/4 bg-gradient-to-tr from-purple-300 to-cyan-100">
+      <div className={`flex flex-col ${pdfPanelOpen ? 'w-1/5' : 'w-1/4'} bg-gradient-to-tr from-purple-300 to-cyan-100 transition-all duration-200`}>
         <div className="flex flex-row mt-3 mb-3 ml-4">
           <ArrowCircleLeftRoundedIcon
             onClick={() => handleBack()}
@@ -662,9 +734,64 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
             ))}
         </div>
       </div>
-      <div className="flex flex-col-reverse w-3/4 bg-[#F8F9FD]">
+      <div className={`flex flex-col-reverse ${pdfPanelOpen ? 'w-2/5' : 'w-3/4'} bg-[#F8F9FD] transition-all duration-200`}>
 
-        <div className="absolute top-4 right-4">
+        <div className="absolute top-4 right-4 flex items-center gap-2">
+          {/* View Materials button */}
+          <div className="relative">
+            <button
+              type="button"
+              className="flex items-center gap-2 bg-gray-800 text-white px-4 py-2 rounded hover:bg-gray-700 transition duration-200"
+              onClick={handleFetchFiles}
+            >
+              <FileText className="w-4 h-4" />
+              <span className="hidden sm:inline">View Materials</span>
+            </button>
+
+            {/* File list popover */}
+            {filesPopoverOpen && (
+              <div className="absolute right-0 top-12 z-40 w-64 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                <div className="flex items-center justify-between p-3 border-b border-gray-200">
+                  <span className="text-sm font-medium text-gray-900">Module Files</span>
+                  <button
+                    onClick={() => setFilesPopoverOpen(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                    aria-label="Close file list"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="max-h-64 overflow-y-auto">
+                  {filesLoading ? (
+                    <div className="p-3 space-y-2">
+                      <div className="h-8 bg-gray-100 rounded animate-pulse" />
+                      <div className="h-8 bg-gray-100 rounded animate-pulse" />
+                      <div className="h-8 bg-gray-100 rounded animate-pulse" />
+                    </div>
+                  ) : moduleFiles && moduleFiles.length > 0 ? (
+                    <div className="py-1">
+                      {moduleFiles.map((f) => (
+                        <button
+                          key={f.file_id}
+                          onClick={() => handleFileSelect(f.file_id)}
+                          className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-2 transition-colors"
+                        >
+                          <FileText className="w-4 h-4 text-gray-400 shrink-0" />
+                          <span className="text-sm text-gray-700 truncate">{f.filename}</span>
+                          <span className="text-xs text-gray-400 uppercase shrink-0">{f.filetype}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-4 text-center">
+                      <p className="text-sm text-gray-500">No materials available</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
           <button
             type="button"
             className="bg-gray-800 text-white px-4 py-2 rounded hover:bg-gray-700 transition duration-200"
@@ -737,6 +864,35 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
           AI Assistant 🌟
         </div>
       </div>
+
+      {/* PDF Viewer Panel */}
+      {pdfPanelOpen && (
+        <div className="hidden md:block w-2/5 h-full transition-all duration-200">
+          <PdfViewerPanel
+            file={selectedFile}
+            pdfUrl={pdfUrl}
+            files={moduleFiles}
+            onFileSelect={handleFileSelect}
+            onClose={handlePdfClose}
+            onRetry={handlePdfRetry}
+            loading={pdfLoading}
+          />
+        </div>
+      )}
+      {/* Mobile: PDF panel renders as full-screen overlay from within PdfViewerPanel */}
+      {pdfPanelOpen && (
+        <div className="md:hidden">
+          <PdfViewerPanel
+            file={selectedFile}
+            pdfUrl={pdfUrl}
+            files={moduleFiles}
+            onFileSelect={handleFileSelect}
+            onClose={handlePdfClose}
+            onRetry={handlePdfRetry}
+            loading={pdfLoading}
+          />
+        </div>
+      )}
     </div>
   );
 };

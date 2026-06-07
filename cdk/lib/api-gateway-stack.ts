@@ -1441,6 +1441,19 @@ export class ApiGatewayStack extends cdk.Stack {
       })
     );
 
+    // Grant S3 GetObject for student PDF viewer (read-only access to course materials)
+    dbLambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ["s3:GetObject"],
+        resources: [`${dataIngestionBucket.bucketArn}/*`],
+      })
+    );
+
+    // Add BUCKET and REGION env vars to studentFunction for pre-signed URL generation
+    lambdaStudentFunction.addEnvironment("BUCKET", dataIngestionBucket.bucketName);
+    lambdaStudentFunction.addEnvironment("REGION", this.region);
+
     /**
      *
      * Create Lambda with container image for data ingestion workflow in RAG pipeline

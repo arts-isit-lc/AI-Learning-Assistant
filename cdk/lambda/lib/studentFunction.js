@@ -1,8 +1,34 @@
 const { initializeConnection } = require("./lib.js");
-let { SM_DB_CREDENTIALS, RDS_PROXY_ENDPOINT } = process.env;
+const { S3Client, GetObjectCommand } = require("@aws-sdk/client-s3");
+const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
+
+let { SM_DB_CREDENTIALS, RDS_PROXY_ENDPOINT, BUCKET, REGION } = process.env;
+
+const s3Client = new S3Client({ region: REGION });
 
 // SQL conneciton from global variable at lib.js
 let sqlConnection = global.sqlConnection;
+
+/**
+ * Verifies the student is enrolled in the course that owns the given module.
+ * The join chain (Enrolments → Course_Concepts → Course_Modules) prevents
+ * mixed-parameter attacks where course_id and module_id belong to different courses.
+ * Returns the enrolment_id if valid, or null if not enrolled.
+ */
+async function verifyStudentAccess(sqlConn, email, courseId, moduleId) {
+  const result = await sqlConn`
+    SELECT e.enrolment_id
+    FROM "Enrolments" e
+    JOIN "Users" u ON u.user_id = e.user_id
+    JOIN "Course_Concepts" cc ON cc.course_id = e.course_id
+    JOIN "Course_Modules" cm ON cm.concept_id = cc.concept_id
+    WHERE u.user_email = ${email}
+      AND cm.module_id = ${moduleId}
+      AND e.course_id = ${courseId}
+    LIMIT 1;
+  `;
+  return result.length > 0 ? result[0].enrolment_id : null;
+}
 
 exports.handler = async (event) => {
   // OPT-1: Read email from authorizer context instead of calling Cognito AdminGetUser
@@ -985,6 +1011,132 @@ exports.handler = async (event) => {
           response.statusCode = 400;
           response.body = JSON.stringify({
             error: "Invalid query parameters.",
+          });
+        }
+        break;
+      case "GET /student/files":
+        if (
+          event.queryStringParameters != null &&
+          event.queryStringParameters.course_id &&
+          event.queryStringParameters.module_id
+        ) {
+          const courseId = event.queryStringParameters.course_id;
+          const moduleId = event.queryStringParameters.module_id;
+
+          try {
+            // Verify student is enrolled in the course that owns this module
+            const enrolmentId = await verifyStudentAccess(
+              sqlConnection,
+              userEmailAttribute,
+              courseId,
+              moduleId
+            );
+
+            if (!enrolmentId) {
+              response.statusCode = 403;
+              response.body = JSON.stringify({
+                error: "Access denied. Student is not enrolled in this course.",
+              });
+              break;
+            }
+
+            // Query all files for this module
+            const files = await sqlConnection`
+              SELECT file_id, filename, filetype, time_uploaded
+              FROM "Module_Files"
+              WHERE module_id = ${moduleId}
+              ORDER BY time_uploaded DESC;
+            `;
+
+            response.body = JSON.stringify(files);
+          } catch (err) {
+            console.error(err);
+            response.statusCode = 500;
+            response.body = JSON.stringify({ error: "Internal server error" });
+          }
+        } else {
+          response.statusCode = 400;
+          response.body = JSON.stringify({
+            error: "course_id and module_id are required",
+          });
+        }
+        break;
+      case "GET /student/file_url":
+        if (
+          event.queryStringParameters != null &&
+          event.queryStringParameters.file_id
+        ) {
+          const fileId = event.queryStringParameters.file_id;
+
+          try {
+            // Look up the file record by file_id
+            const fileResult = await sqlConnection`
+              SELECT file_id, module_id, filepath, s3_bucket_reference, filename, filetype
+              FROM "Module_Files"
+              WHERE file_id = ${fileId}
+              LIMIT 1;
+            `;
+
+            if (fileResult.length === 0) {
+              response.statusCode = 404;
+              response.body = JSON.stringify({ error: "File not found" });
+              break;
+            }
+
+            const fileRecord = fileResult[0];
+
+            // Resolve course_id from the file's module_id
+            const courseResult = await sqlConnection`
+              SELECT cc.course_id
+              FROM "Course_Modules" cm
+              JOIN "Course_Concepts" cc ON cc.concept_id = cm.concept_id
+              WHERE cm.module_id = ${fileRecord.module_id}
+              LIMIT 1;
+            `;
+
+            if (courseResult.length === 0) {
+              response.statusCode = 404;
+              response.body = JSON.stringify({ error: "Course not found for this file" });
+              break;
+            }
+
+            const courseId = courseResult[0].course_id;
+
+            // Verify student is enrolled in the course that owns this file's module
+            const enrolmentId = await verifyStudentAccess(
+              sqlConnection,
+              userEmailAttribute,
+              courseId,
+              fileRecord.module_id
+            );
+
+            if (!enrolmentId) {
+              response.statusCode = 403;
+              response.body = JSON.stringify({
+                error: "Access denied. Student is not enrolled in this course.",
+              });
+              break;
+            }
+
+            // Generate a GET pre-signed URL using the stored filepath (1 hour TTL)
+            const command = new GetObjectCommand({
+              Bucket: BUCKET,
+              Key: fileRecord.filepath,
+            });
+            const presignedurl = await getSignedUrl(s3Client, command, {
+              expiresIn: 3600,
+            });
+
+            response.body = JSON.stringify({ presignedurl });
+          } catch (err) {
+            console.error(err);
+            response.statusCode = 500;
+            response.body = JSON.stringify({ error: "Internal server error" });
+          }
+        } else {
+          response.statusCode = 400;
+          response.body = JSON.stringify({
+            error: "file_id is required",
           });
         }
         break;
