@@ -365,9 +365,12 @@ exports.handler = async (event) => {
                   `;
 
             if (existingFile.length === 0) {
+              const newMeta = metadata && typeof metadata === 'string' && metadata.trim()
+                ? JSON.stringify({ description: metadata })
+                : null;
               const result = await sqlConnection`
                 INSERT INTO "Module_Files" (module_id, filename, filetype, metadata)
-                VALUES (${moduleId}, ${filename}, ${filetype}, ${metadata})
+                VALUES (${moduleId}, ${filename}, ${filetype}, ${newMeta}::jsonb)
                 RETURNING *;
               `;
               response.body = JSON.stringify({
@@ -375,10 +378,11 @@ exports.handler = async (event) => {
               });
             }
 
-            // Update the metadata field
+            // Merge description into existing metadata (preserve topic_extraction and other keys)
+            const description = metadata || "";
             const result = await sqlConnection`
                       UPDATE "Module_Files"
-                      SET metadata = ${metadata}
+                      SET metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('description', ${description}::text)
                       WHERE module_id = ${moduleId}
                       AND filename = ${filename}
                       AND filetype = ${filetype}

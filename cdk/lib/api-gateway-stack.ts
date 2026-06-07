@@ -1271,6 +1271,9 @@ export class ApiGatewayStack extends cdk.Stack {
         "::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0",
         "arn:aws:bedrock:" +
         this.region +
+        "::foundation-model/anthropic.claude-3-haiku-20240307-v1:0",
+        "arn:aws:bedrock:" +
+        this.region +
         "::foundation-model/amazon.titan-embed-text-v2:0",
       ],
     });

@@ -79,12 +79,21 @@ const InstructorEditCourse = () => {
       topic_etag: fileData.metadata && typeof fileData.metadata === 'object' && fileData.metadata.topic_extraction ? fileData.metadata.topic_extraction.s3_etag : null,
     }));
 
-    const metadata = resultArray.reduce((acc, { fileName, url }) => {
-      acc[fileName] = url.metadata;
+    // For the description field, extract only the user-editable description
+    // (not the topic_extraction data which is system-managed)
+    const metadataDescriptions = resultArray.reduce((acc, { fileName, url }) => {
+      const rawMeta = url.metadata;
+      if (rawMeta && typeof rawMeta === 'object') {
+        // If metadata is a JSONB object, use the 'description' field (if any)
+        acc[fileName] = rawMeta.description || "";
+      } else {
+        // Legacy: metadata was a plain text string
+        acc[fileName] = rawMeta || "";
+      }
       return acc;
     }, {});
 
-    setMetadata(metadata);
+    setMetadata(metadataDescriptions);
     return resultArray;
   }
 
