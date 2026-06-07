@@ -120,7 +120,7 @@ async function generateModuleTopics(moduleId, sqlConnection) {
   // 6. Store in Course_Modules.generated_topics
   await sqlConnection`
     UPDATE "Course_Modules"
-    SET generated_topics = ${sqlConnection.json(consolidated)}
+    SET generated_topics = ${JSON.stringify(consolidated)}
     WHERE module_id = ${moduleId};
   `;
 
