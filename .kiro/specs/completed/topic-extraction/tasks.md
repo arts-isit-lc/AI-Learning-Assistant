@@ -51,7 +51,7 @@ This plan implements the Topic Extraction feature across 10 tasks covering datab
   **Requirements:** 10.3
   **Files:** `frontend/src/pages/instructor/InstructorEditCourse.jsx`, `cdk/lambda/lib/instructorFunction.js`
 
-- [ ] 10. End-to-End Verification
+- [x] 10. End-to-End Verification
   Verify: PDF upload populates Module_Files.metadata with topic_extraction; same-content re-upload skips extraction (ETag match); modified file re-upload triggers re-extraction; Generate Topics produces consolidated result; staleness warning appears after file changes; student chat injects topics when no module_prompt; student chat omits topics when module_prompt exists. Run `npx tsc --noEmit` and `npm run lint` to confirm no errors.
   **Requirements:** All
   **Files:** N/A (testing only)
