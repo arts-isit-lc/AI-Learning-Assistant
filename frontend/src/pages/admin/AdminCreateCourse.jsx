@@ -44,8 +44,9 @@ function formatInstructors(instructorsArray) {
 
 export const AdminCreateCourse = ({ setSelectedComponent }) => {
   const [courseName, setCourseName] = useState("");
+  //Original course level prompt: Engage with the student by asking questions and conversing with them to identify any gaps in their understanding of the topic. If you identify gaps, address these gaps by providing explanations, answering the student's questions, and referring to the relevant context to help the student gain a comprehensive understanding of the topic.
   const [coursePrompt, setCoursePrompt] = useState(
-    `Engage with the student by asking questions and conversing with them to identify any gaps in their understanding of the topic. If you identify gaps, address these gaps by providing explanations, answering the student's questions, and referring to the relevant context to help the student gain a comprehensive understanding of the topic.`
+      `Engage with the student through questions and conversation to identify gaps in their understanding. Address those gaps with targeted explanations, answers to their questions, and references to the relevant course materials. Focus only on concepts needed to resolve the identified misunderstandings rather than providing broad summaries.`
   );
   const [courseDepartment, setCourseDepartment] = useState("");
   const [courseCode, setCourseCode] = useState("");
