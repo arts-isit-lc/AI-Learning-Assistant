@@ -35,6 +35,7 @@ import { useNavigate } from "react-router-dom";
 import { UserContext } from "../../App";
 import { DEFAULT_LLM_MODEL_ID, getLLMModelOptions } from "../../constants/llmModels";
 import { courseTitleCase } from "../../utils/formatters";
+import { SYSTEM_LEVEL_PROMPT } from "../../constants/systemPrompt";
 
 const CHARACTER_LIMIT = 1000;
 
@@ -354,21 +355,36 @@ const PromptSettings = ({ courseName, course_id }) => {
           </Box>
 
           <Typography variant="h6">
-            Prompt Settings
+            System Prompt
           </Typography>
           <Typography variant="body2">
-            Example
+            This is the base system prompt applied to all courses. It cannot be edited.
           </Typography>
           <TextField
             fullWidth
             multiline
             rows={6}
-            value={`Engage with the student by asking questions and conversing with them to identify any gaps in their understanding of the topic. If you identify gaps, address these gaps by providing explanations, answering the student's questions, and referring to the relevant context to help the student gain a comprehensive understanding of the topic.`}
+            value={SYSTEM_LEVEL_PROMPT}
             InputProps={{
               readOnly: true,
             }}
+            inputProps={{
+              tabIndex: -1,
+              "aria-label": "System prompt (read-only)",
+            }}
             variant="outlined"
             margin="normal"
+            disabled
+            sx={{
+              "& .MuiInputBase-input.Mui-disabled": {
+                WebkitTextFillColor: "rgba(0, 0, 0, 0.6)",
+                cursor: "not-allowed",
+              },
+              "& .MuiOutlinedInput-root.Mui-disabled": {
+                backgroundColor: "rgba(0, 0, 0, 0.04)",
+              },
+            }}
+            onFocus={(e) => e.target.blur()}
           />
         </Box>
 
@@ -424,6 +440,53 @@ const PromptSettings = ({ courseName, course_id }) => {
 
           {/* Conflict highlighting overlay */}
           {renderHighlightedPrompt()}
+
+          {/* Course-level conflict details */}
+          {getCourseConflicts().length > 0 && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle2" color="error" gutterBottom>
+                Course Prompt Conflicts
+              </Typography>
+              {getCourseConflicts().map((conflict, idx) => {
+                const otherSource =
+                  conflict.prompt_a_source === "course_prompt"
+                    ? conflict.prompt_b_source
+                    : conflict.prompt_a_source;
+                const formattedSource = otherSource
+                  .replace(/_/g, " ")
+                  .replace("system prompt", "System Prompt")
+                  .replace("course prompt", "Course Prompt");
+
+                return (
+                  <Box
+                    key={idx}
+                    sx={{
+                      mb: 1.5,
+                      p: 1.5,
+                      border: "1px solid",
+                      borderColor: conflict.type === "HARD_CONTRADICTION" ? "error.light" : "warning.light",
+                      borderRadius: 1,
+                      backgroundColor: conflict.type === "HARD_CONTRADICTION" ? "rgba(211, 47, 47, 0.04)" : "rgba(237, 108, 2, 0.04)",
+                    }}
+                  >
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
+                      <Chip
+                        label={conflict.type.replace(/_/g, " ")}
+                        size="small"
+                        color={getConflictTypeColor(conflict.type)}
+                      />
+                      <Typography variant="caption" color="text.secondary">
+                        Conflicts with: <strong>{formattedSource}</strong>
+                      </Typography>
+                    </Box>
+                    <Typography variant="body2" color="text.secondary">
+                      {conflict.explanation}
+                    </Typography>
+                  </Box>
+                );
+              })}
+            </Box>
+          )}
         </Box>
 
         {/* Module Prompt Conflicts Section */}
@@ -435,76 +498,103 @@ const PromptSettings = ({ courseName, course_id }) => {
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               The following module prompts conflict with the system-level instructions or the course prompt:
             </Typography>
-            {getModuleConflicts().map((conflict, idx) => {
-              const moduleName =
-                conflict.prompt_a_source.startsWith("module_prompt:")
-                  ? conflict.prompt_a_source.replace("module_prompt:", "")
-                  : conflict.prompt_b_source.replace("module_prompt:", "");
-              const moduleText =
-                conflict.prompt_a_source.startsWith("module_prompt:")
-                  ? conflict.prompt_a_text
-                  : conflict.prompt_b_text;
-              const otherText =
-                conflict.prompt_a_source.startsWith("module_prompt:")
-                  ? conflict.prompt_b_text
-                  : conflict.prompt_a_text;
-              const otherSource =
-                conflict.prompt_a_source.startsWith("module_prompt:")
-                  ? conflict.prompt_b_source
-                  : conflict.prompt_a_source;
+            {(() => {
+              // Group conflicts by module name
+              const grouped = {};
+              getModuleConflicts().forEach((conflict) => {
+                const moduleName =
+                  conflict.prompt_a_source.startsWith("module_prompt:")
+                    ? conflict.prompt_a_source.replace("module_prompt:", "")
+                    : conflict.prompt_b_source.replace("module_prompt:", "");
+                if (!grouped[moduleName]) grouped[moduleName] = [];
+                grouped[moduleName].push(conflict);
+              });
 
-              return (
-                <Accordion key={idx} sx={{ mb: 1 }}>
+              return Object.entries(grouped).map(([moduleName, conflicts]) => (
+                <Accordion key={moduleName} sx={{ mb: 1 }}>
                   <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                       <Typography variant="subtitle1">{moduleName}</Typography>
                       <Chip
-                        label={conflict.type.replace(/_/g, " ")}
+                        label={`${conflicts.length} conflict${conflicts.length > 1 ? "s" : ""}`}
                         size="small"
-                        color={getConflictTypeColor(conflict.type)}
+                        color={conflicts.some((c) => c.type === "HARD_CONTRADICTION") ? "error" : "warning"}
                       />
                     </Box>
                   </AccordionSummary>
                   <AccordionDetails>
                     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                      <Box>
-                        <Typography variant="caption" color="text.secondary">
-                          Module prompt text:
-                        </Typography>
-                        <Box
-                          sx={{
-                            p: 1.5,
-                            backgroundColor: "rgba(211, 47, 47, 0.08)",
-                            borderRadius: 1,
-                            mt: 0.5,
-                          }}
-                        >
-                          <Typography variant="body2">{moduleText}</Typography>
-                        </Box>
-                      </Box>
-                      <Box>
-                        <Typography variant="caption" color="text.secondary">
-                          Conflicts with ({otherSource.replace(/_/g, " ")}):
-                        </Typography>
-                        <Box
-                          sx={{
-                            p: 1.5,
-                            backgroundColor: "grey.100",
-                            borderRadius: 1,
-                            mt: 0.5,
-                          }}
-                        >
-                          <Typography variant="body2">{otherText}</Typography>
-                        </Box>
-                      </Box>
-                      <Typography variant="body2" color="text.secondary">
-                        {conflict.explanation}
-                      </Typography>
+                      {conflicts.map((conflict, idx) => {
+                        const moduleText =
+                          conflict.prompt_a_source.startsWith("module_prompt:")
+                            ? conflict.prompt_a_text
+                            : conflict.prompt_b_text;
+                        const otherText =
+                          conflict.prompt_a_source.startsWith("module_prompt:")
+                            ? conflict.prompt_b_text
+                            : conflict.prompt_a_text;
+                        const otherSource =
+                          conflict.prompt_a_source.startsWith("module_prompt:")
+                            ? conflict.prompt_b_source
+                            : conflict.prompt_a_source;
+                        const formattedSource = otherSource
+                          .replace(/_/g, " ")
+                          .replace("system prompt", "System Prompt")
+                          .replace("course prompt", "Course Prompt");
+
+                        return (
+                          <Box key={idx} sx={{ pb: idx < conflicts.length - 1 ? 2 : 0, borderBottom: idx < conflicts.length - 1 ? "1px solid" : "none", borderColor: "divider" }}>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                              <Chip
+                                label={conflict.type.replace(/_/g, " ")}
+                                size="small"
+                                color={getConflictTypeColor(conflict.type)}
+                              />
+                              <Typography variant="caption" color="text.secondary">
+                                Conflicts with: <strong>{formattedSource}</strong>
+                              </Typography>
+                            </Box>
+                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                              {conflict.explanation}
+                            </Typography>
+                            <Box>
+                              <Typography variant="caption" color="text.secondary">
+                                Module prompt text:
+                              </Typography>
+                              <Box
+                                sx={{
+                                  p: 1.5,
+                                  backgroundColor: "rgba(211, 47, 47, 0.08)",
+                                  borderRadius: 1,
+                                  mt: 0.5,
+                                }}
+                              >
+                                <Typography variant="body2">{moduleText}</Typography>
+                              </Box>
+                            </Box>
+                            <Box sx={{ mt: 1.5 }}>
+                              <Typography variant="caption" color="text.secondary">
+                                Conflicts with ({formattedSource}):
+                              </Typography>
+                              <Box
+                                sx={{
+                                  p: 1.5,
+                                  backgroundColor: "grey.100",
+                                  borderRadius: 1,
+                                  mt: 0.5,
+                                }}
+                              >
+                                <Typography variant="body2">{otherText}</Typography>
+                              </Box>
+                            </Box>
+                          </Box>
+                        );
+                      })}
                     </Box>
                   </AccordionDetails>
                 </Accordion>
-              );
-            })}
+              ));
+            })()}
           </Box>
         )}
 
