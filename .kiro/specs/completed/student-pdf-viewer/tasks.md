@@ -117,8 +117,8 @@ This plan implements a side-by-side PDF viewer in the student chat interface. Wo
   - Run `npm run lint` to check for ESLint issues
   - _Requirements: 5.1, 5.2, 5.3_
 
-- [ ] 8. Final verification
-  - [ ] 8.1 Run CDK tests
+- [x] 8. Final verification
+  - [x] 8.1 Run CDK tests
     - Run `npm test` in the `cdk/` directory (requires Docker) to verify all assertion tests pass including the new IAM test
     - _Requirements: 3.3_
 
