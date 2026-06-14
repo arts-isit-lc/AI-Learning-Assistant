@@ -330,6 +330,8 @@ For every pair you consider:
 - If Prompt A allows multiple ways to achieve a goal, and Prompt B restricts one of those ways, that is NOT a conflict — other ways remain available.
 - Tensions, ambiguities, or speculative incompatibilities are NEVER conflicts.
 - "Could involve" or "might require" reasoning is INVALID. Only "must" and "always" create obligations.
+- CONSTRAINT_COLLISION requires the lower-level prompt to EXPLICITLY change an output constraint (length, format, structure). A prompt that changes content style, emphasis, or topic focus does NOT collide with formatting constraints.
+- Hedge words and permissive language CANNOT create conflicts. Phrases like "may include", "you may also", "when appropriate", "consider adding", "additional context", "supporting explanation", or "occasionally" grant permission — they do not impose requirements. Permission to do X never conflicts with a constraint on Y.
 
 ## Compatibility Examples (DO NOT report these as conflicts):
 
@@ -350,6 +352,18 @@ Example 3:
 - Course: "Help students who are struggling with the material."
 - Compatible response: "Which part of the reading is confusing you? Let's work through it together."
 - Result: COMPATIBLE. Helping does not require summarizing.
+
+Example 4:
+- System: "Keep responses to a maximum of 3 sentences. Be concise."
+- Course: "You may also include additional context that may be useful for learning."
+- Compatible response: "The concept of X relates to Y from your reading. This connects to Z which we covered last week. What aspects are still unclear?"
+- Result: COMPATIBLE. "May include additional context" is permissive, not mandatory. The response can include relevant context within 3 sentences. The course prompt does not override or increase the length limit.
+
+Example 5:
+- System: "Must end every response with a question."
+- Course: "Focus on resolving specific misunderstandings through brief explanations."
+- Compatible response: "The key distinction is between X and Y — they differ in how they handle Z. Does that clarify the difference you were asking about?"
+- Result: COMPATIBLE. Brief explanations can end with a question.
 
 ## True Conflict Examples (REPORT these):
 
