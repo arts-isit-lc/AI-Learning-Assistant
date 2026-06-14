@@ -191,7 +191,7 @@ const PromptSettings = ({ courseName, course_id }) => {
     const report = conflictReport || storedConflicts;
     if (!report || !report.conflicts) return [];
     return report.conflicts.filter(
-      (c) => showLowConfidence || c.confidence >= 0.5
+      (c) => showLowConfidence || c.confidence > 0.8
     );
   };
 
@@ -212,7 +212,7 @@ const PromptSettings = ({ courseName, course_id }) => {
   const getLowConfidenceCount = () => {
     const report = conflictReport || storedConflicts;
     if (!report || !report.conflicts) return 0;
-    return report.conflicts.filter((c) => c.confidence < 0.5).length;
+    return report.conflicts.filter((c) => c.confidence <= 0.8).length;
   };
 
   const getConflictTypeColor = (type) => {

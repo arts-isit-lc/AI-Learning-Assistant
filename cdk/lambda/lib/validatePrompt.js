@@ -219,25 +219,53 @@ function buildLLMPrompt(editedPrompt, coursePrompt, modulePrompts, scope) {
   // For module scope: the editedPrompt is inside modulePrompts, coursePrompt is separate
   const effectiveCoursePrompt = scope === "course" ? editedPrompt : (coursePrompt || "None provided.");
 
-  return `You are a prompt conflict analyzer for an educational AI system. Your job is to identify semantic contradictions between prompts in a strict hierarchy.
+  return `You are a prompt conflict analyzer for an educational AI system. Your job is to identify genuine contradictions between prompts in a strict hierarchy.
 
 ## Prompt Hierarchy (highest to lowest precedence):
 1. SYSTEM_LEVEL_PROMPT — immutable, always dominant
 2. COURSE_PROMPT — set by instructor for the entire course
 3. MODULE_PROMPT(s) — set by instructor per module
 
-A conflict exists ONLY when one prompt negates, prohibits, or makes simultaneously impossible an instruction from another prompt. Complementary instructions (adding constraints, topics, or behaviors that don't contradict) are NOT conflicts.
+## Conflict Definition (strict):
+A conflict exists ONLY when two prompts contain instructions that cannot both be followed at the same time.
 
-## Conflict Types:
-- HARD_CONTRADICTION: Direct logical negation. One uses "must"/"always"/"never" and the other uses the opposite directive on the same behavior.
-- BEHAVIORAL_INCOMPATIBILITY: Two prompts enforce incompatible interaction modes that cannot both be dominant.
-- CONSTRAINT_COLLISION: Output rules from two prompts cannot be satisfied simultaneously.
-- HIERARCHY_VIOLATION: A lower-level prompt explicitly overrides a higher-level prompt's rules.
+Do NOT infer additional requirements. Do NOT assume a prompt requires a behavior unless it explicitly states that behavior. If Prompt A allows multiple ways to satisfy an objective, and Prompt B merely restricts one of those ways, that is NOT a conflict.
+
+Complementary instructions (adding constraints, topics, or behaviors that don't contradict) are NOT conflicts. Tensions, ambiguities, or speculative incompatibilities are NOT conflicts.
+
+If reasonable interpretations exist where both prompts can be followed simultaneously, return no conflict.
+
+## Non-Conflict Examples:
+- System: "Do not provide summaries." / Course: "Help students understand difficult concepts."
+  Reason: Helping students understand concepts can be achieved without summaries. Result: NOT A CONFLICT.
+
+- System: "Use the Socratic method." / Course: "Encourage students to explore multiple perspectives."
+  Reason: Both can be followed simultaneously; Socratic questioning naturally explores perspectives. Result: NOT A CONFLICT.
+
+- System: "Do not summarize readings." / Course: "Address gaps in understanding."
+  Reason: Addressing gaps can be done through questions, hints, or explanations without summarizing. Result: NOT A CONFLICT.
+
+- System: "Use three sentences maximum." / Course: "Discuss only assigned readings."
+  Reason: Both instructions can be followed simultaneously. Result: NOT A CONFLICT.
+
+## Conflict Types (only report when unambiguously present):
+- HARD_CONTRADICTION: Direct logical negation. One prompt explicitly requires a behavior and the other explicitly prohibits the same behavior.
+- BEHAVIORAL_INCOMPATIBILITY: Two prompts explicitly enforce mutually exclusive interaction modes (e.g., "always respond in French" vs "always respond in English").
+- CONSTRAINT_COLLISION: Two prompts impose output rules that literally cannot both be satisfied (e.g., "respond in exactly 1 sentence" vs "respond in at least 5 sentences").
+- HIERARCHY_VIOLATION: A lower-level prompt explicitly states it overrides or ignores a higher-level prompt's rules.
 
 ## Confidence Score Guidelines:
-- HIGH (>0.8): Clear imperative language with direct opposition on the same behavior
-- MEDIUM (0.5-0.8): Implicit tension or likely-but-not-certain contradiction
-- LOW (<0.5): Possible tension but ambiguous; could be complementary
+- HIGH (>0.8): Clear imperative language with direct opposition on the same explicit behavior. Both instructions are stated, not inferred.
+- LOW (<=0.8): Do NOT report. If you are not highly confident, it is not a conflict.
+
+Only report conflicts with confidence > 0.8. Do not report tensions, ambiguities, or speculative incompatibilities.
+
+## Mandatory Pre-Report Test:
+Before reporting ANY conflict, you MUST perform this test:
+1. Quote the exact instruction from Prompt A.
+2. Quote the exact instruction from Prompt B.
+3. Determine whether a human could obey both instructions simultaneously.
+If the answer is YES, it is NOT a conflict — do not include it in the output.
 
 ## Inputs:
 
