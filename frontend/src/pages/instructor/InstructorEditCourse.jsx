@@ -369,9 +369,9 @@ const InstructorEditCourse = () => {
       setNewFiles([]);
       toast.success("Module updated successfully");
 
-      // Run prompt conflict validation after save (non-blocking)
+      // Run prompt conflict validation after save (awaited to keep page alive)
       if (modulePrompt && modulePrompt.trim()) {
-        validateModulePrompt();
+        await validateModulePrompt();
       } else {
         setTimeout(() => {
           handleBackClick();
@@ -380,7 +380,6 @@ const InstructorEditCourse = () => {
     } catch (error) {
       console.error("Error fetching courses:", error);
       toast.error("Module failed to update");
-    } finally {
       setIsSaving(false);
     }
   };

@@ -153,22 +153,21 @@ export const InstructorNewModule = ({ courseId }) => {
       setNewFiles([]);
       toast.success("Module Created Successfully");
 
-      // Run prompt conflict validation after create (non-blocking)
+      // Run prompt conflict validation after create (awaited to keep page alive)
       if (modulePrompt && modulePrompt.trim()) {
-        validateModulePrompt(updatedModule.module_id);
-      }
-    } catch (error) {
-      console.error("Error saving changes:", error.message);
-      toast.error("Module Creation Failed");
-    } finally {
-      setIsSaving(false);
-      setNextModuleNumber(nextModuleNumber + 1);
-      // Only navigate back if no validation is running (validation handles its own navigation)
-      if (!modulePrompt || !modulePrompt.trim()) {
+        setIsSaving(false);
+        await validateModulePrompt(updatedModule.module_id);
+      } else {
+        setIsSaving(false);
+        setNextModuleNumber(nextModuleNumber + 1);
         setTimeout(function () {
           handleBackClick();
         }, 1000);
       }
+    } catch (error) {
+      console.error("Error saving changes:", error.message);
+      toast.error("Module Creation Failed");
+      setIsSaving(false);
     }
   };
 
