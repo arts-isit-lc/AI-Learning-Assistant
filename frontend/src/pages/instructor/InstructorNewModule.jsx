@@ -181,8 +181,14 @@ export const InstructorNewModule = ({ courseId }) => {
         { course_id, instructor_email: email },
         { prompt: modulePrompt, scope: "module", module_id: moduleId }
       );
-      setConflictReport(data);
-      if (!data.has_conflicts) {
+      // Filter to only module-related conflicts
+      const moduleConflicts = (data.conflicts || []).filter(
+        (c) => (c.prompt_a_source && c.prompt_a_source.startsWith("module_prompt")) ||
+               (c.prompt_b_source && c.prompt_b_source.startsWith("module_prompt"))
+      );
+      const filteredReport = { ...data, conflicts: moduleConflicts, has_conflicts: moduleConflicts.length > 0 };
+      setConflictReport(filteredReport);
+      if (!filteredReport.has_conflicts) {
         setTimeout(() => {
           handleBackClick();
         }, 1500);
