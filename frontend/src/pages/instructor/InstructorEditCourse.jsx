@@ -19,7 +19,10 @@ import {
   DialogActions,
   DialogContent,
   DialogContentText,
-  DialogTitle
+  DialogTitle,
+  Alert,
+  Chip,
+  CircularProgress,
 } from "@mui/material";
 import PageContainer from "../Container";
 import FileManagement from "../../components/FileManagement";
@@ -49,6 +52,10 @@ const InstructorEditCourse = () => {
   const [isGeneratingTopics, setIsGeneratingTopics] = useState(false);
   const [moduleTopics, setModuleTopics] = useState(null);
   const [isTopicsStale, setIsTopicsStale] = useState(false);
+
+  // Prompt conflict validation state
+  const [conflictReport, setConflictReport] = useState(null);
+  const [isValidating, setIsValidating] = useState(false);
 
   const handleBackClick = () => {
     window.history.back();
@@ -361,15 +368,53 @@ const InstructorEditCourse = () => {
       setDeletedFiles([]);
       setNewFiles([]);
       toast.success("Module updated successfully");
-      setTimeout(() => {
-        handleBackClick();
-      }, 1000);
+
+      // Run prompt conflict validation after save (non-blocking)
+      if (modulePrompt && modulePrompt.trim()) {
+        validateModulePrompt();
+      } else {
+        setTimeout(() => {
+          handleBackClick();
+        }, 1000);
+      }
     } catch (error) {
       console.error("Error fetching courses:", error);
       toast.error("Module failed to update");
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const validateModulePrompt = async () => {
+    setIsValidating(true);
+    setConflictReport(null);
+    try {
+      const { email } = await apiClient.getAuth();
+      const data = await apiClient.post(
+        "instructor/validate_prompt",
+        { course_id, instructor_email: email },
+        { prompt: modulePrompt, scope: "module", module_id: module.module_id }
+      );
+      setConflictReport(data);
+      if (!data.has_conflicts) {
+        setTimeout(() => {
+          handleBackClick();
+        }, 1500);
+      }
+    } catch (error) {
+      console.error("Prompt validation failed:", error.message);
+      // Non-blocking — save already succeeded, just navigate back
+      setTimeout(() => {
+        handleBackClick();
+      }, 1000);
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
+  const getConflictTypeColor = (type) => {
+    if (type === "HARD_CONTRADICTION") return "error";
+    return "warning";
   };
 
   const updateMetaData = (files, token) => {
@@ -545,6 +590,76 @@ const InstructorEditCourse = () => {
             Save Module
           </Button>
         </Box>
+
+        {/* Prompt Conflict Validation Results */}
+        {isValidating && (
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 2 }}>
+            <CircularProgress size={20} />
+            <Typography variant="body2" color="text.secondary">
+              Checking module prompt for conflicts...
+            </Typography>
+          </Box>
+        )}
+
+        {conflictReport && conflictReport.validation_status === "clean" && (
+          <Alert severity="success" sx={{ mt: 2 }}>
+            No conflicts detected. Module prompt is compatible with system and course prompts.
+          </Alert>
+        )}
+
+        {conflictReport && conflictReport.has_conflicts && (
+          <Box sx={{ mt: 2 }}>
+            <Alert severity="warning" variant="filled" sx={{ mb: 2 }}>
+              {conflictReport.conflicts.length} conflict(s) detected between this module prompt and the system/course prompts.
+              The module was saved, but you may want to revise the prompt.
+            </Alert>
+            {conflictReport.conflicts.map((conflict, idx) => {
+              const otherSource = conflict.prompt_a_source.startsWith("module_prompt")
+                ? conflict.prompt_b_source
+                : conflict.prompt_a_source;
+              const formattedSource = otherSource
+                .replace(/_/g, " ")
+                .replace("system level prompt", "System Prompt")
+                .replace("course prompt", "Course Prompt");
+
+              return (
+                <Box
+                  key={idx}
+                  sx={{
+                    mb: 1.5,
+                    p: 1.5,
+                    border: "1px solid",
+                    borderColor: conflict.type === "HARD_CONTRADICTION" ? "error.light" : "warning.light",
+                    borderRadius: 1,
+                    backgroundColor: conflict.type === "HARD_CONTRADICTION" ? "rgba(211, 47, 47, 0.04)" : "rgba(237, 108, 2, 0.04)",
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
+                    <Chip
+                      label={conflict.type.replace(/_/g, " ")}
+                      size="small"
+                      color={getConflictTypeColor(conflict.type)}
+                    />
+                    <Typography variant="caption" color="text.secondary">
+                      Conflicts with: <strong>{formattedSource}</strong>
+                    </Typography>
+                  </Box>
+                  <Typography variant="body2" color="text.secondary">
+                    {conflict.explanation}
+                  </Typography>
+                </Box>
+              );
+            })}
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={handleBackClick}
+              sx={{ mt: 1 }}
+            >
+              Dismiss and go back
+            </Button>
+          </Box>
+        )}
       </Paper>
       <Dialog open={dialogOpen} onClose={handleDialogClose}>
         <DialogTitle>{"Delete Module"}</DialogTitle>

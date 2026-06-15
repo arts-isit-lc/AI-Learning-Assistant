@@ -34,15 +34,7 @@ function isRetryable(err) {
   return false;
 }
 
-// --- Precompiled action category patterns (avoids recompilation per call) ---
-const ACTION_PATTERNS = [
-  { category: "ask_questions", pattern: /\b(ask\s+(a\s+)?question|question|inquire|end.*(with|by)\s+(a\s+)?question)\b/ },
-  { category: "provide_summary", pattern: /\b(summar(y|ize|ies)|overview|recap|synopsis)\b/ },
-  { category: "respond_language", pattern: /\b(respond|reply|answer|speak|write)\b.*\b(english|french|spanish|mandarin|language)\b/ },
-  { category: "response_length", pattern: /\b(sentence|word count|paragraph|maximum.*(?:sentence|word|line)|at least.*(?:sentence|word|paragraph))\b/ },
-  { category: "response_format", pattern: /\b(json|markdown|bullet point|numbered list|format as|plain text)\b/ },
-  { category: "interaction_mode", pattern: /\b(only.*(?:question|statement)|never.*(?:ask|answer)|always.*(?:ask|answer|end with))\b/ },
-];
+// --- Precompiled patterns removed — value extraction is now inline in categorizeWithValue() ---
 
 // =============================================================================
 // MAIN ENTRY POINT
@@ -167,59 +159,150 @@ function computeValidationHash(coursePrompt, modulePrompts) {
   return crypto.createHash("sha256").update(content).digest("hex");
 }
 
+/**
+ * Generate a fingerprint hash for module validation input.
+ * Covers: system prompt + course prompt + module prompt + validator version.
+ */
+function computeModuleValidationHash(modulePrompt, coursePrompt) {
+  const content = JSON.stringify({
+    validatorVersion: VALIDATOR_VERSION,
+    model: VALIDATION_MODEL_ID,
+    system: SYSTEM_LEVEL_PROMPT,
+    course: coursePrompt,
+    module: modulePrompt,
+  });
+  return crypto.createHash("sha256").update(content).digest("hex");
+}
+
 // =============================================================================
-// RULE-BASED DETECTION — Semantic normalization
+// RULE-BASED DETECTION — Value-aware semantic normalization
 // =============================================================================
 
 /**
+ * Split a sentence containing multiple obligations joined by conjunctions.
+ * "You must answer in English and always ask a question" →
+ *   ["You must answer in English", "always ask a question"]
+ */
+function splitMultiObligationSentence(sentence) {
+  // Split on conjunctions that typically separate independent obligations
+  const parts = sentence.split(/\b(and\s+(?:must|always|never|shall|do not|don't))\b/i);
+
+  if (parts.length <= 1) {
+    // Also try splitting on "and" followed by a verb
+    const conjSplit = sentence.split(/\s+and\s+(?=(?:must|always|never|shall|do not|don't|avoid)\s)/i);
+    if (conjSplit.length > 1) return conjSplit.map((s) => s.trim()).filter(Boolean);
+    return [sentence];
+  }
+
+  // Reassemble: odd-indexed parts are the conjunctions (contain the modal)
+  const results = [parts[0].trim()];
+  for (let i = 1; i < parts.length; i += 2) {
+    const conjunction = parts[i] || "";
+    const rest = parts[i + 1] || "";
+    results.push((conjunction + rest).trim());
+  }
+  return results.filter(Boolean);
+}
+
+/**
  * Extract normalized obligations from prompt text.
- * Returns structured objects: { action, polarity, raw }
+ * Returns structured objects: { category, value, polarity, raw }
+ *
+ * Value-aware: extracts the specific constraint value (e.g., "english", "json", "one")
+ * so that contradictions are only flagged when values actually oppose.
  */
 function extractObligations(text) {
   const obligations = [];
   const sentences = text.split(/[.!;\n]+/).map((s) => s.trim()).filter(Boolean);
 
   for (const sentence of sentences) {
-    const lower = sentence.toLowerCase();
+    // Split multi-obligation sentences first
+    const clauses = splitMultiObligationSentence(sentence);
 
-    // Detect polarity
-    let polarity = null;
-    if (/\b(must|always|shall|required to|have to)\b/.test(lower)) {
-      polarity = "require";
-    } else if (/\b(never|do not|don't|shall not|must not|avoid|prohibit|should not|is not allowed|forbidden)\b/.test(lower)) {
-      polarity = "deny";
+    for (const clause of clauses) {
+      const lower = clause.toLowerCase();
+
+      // Detect polarity
+      let polarity = null;
+      if (/\b(must|always|shall|required to|have to)\b/.test(lower)) {
+        polarity = "require";
+      } else if (/\b(never|do not|don't|shall not|must not|avoid|prohibit|should not|is not allowed|forbidden)\b/.test(lower)) {
+        polarity = "deny";
+      }
+
+      if (!polarity) continue;
+
+      // Non-greedy extraction: find the FIRST modal and take everything after it
+      const modalMatch = lower.match(/\b(must|always|shall|never|do not|don't|shall not|must not|should not|avoid|required to|have to|is not allowed|forbidden)\b\s+(.*)/);
+      if (!modalMatch) continue;
+
+      const actionText = modalMatch[2].trim();
+      if (!actionText) continue;
+
+      const categorized = categorizeWithValue(actionText);
+      if (!categorized) continue;
+
+      obligations.push({
+        category: categorized.category,
+        value: categorized.value,
+        polarity,
+        raw: sentence, // Keep original full sentence for display
+      });
     }
-
-    if (!polarity) continue;
-
-    // Extract action text by removing modal verb prefix
-    const actionText = lower
-      .replace(/^.*(must|always|shall|never|do not|don't|shall not|must not|should not|avoid|required to|have to|is not allowed|forbidden)\s+/, "")
-      .trim();
-
-    const action = categorizeAction(actionText);
-    if (!action) continue;
-
-    obligations.push({ action, polarity, raw: sentence });
   }
 
   return obligations;
 }
 
 /**
- * Categorize action text into a normalized category using precompiled patterns.
- * Returns null if no category matches (intentionally conservative).
+ * Categorize action text and extract the specific constraint value.
+ * Returns { category, value } or null if no category matches.
  */
-function categorizeAction(text) {
-  for (const { category, pattern } of ACTION_PATTERNS) {
-    if (pattern.test(text)) return category;
+function categorizeWithValue(text) {
+  // Order matters — more specific patterns first
+
+  // Language: "respond in English", "write in French"
+  const langMatch = text.match(/\b(?:respond|reply|answer|speak|write|communicate)\b.*\b(english|french|spanish|mandarin|german|chinese|arabic|japanese)\b/);
+  if (langMatch) return { category: "response_language", value: langMatch[1] };
+
+  // Format: "respond in JSON", "format as markdown"
+  const formatMatch = text.match(/\b(json|xml|markdown|html|bullet\s*point|numbered\s*list|plain\s*text|yaml)\b/);
+  if (formatMatch) return { category: "response_format", value: formatMatch[1].replace(/\s+/g, "_") };
+
+  // Quantified constraints: "more than one question", "maximum 3 sentences", "at least 5 paragraphs"
+  // Must come before interaction_mode to capture "more than one question" as a quantity constraint
+  const quantifiedMatch = text.match(/\b((?:more than|less than|at least|at most|maximum|exactly|no more than)\s+(?:\d+|one|two|three|four|five)\s+(?:sentence|word|paragraph|line|question)s?)\b/);
+  if (quantifiedMatch) return { category: "response_length", value: quantifiedMatch[1].replace(/\s+/g, "_") };
+
+  // Specific count: "3 sentences", "one question", "two paragraphs"
+  const countMatch = text.match(/\b(\d+|one|two|three|four|five)\s+(sentence|paragraph|question|word)s?\b/);
+  if (countMatch) return { category: "response_length", value: `${countMatch[1]}_${countMatch[2]}` };
+
+  // Interaction mode: "ask questions" (bare, no quantity), "end with a question", "only provide statements"
+  // Only matches when there's no quantity qualifier (those are caught above)
+  const interactionMatch = text.match(/\b(ask|end\s+with|provide|give)\b\s*(?:a\s+)?(?:(critical\s+thinking|rhetorical|follow-up|clarifying)\s+)?(question|statement|answer)s?\b/);
+  if (interactionMatch) {
+    const verb = interactionMatch[1].replace(/\s+/g, "_");
+    const qualifier = interactionMatch[2] ? interactionMatch[2].replace(/\s+/g, "_") + "_" : "";
+    const object = interactionMatch[3];
+    return { category: "interaction_mode", value: `${verb}_${qualifier}${object}` };
   }
+
+  // Summary: "provide summaries", "summarize"
+  if (/\b(summar(y|ize|ies|ising)|overview|recap|synopsis)\b/.test(text)) {
+    return { category: "provide_summary", value: "summary" };
+  }
+
   return null;
 }
 
 /**
- * Detect hard contradictions using semantic normalization.
- * Same action category + opposite polarity = conflict.
+ * Detect hard contradictions using value-aware semantic normalization.
+ *
+ * Contradiction logic:
+ * - Same category + same value + opposite polarity → CONFLICT
+ * - Same category + different values + both "require" → CONFLICT (can't be both)
+ * - Same category + different values + one "deny" → NOT a conflict (denying X doesn't conflict with requiring Y)
  */
 function detectHardContradictions(input) {
   const contradictions = [];
@@ -233,10 +316,28 @@ function detectHardContradictions(input) {
     moduleObligationsByName[mod.module_name] = extractObligations(mod.module_prompt);
   }
 
+  function isContradiction(a, b) {
+    if (a.category !== b.category) return false;
+
+    // Same value, opposite polarity → clear contradiction
+    // e.g., "require ask_question" vs "deny ask_question"
+    if (a.value === b.value && a.polarity !== b.polarity) return true;
+
+    // Both require different exclusive values → contradiction
+    // e.g., "require language=english" vs "require language=french"
+    if (a.polarity === "require" && b.polarity === "require" && a.value !== b.value) {
+      // Only for inherently exclusive categories (language, format)
+      const exclusiveCategories = new Set(["response_language", "response_format"]);
+      if (exclusiveCategories.has(a.category)) return true;
+    }
+
+    return false;
+  }
+
   function findContradictions(obligationsA, obligationsB, sourceA, sourceB) {
     for (const a of obligationsA) {
       for (const b of obligationsB) {
-        if (a.action === b.action && a.polarity !== b.polarity) {
+        if (isContradiction(a, b)) {
           contradictions.push({
             type: "HARD_CONTRADICTION",
             severity: "hard_rule",
@@ -246,7 +347,7 @@ function detectHardContradictions(input) {
             prompt_a_text: a.raw,
             prompt_b_text: b.raw,
             dominant_source: sourceA === "system_level_prompt" ? "system_level_prompt" : "course_prompt",
-            explanation: `Opposite polarity on "${a.action}": ${sourceA} ${a.polarity}s it, ${sourceB} ${b.polarity}s it.`,
+            explanation: `Conflict on "${a.category}": "${a.polarity} ${a.value}" vs "${b.polarity} ${b.value}".`,
           });
         }
       }
@@ -636,6 +737,24 @@ async function validateModulePrompt(modulePrompt, coursePrompt, module_id, sqlCo
     // Non-critical
   }
 
+  // Module-level cache check
+  if (module_id && sqlConnection) {
+    const moduleHash = computeModuleValidationHash(modulePrompt, coursePrompt);
+    try {
+      const rows = await sqlConnection`
+        SELECT validation_hash, validation_cached_report FROM "Course_Modules" WHERE module_id = ${module_id};
+      `;
+      if (rows[0]?.validation_hash === moduleHash && rows[0]?.validation_cached_report) {
+        const cached = typeof rows[0].validation_cached_report === "string"
+          ? JSON.parse(rows[0].validation_cached_report)
+          : rows[0].validation_cached_report;
+        return cached;
+      }
+    } catch (_) {
+      // Column may not exist — non-critical
+    }
+  }
+
   try {
     const modulePromptFormatted = [{ module_name: moduleName, module_prompt: modulePrompt, module_number: 0 }];
     const input = buildCanonicalInput(modulePrompt, coursePrompt, modulePromptFormatted, "module");
@@ -660,7 +779,7 @@ async function validateModulePrompt(modulePrompt, coursePrompt, module_id, sqlCo
     const sortedConflicts = sortConflicts(dedupedConflicts);
     const hasConflicts = sortedConflicts.length > 0;
 
-    return {
+    const report = {
       validation_status: hasConflicts ? "conflicts_found" : "clean",
       conflicts: sortedConflicts,
       summary: result.summary || (hasConflicts
@@ -671,6 +790,20 @@ async function validateModulePrompt(modulePrompt, coursePrompt, module_id, sqlCo
       validation_scope: "module",
       model_version: VALIDATION_MODEL_ID,
     };
+
+    // Store module cache
+    if (module_id && sqlConnection) {
+      const moduleHash = computeModuleValidationHash(modulePrompt, coursePrompt);
+      try {
+        await sqlConnection`
+          UPDATE "Course_Modules"
+          SET validation_hash = ${moduleHash}, validation_cached_report = ${JSON.stringify(report)}
+          WHERE module_id = ${module_id};
+        `;
+      } catch (_) { /* non-critical */ }
+    }
+
+    return report;
   } catch (err) {
     console.log(JSON.stringify({
       level: "ERROR",
