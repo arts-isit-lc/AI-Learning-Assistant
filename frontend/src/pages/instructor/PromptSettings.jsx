@@ -191,7 +191,7 @@ const PromptSettings = ({ courseName, course_id }) => {
     const report = conflictReport || storedConflicts;
     if (!report || !report.conflicts) return [];
     return report.conflicts.filter(
-      (c) => showLowConfidence || c.confidence > 0.9
+      (c) => showLowConfidence || c.severity !== "low_confidence_llm"
     );
   };
 
@@ -212,7 +212,7 @@ const PromptSettings = ({ courseName, course_id }) => {
   const getLowConfidenceCount = () => {
     const report = conflictReport || storedConflicts;
     if (!report || !report.conflicts) return 0;
-    return report.conflicts.filter((c) => c.confidence <= 0.9).length;
+    return report.conflicts.filter((c) => c.severity === "low_confidence_llm").length;
   };
 
   const getConflictTypeColor = (type) => {
