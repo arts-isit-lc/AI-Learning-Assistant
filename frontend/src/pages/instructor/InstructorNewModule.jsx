@@ -110,6 +110,7 @@ export const InstructorNewModule = ({ courseId }) => {
 
   const handleSave = async () => {
     if (isSaving) return;
+    setConflictReport(null);
 
     // Validation check
     if (!moduleName || !concept) {

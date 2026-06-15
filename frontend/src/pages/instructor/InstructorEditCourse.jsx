@@ -331,6 +331,7 @@ const InstructorEditCourse = () => {
   const handleSave = async () => {
     if (isSaving) return;
     setIsSaving(true);
+    setConflictReport(null);
 
 
     const totalFiles = files.length + newFiles.length;
@@ -371,8 +372,10 @@ const InstructorEditCourse = () => {
 
       // Run prompt conflict validation after save (awaited to keep page alive)
       if (modulePrompt && modulePrompt.trim()) {
+        setIsSaving(false);
         await validateModulePrompt();
       } else {
+        setIsSaving(false);
         setTimeout(() => {
           handleBackClick();
         }, 1000);
