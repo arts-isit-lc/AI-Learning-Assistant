@@ -379,10 +379,19 @@ exports.handler = async (event) => {
             }
 
             // Merge description into existing metadata (preserve topic_extraction and other keys)
+            // metadata column is TEXT — may contain JSON or plain text from legacy rows
             const description = metadata || "";
             const result = await sqlConnection`
                       UPDATE "Module_Files"
-                      SET metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('description', ${description}::text)
+                      SET metadata = (
+                        COALESCE(
+                          CASE
+                            WHEN metadata IS NOT NULL AND metadata ~ '^\s*\{' THEN metadata::jsonb
+                            ELSE '{}'::jsonb
+                          END,
+                          '{}'::jsonb
+                        ) || jsonb_build_object('description', ${description}::text)
+                      )::text
                       WHERE module_id = ${moduleId}
                       AND filename = ${filename}
                       AND filetype = ${filetype}

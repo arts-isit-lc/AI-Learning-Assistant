@@ -16,8 +16,8 @@ import {
   MenuItem,
   ListSubheader,
   Alert,
-  Chip,
   CircularProgress,
+  Tooltip,
 } from "@mui/material";
 import PageContainer from "../Container";
 import FileManagement from "../../components/FileManagement";
@@ -209,6 +209,84 @@ export const InstructorNewModule = ({ courseId }) => {
     return "warning";
   };
 
+  const renderHighlightedPrompt = () => {
+    if (!conflictReport || !conflictReport.has_conflicts) return null;
+
+    const conflicts = conflictReport.conflicts;
+    const excerpts = conflicts.map((c) => {
+      if (c.prompt_a_source && c.prompt_a_source.startsWith("module_prompt")) return { text: c.prompt_a_text, conflict: c };
+      if (c.prompt_b_source && c.prompt_b_source.startsWith("module_prompt")) return { text: c.prompt_b_text, conflict: c };
+      return null;
+    }).filter(Boolean);
+
+    if (excerpts.length === 0) return null;
+
+    const promptText = modulePrompt;
+    const highlights = [];
+
+    for (const { text, conflict } of excerpts) {
+      const idx = promptText.toLowerCase().indexOf(text.toLowerCase());
+      if (idx !== -1) {
+        highlights.push({ start: idx, end: idx + text.length, conflict });
+      }
+    }
+
+    highlights.sort((a, b) => a.start - b.start);
+
+    const parts = [];
+    let lastIdx = 0;
+    for (const h of highlights) {
+      if (h.start > lastIdx) {
+        parts.push(<span key={`text-${lastIdx}`}>{promptText.slice(lastIdx, h.start)}</span>);
+      }
+      const otherSource = h.conflict.prompt_a_source.startsWith("module_prompt")
+        ? h.conflict.prompt_b_source : h.conflict.prompt_a_source;
+      const otherText = h.conflict.prompt_a_source.startsWith("module_prompt")
+        ? h.conflict.prompt_b_text : h.conflict.prompt_a_text;
+      const tooltipText = `Conflicts with ${otherSource.replace(/_/g, " ")}: "${otherText}"\n\n${h.conflict.explanation}`;
+      parts.push(
+        <Tooltip key={`hl-${h.start}`} title={tooltipText} arrow placement="top">
+          <span
+            style={{
+              backgroundColor: "rgba(211, 47, 47, 0.15)",
+              borderRadius: 3,
+              padding: "1px 2px",
+              borderBottom: "2px solid #d32f2f",
+              cursor: "help",
+            }}
+          >
+            {promptText.slice(h.start, h.end)}
+          </span>
+        </Tooltip>
+      );
+      lastIdx = h.end;
+    }
+    if (lastIdx < promptText.length) {
+      parts.push(<span key={`text-end`}>{promptText.slice(lastIdx)}</span>);
+    }
+
+    return (
+      <Box
+        sx={{
+          mt: 1,
+          p: 2,
+          border: "1px solid",
+          borderColor: "error.light",
+          borderRadius: 1,
+          whiteSpace: "pre-wrap",
+          fontFamily: "monospace",
+          fontSize: "0.875rem",
+          backgroundColor: "grey.50",
+        }}
+      >
+        <Typography variant="caption" color="error" sx={{ display: "block", mb: 1, fontFamily: "inherit" }}>
+          Conflicting text highlighted below (hover for details):
+        </Typography>
+        {parts}
+      </Box>
+    );
+  };
+
   return (
     <PageContainer>
       <Paper style={{ padding: 25, width: "100%", overflow: "auto" }}>
@@ -235,6 +313,30 @@ export const InstructorNewModule = ({ courseId }) => {
           rows={4}
           helperText="Provide specific instructions for this module. This will be used alongside the course-level prompt."
         />
+
+        {/* Conflict validation feedback inline with the prompt */}
+        {isValidating && (
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1 }}>
+            <CircularProgress size={16} />
+            <Typography variant="caption" color="text.secondary">
+              Checking module prompt for conflicts...
+            </Typography>
+          </Box>
+        )}
+
+        {conflictReport && conflictReport.validation_status === "clean" && (
+          <Alert severity="success" sx={{ mt: 1 }}>
+            No conflicts detected. Module prompt is compatible with system and course prompts.
+          </Alert>
+        )}
+
+        {conflictReport && conflictReport.has_conflicts && (
+          <Alert severity="warning" variant="filled" sx={{ mt: 1 }}>
+            {conflictReport.conflicts.length} conflict(s) detected. The module was created, but you may want to revise the prompt.
+          </Alert>
+        )}
+
+        {renderHighlightedPrompt()}
 
         <FormControl fullWidth margin="normal">
           <InputLabel id="concept-select-label">Concept</InputLabel>
@@ -333,68 +435,6 @@ export const InstructorNewModule = ({ courseId }) => {
             </Button>
           </Box>
         </Box>
-
-        {/* Prompt Conflict Validation Results */}
-        {isValidating && (
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 2 }}>
-            <CircularProgress size={20} />
-            <Typography variant="body2" color="text.secondary">
-              Checking module prompt for conflicts...
-            </Typography>
-          </Box>
-        )}
-
-        {conflictReport && conflictReport.validation_status === "clean" && (
-          <Alert severity="success" sx={{ mt: 2 }}>
-            No conflicts detected. Module prompt is compatible with system and course prompts.
-          </Alert>
-        )}
-
-        {conflictReport && conflictReport.has_conflicts && (
-          <Box sx={{ mt: 2 }}>
-            <Alert severity="warning" variant="filled" sx={{ mb: 2 }}>
-              {conflictReport.conflicts.length} conflict(s) detected between this module prompt and the system/course prompts.
-              The module was created, but you may want to revise the prompt.
-            </Alert>
-            {conflictReport.conflicts.map((conflict, idx) => {
-              const otherSource = conflict.prompt_a_source.startsWith("module_prompt")
-                ? conflict.prompt_b_source
-                : conflict.prompt_a_source;
-              const formattedSource = otherSource
-                .replace(/_/g, " ")
-                .replace("system level prompt", "System Prompt")
-                .replace("course prompt", "Course Prompt");
-
-              return (
-                <Box
-                  key={idx}
-                  sx={{
-                    mb: 1.5,
-                    p: 1.5,
-                    border: "1px solid",
-                    borderColor: conflict.type === "HARD_CONTRADICTION" ? "error.light" : "warning.light",
-                    borderRadius: 1,
-                    backgroundColor: conflict.type === "HARD_CONTRADICTION" ? "rgba(211, 47, 47, 0.04)" : "rgba(237, 108, 2, 0.04)",
-                  }}
-                >
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
-                    <Chip
-                      label={conflict.type.replace(/_/g, " ")}
-                      size="small"
-                      color={getConflictTypeColor(conflict.type)}
-                    />
-                    <Typography variant="caption" color="text.secondary">
-                      Conflicts with: <strong>{formattedSource}</strong>
-                    </Typography>
-                  </Box>
-                  <Typography variant="body2" color="text.secondary">
-                    {conflict.explanation}
-                  </Typography>
-                </Box>
-              );
-            })}
-          </Box>
-        )}
       </Paper>
     </PageContainer>
   );
