@@ -535,17 +535,8 @@ const InstructorEditCourse = () => {
           setMetadata={setMetadata}
         />
 
-        {/* Generate Topics Section */}
+        {/* Generate Topics Display (topics list only, button moved to action bar) */}
         <Box sx={{ marginTop: 3, marginBottom: 2 }}>
-          <Button
-            variant="contained"
-            color="secondary"
-            onClick={handleGenerateTopics}
-            disabled={isGeneratingTopics || files.length === 0}
-          >
-            {isGeneratingTopics ? "Generating..." : "Generate Topics"}
-          </Button>
-
           {isTopicsStale && moduleTopics && (
             <Typography variant="caption" color="warning.main" sx={{ display: "block", marginTop: 1 }}>
               ⚠ Topics may be outdated — files have been added or removed since last generation.
@@ -574,7 +565,8 @@ const InstructorEditCourse = () => {
           )}
         </Box>
 
-        <Box sx={{ display: "flex", justifyContent: "space-between", marginTop: 2, width: '100%' }}>
+        {/* Action Buttons */}
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 2, width: '100%' }}>
           <Box sx={{ display: "flex", gap: 2 }}>
             <Button
               variant="contained"
@@ -593,11 +585,30 @@ const InstructorEditCourse = () => {
           </Box>
           <Button
             variant="contained"
-            color="primary"
-            onClick={handleSave}
+            color="secondary"
+            onClick={handleGenerateTopics}
+            disabled={isGeneratingTopics || files.length === 0}
           >
-            Save Module
+            {isGeneratingTopics ? "Generating..." : "Generate Topics"}
           </Button>
+          <Box sx={{ display: "flex", gap: 2 }}>
+            {conflictReport && conflictReport.has_conflicts && (
+              <Button
+                variant="outlined"
+                color="warning"
+                onClick={handleBackClick}
+              >
+                Dismiss and go back
+              </Button>
+            )}
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={handleSave}
+            >
+              Save Module
+            </Button>
+          </Box>
         </Box>
 
         {/* Prompt Conflict Validation Results */}
@@ -659,14 +670,6 @@ const InstructorEditCourse = () => {
                 </Box>
               );
             })}
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={handleBackClick}
-              sx={{ mt: 1 }}
-            >
-              Dismiss and go back
-            </Button>
           </Box>
         )}
       </Paper>

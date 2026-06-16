@@ -300,19 +300,13 @@ export const InstructorNewModule = ({ courseId }) => {
 
         {/* Generate Topics - disabled on new module (needs save first) */}
         <Box sx={{ marginTop: 3, marginBottom: 2 }}>
-          <Button
-            variant="contained"
-            color="secondary"
-            disabled
-          >
-            Generate Topics
-          </Button>
-          <Typography variant="caption" color="text.secondary" sx={{ display: "block", marginTop: 0.5 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
             Save the module first, then generate topics from the edit page.
           </Typography>
         </Box>
 
-        <Box sx={{ display: "flex", justifyContent: "space-between", marginTop: 2, width: '100%' }}>
+        {/* Action Buttons */}
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 2, width: '100%' }}>
           <Button
             variant="contained"
             color="primary"
@@ -320,13 +314,24 @@ export const InstructorNewModule = ({ courseId }) => {
           >
             Cancel
           </Button>
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={handleSave}
-          >
-            Save Module
-          </Button>
+          <Box sx={{ display: "flex", gap: 2 }}>
+            {conflictReport && conflictReport.has_conflicts && (
+              <Button
+                variant="outlined"
+                color="warning"
+                onClick={handleBackClick}
+              >
+                Dismiss and go back
+              </Button>
+            )}
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={handleSave}
+            >
+              Save Module
+            </Button>
+          </Box>
         </Box>
 
         {/* Prompt Conflict Validation Results */}
@@ -388,14 +393,6 @@ export const InstructorNewModule = ({ courseId }) => {
                 </Box>
               );
             })}
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={handleBackClick}
-              sx={{ mt: 1 }}
-            >
-              Dismiss and go back
-            </Button>
           </Box>
         )}
       </Paper>
