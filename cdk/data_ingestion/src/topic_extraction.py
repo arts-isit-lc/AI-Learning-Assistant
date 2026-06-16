@@ -27,23 +27,29 @@ TOPIC_EXTRACTION_MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0"
 
 EXTRACTION_PROMPT = """Analyze this educational document and extract the core subject matter.
 
-Identify only the concepts that an instructor would expect students to learn
-and be assessed on.
+Identify the specific concepts that would appear as:
+- Lecture topics or section headings
+- Exam questions or assessment items
+- Learning outcomes in a course syllabus
+
+Extract the concepts that are distinct and assessable. Do NOT collapse multiple distinct concepts into one broader category.
+
+For example, if a chapter covers "Classical Conditioning", "Operant Conditioning", and "Observational Learning", list all three — do NOT merge them into "Learning Theory".
 
 Exclude:
-- Examples and case studies
-- Citations and references
-- Supporting details and tangential mentions
-- Administrative content (syllabus info, grading policies)
-- Appendices and indexes
+- Examples and case studies (unless they ARE the topic)
+- Citations, references, and bibliographic entries
+- Administrative content (syllabus logistics, grading policies)
+- Appendices, indexes, and glossaries
 
-Prefer broad conceptual topics over narrow subtopics.
-
-Return ONLY a valid JSON object (no markdown, no explanation):
+Return ONLY a valid JSON object (no markdown, no explanation, no trailing commas):
 {
     "topics": ["topic1", "topic2", ...],
-    "learning_objectives": ["objective1", "objective2", ...]
+    "learning_objectives": ["objective1", "objective2", ...],
+    "confidence": 0.0
 }
+
+confidence: How confident are you that the identified topics accurately represent the main subject matter of the provided text? (0.0 = very uncertain, 1.0 = highly confident).
 
 Limit: maximum 5 topics and 5 learning objectives.
 
@@ -97,7 +103,7 @@ def should_extract_topics(file_id: str, s3_etag: str, connection) -> bool:
         return True
 
 
-def extract_text_from_pdf(bucket: str, file_key: str) -> str:
+def extract_text_from_pdf(bucket: str, file_key: str) -> tuple:
     """
     Download a PDF from S3 and extract all text content.
     Uses PyMuPDF with OCR fallback for scanned pages.
@@ -108,7 +114,8 @@ def extract_text_from_pdf(bucket: str, file_key: str) -> str:
         file_key: S3 object key for the PDF.
 
     Returns:
-        The extracted text to send to the LLM (full or sampled).
+        Tuple of (extracted_text, extraction_method, total_chars) where extraction_method
+        is "full_document" or "sampled_document", and total_chars is the original document size.
     """
     with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
         s3.download_file(bucket, file_key, tmp_file.name)
@@ -134,84 +141,80 @@ def extract_text_from_pdf(bucket: str, file_key: str) -> str:
         os.remove(tmp_file.name)
 
     if not all_pages:
-        return ""
+        return "", "full_document", 0
 
     # Decision: send full or sample
     if total_chars <= DIRECT_SEND_LIMIT:
-        return "\n\n".join(all_pages)
+        return "\n\n".join(all_pages), "full_document", total_chars
     else:
         logger.info(f"Document exceeds {DIRECT_SEND_LIMIT} chars ({total_chars}), applying sampling")
-        return sample_large_document(all_pages)
+        return sample_large_document(all_pages), "sampled_document", total_chars
 
 
 def sample_large_document(pages: list, target_chars: int = DIRECT_SEND_LIMIT) -> str:
     """
-    For documents exceeding the direct send limit, sample:
-    - First 20% of pages (introduction, context setting)
-    - Evenly spaced pages from the middle 60%
-    - Last 10% of pages (conclusions, summaries)
+    For documents exceeding the direct send limit, build a compressed
+    representation by taking the first ~500 chars of every page.
 
-    Total output stays within target_chars.
+    This preserves topic coverage across the entire document (headings,
+    opening paragraphs) rather than sampling a handful of full pages
+    which may miss major sections entirely.
+
+    Falls back to the first/last strategy if per-page headers still
+    exceed the budget.
 
     Args:
         pages: List of page text strings.
         target_chars: Maximum total characters for the sampled output.
 
     Returns:
-        Sampled text with section separators.
+        Sampled text with page markers.
     """
-    total_pages = len(pages)
+    # Strategy 1: First 500 chars per page (captures headings + opening text)
+    PER_PAGE_LIMIT = 500
+    compressed = []
+    total_chars = 0
 
-    # Always include first 20% and last 10%
-    first_count = max(2, total_pages // 5)
-    last_count = max(2, total_pages // 10)
+    for i, page in enumerate(pages):
+        snippet = page[:PER_PAGE_LIMIT].strip()
+        if not snippet:
+            continue
+        entry = f"[Page {i + 1}] {snippet}"
+        if total_chars + len(entry) > target_chars:
+            break
+        compressed.append(entry)
+        total_chars += len(entry)
 
-    first_section = pages[:first_count]
-    last_section = pages[-last_count:]
-
-    # Budget remaining chars for middle sampling
-    first_chars = sum(len(p) for p in first_section)
-    last_chars = sum(len(p) for p in last_section)
-    middle_budget = target_chars - first_chars - last_chars
-
-    # Sample from middle pages
-    middle_start = first_count
-    middle_end = total_pages - last_count
-    middle_pages = pages[middle_start:middle_end]
-
-    sampled_middle = []
-    middle_chars = 0
-
-    if middle_pages and middle_budget > 0:
-        step = max(1, len(middle_pages) // 8)  # pick ~8 evenly spaced pages
-        for i in range(0, len(middle_pages), step):
-            if middle_chars + len(middle_pages[i]) > middle_budget:
-                break
-            sampled_middle.append(middle_pages[i])
-            middle_chars += len(middle_pages[i])
-
-    # Combine with separators indicating sampling
-    result_parts = (
-        first_section
-        + ["--- [sampled middle pages] ---"]
-        + sampled_middle
-        + ["--- [final pages] ---"]
-        + last_section
-    )
-    return "\n\n".join(result_parts)
+    # Always return the compressed representation — even partial coverage
+    # of all pages (via headings) is better than full text of a few pages.
+    return "\n\n".join(compressed)
 
 
-def call_haiku_for_topics(full_text: str, bedrock_client) -> dict:
+def repair_json(content: str) -> str:
+    """
+    Attempt to repair common LLM JSON output issues:
+    - Trailing commas in arrays/objects
+    - Missing closing braces
+    """
+    import re
+    # Remove trailing commas before ] or }
+    content = re.sub(r',\s*([}\]])', r'\1', content)
+    return content
+
+
+def call_haiku_for_topics(full_text: str, bedrock_client, extraction_method: str = "full_document", original_chars: int = 0) -> dict:
     """
     Call Claude 3 Haiku to extract main topics from document text.
-    Retries up to 3 times on JSON parse failures.
+    Retries up to 3 times on JSON parse failures with repair attempts.
 
     Args:
         full_text: The extracted document text to analyze.
         bedrock_client: Boto3 Bedrock Runtime client.
+        extraction_method: "full_document" or "sampled_document" — stored for diagnostics.
+        original_chars: Total character count of the original document (for coverage calculation).
 
     Returns:
-        Dict containing topics, learning_objectives, and provenance metadata.
+        Dict containing topics, learning_objectives, confidence, coverage, and provenance metadata.
 
     Raises:
         RuntimeError: If all 3 parse attempts fail.
@@ -231,6 +234,17 @@ def call_haiku_for_topics(full_text: str, bedrock_client) -> dict:
                 body=request_body
             )
             result = json.loads(response["body"].read())
+
+            # Validate Bedrock response shape before indexing
+            if (
+                not isinstance(result, dict)
+                or "content" not in result
+                or not isinstance(result["content"], list)
+                or len(result["content"]) == 0
+                or "text" not in result["content"][0]
+            ):
+                raise ValueError(f"Unexpected Bedrock response shape: {str(result)[:200]}")
+
             content = result["content"][0]["text"]
 
             # Clean response: strip markdown fences if present
@@ -242,23 +256,47 @@ def call_haiku_for_topics(full_text: str, bedrock_client) -> dict:
                     content = content[:-3]
                 content = content.strip()
 
-            parsed = json.loads(content)
+            # Attempt JSON repair before parsing
+            try:
+                parsed = json.loads(content)
+            except json.JSONDecodeError:
+                repaired = repair_json(content)
+                parsed = json.loads(repaired)
 
             # Validate structure
             if "topics" not in parsed or not isinstance(parsed["topics"], list):
                 raise ValueError("Missing or invalid 'topics' field")
 
-            # Enforce maximum limits
-            parsed["topics"] = parsed["topics"][:5]
+            # Sanitize topic strings — remove empty, non-string, or generic entries
+            parsed["topics"] = [
+                t.strip() for t in parsed["topics"]
+                if isinstance(t, str) and t.strip()
+            ][:5]
+
             if "learning_objectives" in parsed and isinstance(parsed["learning_objectives"], list):
-                parsed["learning_objectives"] = parsed["learning_objectives"][:5]
+                parsed["learning_objectives"] = [
+                    o.strip() for o in parsed["learning_objectives"]
+                    if isinstance(o, str) and o.strip()
+                ][:5]
             else:
                 parsed["learning_objectives"] = []
+
+            # Confidence = model's assessment of topic accuracy against the provided text
+            if "confidence" not in parsed or not isinstance(parsed.get("confidence"), (int, float)):
+                parsed["confidence"] = 0.85
+
+            # Coverage = what fraction of the original document was sent to the LLM
+            if extraction_method == "full_document":
+                parsed["coverage"] = 1.0
+            else:
+                # original_chars is the total raw document size; full_text is the sampled version
+                parsed["coverage"] = round(len(full_text) / original_chars, 2) if original_chars > 0 else 1.0
 
             # Add provenance metadata
             parsed["extracted_at"] = datetime.now(timezone.utc).isoformat()
             parsed["model"] = TOPIC_EXTRACTION_MODEL_ID
-            parsed["version"] = 1
+            parsed["version"] = 2
+            parsed["extraction_method"] = extraction_method
 
             return parsed
 

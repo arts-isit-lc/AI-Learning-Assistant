@@ -435,9 +435,7 @@ exports.handler = async (event) => {
             module_number,
             instructor_email,
           } = event.queryStringParameters;
-          const { module_prompt } = JSON.parse(event.body || "{}");
-          console.log("CREATE MODULE - module_prompt:", module_prompt);
-          console.log("CREATE MODULE - event.body:", event.body);
+          const { module_prompt, key_topics } = JSON.parse(event.body || "{}");
 
           try {
             // Check if a module with the same name already exists
@@ -457,9 +455,10 @@ exports.handler = async (event) => {
             }
 
             // Insert new module into Course_Modules table
+            const keyTopicsJson = key_topics ? JSON.stringify(key_topics) : null;
             const newModule = await sqlConnection`
-                    INSERT INTO "Course_Modules" (module_id, concept_id, module_name, module_number, module_prompt)
-                    VALUES (uuid_generate_v4(), ${concept_id}, ${module_name}, ${module_number}, ${module_prompt})
+                    INSERT INTO "Course_Modules" (module_id, concept_id, module_name, module_number, module_prompt, key_topics)
+                    VALUES (uuid_generate_v4(), ${concept_id}, ${module_name}, ${module_number}, ${module_prompt}, ${keyTopicsJson})
                     RETURNING *;
                   `;
 
@@ -560,9 +559,7 @@ exports.handler = async (event) => {
         ) {
           const { module_id, instructor_email, concept_id } =
             event.queryStringParameters;
-          const { module_name, module_prompt, conflict_metadata } = JSON.parse(event.body || "{}");
-          console.log("EDIT MODULE - module_prompt:", module_prompt);
-          console.log("EDIT MODULE - event.body:", event.body);
+          const { module_name, module_prompt, conflict_metadata, key_topics } = JSON.parse(event.body || "{}");
 
           if (module_name) {
             try {
@@ -584,9 +581,10 @@ exports.handler = async (event) => {
               }
 
               // Update the module in the Course_Modules table
+              const keyTopicsJson = key_topics ? JSON.stringify(key_topics) : null;
               await sqlConnection`
                     UPDATE "Course_Modules"
-                    SET module_name = ${module_name}, concept_id = ${concept_id}, module_prompt = ${module_prompt}, conflict_metadata = ${conflict_metadata ? JSON.stringify(conflict_metadata) : null}
+                    SET module_name = ${module_name}, concept_id = ${concept_id}, module_prompt = ${module_prompt}, conflict_metadata = ${conflict_metadata ? JSON.stringify(conflict_metadata) : null}, key_topics = ${keyTopicsJson}
                     WHERE module_id = ${module_id};
                   `;
 

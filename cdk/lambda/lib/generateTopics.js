@@ -90,6 +90,8 @@ async function generateModuleTopics(moduleId, sqlConnection) {
     consolidated = {
       topics: allTopics,
       learning_objectives: allObjectives,
+      raw_topics: allTopics,
+      raw_learning_objectives: allObjectives,
       generated_at: new Date().toISOString(),
       model: "direct-passthrough",
       source_file_count: filesWithTopics,
@@ -102,6 +104,8 @@ async function generateModuleTopics(moduleId, sqlConnection) {
       const llmResult = await callHaikuForConsolidation(allTopics, allObjectives, filesWithTopics);
       consolidated = {
         ...llmResult,
+        raw_topics: allTopics,
+        raw_learning_objectives: allObjectives,
         generated_at: new Date().toISOString(),
         model: TOPIC_EXTRACTION_MODEL_ID,
         source_file_count: filesWithTopics,

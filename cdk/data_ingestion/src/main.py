@@ -283,11 +283,11 @@ def handler(event, context):
             try:
                 conn = connect_to_db()
                 if should_extract_topics(file_id, s3_etag, conn):
-                    full_text = extract_text_from_pdf(bucket_name, file_key)
+                    full_text, extraction_method, original_chars = extract_text_from_pdf(bucket_name, file_key)
                     if full_text:
-                        topics = call_haiku_for_topics(full_text, bedrock_runtime)
+                        topics = call_haiku_for_topics(full_text, bedrock_runtime, extraction_method, original_chars)
                         update_file_metadata(file_id, topics, s3_etag, conn)
-                        logger.info(f"Topic extraction completed for file_id={file_id}")
+                        logger.info(f"Topic extraction completed for file_id={file_id}", extra={"extraction_method": extraction_method})
                     else:
                         logger.info(f"No text extracted from file, skipping topic extraction")
             except Exception as e:

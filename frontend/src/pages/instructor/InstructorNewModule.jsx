@@ -16,6 +16,7 @@ import {
   MenuItem,
   ListSubheader,
   Alert,
+  Chip,
   CircularProgress,
   Tooltip,
 } from "@mui/material";
@@ -43,6 +44,12 @@ export const InstructorNewModule = ({ courseId }) => {
   const [nextModuleNumber, setNextModuleNumber] = useState(data.length + 1);
   const [referencedFileIds, setReferencedFileIds] = useState([]);
   const [courseFiles, setCourseFiles] = useState([]);
+
+  // Key topics state
+  const [keyTopics, setKeyTopics] = useState([]);
+  const [newTopicInput, setNewTopicInput] = useState("");
+  const [editingTopicIndex, setEditingTopicIndex] = useState(null);
+  const [editingTopicValue, setEditingTopicValue] = useState("");
 
   // Prompt conflict validation state
   const [conflictReport, setConflictReport] = useState(null);
@@ -139,7 +146,7 @@ export const InstructorNewModule = ({ courseId }) => {
           module_number: nextModuleNumber,
           instructor_email: email,
         },
-        { module_prompt: modulePrompt }
+        { module_prompt: modulePrompt, key_topics: keyTopics.length > 0 ? keyTopics : null }
       );
 
       await uploadFiles(newFiles, null, updatedModule.module_id);
@@ -337,6 +344,86 @@ export const InstructorNewModule = ({ courseId }) => {
         )}
 
         {renderHighlightedPrompt()}
+
+        {/* Key Topics */}
+        <Box sx={{ marginTop: 3, marginBottom: 1 }}>
+          <Typography variant="subtitle2" gutterBottom>
+            Key Topics
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+            Topics the chatbot should focus on and guide students to learn. Click a topic to edit it. Press Enter to add a new one.
+          </Typography>
+
+          {/* Topic chips */}
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 1 }}>
+            {keyTopics.map((topic, index) => (
+              editingTopicIndex === index ? (
+                <TextField
+                  key={index}
+                  size="small"
+                  value={editingTopicValue}
+                  onChange={(e) => setEditingTopicValue(e.target.value)}
+                  onBlur={() => {
+                    if (editingTopicValue.trim()) {
+                      const updated = [...keyTopics];
+                      updated[index] = editingTopicValue.trim();
+                      setKeyTopics(updated);
+                    }
+                    setEditingTopicIndex(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (editingTopicValue.trim()) {
+                        const updated = [...keyTopics];
+                        updated[index] = editingTopicValue.trim();
+                        setKeyTopics(updated);
+                      }
+                      setEditingTopicIndex(null);
+                    } else if (e.key === "Escape") {
+                      setEditingTopicIndex(null);
+                    }
+                  }}
+                  autoFocus
+                  sx={{ minWidth: 120 }}
+                />
+              ) : (
+                <Chip
+                  key={index}
+                  label={topic}
+                  onClick={() => {
+                    setEditingTopicIndex(index);
+                    setEditingTopicValue(topic);
+                  }}
+                  onDelete={() => {
+                    setKeyTopics(keyTopics.filter((_, i) => i !== index));
+                  }}
+                  color="primary"
+                  variant="outlined"
+                />
+              )
+            ))}
+          </Box>
+
+          {/* Add new topic input */}
+          <TextField
+            size="small"
+            placeholder="Add a topic and press Enter"
+            value={newTopicInput}
+            onChange={(e) => setNewTopicInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                const trimmed = newTopicInput.trim();
+                if (trimmed && !keyTopics.includes(trimmed)) {
+                  setKeyTopics([...keyTopics, trimmed]);
+                  setNewTopicInput("");
+                }
+              }
+            }}
+            sx={{ maxWidth: 300 }}
+          />
+        </Box>
 
         <FormControl fullWidth margin="normal">
           <InputLabel id="concept-select-label">Concept</InputLabel>
