@@ -558,6 +558,11 @@ def handler(event, context):
 
             except Exception as e:
                 logger.exception("Processing failed", extra={"file_id": file_id})
+                # Rollback any aborted transaction so conn is usable for failure recording
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
                 # Record failure metrics
                 try:
                     processing_duration_ms = int((time.time() - processing_start) * 1000)
