@@ -271,9 +271,11 @@ const FileManagement = ({
                       ? (processingStates || {})[fileId]
                       : null;
 
-                    // Determine upload column status
+                    // Determine if this file was uploaded in the current session
+                    // (has tracking state) vs a pre-existing file loaded from the server
                     const isNewFile = newFiles.includes(file);
-                    const isExistingFile = !isNewFile;
+                    const hasUploadTracking = !!uploadState || !!processingState;
+                    const isPreExistingFile = !isNewFile && !hasUploadTracking;
 
                     return (
                       <tr key={index} className="border-b border-border">
@@ -293,17 +295,21 @@ const FileManagement = ({
                         {/* Uploaded column */}
                         <td className="py-3 px-2">
                           <div className="flex items-center justify-center gap-2">
-                            {isExistingFile ? (
+                            {isPreExistingFile ? (
                               <CheckCircle2 className="h-4 w-4 text-green-600" aria-label="Uploaded" />
                             ) : uploadState?.status === "uploading" ? (
                               <div className="flex items-center gap-2 w-full max-w-[120px]">
                                 <Progress value={uploadState.progress} className="flex-1 h-2" />
                                 <span className="text-xs text-muted-foreground whitespace-nowrap">{uploadState.progress}%</span>
                               </div>
-                            ) : uploadState?.status === "upload_complete" ? (
+                            ) : uploadState?.status === "upload_complete" || uploadState?.status === "upload_failed" ? (
+                              uploadState.status === "upload_complete" ? (
+                                <CheckCircle2 className="h-4 w-4 text-green-600" aria-label="Upload complete" />
+                              ) : (
+                                <AlertCircle className="h-4 w-4 text-destructive" aria-label={uploadState.error || "Upload failed"} title={uploadState.error || "Upload failed"} />
+                              )
+                            ) : processingState ? (
                               <CheckCircle2 className="h-4 w-4 text-green-600" aria-label="Upload complete" />
-                            ) : uploadState?.status === "upload_failed" ? (
-                              <AlertCircle className="h-4 w-4 text-destructive" aria-label={uploadState.error || "Upload failed"} title={uploadState.error || "Upload failed"} />
                             ) : (
                               <span className="text-xs text-muted-foreground">Pending</span>
                             )}
@@ -313,7 +319,7 @@ const FileManagement = ({
                         {/* Generated Embedding column */}
                         <td className="py-3 px-2">
                           <div className="flex items-center justify-center gap-2">
-                            {isExistingFile ? (
+                            {isPreExistingFile ? (
                               <CheckCircle2 className="h-4 w-4 text-green-600" aria-label="Embeddings generated" />
                             ) : processingState?.status === "complete" ? (
                               <CheckCircle2 className="h-4 w-4 text-green-600" aria-label="Embeddings generated" />
@@ -329,10 +335,8 @@ const FileManagement = ({
                               </div>
                             ) : processingState?.status === "timed_out" ? (
                               <Clock className="h-4 w-4 text-yellow-600" aria-label="Taking longer than expected" title="Taking longer than expected" />
-                            ) : uploadState && !processingState ? (
+                            ) : uploadState ? (
                               <span className="text-xs text-muted-foreground">—</span>
-                            ) : isExistingFile ? (
-                              <CheckCircle2 className="h-4 w-4 text-green-600" aria-label="Embeddings generated" />
                             ) : (
                               <span className="text-xs text-muted-foreground">—</span>
                             )}
