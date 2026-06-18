@@ -885,36 +885,6 @@ const InstructorEditCourse = () => {
           onFilesSelected={handleImmediateUpload}
         />
 
-        {/* Generate Topics Display (topics list only, button moved to action bar) */}
-        <Box sx={{ marginTop: 3, marginBottom: 2 }}>
-          {isTopicsStale && moduleTopics && (
-            <Typography variant="caption" color="warning.main" sx={{ display: "block", marginTop: 1 }}>
-              ⚠ Topics may be outdated — files have been added or removed since last generation.
-            </Typography>
-          )}
-
-          {moduleTopics && moduleTopics.topics && moduleTopics.topics.length > 0 && (
-            <Box sx={{ marginTop: 2 }}>
-              <Typography variant="subtitle2">Generated Topics (use as reference for module prompt):</Typography>
-              <ul style={{ margin: "4px 0", paddingLeft: 20 }}>
-                {moduleTopics.topics.map((topic, i) => (
-                  <li key={i}><Typography variant="body2">{topic}</Typography></li>
-                ))}
-              </ul>
-              {moduleTopics.learning_objectives && moduleTopics.learning_objectives.length > 0 && (
-                <>
-                  <Typography variant="subtitle2" sx={{ marginTop: 1 }}>Learning Objectives:</Typography>
-                  <ul style={{ margin: "4px 0", paddingLeft: 20 }}>
-                    {moduleTopics.learning_objectives.map((obj, i) => (
-                      <li key={i}><Typography variant="body2">{obj}</Typography></li>
-                    ))}
-                  </ul>
-                </>
-              )}
-            </Box>
-          )}
-        </Box>
-
         {/* Action Buttons */}
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 2, width: '100%' }}>
           <Box sx={{ display: "flex", gap: 2 }}>
@@ -933,14 +903,6 @@ const InstructorEditCourse = () => {
               Delete Module
             </Button>
           </Box>
-          <Button
-            variant="contained"
-            color="secondary"
-            onClick={handleGenerateTopics}
-            disabled={isGeneratingTopics || files.length === 0}
-          >
-            {isGeneratingTopics ? "Generating..." : "Generate Topics"}
-          </Button>
           <Box sx={{ display: "flex", gap: 2 }}>
             {conflictReport && conflictReport.has_conflicts && (
               <Button
