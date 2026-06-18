@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { Trash2, CloudUpload, Download } from "lucide-react";
+import { Trash2, CloudUpload, Download, CheckCircle2, AlertCircle, Clock } from "lucide-react";
 import { toast } from "react-toastify";
 
 import { cleanFileName } from "../utils/fileHelpers";
-import FileProgressRow from "./FileProgressRow";
+import { Progress } from "@/components/ui/progress";
 
 const FileManagement = ({
   newFiles,
@@ -210,21 +210,24 @@ const FileManagement = ({
 
       {/* File table */}
       {!loading ? (
-        <div className="mx-8 mt-2">
+        <div className="mt-2 overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-border">
-                <th className="text-sm font-medium text-muted-foreground py-2 text-center">
+                <th className="text-sm font-medium text-muted-foreground py-2 text-left pl-3">
                   File Name
                 </th>
                 <th className="text-sm font-medium text-muted-foreground py-2 text-center">
-                  File Description
+                  Uploaded
                 </th>
-                <th className="text-sm font-medium text-muted-foreground py-2 text-right pr-4">
-                  Download
+                <th className="text-sm font-medium text-muted-foreground py-2 text-center">
+                  Generated Embedding
                 </th>
-                <th className="text-sm font-medium text-muted-foreground py-2 text-right">
-                  Remove
+                <th className="text-sm font-medium text-muted-foreground py-2 text-center">
+                  Description
+                </th>
+                <th className="text-sm font-medium text-muted-foreground py-2 text-right pr-3">
+                  Actions
                 </th>
               </tr>
             </thead>
@@ -232,7 +235,7 @@ const FileManagement = ({
               {[...files, ...savedFiles, ...newFiles].length === 0 ? (
                 <tr>
                   <td
-                    colSpan={4}
+                    colSpan={5}
                     className="text-sm text-muted-foreground text-center py-4"
                   >
                     No files found
@@ -255,20 +258,89 @@ const FileManagement = ({
                   })
                   .map((file, index) => {
                     const fileName = file.fileName || file.name;
+                    const cleanedName = cleanFileName(fileName);
+
+                    // Find this file's upload state (match by fileName)
+                    const uploadState = Object.values(uploadStates || {}).find(
+                      (u) => u.fileName === file.name || u.fileName === fileName
+                    );
+
+                    // Find this file's processing state (match by fileId from upload)
+                    const fileId = uploadState?.fileId;
+                    const processingState = fileId
+                      ? (processingStates || {})[fileId]
+                      : null;
+
+                    // Determine upload column status
+                    const isNewFile = newFiles.includes(file);
+                    const isExistingFile = !isNewFile;
+
                     return (
                       <tr key={index} className="border-b border-border">
-                        <td className="text-sm py-3 text-center">
+                        {/* File Name */}
+                        <td className="text-sm py-3 pl-3">
                           <span
                             className={
-                              newFiles.includes(file)
-                                ? "text-destructive"
+                              isNewFile
+                                ? "text-destructive font-medium"
                                 : "text-foreground"
                             }
                           >
-                            {cleanFileName(fileName)}
+                            {cleanedName}
                           </span>
                         </td>
-                        <td className="py-3">
+
+                        {/* Uploaded column */}
+                        <td className="py-3 px-2">
+                          <div className="flex items-center justify-center gap-2">
+                            {isExistingFile ? (
+                              <CheckCircle2 className="h-4 w-4 text-green-600" aria-label="Uploaded" />
+                            ) : uploadState?.status === "uploading" ? (
+                              <div className="flex items-center gap-2 w-full max-w-[120px]">
+                                <Progress value={uploadState.progress} className="flex-1 h-2" />
+                                <span className="text-xs text-muted-foreground whitespace-nowrap">{uploadState.progress}%</span>
+                              </div>
+                            ) : uploadState?.status === "upload_complete" ? (
+                              <CheckCircle2 className="h-4 w-4 text-green-600" aria-label="Upload complete" />
+                            ) : uploadState?.status === "upload_failed" ? (
+                              <AlertCircle className="h-4 w-4 text-destructive" aria-label={uploadState.error || "Upload failed"} title={uploadState.error || "Upload failed"} />
+                            ) : (
+                              <span className="text-xs text-muted-foreground">Pending</span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Generated Embedding column */}
+                        <td className="py-3 px-2">
+                          <div className="flex items-center justify-center gap-2">
+                            {isExistingFile ? (
+                              <CheckCircle2 className="h-4 w-4 text-green-600" aria-label="Embeddings generated" />
+                            ) : processingState?.status === "complete" ? (
+                              <CheckCircle2 className="h-4 w-4 text-green-600" aria-label="Embeddings generated" />
+                            ) : processingState?.status === "processing" || processingState?.status === "pending" ? (
+                              <div className="flex items-center gap-2 w-full max-w-[120px]">
+                                <Progress indeterminate className="flex-1 h-2" />
+                              </div>
+                            ) : processingState?.status === "failed" ? (
+                              <AlertCircle className="h-4 w-4 text-destructive" aria-label="Processing failed" title="Embedding generation failed" />
+                            ) : processingState?.status === "not_found" ? (
+                              <div className="flex items-center gap-2 w-full max-w-[120px]">
+                                <Progress indeterminate className="flex-1 h-2" />
+                              </div>
+                            ) : processingState?.status === "timed_out" ? (
+                              <Clock className="h-4 w-4 text-yellow-600" aria-label="Taking longer than expected" title="Taking longer than expected" />
+                            ) : uploadState && !processingState ? (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            ) : isExistingFile ? (
+                              <CheckCircle2 className="h-4 w-4 text-green-600" aria-label="Embeddings generated" />
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Description */}
+                        <td className="py-3 px-2">
                           <textarea
                             className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
                             placeholder="Enter File Description"
@@ -280,38 +352,42 @@ const FileManagement = ({
                             }
                           />
                         </td>
-                        <td className="py-3 text-right pr-4">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (file && file.url && file.url !== "dummy")
-                                handleDownloadClick(file.url);
-                              else handleDownloadFile(file);
-                            }}
-                            className="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                          >
-                            <Download className="h-4 w-4" aria-hidden="true" />
-                            Download
-                          </button>
-                        </td>
-                        <td className="py-3 text-right">
-                          <button
-                            type="button"
-                            aria-label={`Delete ${cleanFileName(fileName)}`}
-                            onClick={() => {
-                              if (newFiles.includes(file))
-                                handleRemoveNewFile(fileName);
-                              else if (savedFiles.includes(file))
-                                handleSavedRemoveFile(fileName);
-                              else handleRemoveFile(fileName);
-                            }}
-                            className="p-2 rounded-md hover:bg-muted transition-colors"
-                          >
-                            <Trash2
-                              className="h-4 w-4 text-destructive"
-                              aria-hidden="true"
-                            />
-                          </button>
+
+                        {/* Actions */}
+                        <td className="py-3 pr-3">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (file && file.url && file.url !== "dummy")
+                                  handleDownloadClick(file.url);
+                                else handleDownloadFile(file);
+                              }}
+                              className="p-2 rounded-md hover:bg-muted transition-colors"
+                              aria-label={`Download ${cleanedName}`}
+                              title="Download"
+                            >
+                              <Download className="h-4 w-4 text-foreground" aria-hidden="true" />
+                            </button>
+                            <button
+                              type="button"
+                              aria-label={`Delete ${cleanedName}`}
+                              title="Remove"
+                              onClick={() => {
+                                if (newFiles.includes(file))
+                                  handleRemoveNewFile(fileName);
+                                else if (savedFiles.includes(file))
+                                  handleSavedRemoveFile(fileName);
+                                else handleRemoveFile(fileName);
+                              }}
+                              className="p-2 rounded-md hover:bg-muted transition-colors"
+                            >
+                              <Trash2
+                                className="h-4 w-4 text-destructive"
+                                aria-hidden="true"
+                              />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -323,46 +399,6 @@ const FileManagement = ({
       ) : (
         <p className="text-sm text-muted-foreground mt-2">Loading...</p>
       )}
-
-      {/* Active upload/processing progress indicators */}
-      {Object.values(uploadStates || {}).length > 0 ||
-      Object.values(processingStates || {}).length > 0 ? (
-        <div className="flex flex-col gap-2 mt-4">
-          {/* Show upload progress for files currently uploading — skip files that
-              have transitioned to processingStates (avoid showing both) */}
-          {Object.values(uploadStates || {})
-            .filter((fileState) => {
-              // If this file is already tracked by the processing poller, let the poller render it
-              const inProcessing = processingStates && processingStates[fileState.fileId];
-              if (inProcessing) return false;
-              return true;
-            })
-            .map((fileState) => (
-              <FileProgressRow
-                key={fileState.fileId}
-                fileName={fileState.fileName}
-                status={fileState.status}
-                progress={fileState.progress}
-                error={fileState.error}
-                onAbort={() => onAbortFile?.(fileState.fileId)}
-                onRetry={() => onRetryFile?.(fileState.fileId)}
-                onRemove={() => onRemoveTrackedFile?.(fileState.fileId)}
-              />
-            ))}
-          {/* Show processing progress for files being processed (including complete for brief success feedback) */}
-          {Object.values(processingStates || {}).map((fileState) => (
-            <FileProgressRow
-              key={fileState.fileId}
-              fileName={fileState.fileName || fileState.fileId}
-              status={fileState.status}
-              progress={0}
-              error={null}
-              notFoundContext={getNotFoundContext?.(fileState.fileId)}
-              onRemove={() => onRemoveTrackedFile?.(fileState.fileId)}
-            />
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 };
