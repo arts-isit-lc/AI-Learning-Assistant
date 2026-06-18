@@ -355,11 +355,16 @@ const InstructorEditCourse = () => {
       addTrackedFiles(uploadedFileIds);
     }
 
-    // Move successfully uploaded files to savedFiles
+    // Move successfully uploaded files from newFiles to savedFiles
     const successfullyUploaded = selectedFiles.filter((file) =>
       results.some((r) => r?.fileName === file.name)
     );
-    setSavedFiles((prev) => [...prev, ...successfullyUploaded]);
+    if (successfullyUploaded.length > 0) {
+      setSavedFiles((prev) => [...prev, ...successfullyUploaded]);
+      setNewFiles((prev) =>
+        prev.filter((f) => !successfullyUploaded.includes(f))
+      );
+    }
   };
 
   const handleSave = async () => {
