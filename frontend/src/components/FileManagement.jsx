@@ -328,33 +328,39 @@ const FileManagement = ({
       {Object.values(uploadStates || {}).length > 0 ||
       Object.values(processingStates || {}).length > 0 ? (
         <div className="flex flex-col gap-2 mt-4">
-          {/* Show upload progress for files currently uploading */}
-          {Object.values(uploadStates || {}).map((fileState) => (
-            <FileProgressRow
-              key={fileState.fileId}
-              fileName={fileState.fileName}
-              status={fileState.status}
-              progress={fileState.progress}
-              error={fileState.error}
-              onAbort={() => onAbortFile?.(fileState.fileId)}
-              onRetry={() => onRetryFile?.(fileState.fileId)}
-              onRemove={() => onRemoveTrackedFile?.(fileState.fileId)}
-            />
-          ))}
-          {/* Show processing progress for files being processed */}
-          {Object.values(processingStates || {})
-            .filter((f) => f.status !== "complete")
+          {/* Show upload progress for files currently uploading — skip files that
+              have transitioned to processingStates (avoid showing both) */}
+          {Object.values(uploadStates || {})
+            .filter((fileState) => {
+              // If this file is already tracked by the processing poller, let the poller render it
+              const inProcessing = processingStates && processingStates[fileState.fileId];
+              if (inProcessing) return false;
+              return true;
+            })
             .map((fileState) => (
               <FileProgressRow
                 key={fileState.fileId}
-                fileName={fileState.fileName || fileState.fileId}
+                fileName={fileState.fileName}
                 status={fileState.status}
-                progress={0}
-                error={null}
-                notFoundContext={getNotFoundContext?.(fileState.fileId)}
+                progress={fileState.progress}
+                error={fileState.error}
+                onAbort={() => onAbortFile?.(fileState.fileId)}
+                onRetry={() => onRetryFile?.(fileState.fileId)}
                 onRemove={() => onRemoveTrackedFile?.(fileState.fileId)}
               />
             ))}
+          {/* Show processing progress for files being processed (including complete for brief success feedback) */}
+          {Object.values(processingStates || {}).map((fileState) => (
+            <FileProgressRow
+              key={fileState.fileId}
+              fileName={fileState.fileName || fileState.fileId}
+              status={fileState.status}
+              progress={0}
+              error={null}
+              notFoundContext={getNotFoundContext?.(fileState.fileId)}
+              onRemove={() => onRemoveTrackedFile?.(fileState.fileId)}
+            />
+          ))}
         </div>
       ) : null}
     </div>
