@@ -489,20 +489,35 @@ def handler(event, context):
                     bucket=bucket_name,
                 )
 
-                # Steps 7+8: Run topic extraction and embedding concurrently
+                # Steps 7+8: Run topic extraction (background thread) and
+                # embedding (main thread) concurrently.
+                # NOTE: psycopg2 connections are NOT thread-safe — the main
+                # thread's `conn` must stay on the main thread. Only topic_task
+                # runs on a background thread with its own connection.
                 db_secret_for_thread = get_secret()
                 topic_exc = None
-                with ThreadPoolExecutor(max_workers=2) as executor:
-                    embedder_future = executor.submit(
-                        embedder_task,
-                        file_id, chunks, vectorstore, conn, module_id,
-                    )
+                with ThreadPoolExecutor(max_workers=1) as executor:
                     topic_future = executor.submit(
                         topic_task,
                         full_text, file_id, s3_etag, db_secret_for_thread, bedrock_runtime,
                     )
 
-                # Await both — topic first so its exception is captured as non-blocking
+                    # Run embedder on the main thread while topic runs in background
+                    index_result = incremental_index(
+                        file_id=file_id,
+                        chunks=chunks,
+                        vectorstore=vectorstore,
+                        connection=conn,
+                        collection_name=module_id,
+                    )
+                    logger.info("Incremental index complete", extra={
+                        "file_id": file_id,
+                        "deleted": index_result["deleted"],
+                        "inserted": index_result["inserted"],
+                    })
+
+                # Topic thread has completed (executor __exit__ waits).
+                # Retrieve result — swallow exceptions as non-blocking.
                 try:
                     topic_future.result()
                 except Exception as e:
@@ -511,14 +526,6 @@ def handler(event, context):
                         "Topic extraction failed (non-blocking)",
                         extra={"file_id": file_id, "error": str(e)},
                     )
-
-                # Embedder exception re-raises — preserves existing failure path
-                index_result = embedder_future.result()
-                logger.info("Incremental index complete", extra={
-                    "file_id": file_id,
-                    "deleted": index_result["deleted"],
-                    "inserted": index_result["inserted"],
-                })
 
                 # Step 9: Update metadata after success
                 update_content_hash(file_id, content_hash, conn)
