@@ -3,6 +3,7 @@ import json
 import time
 import boto3
 import psycopg2
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from aws_lambda_powertools import Logger
 
@@ -13,6 +14,7 @@ from topic_extraction import (
     call_haiku_for_topics,
     update_file_metadata,
 )
+from topic_aggregation import all_files_have_topics, aggregate_module_topics
 from indexing.deduplication import compute_content_hash, should_reprocess_file, update_content_hash
 from indexing.incremental import acquire_module_lock, release_module_lock, incremental_index
 from indexing.deletion import handle_file_deletion
@@ -323,6 +325,68 @@ def get_module_status(module_id: str, connection) -> str:
         return 'active'
 
 
+def embedder_task(
+    file_id: str,
+    chunks: list,
+    vectorstore,
+    connection,
+    collection_name: str,
+) -> dict:
+    """Run incremental_index in a thread. Returns the index result dict.
+
+    Exceptions propagate to the caller (handler will re-raise them).
+    """
+    return incremental_index(
+        file_id=file_id,
+        chunks=chunks,
+        vectorstore=vectorstore,
+        connection=connection,
+        collection_name=collection_name,
+    )
+
+
+def topic_task(
+    full_text: str,
+    file_id: str,
+    s3_etag: str,
+    db_secret: dict,
+    bedrock_client,
+) -> None:
+    """Run per-file topic extraction in a thread.
+
+    Opens and closes its own psycopg2 connection for thread-safety.
+    Exceptions propagate to the caller (handler swallows them as non-blocking).
+    """
+    conn = None
+    try:
+        conn = psycopg2.connect(
+            dbname=db_secret["dbname"],
+            user=db_secret["username"],
+            password=db_secret["password"],
+            host=RDS_PROXY_ENDPOINT,
+            port=db_secret["port"],
+            sslmode="require",
+        )
+        if not full_text:
+            logger.info(
+                "Skipping topic extraction — no text extracted",
+                extra={"file_id": file_id},
+            )
+            return
+        if should_extract_topics(file_id, s3_etag, conn):
+            topics = call_haiku_for_topics(
+                full_text, bedrock_client, "full_document", len(full_text)
+            )
+            update_file_metadata(file_id, topics, s3_etag, conn)
+            logger.info(
+                "Topic extraction completed",
+                extra={"file_id": file_id, "extraction_method": "full_document"},
+            )
+    finally:
+        if conn:
+            conn.close()
+
+
 @logger.inject_lambda_context(clear_state=True)
 def handler(event, context):
     records = event.get('Records', [])
@@ -425,26 +489,31 @@ def handler(event, context):
                     bucket=bucket_name,
                 )
 
-                # Step 7: Topic extraction using full_text (no re-download)
-                try:
-                    if should_extract_topics(file_id, s3_etag, conn):
-                        if full_text:
-                            topics = call_haiku_for_topics(full_text, bedrock_runtime, "full_document", len(full_text))
-                            update_file_metadata(file_id, topics, s3_etag, conn)
-                            logger.info("Topic extraction completed", extra={"file_id": file_id, "extraction_method": "full_document"})
-                        else:
-                            logger.info("No text extracted from file, skipping topic extraction")
-                except Exception as e:
-                    logger.warning("Topic extraction failed (non-blocking)", extra={"file_id": file_id, "error": str(e)})
+                # Steps 7+8: Run topic extraction and embedding concurrently
+                db_secret_for_thread = get_secret()
+                topic_exc = None
+                with ThreadPoolExecutor(max_workers=2) as executor:
+                    embedder_future = executor.submit(
+                        embedder_task,
+                        file_id, chunks, vectorstore, conn, module_id,
+                    )
+                    topic_future = executor.submit(
+                        topic_task,
+                        full_text, file_id, s3_etag, db_secret_for_thread, bedrock_runtime,
+                    )
 
-                # Step 8: Incremental index — direct SQL delete + insert
-                index_result = incremental_index(
-                    file_id=file_id,
-                    chunks=chunks,
-                    vectorstore=vectorstore,
-                    connection=conn,
-                    collection_name=module_id,
-                )
+                # Await both — topic first so its exception is captured as non-blocking
+                try:
+                    topic_future.result()
+                except Exception as e:
+                    topic_exc = e
+                    logger.warning(
+                        "Topic extraction failed (non-blocking)",
+                        extra={"file_id": file_id, "error": str(e)},
+                    )
+
+                # Embedder exception re-raises — preserves existing failure path
+                index_result = embedder_future.result()
                 logger.info("Incremental index complete", extra={
                     "file_id": file_id,
                     "deleted": index_result["deleted"],
@@ -455,6 +524,18 @@ def handler(event, context):
                 update_content_hash(file_id, content_hash, conn)
                 update_chunk_count(file_id, index_result["inserted"], conn)
                 update_processing_status(file_id, 'complete', conn)
+
+                # Module completion check + aggregation (AFTER Step 9, BEFORE Step 10 metrics)
+                # Only run when topic extraction did not error for this file
+                if topic_exc is None:
+                    if all_files_have_topics(module_id, conn):
+                        try:
+                            aggregate_module_topics(module_id, conn, bedrock_runtime)
+                        except Exception as agg_exc:
+                            logger.warning(
+                                "Module topic aggregation failed (non-blocking)",
+                                extra={"module_id": module_id, "error": str(agg_exc)},
+                            )
 
                 # Step 10: Record processing metrics
                 processing_duration_ms = int((time.time() - processing_start) * 1000)
