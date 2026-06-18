@@ -1,33 +1,35 @@
+"""Legacy vectorstore helper module.
+
+This module is retained for backwards compatibility but is no longer
+called from main.py. The incremental pipeline uses add_document() +
+incremental_index() directly instead of the full-module update_vectorstore flow.
+"""
+
 from typing import Dict
 
-from helpers.helper import store_module_data
+from aws_lambda_powertools import Logger
+
+logger = Logger(service="data-ingestion")
+
 
 def update_vectorstore(
     bucket: str,
     course: str,
     module: str,
     vectorstore_config_dict: Dict[str, str],
-    embeddings,#: BedrockEmbeddings
+    embeddings,
     file_id: str = None
 ) -> None:
     """
-    Update the vectorstore with embeddings for all documents and images in the S3 bucket.
+    Legacy function — no longer called from the main handler.
 
-    Args:
-    bucket (str): The name of the S3 bucket containing the course folders.
-    course (str): The name of the course folder within the S3 bucket.
-    module (str): The name of the module folder within the S3 bucket.
-    vectorstore_config_dict (Dict[str, str]): The configuration dictionary for the vectorstore, including parameters like collection name, database name, user, password, host, and port.
-    embeddings (BedrockEmbeddings): The embeddings instance used to process the documents and images.
+    Previously updated the vectorstore with embeddings for all documents in the S3 bucket
+    using SQLRecordManager and cleanup="full". Now replaced by incremental_index() in main.py.
 
-    Returns:
-    None
+    This function is kept for backwards compatibility but will log a deprecation warning
+    if called.
     """
-    store_module_data(
-        bucket=bucket,
-        course=course,
-        module=module,
-        vectorstore_config_dict=vectorstore_config_dict,
-        embeddings=embeddings,
-        file_id=file_id
+    logger.warning(
+        "update_vectorstore is deprecated — use incremental_index() instead",
+        extra={"module": module, "bucket": bucket},
     )

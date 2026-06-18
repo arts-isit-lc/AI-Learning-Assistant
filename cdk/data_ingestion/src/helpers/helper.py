@@ -1,28 +1,24 @@
-import logging
 from typing import Dict, Optional
 
+from aws_lambda_powertools import Logger
 from langchain_aws import BedrockEmbeddings
 from langchain_postgres import PGVector
-from langchain_classic.indexes import SQLRecordManager
 
-from processing.documents import process_documents
+logger = Logger(service="data-ingestion")
 
-# Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 def get_vectorstore(
-    collection_name: str, 
-    embeddings: BedrockEmbeddings, 
-    dbname: str, 
-    user: str, 
-    password: str, 
-    host: str, 
+    collection_name: str,
+    embeddings: BedrockEmbeddings,
+    dbname: str,
+    user: str,
+    password: str,
+    host: str,
     port: int
 ) -> Optional[PGVector]:
     """
     Initialize and return a PGVector instance.
-    
+
     Args:
     collection_name (str): The name of the collection.
     embeddings (BedrockEmbeddings): The embeddings instance.
@@ -31,7 +27,7 @@ def get_vectorstore(
     password (str): The database password.
     host (str): The database host.
     port (int): The database port.
-    
+
     Returns:
     Optional[PGVector]: The initialized PGVector instance, or None if an error occurred.
     """
@@ -52,56 +48,5 @@ def get_vectorstore(
         return vectorstore, connection_string
 
     except Exception as e:
-        logger.error(f"Error initializing vector store: {e}")
+        logger.exception("Error initializing vector store")
         return None
-    
-def store_module_data(
-    bucket: str, 
-    course: str, 
-    module: str,
-    vectorstore_config_dict: Dict[str, str], 
-    embeddings: BedrockEmbeddings,
-    file_id: str = None
-) -> None:
-    """
-    Store course data from an S3 bucket into the vectorstore.
-    
-    Args:
-    bucket (str): The name of the S3 bucket.
-    course (str): The course name/folder in the S3 bucket.
-    module (str): The moudle name/folder in the S3 bucket.
-    vectorstore_config_dict (Dict[str, str]): The configuration dictionary for the vectorstore.
-    embeddings (BedrockEmbeddings): The embeddings instance.
-    """
-    vectorstore, connection_string = get_vectorstore(
-        collection_name=vectorstore_config_dict['collection_name'],
-        embeddings=embeddings,
-        dbname=vectorstore_config_dict['dbname'],
-        user=vectorstore_config_dict['user'],
-        password=vectorstore_config_dict['password'],
-        host=vectorstore_config_dict['host'],
-        port=int(vectorstore_config_dict['port'])
-    )
-    
-    if vectorstore:
-        # define record manager
-        namespace = f"pgvector/{vectorstore_config_dict['collection_name']}"
-        record_manager = SQLRecordManager(
-            namespace, db_url=connection_string
-        )
-        record_manager.create_schema()
-
-    if not vectorstore:
-        logger.error("VectorStore could not be initialized")
-        return
-
-    # Process all files in the "documents" folder
-    process_documents(
-        bucket=bucket,
-        course=course,
-        module=module,
-        vectorstore=vectorstore,
-        embeddings=embeddings,
-        record_manager=record_manager,
-        file_id=file_id
-    )

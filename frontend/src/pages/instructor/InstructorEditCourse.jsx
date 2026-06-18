@@ -29,6 +29,9 @@ import PageContainer from "../Container";
 import FileManagement from "../../components/FileManagement";
 import { titleCase } from "../../utils/formatters";
 import { cleanFileName, removeFileExtension, getFileType } from "../../utils/fileHelpers";
+import { useFileUpload } from "../../hooks/useFileUpload";
+import { useProcessingPoller } from "../../hooks/useProcessingPoller";
+import { BLOCKING_STATUSES } from "../../constants/uploadConfig";
 
 const InstructorEditCourse = () => {
   const [loading, setLoading] = useState(true);
@@ -63,6 +66,46 @@ const InstructorEditCourse = () => {
   const [newTopicInput, setNewTopicInput] = useState("");
   const [editingTopicIndex, setEditingTopicIndex] = useState(null);
   const [editingTopicValue, setEditingTopicValue] = useState("");
+
+  // --- Upload progress & processing poller hooks ---
+  const {
+    fileStates,
+    uploadFiles: uploadFilesWithProgress,
+    abortFile,
+    removeFile: removeUploadFile,
+    retryFile,
+  } = useFileUpload({
+    courseId: course_id,
+    moduleId: module?.module_id,
+    moduleName: moduleName,
+  });
+
+  const {
+    trackedFiles,
+    addTrackedFiles,
+    removeTrackedFile,
+    getNotFoundContext,
+    loadInitialStatuses,
+  } = useProcessingPoller({
+    moduleId: module?.module_id,
+    enabled: true,
+  });
+
+  // Compute whether save should be blocked by in-progress files
+  const isProcessingBlocking = Object.values(fileStates).some(
+    (f) => BLOCKING_STATUSES.includes(f.status)
+  ) || Object.values(trackedFiles).some(
+    (f) => BLOCKING_STATUSES.includes(f.status)
+  );
+
+  const canSave = !isSaving && !isProcessingBlocking;
+
+  // Load initial statuses on mount (resume polling for files still processing after page refresh)
+  useEffect(() => {
+    if (module?.module_id) {
+      loadInitialStatuses();
+    }
+  }, [module?.module_id, loadInitialStatuses]);
 
   const handleBackClick = () => {
     window.history.back();
@@ -300,55 +343,32 @@ const InstructorEditCourse = () => {
       });
     });
   };
-  const uploadFiles = async (newFiles, token) => {
-    const successfullyUploadedFiles = [];
-    // add meta data to this request
-    const newFilePromises = newFiles.map(async (file) => {
-      const fileType = getFileType(file.name);
-      const fileName = cleanFileName(removeFileExtension(file.name));
+  const handleImmediateUpload = async (selectedFiles) => {
+    const results = await uploadFilesWithProgress(selectedFiles);
 
-      try {
-        const presignedUrl = await apiClient.get("instructor/generate_presigned_url", {
-          course_id,
-          module_id: module.module_id,
-          module_name: moduleName,
-          file_type: fileType,
-          file_name: fileName,
-        });
+    // Hand off successfully uploaded file_ids to the processing poller
+    const uploadedFileIds = results
+      .filter((r) => r?.fileId)
+      .map((r) => ({ fileId: r.fileId, uploadCompletedAt: Date.now() }));
 
-        const uploadResponse = await fetch(presignedUrl.presignedurl, {
-          method: "PUT",
-          headers: {
-            "Content-Type": file.type,
-          },
-          body: file,
-        });
+    if (uploadedFileIds.length > 0) {
+      addTrackedFiles(uploadedFileIds);
+    }
 
-        if (!uploadResponse.ok) {
-          throw new Error("Failed to upload file");
-        }
-
-        // Add file to the successful uploads array
-        successfullyUploadedFiles.push(file);
-      } catch (error) {
-        console.error(error.message);
-      }
-    });
-
-    // Wait for all uploads to complete
-    await Promise.all(newFilePromises);
-
-    // Update state with successfully uploaded files
-    setSavedFiles((prevFiles) => [...prevFiles, ...successfullyUploadedFiles]);
+    // Move successfully uploaded files to savedFiles
+    const successfullyUploaded = selectedFiles.filter((file) =>
+      results.some((r) => r?.fileName === file.name)
+    );
+    setSavedFiles((prev) => [...prev, ...successfullyUploaded]);
   };
 
   const handleSave = async () => {
-    if (isSaving) return;
+    if (!canSave) return;
     setIsSaving(true);
     setConflictReport(null);
 
 
-    const totalFiles = files.length + newFiles.length;
+    const totalFiles = files.length + savedFiles.length + newFiles.length;
     if (totalFiles === 0) {
       toast.error("At least one file is required to save the module.", { autoClose: 2000 });
       setIsSaving(false);
@@ -364,7 +384,6 @@ const InstructorEditCourse = () => {
     try {
       await updateModule();
       await deleteFiles(deletedFiles);
-      await uploadFiles(newFiles);
       await apiClient.put(
         "instructor/module_file_references",
         { module_id: module.module_id },
@@ -741,6 +760,16 @@ const InstructorEditCourse = () => {
           loading={loading}
           metadata={metadata}
           setMetadata={setMetadata}
+          uploadStates={fileStates}
+          processingStates={trackedFiles}
+          onAbortFile={abortFile}
+          onRetryFile={retryFile}
+          onRemoveTrackedFile={(fileId) => {
+            removeUploadFile(fileId);
+            removeTrackedFile(fileId);
+          }}
+          getNotFoundContext={getNotFoundContext}
+          onFilesSelected={handleImmediateUpload}
         />
 
         {/* Generate Topics Display (topics list only, button moved to action bar) */}
@@ -809,13 +838,18 @@ const InstructorEditCourse = () => {
                 Dismiss and go back
               </Button>
             )}
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={handleSave}
-            >
-              Save Module
-            </Button>
+            <Tooltip title={isProcessingBlocking ? "Files are still processing..." : ""} arrow>
+              <span>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={handleSave}
+                  disabled={!canSave}
+                >
+                  Save Module
+                </Button>
+              </span>
+            </Tooltip>
           </Box>
         </Box>
       </Paper>

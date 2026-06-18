@@ -1400,6 +1400,40 @@ exports.handler = async (event) => {
         response.body = JSON.stringify(result.body);
         break;
       }
+      case "GET /instructor/file_processing_statuses":
+        if (
+          event.queryStringParameters != null &&
+          event.queryStringParameters.module_id
+        ) {
+          const moduleId = event.queryStringParameters.module_id;
+
+          // Validate UUID format
+          const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+          if (!uuidRegex.test(moduleId)) {
+            response.statusCode = 400;
+            response.body = JSON.stringify({ error: "module_id must be a valid UUID" });
+            break;
+          }
+
+          try {
+            const files = await sqlConnection`
+              SELECT file_id, filename, processing_status, chunk_count, last_processed_at
+              FROM "Module_Files"
+              WHERE module_id = ${moduleId}
+              ORDER BY filename ASC;
+            `;
+
+            response.body = JSON.stringify({ files });
+          } catch (err) {
+            response.statusCode = 500;
+            console.error("Error fetching file processing statuses:", err);
+            response.body = JSON.stringify({ error: "Internal server error" });
+          }
+        } else {
+          response.statusCode = 400;
+          response.body = JSON.stringify({ error: "module_id is required and must be a valid UUID" });
+        }
+        break;
       default:
         throw new Error(`Unsupported route: "${pathData}"`);
     }

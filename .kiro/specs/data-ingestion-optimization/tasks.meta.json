@@ -1,0 +1,362 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Create database migration script for Module_Files table extensions": [
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732195661
+      }
+    ],
+    "1. Database schema extension and migration": [
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732195709
+      }
+    ],
+    "2.1 Implement `incremental_index()` function with direct SQL delete+insert": [
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732200255
+      },
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732208702
+      },
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732605118
+      }
+    ],
+    "2.2 Implement PostgreSQL advisory lock for concurrent access protection": [
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732200284
+      },
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732614020
+      },
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732889062
+      }
+    ],
+    "2.3 Enforce mandatory `file_id` in all chunk metadata": [
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732200314
+      },
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732209439
+      },
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732605075
+      }
+    ],
+    "3.1 Implement `should_reprocess_file()` content deduplication checker": [
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732200365
+      },
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732210249
+      },
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732605145
+      }
+    ],
+    "4.1 Implement `handle_file_deletion()` for S3 ObjectRemoved events": [
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732200389
+      },
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732211105
+      },
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732605169
+      }
+    ],
+    "5.1 Refactor `handler()` in `cdk/data_ingestion/src/main.py` for incremental flow": [
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732200409
+      },
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732907853
+      }
+    ],
+    "5.2 Remove SQLRecordManager and `cleanup=\"full\"` usage": [
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732200437
+      },
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732908753
+      }
+    ],
+    "6. Checkpoint — Ensure Phase 1 core logic works": [
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732200464
+      },
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781733468451
+      },
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781733849989
+      }
+    ],
+    "7.1 Create benchmark script comparing SemanticChunker vs RecursiveCharacterTextSplitter": [
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732200487
+      },
+      {
+        "executionId": "2567ccb8-dcae-48b5-917d-1ad9d1ea27c3",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781733984231
+      },
+      {
+        "executionId": "2567ccb8-dcae-48b5-917d-1ad9d1ea27c3",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781734545165
+      }
+    ],
+    "8.1 Implement `process_file_in_memory()` replacing intermediate S3 storage": [
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732200509
+      },
+      {
+        "executionId": "2567ccb8-dcae-48b5-917d-1ad9d1ea27c3",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781733985036
+      },
+      {
+        "executionId": "2567ccb8-dcae-48b5-917d-1ad9d1ea27c3",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781734544247
+      }
+    ],
+    "8.3 Wire in-memory processor into the main handler": [
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732200532
+      },
+      {
+        "executionId": "2567ccb8-dcae-48b5-917d-1ad9d1ea27c3",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781734550441
+      },
+      {
+        "executionId": "2567ccb8-dcae-48b5-917d-1ad9d1ea27c3",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781734792400
+      }
+    ],
+    "9.1 Implement `ProcessingMetrics` dataclass and `record_processing_metrics()` function": [
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732200555
+      },
+      {
+        "executionId": "2567ccb8-dcae-48b5-917d-1ad9d1ea27c3",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781733985871
+      },
+      {
+        "executionId": "2567ccb8-dcae-48b5-917d-1ad9d1ea27c3",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781734543282
+      }
+    ],
+    "10.1 Implement configurable chunking strategy based on benchmark results": [
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732200576
+      },
+      {
+        "executionId": "2567ccb8-dcae-48b5-917d-1ad9d1ea27c3",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781734551235
+      },
+      {
+        "executionId": "2567ccb8-dcae-48b5-917d-1ad9d1ea27c3",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781734793235
+      }
+    ],
+    "11.1 Update Lambda configuration in CDK stack": [
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732200623
+      },
+      {
+        "executionId": "2567ccb8-dcae-48b5-917d-1ad9d1ea27c3",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781733986712
+      },
+      {
+        "executionId": "2567ccb8-dcae-48b5-917d-1ad9d1ea27c3",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781734542390
+      }
+    ],
+    "12. Checkpoint — Ensure Phase 1 and Phase 2 are complete": [
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732200647
+      },
+      {
+        "executionId": "2567ccb8-dcae-48b5-917d-1ad9d1ea27c3",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781734798552
+      },
+      {
+        "executionId": "2567ccb8-dcae-48b5-917d-1ad9d1ea27c3",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781734934741
+      }
+    ],
+    "13.1 Implement `batch_embed_chunks()` with batched Bedrock API calls": [
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732200672
+      }
+    ],
+    "14.1 Add SQS FIFO queue and DLQ to CDK stack": [
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732200697
+      }
+    ],
+    "14.2 Update handler to process SQS event records": [
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732200725
+      }
+    ],
+    "15.1 Add AppSync schema and notification service": [
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732200750
+      }
+    ],
+    "16.1 Implement parallel page extraction with `concurrent.futures`": [
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732200773
+      }
+    ],
+    "17. Final checkpoint — Ensure all tests pass": [
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732200797
+      }
+    ],
+    "3. Content hash deduplication (Phase 1)": [
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732605208
+      }
+    ],
+    "4. File deletion handler (Phase 1)": [
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732605224
+      }
+    ],
+    "2. Core incremental indexing engine (Phase 1)": [
+      {
+        "executionId": "6e86c8cb-95ec-4346-93a4-9fb9ce41252d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781732889110
+      }
+    ],
+    "11. CDK configuration updates (Phase 1-2)": [
+      {
+        "executionId": "2567ccb8-dcae-48b5-917d-1ad9d1ea27c3",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781734542451
+      }
+    ],
+    "9. Processing metrics and status tracking (Phase 2)": [
+      {
+        "executionId": "2567ccb8-dcae-48b5-917d-1ad9d1ea27c3",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781734543323
+      }
+    ],
+    "7. Chunking strategy benchmarking (Phase 1)": [
+      {
+        "executionId": "2567ccb8-dcae-48b5-917d-1ad9d1ea27c3",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781734545223
+      }
+    ],
+    "8. In-memory document processing (Phase 2)": [
+      {
+        "executionId": "2567ccb8-dcae-48b5-917d-1ad9d1ea27c3",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781734792432
+      }
+    ],
+    "10. Chunking strategy switch (Phase 2)": [
+      {
+        "executionId": "2567ccb8-dcae-48b5-917d-1ad9d1ea27c3",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781734793263
+      }
+    ]
+  }
+}

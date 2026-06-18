@@ -1,18 +1,23 @@
 import os
 import json
+import time
 import boto3
 import psycopg2
 from datetime import datetime, timezone
 from aws_lambda_powertools import Logger
 
-from helpers.vectorstore import update_vectorstore
 from langchain_aws import BedrockEmbeddings
+from langchain_postgres import PGVector
 from topic_extraction import (
     should_extract_topics,
-    extract_text_from_pdf,
     call_haiku_for_topics,
     update_file_metadata,
 )
+from indexing.deduplication import compute_content_hash, should_reprocess_file, update_content_hash
+from indexing.incremental import acquire_module_lock, release_module_lock, incremental_index
+from indexing.deletion import handle_file_deletion
+from processing.in_memory import process_file_in_memory
+from metrics.recorder import ProcessingMetrics, record_processing_metrics
 
 # Structured logging via Powertools
 logger = Logger(service="data-ingestion")
@@ -23,9 +28,9 @@ try:
     xray_recorder.configure(context_missing='LOG_ERROR')
     patch_all()
 except ImportError:
-    logger.warning("aws-xray-sdk not available, skipping X-Ray patching")
-except Exception as exc:
-    logger.warning(f"X-Ray SDK patching failed: {exc}")
+    print("X-Ray initialization failed (non-critical): aws-xray-sdk not available")
+except Exception as e:
+    print(f"X-Ray initialization failed (non-critical): {e}")
 
 # Environment variables
 DB_SECRET_NAME = os.environ["SM_DB_CREDENTIALS"]
@@ -39,11 +44,13 @@ EMBEDDING_MODEL_PARAM = os.environ["EMBEDDING_MODEL_PARAM"]
 secrets_manager_client = boto3.client("secretsmanager")
 ssm_client = boto3.client("ssm")
 bedrock_runtime = boto3.client("bedrock-runtime", region_name=REGION)
+s3_client = boto3.client("s3")
 
 # Cached resources
 connection = None
 db_secret = None
 EMBEDDING_MODEL_ID = None
+
 
 def get_secret():
     global db_secret
@@ -52,9 +59,10 @@ def get_secret():
             response = secrets_manager_client.get_secret_value(SecretId=DB_SECRET_NAME)["SecretString"]
             db_secret = json.loads(response)
         except Exception as e:
-            logger.error(f"Error fetching secret: {e}")
+            logger.exception("Error fetching secret")
             raise
     return db_secret
+
 
 def get_parameter():
     """
@@ -66,9 +74,10 @@ def get_parameter():
             response = ssm_client.get_parameter(Name=EMBEDDING_MODEL_PARAM, WithDecryption=True)
             EMBEDDING_MODEL_ID = response["Parameter"]["Value"]
         except Exception as e:
-            logger.error(f"Error fetching parameter {EMBEDDING_MODEL_PARAM}: {e}")
+            logger.exception("Error fetching parameter", extra={"param_name": EMBEDDING_MODEL_PARAM})
             raise
     return EMBEDDING_MODEL_ID
+
 
 def connect_to_db():
     global connection
@@ -87,28 +96,30 @@ def connect_to_db():
             connection = psycopg2.connect(connection_string)
             logger.info("Connected to the database!")
         except Exception as e:
-            logger.error(f"Failed to connect to database: {e}")
+            logger.exception("Failed to connect to database")
             if connection:
                 connection.rollback()
                 connection.close()
             raise
     return connection
 
+
 def parse_s3_file_path(file_key):
     # Assuming the file path is of the format: {course_id}/{module_id}/{documents}/{file_name}.{file_type}
-    logger.info(f"file_key: {file_key}")
+    logger.info("Parsing S3 file path", extra={"file_key": file_key})
     try:
         course_id, module_id, file_category, filename_with_ext = file_key.split('/')
         file_name, file_type = filename_with_ext.rsplit('.', 1)
         return course_id, module_id, file_category, file_name, file_type
     except Exception as e:
-        logger.error(f"Error parsing S3 file path: {e}")
+        logger.exception("Error parsing S3 file path", extra={"file_key": file_key})
         return {
                     "statusCode": 400,
                     "body": json.dumps("Error parsing S3 file path.")
                 }
 
-def insert_file_into_db(module_id, file_name, file_type, file_path, bucket_name):    
+
+def insert_file_into_db(module_id, file_name, file_type, file_path, bucket_name):
     connection = connect_to_db()
     if connection is None:
         logger.error("No database connection available.")
@@ -116,7 +127,7 @@ def insert_file_into_db(module_id, file_name, file_type, file_path, bucket_name)
             "statusCode": 500,
             "body": json.dumps("Database connection failed.")
         }
-    
+
     try:
         cur = connection.cursor()
 
@@ -151,11 +162,11 @@ def insert_file_into_db(module_id, file_name, file_type, file_path, bucket_name)
                 file_name,  # filename
                 file_type  # filetype
             ))
-            logger.info(f"Successfully updated file {file_name}.{file_type} in database for module {module_id}.")
+            logger.info("Successfully updated file in database", extra={"file_name": file_name, "file_type": file_type, "module_id": module_id})
         else:
             # Insert a new record
             insert_query = """
-                INSERT INTO "Module_Files" 
+                INSERT INTO "Module_Files"
                 (module_id, filetype, s3_bucket_reference, filepath, filename, time_uploaded, metadata)
                 VALUES (%s, %s, %s, %s, %s, %s, %s);
             """
@@ -169,7 +180,7 @@ def insert_file_into_db(module_id, file_name, file_type, file_path, bucket_name)
                 timestamp,  # time_uploaded
                 None  # metadata (JSONB NULL)
         ))
-        logger.info(f"Successfully inserted file {file_name}.{file_type} into database for module {module_id}.")
+        logger.info("Successfully inserted file into database", extra={"file_name": file_name, "file_type": file_type, "module_id": module_id})
 
         connection.commit()
         cur.close()
@@ -177,8 +188,9 @@ def insert_file_into_db(module_id, file_name, file_type, file_path, bucket_name)
         if cur:
             cur.close()
         connection.rollback()
-        logger.error(f"Error inserting file {file_name}.{file_type} into database: {e}")
+        logger.exception("Error inserting file into database", extra={"file_name": file_name, "file_type": file_type})
         raise
+
 
 def get_file_id_from_db(module_id, file_name, file_type):
     connection = connect_to_db()
@@ -192,40 +204,98 @@ def get_file_id_from_db(module_id, file_name, file_type):
         cur.close()
         return str(result[0]) if result else None
     except Exception as e:
-        logger.error(f"Error fetching file_id: {e}")
+        logger.exception("Error fetching file_id", extra={"module_id": module_id, "file_name": file_name})
         return None
 
-def update_vectorstore_from_s3(bucket, course_id, module_id, file_id):
 
-    embeddings = BedrockEmbeddings(
-        model_id=get_parameter(), 
-        client=bedrock_runtime,
-        region_name=REGION
-    )
+def download_file_from_s3(bucket: str, key: str) -> bytes:
+    """Download a file from S3 and return its raw bytes.
 
-    secret = get_secret()
+    Args:
+        bucket: S3 bucket name.
+        key: S3 object key.
 
-    vectorstore_config_dict = {
-        'collection_name': f'{module_id}',
-        'dbname': secret["dbname"],
-        'user': secret["username"],
-        'password': secret["password"],
-        'host': RDS_PROXY_ENDPOINT,
-        'port': secret["port"]
-    }
+    Returns:
+        Raw bytes of the file content.
+    """
+    response = s3_client.get_object(Bucket=bucket, Key=key)
+    return response['Body'].read()
 
+
+def update_processing_status(file_id: str, status: str, connection) -> None:
+    """Update the processing_status column in Module_Files.
+
+    Also updates last_processed_at when status is 'complete'.
+
+    Args:
+        file_id: The UUID primary key from Module_Files.
+        status: The new processing status ('processing', 'complete', 'failed', 'deleted').
+        connection: An active psycopg2 connection.
+    """
     try:
-        update_vectorstore(
-            bucket=bucket,
-            course=course_id,
-            module=module_id,
-            vectorstore_config_dict=vectorstore_config_dict,
-            embeddings=embeddings,
-            file_id=file_id
-        )
-    except Exception as e:
-        logger.error(f"Error updating vectorstore for module {module_id} in course {course_id}: {e}")
+        with connection.cursor() as cur:
+            if status == 'complete':
+                cur.execute(
+                    'UPDATE "Module_Files" SET processing_status = %s, last_processed_at = %s WHERE file_id = %s',
+                    (status, datetime.now(timezone.utc), file_id),
+                )
+            else:
+                cur.execute(
+                    'UPDATE "Module_Files" SET processing_status = %s WHERE file_id = %s',
+                    (status, file_id),
+                )
+        connection.commit()
+        logger.info("Processing status updated", extra={"file_id": file_id, "status": status})
+    except Exception:
+        logger.exception("Failed to update processing status", extra={"file_id": file_id, "status": status})
+        connection.rollback()
         raise
+
+
+def update_chunk_count(file_id: str, chunk_count: int, connection) -> None:
+    """Update the chunk_count column in Module_Files after successful processing.
+
+    Args:
+        file_id: The UUID primary key from Module_Files.
+        chunk_count: Number of chunks indexed for this file.
+        connection: An active psycopg2 connection.
+    """
+    try:
+        with connection.cursor() as cur:
+            cur.execute(
+                'UPDATE "Module_Files" SET chunk_count = %s WHERE file_id = %s',
+                (chunk_count, file_id),
+            )
+        connection.commit()
+    except Exception:
+        logger.exception("Failed to update chunk_count", extra={"file_id": file_id})
+        connection.rollback()
+        raise
+
+
+def get_vectorstore(module_id: str, embeddings: BedrockEmbeddings) -> PGVector:
+    """Initialize a PGVector instance for the given module.
+
+    Args:
+        module_id: Used as the collection name.
+        embeddings: BedrockEmbeddings instance.
+
+    Returns:
+        Configured PGVector instance.
+    """
+    secret = get_secret()
+    connection_string = (
+        f"postgresql+psycopg://{secret['username']}:{secret['password']}"
+        f"@{RDS_PROXY_ENDPOINT}:{secret['port']}/{secret['dbname']}?sslmode=require"
+    )
+    vectorstore = PGVector(
+        embeddings=embeddings,
+        collection_name=module_id,
+        connection=connection_string,
+        use_jsonb=True,
+    )
+    return vectorstore
+
 
 @logger.inject_lambda_context(clear_state=True)
 def handler(event, context):
@@ -242,11 +312,12 @@ def handler(event, context):
 
         # Only process files from the AILA_DATA_INGESTION_BUCKET
         if bucket_name != AILA_DATA_INGESTION_BUCKET:
-            logger.info(f"Ignoring event from non-target bucket: {bucket_name}")
-            continue  # Ignore this event and move to the next one
-        file_key = record['s3']['object']['key']
+            logger.info("Ignoring event from non-target bucket", extra={"bucket_name": bucket_name})
+            continue
 
-        # if event_name.startswith('ObjectCreated:'):
+        file_key = record['s3']['object']['key']
+        s3_etag = record['s3']['object'].get('eTag', '')
+
         # Parse the file path
         course_id, module_id, file_category, file_name, file_type = parse_s3_file_path(file_key)
         if not course_id or not module_id or not file_name or not file_type:
@@ -255,62 +326,145 @@ def handler(event, context):
                 "body": json.dumps("Error parsing S3 file path.")
             }
 
+        logger.append_keys(course_id=course_id, module_id=module_id)
+
+        # --- ObjectRemoved: file deletion ---
+        if event_name.startswith('ObjectRemoved:'):
+            conn = connect_to_db()
+            result = handle_file_deletion(module_id, file_name, file_type, conn)
+            logger.info("File deletion handled", extra=result)
+            continue
+
+        # --- ObjectCreated: file upload — incremental processing ---
         if event_name.startswith('ObjectCreated:'):
-            # Insert the file into the PostgreSQL database
-            try:
-                insert_file_into_db(
-                    module_id=module_id,
-                    file_name=file_name,
-                    file_type=file_type,
-                    file_path=file_key,
-                    bucket_name=bucket_name
-                )
-                logger.info(f"File {file_name}.{file_type} inserted successfully.")
-            except Exception as e:
-                logger.error(f"Error inserting file {file_name}.{file_type} into database: {e}")
+            # Step 1: Insert/update file record in DB
+            insert_file_into_db(
+                module_id=module_id,
+                file_name=file_name,
+                file_type=file_type,
+                file_path=file_key,
+                bucket_name=bucket_name,
+            )
+            file_id = get_file_id_from_db(module_id, file_name, file_type)
+            if not file_id:
+                logger.error("Could not resolve file_id after insert", extra={"file_name": file_name})
                 return {
                     "statusCode": 500,
-                    "body": json.dumps(f"Error inserting file {file_name}.{file_type}: {e}")
+                    "body": json.dumps("Failed to resolve file_id."),
                 }
-        else:
-            logger.info(f"File {file_name}.{file_type} is being deleted. Deleting files from database does not occur here.")
 
-        file_id = get_file_id_from_db(module_id, file_name, file_type)
+            # Step 2: Download file once (reused for hash, topics, and chunking)
+            file_bytes = download_file_from_s3(bucket_name, file_key)
 
-        # Topic extraction — non-blocking, runs before vectorstore update
-        if event_name.startswith('ObjectCreated:'):
-            s3_etag = record['s3']['object'].get('eTag', '')
+            # Step 3: Content hash deduplication check
+            content_hash = compute_content_hash(file_bytes)
+            conn = connect_to_db()
+            if not should_reprocess_file(file_id, content_hash, conn):
+                logger.info("File unchanged, skipping processing", extra={"file_id": file_id})
+                return {"statusCode": 200, "body": "File unchanged, skipping"}
+
+            # Step 4: Set processing status
+            update_processing_status(file_id, 'processing', conn)
+
+            # Step 5: Acquire advisory lock for module
+            if not acquire_module_lock(module_id, conn):
+                raise RuntimeError(f"Could not acquire advisory lock for module {module_id}")
+
+            processing_start = time.time()
+
             try:
-                conn = connect_to_db()
-                if should_extract_topics(file_id, s3_etag, conn):
-                    full_text, extraction_method, original_chars = extract_text_from_pdf(bucket_name, file_key)
-                    if full_text:
-                        topics = call_haiku_for_topics(full_text, bedrock_runtime, extraction_method, original_chars)
-                        update_file_metadata(file_id, topics, s3_etag, conn)
-                        logger.info(f"Topic extraction completed for file_id={file_id}", extra={"extraction_method": extraction_method})
-                    else:
-                        logger.info(f"No text extracted from file, skipping topic extraction")
+                # Step 6: Process file in memory — get chunks AND full_text
+                embeddings = BedrockEmbeddings(
+                    model_id=get_parameter(),
+                    client=bedrock_runtime,
+                    region_name=REGION,
+                )
+                vectorstore = get_vectorstore(module_id, embeddings)
+
+                chunks, full_text = process_file_in_memory(
+                    file_bytes=file_bytes,
+                    file_id=file_id,
+                    filename=f"{file_name}.{file_type}",
+                    embeddings=embeddings,
+                    bucket=bucket_name,
+                )
+
+                # Step 7: Topic extraction using full_text (no re-download)
+                try:
+                    if should_extract_topics(file_id, s3_etag, conn):
+                        if full_text:
+                            topics = call_haiku_for_topics(full_text, bedrock_runtime, "full_document", len(full_text))
+                            update_file_metadata(file_id, topics, s3_etag, conn)
+                            logger.info("Topic extraction completed", extra={"file_id": file_id, "extraction_method": "full_document"})
+                        else:
+                            logger.info("No text extracted from file, skipping topic extraction")
+                except Exception as e:
+                    logger.warning("Topic extraction failed (non-blocking)", extra={"file_id": file_id, "error": str(e)})
+
+                # Step 8: Incremental index — direct SQL delete + insert
+                index_result = incremental_index(
+                    file_id=file_id,
+                    chunks=chunks,
+                    vectorstore=vectorstore,
+                    connection=conn,
+                    collection_name=module_id,
+                )
+                logger.info("Incremental index complete", extra={
+                    "file_id": file_id,
+                    "deleted": index_result["deleted"],
+                    "inserted": index_result["inserted"],
+                })
+
+                # Step 9: Update metadata after success
+                update_content_hash(file_id, content_hash, conn)
+                update_chunk_count(file_id, index_result["inserted"], conn)
+                update_processing_status(file_id, 'complete', conn)
+
+                # Step 10: Record processing metrics
+                processing_duration_ms = int((time.time() - processing_start) * 1000)
+                record_processing_metrics(
+                    file_id=file_id,
+                    metrics=ProcessingMetrics(
+                        processing_duration_ms=processing_duration_ms,
+                        chunk_count=index_result["inserted"],
+                        embedding_count=index_result["inserted"],
+                    ),
+                    connection=conn,
+                )
+
             except Exception as e:
-                logger.warning(f"Topic extraction failed (non-blocking) for file_id={file_id}: {e}")
+                logger.exception("Processing failed", extra={"file_id": file_id})
+                # Record failure metrics
+                try:
+                    processing_duration_ms = int((time.time() - processing_start) * 1000)
+                    record_processing_metrics(
+                        file_id=file_id,
+                        metrics=ProcessingMetrics(
+                            processing_duration_ms=processing_duration_ms,
+                            chunk_count=0,
+                            embedding_count=0,
+                            last_error=str(e),
+                        ),
+                        connection=conn,
+                    )
+                except Exception:
+                    logger.exception("Failed to record failure metrics", extra={"file_id": file_id})
+                try:
+                    update_processing_status(file_id, 'failed', conn)
+                except Exception:
+                    logger.exception("Failed to set status to 'failed'", extra={"file_id": file_id})
+                raise
+            finally:
+                release_module_lock(module_id, conn)
 
-        # Update embeddings for course after the file is successfully inserted into the database
-        try:
-            update_vectorstore_from_s3(bucket_name, course_id, module_id, file_id)
-            logger.info(f"Vectorstore updated successfully for module {module_id} in course {course_id}.")
-        except Exception as e:
-            logger.error(f"Error updating vectorstore for course {course_id}: {e}")
             return {
-                "statusCode": 500,
-                "body": json.dumps(f"File inserted, but error updating vectorstore: {e}")
+                "statusCode": 200,
+                "body": json.dumps({
+                    "message": "File processed successfully.",
+                    "location": f"s3://{bucket_name}/{file_key}",
+                    "chunks_indexed": index_result["inserted"],
+                }),
             }
-
-        return {
-            "statusCode": 200,
-            "body": json.dumps({
-                "message": "New file inserted into database.",
-                "location": f"s3://{bucket_name}/{file_key}"
-            })
-        }
 
     return {
         "statusCode": 400,

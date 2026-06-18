@@ -1,10 +1,13 @@
 import os, json
 import boto3
+import psycopg2
 from botocore.config import Config
 from aws_lambda_powertools import Logger
 
 BUCKET = os.environ["BUCKET"]
 REGION = os.environ["REGION"]
+DB_SECRET_NAME = os.environ.get("SM_DB_CREDENTIALS")
+RDS_PROXY_ENDPOINT = os.environ.get("RDS_PROXY_ENDPOINT")
 
 s3 = boto3.client(
     "s3",
@@ -13,7 +16,72 @@ s3 = boto3.client(
         s3={"addressing_style": "virtual"}, region_name=REGION, signature_version="s3v4"
     ),
 )
-logger = Logger()
+logger = Logger(service="generate-presigned-url")
+
+# Cached DB resources
+secrets_manager_client = boto3.client("secretsmanager")
+connection = None
+db_secret = None
+
+
+def get_secret():
+    global db_secret
+    if not db_secret:
+        response = secrets_manager_client.get_secret_value(SecretId=DB_SECRET_NAME)["SecretString"]
+        db_secret = json.loads(response)
+    return db_secret
+
+
+def connect_to_db():
+    global connection
+    if connection is None or connection.closed:
+        try:
+            secret = get_secret()
+            connection_params = {
+                'dbname': secret["dbname"],
+                'user': secret["username"],
+                'password': secret["password"],
+                'host': RDS_PROXY_ENDPOINT,
+                'port': secret["port"],
+                'sslmode': 'require'
+            }
+            connection_string = " ".join([f"{key}={value}" for key, value in connection_params.items()])
+            connection = psycopg2.connect(connection_string)
+            logger.info("Connected to the database!")
+        except Exception as e:
+            logger.exception("Failed to connect to database")
+            if connection:
+                connection.rollback()
+                connection.close()
+            raise
+    return connection
+
+
+def upsert_file_record(module_id, file_name, file_type):
+    """Create or update a Module_Files record and return the file_id.
+
+    Sets processing_status to 'pending' and resets content_hash/chunk_count/last_processed_at
+    on re-upload so the ingestion pipeline treats it as a fresh file.
+    """
+    conn = connect_to_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO "Module_Files" (module_id, filename, filetype, processing_status, time_uploaded)
+                VALUES (%s, %s, %s, 'pending', NOW())
+                ON CONFLICT (module_id, filename, filetype)
+                DO UPDATE SET processing_status = 'pending', time_uploaded = NOW(),
+                             content_hash = NULL, chunk_count = NULL, last_processed_at = NULL
+                RETURNING file_id;
+            """, (module_id, file_name, file_type))
+            result = cur.fetchone()
+            conn.commit()
+            return str(result[0])
+    except Exception:
+        conn.rollback()
+        logger.exception("Failed to upsert file record")
+        raise
+
 
 @logger.inject_lambda_context(log_event=True)
 def lambda_handler(event, context):
@@ -42,7 +110,7 @@ def lambda_handler(event, context):
             'statusCode': 400,
             'body': json.dumps('Missing required parameter: module_id')
         }
-    
+
     if not file_name:
         return {
             'statusCode': 400,
@@ -56,11 +124,11 @@ def lambda_handler(event, context):
         "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         "txt": "text/plain",
         "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "xps": "application/oxps",  # or "application/vnd.ms-xpsdocument" for legacy XPS
+        "xps": "application/oxps",
         "mobi": "application/x-mobipocket-ebook",
         "cbz": "application/vnd.comicbook+zip"
     }
-    
+
     if file_type in allowed_document_types:
         key = f"{course_id}/{module_id}/documents/{file_name}.{file_type}"
         content_type = allowed_document_types[file_type]
@@ -70,7 +138,7 @@ def lambda_handler(event, context):
             'body': json.dumps('Unsupported file type')
         }
 
-    logger.info({
+    logger.info("Generating presigned URL", extra={
         "course_id": course_id,
         "module_id": module_id,
         "file_type": file_type,
@@ -78,6 +146,14 @@ def lambda_handler(event, context):
     })
 
     try:
+        # Upsert file record in DB to get file_id (graceful degradation if DB not configured)
+        file_id = None
+        if DB_SECRET_NAME and RDS_PROXY_ENDPOINT:
+            try:
+                file_id = upsert_file_record(module_id, file_name, file_type)
+                logger.info("File record upserted", extra={"file_id": file_id})
+            except Exception:
+                logger.exception("DB upsert failed, continuing without file_id")
 
         presigned_url = s3.generate_presigned_url(
             ClientMethod="put_object",
@@ -90,6 +166,10 @@ def lambda_handler(event, context):
             HttpMethod="PUT",
         )
 
+        response_body = {"presignedurl": presigned_url}
+        if file_id:
+            response_body["file_id"] = file_id
+
         return {
             "statusCode": 200,
             "headers": {
@@ -98,11 +178,11 @@ def lambda_handler(event, context):
                 "Access-Control-Allow-Origin": "*",
                 "Access-Control-Allow-Methods": "*",
             },
-            "body": json.dumps({"presignedurl": presigned_url}),
+            "body": json.dumps(response_body),
         }
-    
+
     except Exception as e:
-        logger.error(f"Error generating presigned URL or uploading txt file: {e}")
+        logger.exception("Error generating presigned URL")
         return {
             'statusCode': 500,
             'body': json.dumps('Internal server error')

@@ -16,8 +16,11 @@
     "@mui/icons-material": "^9.0.0",
     "@mui/material": "^9.0.0",
     "@mui/x-date-pickers": "^9.0.2",
+    "@radix-ui/react-progress": "^1.1.10",
     "aws-amplify": "^6.3.8",
     "aws-jwt-verify": "^4.0.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "ldrs": "^1.0.2",
     "lucide-react": "^1.17.0",
     "material-react-table": "^3.2.1",
@@ -30,7 +33,8 @@
     "react-router-dom": "^7.14.1",
     "react-syntax-highlighter": "^16.1.1",
     "react-toastify": "^10.0.5",
-    "recharts": "^2.12.7"
+    "recharts": "^2.12.7",
+    "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

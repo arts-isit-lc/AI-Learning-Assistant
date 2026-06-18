@@ -1,0 +1,290 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Add UNIQUE constraint migration to initializer Lambda": [
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760029440
+      },
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760035750
+      },
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760241493
+      }
+    ],
+    "1.2 Modify generatePreSignedURL Lambda to create DB record and return file_id": [
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760029470
+      },
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760036566
+      },
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760242363
+      }
+    ],
+    "1.3 Update CDK stack for generatePreSignedURL Lambda (VPC, IAM, env vars)": [
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760029516
+      },
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760250995
+      },
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760424946
+      }
+    ],
+    "1.4 Add batch file processing status route to instructorFunction Lambda": [
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760029555
+      },
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760251806
+      },
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760426535
+      }
+    ],
+    "1.5 Add API Gateway route for file_processing_statuses endpoint": [
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760029590
+      },
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760435326
+      },
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760758200
+      }
+    ],
+    "2. Checkpoint - Backend verification": [
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760029609
+      },
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781761476162
+      }
+    ],
+    "3.1 Create upload configuration constants file": [
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760029628
+      },
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760037204
+      },
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760243232
+      }
+    ],
+    "3.2 Add shadcn/ui Progress component": [
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760029651
+      },
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760038029
+      },
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760244180
+      }
+    ],
+    "4.1 Implement useFileUpload hook": [
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760029688
+      },
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760436043
+      },
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760758910
+      }
+    ],
+    "4.3 Implement useProcessingPoller hook": [
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760029710
+      },
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760436807
+      },
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760759646
+      }
+    ],
+    "5.1 Implement FileProgressRow component": [
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760029732
+      },
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760765452
+      },
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760950219
+      }
+    ],
+    "5.3 Refactor FileManagement component to integrate progress UI": [
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760029751
+      },
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760961382
+      },
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781761473809
+      }
+    ],
+    "6.1 Integrate hooks and save gate into InstructorEditCourse page": [
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760029771
+      },
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760962181
+      },
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781761474597
+      }
+    ],
+    "6.2 Integrate hooks into InstructorNewModule page": [
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760029792
+      },
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760962901
+      },
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781761475321
+      }
+    ],
+    "7. Final checkpoint - Ensure all changes compile and lint": [
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760029827
+      },
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781761481463
+      },
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781761622943
+      }
+    ],
+    "3. Frontend constants and utility setup": [
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760244203
+      }
+    ],
+    "1. Backend infrastructure and database migration": [
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760758235
+      }
+    ],
+    "4. Frontend hooks implementation": [
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781760759670
+      }
+    ],
+    "5. Frontend UI components": [
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781761473837
+      }
+    ],
+    "6. Integration wiring and save gate": [
+      {
+        "executionId": "c0ddd643-03f6-4318-b643-d1b89948843d",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781761475372
+      }
+    ]
+  }
+}

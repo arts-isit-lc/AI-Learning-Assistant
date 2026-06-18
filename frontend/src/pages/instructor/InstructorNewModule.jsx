@@ -24,6 +24,9 @@ import PageContainer from "../Container";
 import FileManagement from "../../components/FileManagement";
 import { titleCase } from "../../utils/formatters";
 import { cleanFileName, removeFileExtension, getFileType } from "../../utils/fileHelpers";
+import { useFileUpload } from "../../hooks/useFileUpload";
+import { useProcessingPoller } from "../../hooks/useProcessingPoller";
+import { BLOCKING_STATUSES } from "../../constants/uploadConfig";
 
 
 export const InstructorNewModule = ({ courseId }) => {
@@ -54,6 +57,43 @@ export const InstructorNewModule = ({ courseId }) => {
   // Prompt conflict validation state
   const [conflictReport, setConflictReport] = useState(null);
   const [isValidating, setIsValidating] = useState(false);
+
+  // Track created module_id for upload progress hooks
+  const [createdModuleId, setCreatedModuleId] = useState(null);
+
+  // --- Upload progress & processing poller hooks ---
+  // Note: For InstructorNewModule, moduleId is null until the module is created.
+  // The useFileUpload hook handles null moduleId gracefully (won't upload until moduleId is set).
+  // For the initial save flow, we do the upload inline since moduleId is obtained at save time.
+  const {
+    fileStates,
+    abortFile,
+    removeFile: removeUploadFile,
+    retryFile,
+  } = useFileUpload({
+    courseId: course_id,
+    moduleId: createdModuleId,
+    moduleName: moduleName,
+  });
+
+  const {
+    trackedFiles,
+    addTrackedFiles,
+    removeTrackedFile,
+    getNotFoundContext,
+  } = useProcessingPoller({
+    moduleId: createdModuleId,
+    enabled: !!createdModuleId,
+  });
+
+  // Compute whether save should be blocked by in-progress files
+  const isProcessingBlocking = Object.values(fileStates).some(
+    (f) => BLOCKING_STATUSES.includes(f.status)
+  ) || Object.values(trackedFiles).some(
+    (f) => BLOCKING_STATUSES.includes(f.status)
+  );
+
+  const canSave = !isSaving && !isProcessingBlocking;
 
   const handleBackClick = () => {
     window.history.back();
@@ -91,32 +131,64 @@ export const InstructorNewModule = ({ courseId }) => {
     setConcept(e.target.value);
   };
   const uploadFiles = async (newFiles, token, moduleid) => {
-    const newFilePromises = newFiles.map((file) => {
+    // For InstructorNewModule, we upload directly using the moduleid parameter
+    // since the useFileUpload hook's closure won't have the moduleId yet (state is async).
+    // We still collect file_ids for the processing poller.
+    const uploadedFileIds = [];
+
+    const newFilePromises = newFiles.map(async (file) => {
       const fileType = getFileType(file.name);
       const fileName = cleanFileName(removeFileExtension(file.name));
-      return apiClient.get("instructor/generate_presigned_url", {
-        course_id,
-        module_id: moduleid,
-        module_name: moduleName,
-        file_type: fileType,
-        file_name: fileName,
-      })
-        .then((presignedUrl) => {
-          return fetch(presignedUrl.presignedurl, {
-            method: "PUT",
-            headers: {
-              "Content-Type": file.type,
-            },
-            body: file,
-          });
+
+      try {
+        const response = await apiClient.get("instructor/generate_presigned_url", {
+          course_id,
+          module_id: moduleid,
+          module_name: moduleName,
+          file_type: fileType,
+          file_name: fileName,
         });
+
+        const presignedUrl = response.presignedurl;
+        const fileId = response.file_id;
+
+        // Upload via XHR (no progress tracking UI needed for new module create flow)
+        await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              if (fileId) {
+                uploadedFileIds.push({ fileId, uploadCompletedAt: Date.now() });
+              }
+              resolve();
+            } else {
+              reject(new Error(`Upload failed with status ${xhr.status}`));
+            }
+          };
+          xhr.onerror = () => reject(new Error("Network error during upload"));
+          xhr.ontimeout = () => reject(new Error("Upload timed out"));
+          xhr.open("PUT", presignedUrl);
+          xhr.timeout = 300000;
+          xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+          xhr.send(file);
+        });
+      } catch (error) {
+        console.error(`Upload failed for ${file.name}:`, error.message);
+      }
     });
 
-    return await Promise.all(newFilePromises);
+    await Promise.all(newFilePromises);
+
+    // Hand off successfully uploaded file_ids to the processing poller
+    if (uploadedFileIds.length > 0) {
+      addTrackedFiles(uploadedFileIds);
+    }
+
+    return uploadedFileIds;
   };
 
   const handleSave = async () => {
-    if (isSaving) return;
+    if (!canSave) return;
     setConflictReport(null);
 
     // Validation check
@@ -148,6 +220,9 @@ export const InstructorNewModule = ({ courseId }) => {
         },
         { module_prompt: modulePrompt, key_topics: keyTopics.length > 0 ? keyTopics : null }
       );
+
+      // Set the created module ID so the upload hook has the correct moduleId
+      setCreatedModuleId(updatedModule.module_id);
 
       await uploadFiles(newFiles, null, updatedModule.module_id);
 
@@ -485,6 +560,15 @@ export const InstructorNewModule = ({ courseId }) => {
           loading={loading}
           metadata={metadata}
           setMetadata={setMetadata}
+          uploadStates={fileStates}
+          processingStates={trackedFiles}
+          onAbortFile={abortFile}
+          onRetryFile={retryFile}
+          onRemoveTrackedFile={(fileId) => {
+            removeUploadFile(fileId);
+            removeTrackedFile(fileId);
+          }}
+          getNotFoundContext={getNotFoundContext}
         />
 
         {/* Generate Topics - disabled on new module (needs save first) */}
@@ -513,13 +597,18 @@ export const InstructorNewModule = ({ courseId }) => {
                 Dismiss and go back
               </Button>
             )}
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={handleSave}
-            >
-              Save Module
-            </Button>
+            <Tooltip title={isProcessingBlocking ? "Files are still processing..." : ""} arrow>
+              <span>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={handleSave}
+                  disabled={!canSave}
+                >
+                  Save Module
+                </Button>
+              </span>
+            </Tooltip>
           </Box>
         </Box>
       </Paper>

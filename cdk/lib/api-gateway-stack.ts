@@ -1392,16 +1392,19 @@ export class ApiGatewayStack extends cdk.Stack {
         runtime: lambda.Runtime.PYTHON_3_11,
         code: lambda.Code.fromAsset("lambda/generatePreSignedURL"),
         handler: "generatePreSignedURL.lambda_handler",
-        timeout: Duration.seconds(30),
+        timeout: Duration.seconds(60),
         tracing: lambda.Tracing.ACTIVE,
         logRetention: logRetention,
-        memorySize: 128,
+        memorySize: 256,
+        vpc: vpcStack.vpc,
         environment: {
           BUCKET: dataIngestionBucket.bucketName,
           REGION: this.region,
+          SM_DB_CREDENTIALS: db.secretPathAdminName,
+          RDS_PROXY_ENDPOINT: db.rdsProxyEndpointAdmin,
         },
         functionName: `${id}-GeneratePreSignedURLFunc`,
-        layers: [powertoolsLayer],
+        layers: [powertoolsLayer, psycopgLayer],
       }
     );
 
@@ -1441,6 +1444,30 @@ export class ApiGatewayStack extends cdk.Stack {
       })
     );
 
+    // SecretsManager access for DB credentials (scoped to specific secret)
+    generatePreSignedURL.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ["secretsmanager:GetSecretValue"],
+        resources: [
+          `arn:aws:secretsmanager:${this.region}:${this.account}:secret:${db.secretPathAdminName}-*`,
+        ],
+      })
+    );
+
+    // EC2 VPC networking (required for VPC-enabled Lambdas — resource '*' required by AWS)
+    generatePreSignedURL.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "ec2:CreateNetworkInterface",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DeleteNetworkInterface",
+        ],
+        resources: ["*"],
+      })
+    );
+
     // Grant S3 GetObject for student PDF viewer (read-only access to course materials)
     dbLambdaRole.addToPolicy(
       new iam.PolicyStatement({
@@ -1464,8 +1491,8 @@ export class ApiGatewayStack extends cdk.Stack {
       `${id}-DataIngestLambdaDockerFunc`,
       {
         code: lambda.DockerImageCode.fromImageAsset("./data_ingestion"),
-        memorySize: 512,
-        timeout: cdk.Duration.seconds(600),
+        memorySize: 1024,
+        timeout: cdk.Duration.seconds(900),
         tracing: lambda.Tracing.ACTIVE,
         logRetention: logRetention,
         vpc: vpcStack.vpc, // Pass the VPC
@@ -2364,8 +2391,8 @@ export class ApiGatewayStack extends cdk.Stack {
       { functionName: `${id}-studentLambdaAuthorizer`, timeoutSeconds: 30, isContainer: false },
       { functionName: `${id}-instructorLambdaAuthorizer`, timeoutSeconds: 30, isContainer: false },
       { functionName: `${id}-TextGenLambdaDockerFunc`, timeoutSeconds: 300, isContainer: true },
-      { functionName: `${id}-GeneratePreSignedURLFunc`, timeoutSeconds: 30, isContainer: false },
-      { functionName: `${id}-DataIngestLambdaDockerFunc`, timeoutSeconds: 600, isContainer: true },
+      { functionName: `${id}-GeneratePreSignedURLFunc`, timeoutSeconds: 60, isContainer: false },
+      { functionName: `${id}-DataIngestLambdaDockerFunc`, timeoutSeconds: 900, isContainer: true },
       { functionName: `${id}-GetFilesFunction`, timeoutSeconds: 30, isContainer: false },
       { functionName: `${id}-DeleteFileFunc`, timeoutSeconds: 30, isContainer: false },
       { functionName: `${id}-DeleteModuleFunc`, timeoutSeconds: 60, isContainer: false },

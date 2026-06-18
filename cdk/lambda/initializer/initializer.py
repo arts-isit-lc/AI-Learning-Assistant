@@ -99,7 +99,11 @@ def handler(event, context):
                 "filepath" varchar,
                 "filename" varchar,
                 "time_uploaded" timestamp,
-                "metadata" text
+                "metadata" text,
+                "content_hash" text,
+                "processing_status" text DEFAULT 'pending',
+                "last_processed_at" timestamptz,
+                "chunk_count" integer
             );
 
             CREATE TABLE IF NOT EXISTS "Student_Modules" (
@@ -328,6 +332,39 @@ def handler(event, context):
                     WHERE cmetadata->>'source' LIKE %s
                     AND cmetadata->>'file_id' IS NULL;
                 """, (str(file_id), s3_path_pattern))
+            connection.commit()
+
+        # Data Ingestion Optimization: Add incremental indexing columns to Module_Files
+        cursor.execute("""
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public'
+                AND table_name = 'Module_Files'
+                AND column_name = 'content_hash'
+            )
+        """)
+        if not cursor.fetchone()[0]:
+            cursor.execute("""
+                ALTER TABLE "Module_Files"
+                ADD COLUMN "content_hash" text,
+                ADD COLUMN "processing_status" text DEFAULT 'pending',
+                ADD COLUMN "last_processed_at" timestamptz,
+                ADD COLUMN "chunk_count" integer
+            """)
+            connection.commit()
+
+        # Upload Progress Feedback: Add UNIQUE constraint for file upsert logic
+        cursor.execute("""
+            SELECT EXISTS (
+                SELECT 1 FROM pg_indexes
+                WHERE indexname = 'idx_module_files_unique_file'
+            )
+        """)
+        if not cursor.fetchone()[0]:
+            cursor.execute("""
+                CREATE UNIQUE INDEX idx_module_files_unique_file
+                ON "Module_Files" (module_id, filename, filetype)
+            """)
             connection.commit()
 
         # Generate 16 bytes username and password randomly

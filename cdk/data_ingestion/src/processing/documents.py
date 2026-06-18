@@ -1,37 +1,37 @@
-import os, tempfile, logging, uuid, hashlib
+import os, tempfile, uuid, hashlib
 from io import BytesIO
 from typing import List
 import boto3
 import fitz
 import re
-import traceback
+
+from aws_lambda_powertools import Logger
 
 from langchain_postgres import PGVector
 from langchain_core.documents import Document
 from langchain_aws import BedrockEmbeddings
 from langchain_experimental.text_splitter import SemanticChunker
-from langchain_classic.indexes import SQLRecordManager, index
 
-# Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Powertools Logger (mandatory per project standards)
+logger = Logger(service="data-ingestion")
 
 # Initialize the S3 client
 s3 = boto3.client('s3')
 
 EMBEDDING_BUCKET_NAME = os.environ["EMBEDDING_BUCKET_NAME"]
 
+
 def extract_txt(
-    bucket: str, 
+    bucket: str,
     file_key: str
 ) -> str:
     """
     Extract text from a file stored in an S3 bucket.
-    
+
     Args:
     bucket (str): The name of the S3 bucket.
     file_key (str): The key of the file in the S3 bucket.
-    
+
     Returns:
     str: The extracted text.
     """
@@ -47,6 +47,7 @@ def extract_txt(
 
     return text
 
+
 def clean_text(text: str) -> str:
     # Remove non-ASCII characters
     text = text.encode("ascii", errors="ignore").decode()
@@ -57,23 +58,24 @@ def clean_text(text: str) -> str:
         return ""
     return text
 
+
 def store_doc_texts(
-    bucket: str, 
-    course: str, 
+    bucket: str,
+    course: str,
     module: str,
-    filename: str, 
+    filename: str,
     output_bucket: str
 ) -> List[str]:
     """
     Store the text of each page of a document in an S3 bucket.
-    
+
     Args:
     bucket (str): The name of the S3 bucket containing the document.
     course (str): The course ID folder in the S3 bucket.
     module (str): The module name and ID folder within the course.
     filename (str): The name of the document file.
     output_bucket (str): The name of the S3 bucket for storing the extracted text.
-    
+
     Returns:
     List[str]: A list of keys for the stored text files in the output bucket.
     """
@@ -96,9 +98,9 @@ def store_doc_texts(
                     lines = raw_text.split("\n")
                     cleaned_lines = [clean_text(line) for line in lines if clean_text(line)]
                     text = "\n".join(cleaned_lines)
-                    logger.info(f"OCR used for page {page_num} of {filename}")
+                    logger.info("OCR used for page extraction", extra={"page_num": page_num, "file_name": filename})
                 except Exception as e:
-                    logging.warning(f"OCR failed on page {page_num} of {filename}: {e}\n{traceback.format_exc()}")
+                    logger.warning("OCR failed on page", extra={"page_num": page_num, "file_name": filename, "error": str(e)})
                     text = ""
 
             if not text.strip():
@@ -117,19 +119,20 @@ def store_doc_texts(
 
     return uploaded_keys
 
+
 def add_document(
-    bucket: str, 
-    course: str, 
+    bucket: str,
+    course: str,
     module: str,
-    filename: str, 
-    vectorstore: PGVector, 
+    filename: str,
+    vectorstore: PGVector,
     embeddings: BedrockEmbeddings,
-    output_bucket: str = EMBEDDING_BUCKET_NAME,
-    file_id: str = None
+    file_id: str,
+    output_bucket: str = EMBEDDING_BUCKET_NAME
 ) -> List[Document]:
     """
     Add a document to the vectorstore.
-    
+
     Args:
     bucket (str): The name of the S3 bucket containing the document.
     course (str): The course ID folder in the S3 bucket.
@@ -137,13 +140,16 @@ def add_document(
     filename (str): The name of the document file.
     vectorstore (PGVector): The vectorstore instance.
     embeddings (BedrockEmbeddings): The embeddings instance.
-    output_bucket (str, optional): The name of the S3 bucket for storing extracted data. Defaults to 'temp-extracted-data'.
-    
+    file_id (str): The mandatory file_id for chunk metadata partitioning.
+    output_bucket (str, optional): The name of the S3 bucket for storing extracted data.
+
     Returns:
     List[Document]: A list of all document chunks for this document that were added to the vectorstore.
     """
-    
-    logger.info("output_bucket: %s", output_bucket)
+    if not file_id:
+        raise ValueError("file_id is mandatory for add_document — cannot process without it")
+
+    logger.info("Adding document to vectorstore", extra={"output_bucket": output_bucket, "file_id": file_id})
     output_filenames = store_doc_texts(
         bucket=bucket,
         course=course,
@@ -158,85 +164,128 @@ def add_document(
         embeddings=embeddings,
         file_id=file_id
     )
-    
+
     return this_doc_chunks
 
+
 def store_doc_chunks(
-    bucket: str, 
+    bucket: str,
     filenames: List[str],
-    vectorstore: PGVector, 
+    vectorstore: PGVector,
     embeddings: BedrockEmbeddings,
-    file_id: str = None
+    file_id: str
 ) -> List[Document]:
     """
     Store chunks of documents in the vectorstore.
-    
+
     Args:
     bucket (str): The name of the S3 bucket containing the text files.
     filenames (List[str]): A list of keys for the text files in the bucket.
     vectorstore (PGVector): The vectorstore instance.
     embeddings (BedrockEmbeddings): The embeddings instance.
-    
+    file_id (str): The mandatory file_id for chunk metadata partitioning.
+
     Returns:
     List[Document]: A list of all document chunks for this document that were added to the vectorstore.
+
+    Raises:
+    ValueError: If file_id is None or empty.
     """
+    # file_id is unconditionally required — raises immediately if missing
+    if not file_id:
+        raise ValueError("file_id is mandatory for store_doc_chunks — cannot partition chunks without it")
+
     text_splitter = SemanticChunker(embeddings)
     this_doc_chunks = []
 
-    for filename in filenames:
-        this_uuid = str(uuid.uuid4()) # Generating one UUID for all chunks of from a specific page in the document
+    for chunk_index_offset, filename in enumerate(filenames):
+        this_uuid = str(uuid.uuid4())  # Generating one UUID for all chunks from a specific page in the document
         output_buffer = BytesIO()
         s3.download_fileobj(bucket, filename, output_buffer)
         output_buffer.seek(0)
         doc_texts = output_buffer.read().decode('utf-8')
         doc_chunks = text_splitter.create_documents([doc_texts])
-        
-        head, _, _ = filename.partition("_page")
-        true_filename = head # Converts 'CourseCode_XXX_-_Course-Name.pdf_page_1.txt' to 'CourseCode_XXX_-_Course-Name.pdf'
-        
+
+        head, _, page_part = filename.partition("_page")
+        true_filename = head  # Converts 'CourseCode_XXX_-_Course-Name.pdf_page_1.txt' to 'CourseCode_XXX_-_Course-Name.pdf'
+
+        # Extract page number from filename (e.g., "_page_3.txt" -> 3)
+        page_number = None
+        if page_part:
+            page_str = page_part.lstrip("_").replace(".txt", "")
+            try:
+                page_number = int(page_str)
+            except ValueError:
+                page_number = None
+
         doc_chunks = [x for x in doc_chunks if x.page_content]
-        
-        for doc_chunk in doc_chunks:
+
+        for idx, doc_chunk in enumerate(doc_chunks):
             if doc_chunk:
+                content_hash = hashlib.sha256(doc_chunk.page_content.encode('utf-8')).hexdigest()
                 doc_chunk.metadata["source"] = f"s3://{bucket}/{true_filename}"
                 doc_chunk.metadata["doc_id"] = this_uuid
-                if file_id:
-                    doc_chunk.metadata["file_id"] = file_id
-                
+                doc_chunk.metadata["file_id"] = file_id
+                doc_chunk.metadata["page_numbers"] = [page_number] if page_number else [chunk_index_offset + 1]
+                doc_chunk.metadata["chunk_index"] = len(this_doc_chunks) + idx
+                doc_chunk.metadata["content_hash"] = content_hash
             else:
-                logger.warning(f"Empty chunk for {filename}")
-        
+                logger.warning("Empty chunk encountered", extra={"file_name": filename})
+
         s3.delete_object(Bucket=bucket, Key=filename)
-        logger.info(f"Deleting {filename} from {bucket}")
-        
+        logger.info("Deleted processed text file from S3", extra={"file_key": filename, "bucket": bucket})
+
         this_doc_chunks.extend(doc_chunks)
-       
+
+    # Post-assignment validation: every chunk must have file_id
+    for i, chunk in enumerate(this_doc_chunks):
+        if not chunk.metadata.get("file_id"):
+            raise ValueError(
+                f"Chunk at index {i} is missing mandatory 'file_id' metadata. "
+                "All chunks must include file_id for incremental indexing."
+            )
+
     return this_doc_chunks
-                
+
+
 def process_documents(
-    bucket: str, 
-    course: str, 
-    module: str, 
-    vectorstore: PGVector, 
+    bucket: str,
+    course: str,
+    module: str,
+    vectorstore: PGVector,
     embeddings: BedrockEmbeddings,
-    record_manager: SQLRecordManager,
+    record_manager=None,
     file_id: str = None
 ) -> None:
     """
     Process and add text documents from an S3 bucket to the vectorstore.
-    
+
+    Note: This function is kept for backwards compatibility. The incremental
+    pipeline in main.py uses add_document() + incremental_index() directly
+    instead of this full-module processing function.
+
+    The record_manager and index() call have been removed as part of the
+    migration away from SQLRecordManager and cleanup="full".
+
     Args:
     bucket (str): The name of the S3 bucket containing the text documents.
     course (str): The course ID folder in the S3 bucket.
     module (str): The module ID folder in the S3 bucket.
     vectorstore (PGVector): The vectorstore instance.
     embeddings (BedrockEmbeddings): The embeddings instance.
-    record_manager (SQLRecordManager): Manages list of documents in the vectorstore for indexing.
+    record_manager: Deprecated — no longer used. Kept for API compatibility.
+    file_id (str): The mandatory file_id for chunk metadata partitioning.
+
+    Raises:
+    ValueError: If file_id is None or empty.
     """
+    if not file_id:
+        raise ValueError("file_id is mandatory for process_documents — cannot process without it")
+
     paginator = s3.get_paginator('list_objects_v2')
     page_iterator = paginator.paginate(Bucket=bucket, Prefix=f"{course}/{module}/documents")
     all_doc_chunks = []
-    
+
     for page in page_iterator:
         if "Contents" not in page:
             continue  # Skip pages without any content (e.g., if the bucket is empty)
@@ -254,24 +303,8 @@ def process_documents(
                 )
 
                 all_doc_chunks.extend(this_doc_chunks)
-    
-    if all_doc_chunks:  # Check if there are any documents to index
-        idx = index(
-            all_doc_chunks, 
-            record_manager, 
-            vectorstore, 
-            cleanup="full",
-            source_id_key="source",
-            key_encoder=lambda key: hashlib.sha256(key.encode()).hexdigest()
-        )
-        logger.info(f"Indexing updates: \n {idx}")
+
+    if all_doc_chunks:
+        logger.info("Documents processed", extra={"chunk_count": len(all_doc_chunks)})
     else:
-        idx = index(
-            [],
-            record_manager, 
-            vectorstore, 
-            cleanup="full",
-            source_id_key="source",
-            key_encoder=lambda key: hashlib.sha256(key.encode()).hexdigest()
-        )
-        logger.info("No documents found for indexing.")
+        logger.info("No documents found for processing.")
