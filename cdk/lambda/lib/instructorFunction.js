@@ -1,7 +1,10 @@
 const { initializeConnection } = require("./lib.js");
 const { validatePrompt } = require("./validatePrompt.js");
 const { generateModuleTopics } = require("./generateTopics.js");
-let { SM_DB_CREDENTIALS, RDS_PROXY_ENDPOINT } = process.env;
+const { S3Client, ListObjectsV2Command, DeleteObjectsCommand } = require("@aws-sdk/client-s3");
+const s3Client = new S3Client({ region: process.env.REGION });
+const DATA_INGESTION_BUCKET = process.env.DATA_INGESTION_BUCKET;
+let { SM_DB_CREDENTIALS, RDS_PROXY_ENDPOINT, REGION } = process.env;
 
 let sqlConnection = global.sqlConnection;
 
@@ -1432,6 +1435,306 @@ exports.handler = async (event) => {
         } else {
           response.statusCode = 400;
           response.body = JSON.stringify({ error: "module_id is required and must be a valid UUID" });
+        }
+        break;
+      case "POST /instructor/reserve_module":
+        if (
+          event.queryStringParameters != null &&
+          event.queryStringParameters.course_id
+        ) {
+          const { course_id } = event.queryStringParameters;
+          const instructor_email = userEmailAttribute;
+
+          try {
+            // Verify instructor is enrolled in the course with instructor role
+            const enrollment = await sqlConnection`
+              SELECT e.enrolment_id
+              FROM "Enrolments" e
+              JOIN "Users" u ON e.user_id = u.user_id
+              WHERE u.user_email = ${instructor_email}
+                AND e.course_id = ${course_id}
+                AND e.enrolment_type = 'instructor';
+            `;
+
+            if (enrollment.length === 0) {
+              response.statusCode = 403;
+              response.body = JSON.stringify({ error: "Forbidden: not enrolled as instructor in this course" });
+              break;
+            }
+
+            // Insert a draft module record with a server-generated UUID
+            const draftModule = await sqlConnection`
+              INSERT INTO "Course_Modules" (module_id, concept_id, module_name, module_number, status, created_at, updated_at)
+              VALUES (uuid_generate_v4(), NULL, NULL, NULL, 'draft', NOW(), NOW())
+              RETURNING module_id, status;
+            `;
+
+            response.statusCode = 201;
+            response.body = JSON.stringify({
+              module_id: draftModule[0].module_id,
+              status: draftModule[0].status,
+            });
+          } catch (err) {
+            response.statusCode = 500;
+            console.error("Error reserving module:", err);
+            response.body = JSON.stringify({ error: "Internal server error" });
+          }
+        } else {
+          response.statusCode = 400;
+          response.body = JSON.stringify({ error: "course_id is required" });
+        }
+        break;
+      case "POST /instructor/finalize_module":
+        if (
+          event.queryStringParameters != null &&
+          event.queryStringParameters.module_id &&
+          event.queryStringParameters.course_id &&
+          event.queryStringParameters.concept_id &&
+          event.queryStringParameters.module_name &&
+          event.queryStringParameters.module_number
+        ) {
+          const {
+            module_id,
+            course_id,
+            concept_id,
+            module_name,
+            module_number,
+          } = event.queryStringParameters;
+          const instructor_email = userEmailAttribute;
+          const { module_prompt, key_topics } = JSON.parse(event.body || "{}");
+
+          try {
+            // Verify instructor enrollment
+            const enrollment = await sqlConnection`
+              SELECT e.enrolment_id
+              FROM "Enrolments" e
+              JOIN "Users" u ON e.user_id = u.user_id
+              WHERE u.user_email = ${instructor_email}
+                AND e.course_id = ${course_id}
+                AND e.enrolment_type = 'instructor';
+            `;
+
+            if (enrollment.length === 0) {
+              response.statusCode = 403;
+              response.body = JSON.stringify({ error: "Forbidden: not enrolled as instructor in this course" });
+              break;
+            }
+
+            // Verify the module exists and is a draft
+            const draftCheck = await sqlConnection`
+              SELECT module_id, status FROM "Course_Modules"
+              WHERE module_id = ${module_id} AND status = 'draft';
+            `;
+
+            if (draftCheck.length === 0) {
+              response.statusCode = 404;
+              response.body = JSON.stringify({ error: "Draft module not found" });
+              break;
+            }
+
+            // Check for duplicate module name within concept
+            const duplicateCheck = await sqlConnection`
+              SELECT module_id FROM "Course_Modules"
+              WHERE concept_id = ${concept_id}
+                AND module_name = ${module_name}
+                AND status = 'active';
+            `;
+
+            if (duplicateCheck.length > 0) {
+              response.statusCode = 400;
+              response.body = JSON.stringify({ error: "A module with this name already exists in the given concept." });
+              break;
+            }
+
+            // Check all associated files are in a terminal processing state
+            const processingFiles = await sqlConnection`
+              SELECT file_id FROM "Module_Files"
+              WHERE module_id = ${module_id}
+                AND processing_status IN ('pending', 'processing');
+            `;
+
+            if (processingFiles.length > 0) {
+              response.statusCode = 409;
+              response.body = JSON.stringify({ error: "Files are still being processed." });
+              break;
+            }
+
+            // Update the draft to active with all metadata
+            const keyTopicsJson = key_topics ? JSON.stringify(key_topics) : null;
+            const finalizedModule = await sqlConnection`
+              UPDATE "Course_Modules"
+              SET concept_id = ${concept_id},
+                  module_name = ${module_name},
+                  module_number = ${module_number},
+                  module_prompt = ${module_prompt || null},
+                  key_topics = ${keyTopicsJson},
+                  status = 'active',
+                  updated_at = NOW()
+              WHERE module_id = ${module_id}
+              RETURNING *;
+            `;
+
+            // Create Student_Modules for all enrolled students
+            const enrolments = await sqlConnection`
+              SELECT enrolment_id FROM "Enrolments"
+              WHERE course_id = ${course_id};
+            `;
+
+            await Promise.all(
+              enrolments.map(async (enrolment) => {
+                await sqlConnection`
+                  INSERT INTO "Student_Modules" (student_module_id, course_module_id, enrolment_id, module_score)
+                  VALUES (uuid_generate_v4(), ${module_id}, ${enrolment.enrolment_id}, 0)
+                  ON CONFLICT DO NOTHING;
+                `;
+              })
+            );
+
+            // Insert engagement log
+            await sqlConnection`
+              INSERT INTO "User_Engagement_Log" (log_id, user_id, course_id, module_id, enrolment_id, timestamp, engagement_type)
+              VALUES (
+                uuid_generate_v4(),
+                (SELECT user_id FROM "Users" WHERE user_email = ${instructor_email}),
+                ${course_id},
+                ${module_id},
+                NULL,
+                CURRENT_TIMESTAMP,
+                'instructor_created_module'
+              );
+            `;
+
+            response.statusCode = 200;
+            response.body = JSON.stringify(finalizedModule[0]);
+          } catch (err) {
+            response.statusCode = 500;
+            console.error("Error finalizing module:", err);
+            response.body = JSON.stringify({ error: "Internal server error" });
+          }
+        } else {
+          response.statusCode = 400;
+          response.body = JSON.stringify({
+            error: "module_id, course_id, concept_id, module_name, and module_number are required",
+          });
+        }
+        break;
+      case "POST /instructor/cleanup_module":
+        if (
+          event.queryStringParameters != null &&
+          event.queryStringParameters.module_id &&
+          event.queryStringParameters.course_id
+        ) {
+          const { module_id, course_id } = event.queryStringParameters;
+          const instructor_email = userEmailAttribute;
+
+          try {
+            // Verify instructor enrollment
+            const enrollment = await sqlConnection`
+              SELECT e.enrolment_id
+              FROM "Enrolments" e
+              JOIN "Users" u ON e.user_id = u.user_id
+              WHERE u.user_email = ${instructor_email}
+                AND e.course_id = ${course_id}
+                AND e.enrolment_type = 'instructor';
+            `;
+
+            if (enrollment.length === 0) {
+              response.statusCode = 403;
+              response.body = JSON.stringify({ error: "Forbidden: not enrolled as instructor in this course" });
+              break;
+            }
+
+            // Verify module status is draft or deleting (idempotent if already deleting)
+            const moduleCheck = await sqlConnection`
+              SELECT module_id, status FROM "Course_Modules"
+              WHERE module_id = ${module_id};
+            `;
+
+            if (moduleCheck.length === 0) {
+              // Already deleted — idempotent success
+              response.statusCode = 200;
+              response.body = JSON.stringify({ message: "Module cleaned up successfully" });
+              break;
+            }
+
+            if (moduleCheck[0].status === 'active') {
+              response.statusCode = 400;
+              response.body = JSON.stringify({ error: `Cannot cleanup module with status: active` });
+              break;
+            }
+
+            // Step 1: Set status to 'deleting' to prevent new processing work
+            await sqlConnection`
+              UPDATE "Course_Modules"
+              SET status = 'deleting', updated_at = NOW()
+              WHERE module_id = ${module_id};
+            `;
+
+            // Step 2: Delete vector embeddings (idempotent — no error if collection missing)
+            try {
+              const collection = await sqlConnection`
+                SELECT uuid FROM langchain_pg_collection WHERE name = ${module_id}::text;
+              `;
+              if (collection.length > 0) {
+                await sqlConnection`
+                  DELETE FROM langchain_pg_embedding WHERE collection_id = ${collection[0].uuid};
+                `;
+                await sqlConnection`
+                  DELETE FROM langchain_pg_collection WHERE name = ${module_id}::text;
+                `;
+              }
+            } catch (embeddingErr) {
+              console.error("Error deleting embeddings (continuing):", embeddingErr);
+            }
+
+            // Step 3: Delete Module_Files records
+            await sqlConnection`
+              DELETE FROM "Module_Files" WHERE module_id = ${module_id};
+            `;
+
+            // Step 4: Delete S3 objects under the module prefix (idempotent)
+            if (DATA_INGESTION_BUCKET) {
+              try {
+                const prefix = `${course_id}/${module_id}/`;
+                let continuationToken;
+                do {
+                  const listParams = {
+                    Bucket: DATA_INGESTION_BUCKET,
+                    Prefix: prefix,
+                    ...(continuationToken && { ContinuationToken: continuationToken }),
+                  };
+                  const listResult = await s3Client.send(new ListObjectsV2Command(listParams));
+                  if (listResult.Contents && listResult.Contents.length > 0) {
+                    await s3Client.send(new DeleteObjectsCommand({
+                      Bucket: DATA_INGESTION_BUCKET,
+                      Delete: {
+                        Objects: listResult.Contents.map((obj) => ({ Key: obj.Key })),
+                        Quiet: true,
+                      },
+                    }));
+                  }
+                  continuationToken = listResult.NextContinuationToken;
+                } while (continuationToken);
+              } catch (s3Err) {
+                console.error("Error deleting S3 objects (continuing):", s3Err);
+              }
+            }
+
+            // Step 5: Delete the Course_Modules record
+            await sqlConnection`
+              DELETE FROM "Course_Modules" WHERE module_id = ${module_id};
+            `;
+
+            response.statusCode = 200;
+            response.body = JSON.stringify({ message: "Module cleaned up successfully" });
+          } catch (err) {
+            response.statusCode = 500;
+            console.error("Error cleaning up module:", err);
+            response.body = JSON.stringify({ error: "Internal server error" });
+          }
+        } else {
+          response.statusCode = 400;
+          response.body = JSON.stringify({ error: "module_id and course_id are required" });
         }
         break;
       default:

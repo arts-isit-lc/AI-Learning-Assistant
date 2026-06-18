@@ -8,7 +8,6 @@ import {
   Button,
   Paper,
   Typography,
-  Grid,
   Box,
   FormControl,
   InputLabel,
@@ -23,9 +22,9 @@ import {
 import PageContainer from "../Container";
 import FileManagement from "../../components/FileManagement";
 import { titleCase } from "../../utils/formatters";
-import { cleanFileName, removeFileExtension, getFileType } from "../../utils/fileHelpers";
 import { useFileUpload } from "../../hooks/useFileUpload";
 import { useProcessingPoller } from "../../hooks/useProcessingPoller";
+import { useDraftModule } from "../../hooks/useDraftModule";
 import { BLOCKING_STATUSES } from "../../constants/uploadConfig";
 
 
@@ -33,11 +32,11 @@ export const InstructorNewModule = ({ courseId }) => {
   const [files, setFiles] = useState([]);
   const [newFiles, setNewFiles] = useState([]);
   const [savedFiles, setSavedFiles] = useState([]);
-  const [deletedFiles, setDeletedFiles] = useState([]);
+  const [, setDeletedFiles] = useState([]);
   const [metadata, setMetadata] = useState({});
 
   const [isSaving, setIsSaving] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [isCleaning, setIsCleaning] = useState(false);
   const [moduleName, setModuleName] = useState("");
   const [modulePrompt, setModulePrompt] = useState("");
   const [concept, setConcept] = useState("");
@@ -58,22 +57,22 @@ export const InstructorNewModule = ({ courseId }) => {
   const [conflictReport, setConflictReport] = useState(null);
   const [isValidating, setIsValidating] = useState(false);
 
-  // Track created module_id for upload progress hooks
-  const [createdModuleId, setCreatedModuleId] = useState(null);
+  // --- Draft module lifecycle (reserves module_id eagerly on mount) ---
+  const { moduleId, isReserving, reserveError, cleanup, markSaved } = useDraftModule(course_id);
 
   // --- Upload progress & processing poller hooks ---
-  // Note: For InstructorNewModule, moduleId is null until the module is created.
-  // The useFileUpload hook handles null moduleId gracefully (won't upload until moduleId is set).
-  // For the initial save flow, we do the upload inline since moduleId is obtained at save time.
+  // moduleId is available from useDraftModule immediately (or after reservation completes),
+  // so files can be uploaded as soon as they are selected.
   const {
     fileStates,
+    uploadFiles: uploadFilesWithProgress,
     abortFile,
     removeFile: removeUploadFile,
     retryFile,
   } = useFileUpload({
     courseId: course_id,
-    moduleId: createdModuleId,
-    moduleName: moduleName,
+    moduleId,
+    moduleName,
   });
 
   const {
@@ -82,8 +81,8 @@ export const InstructorNewModule = ({ courseId }) => {
     removeTrackedFile,
     getNotFoundContext,
   } = useProcessingPoller({
-    moduleId: createdModuleId,
-    enabled: !!createdModuleId,
+    moduleId,
+    enabled: !!moduleId,
   });
 
   // Compute whether save should be blocked by in-progress files
@@ -93,10 +92,20 @@ export const InstructorNewModule = ({ courseId }) => {
     (f) => BLOCKING_STATUSES.includes(f.status)
   );
 
-  const canSave = !isSaving && !isProcessingBlocking;
+  const canSave = !isSaving && !isReserving && !isProcessingBlocking && !!moduleId && !reserveError;
 
   const handleBackClick = () => {
     window.history.back();
+  };
+
+  const handleCancelClick = async () => {
+    setIsCleaning(true);
+    try {
+      await cleanup();
+    } finally {
+      setIsCleaning(false);
+      handleBackClick();
+    }
   };
 
   useEffect(() => {
@@ -130,89 +139,47 @@ export const InstructorNewModule = ({ courseId }) => {
   const handleConceptInputChange = (e) => {
     setConcept(e.target.value);
   };
-  const uploadFiles = async (newFiles, token, moduleid) => {
-    // For InstructorNewModule, we upload directly using the moduleid parameter
-    // since the useFileUpload hook's closure won't have the moduleId yet (state is async).
-    // We still collect file_ids for the processing poller.
-    const uploadedFileIds = [];
 
-    const newFilePromises = newFiles.map(async (file) => {
-      const fileType = getFileType(file.name);
-      const fileName = cleanFileName(removeFileExtension(file.name));
-
-      try {
-        const response = await apiClient.get("instructor/generate_presigned_url", {
-          course_id,
-          module_id: moduleid,
-          module_name: moduleName,
-          file_type: fileType,
-          file_name: fileName,
-        });
-
-        const presignedUrl = response.presignedurl;
-        const fileId = response.file_id;
-
-        // Upload via XHR (no progress tracking UI needed for new module create flow)
-        await new Promise((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-          xhr.onload = () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-              if (fileId) {
-                uploadedFileIds.push({ fileId, uploadCompletedAt: Date.now() });
-              }
-              resolve();
-            } else {
-              reject(new Error(`Upload failed with status ${xhr.status}`));
-            }
-          };
-          xhr.onerror = () => reject(new Error("Network error during upload"));
-          xhr.ontimeout = () => reject(new Error("Upload timed out"));
-          xhr.open("PUT", presignedUrl);
-          xhr.timeout = 300000;
-          xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
-          xhr.send(file);
-        });
-      } catch (error) {
-        console.error(`Upload failed for ${file.name}:`, error.message);
-      }
-    });
-
-    await Promise.all(newFilePromises);
+  // Files upload immediately on selection — same pattern as InstructorEditCourse.
+  const handleImmediateUpload = async (selectedFiles) => {
+    const results = await uploadFilesWithProgress(selectedFiles);
 
     // Hand off successfully uploaded file_ids to the processing poller
+    const uploadedFileIds = results
+      .filter((r) => r?.fileId)
+      .map((r) => ({ fileId: r.fileId, uploadCompletedAt: Date.now() }));
+
     if (uploadedFileIds.length > 0) {
       addTrackedFiles(uploadedFileIds);
     }
-
-    return uploadedFileIds;
   };
 
   const handleSave = async () => {
     if (!canSave) return;
     setConflictReport(null);
 
-    // Validation check
+    // Validation
     if (!moduleName || !concept) {
       toast.error("Module Name and Concept are required.", { autoClose: 2000 });
       return;
     }
 
-    // Check if at least one file is uploaded
     if (newFiles.length === 0) {
       toast.error("At least one file must be uploaded.", { autoClose: 2000 });
       return;
     }
-
 
     setIsSaving(true);
 
     const selectedConcept = allConcepts.find((c) => c.concept_name === concept);
     try {
       const { email } = await apiClient.getAuth();
+
+      // Finalize the draft module — sets concept, name, number, prompt, key_topics, status='active'
       const updatedModule = await apiClient.post(
-        "instructor/create_module",
+        "instructor/finalize_module",
         {
-          course_id,
+          module_id: moduleId,
           concept_id: selectedConcept.concept_id,
           module_name: moduleName,
           module_number: nextModuleNumber,
@@ -221,25 +188,23 @@ export const InstructorNewModule = ({ courseId }) => {
         { module_prompt: modulePrompt, key_topics: keyTopics.length > 0 ? keyTopics : null }
       );
 
-      // Set the created module ID so the upload hook has the correct moduleId
-      setCreatedModuleId(updatedModule.module_id);
-
-      await uploadFiles(newFiles, null, updatedModule.module_id);
-
       await apiClient.put(
         "instructor/module_file_references",
-        { module_id: updatedModule.module_id },
+        { module_id: moduleId },
         { referenced_file_ids: referencedFileIds }
       );
+
+      // Prevent cleanup on unmount — module is now active
+      markSaved();
 
       setDeletedFiles([]);
       setNewFiles([]);
       toast.success("Module Created Successfully");
 
-      // Run prompt conflict validation after create (awaited to keep page alive)
+      // Run prompt conflict validation after finalization (awaited to keep page alive)
       if (modulePrompt && modulePrompt.trim()) {
         setIsSaving(false);
-        await validateModulePrompt(updatedModule.module_id);
+        await validateModulePrompt(updatedModule?.module_id || moduleId);
       } else {
         setIsSaving(false);
         setNextModuleNumber(nextModuleNumber + 1);
@@ -248,13 +213,19 @@ export const InstructorNewModule = ({ courseId }) => {
         }, 1000);
       }
     } catch (error) {
-      console.error("Error saving changes:", error.message);
-      toast.error("Module Creation Failed");
+      console.error("Error finalizing module:", error.message);
+      if (error.status === 400) {
+        toast.error("A module with this name already exists");
+      } else if (error.status === 409) {
+        toast.error("Files are still being processed");
+      } else {
+        toast.error("Module Creation Failed");
+      }
       setIsSaving(false);
     }
   };
 
-  const validateModulePrompt = async (moduleId) => {
+  const validateModulePrompt = async (moduleIdToValidate) => {
     setIsValidating(true);
     setConflictReport(null);
     try {
@@ -262,7 +233,7 @@ export const InstructorNewModule = ({ courseId }) => {
       const data = await apiClient.post(
         "instructor/validate_prompt",
         { course_id, instructor_email: email },
-        { prompt: modulePrompt, scope: "module", module_id: moduleId }
+        { prompt: modulePrompt, scope: "module", module_id: moduleIdToValidate }
       );
       // Filter to only module-related conflicts
       const moduleConflicts = (data.conflicts || []).filter(
@@ -284,11 +255,6 @@ export const InstructorNewModule = ({ courseId }) => {
     } finally {
       setIsValidating(false);
     }
-  };
-
-  const getConflictTypeColor = (type) => {
-    if (type === "HARD_CONTRADICTION") return "error";
-    return "warning";
   };
 
   const renderHighlightedPrompt = () => {
@@ -373,6 +339,23 @@ export const InstructorNewModule = ({ courseId }) => {
     <PageContainer>
       <Paper style={{ padding: 25, width: "100%", overflow: "auto" }}>
         <Typography variant="h6">New Module </Typography>
+
+        {/* Reservation error — disable uploads until resolved */}
+        {reserveError && (
+          <Alert severity="error" sx={{ mt: 1, mb: 1 }}>
+            {reserveError} — File uploads are unavailable until the module reservation succeeds.
+          </Alert>
+        )}
+
+        {/* Reservation in-progress indicator */}
+        {isReserving && (
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1, mb: 1 }}>
+            <CircularProgress size={16} />
+            <Typography variant="caption" color="text.secondary">
+              Reserving module slot…
+            </Typography>
+          </Box>
+        )}
 
         <TextField
           label="Module Name"
@@ -557,7 +540,7 @@ export const InstructorNewModule = ({ courseId }) => {
           setDeletedFiles={setDeletedFiles}
           savedFiles={savedFiles}
           setSavedFiles={setSavedFiles}
-          loading={loading}
+          loading={false}
           metadata={metadata}
           setMetadata={setMetadata}
           uploadStates={fileStates}
@@ -569,6 +552,9 @@ export const InstructorNewModule = ({ courseId }) => {
             removeTrackedFile(fileId);
           }}
           getNotFoundContext={getNotFoundContext}
+          // Files upload immediately on selection (same as InstructorEditCourse).
+          // Omitted when reserveError is set to prevent uploads with no valid moduleId.
+          onFilesSelected={reserveError ? undefined : handleImmediateUpload}
         />
 
         {/* Generate Topics - disabled on new module (needs save first) */}
@@ -583,9 +569,10 @@ export const InstructorNewModule = ({ courseId }) => {
           <Button
             variant="contained"
             color="primary"
-            onClick={handleBackClick}
+            onClick={handleCancelClick}
+            disabled={isCleaning}
           >
-            Cancel
+            {isCleaning ? "Cancelling…" : "Cancel"}
           </Button>
           <Box sx={{ display: "flex", gap: 2 }}>
             {conflictReport && conflictReport.has_conflicts && (

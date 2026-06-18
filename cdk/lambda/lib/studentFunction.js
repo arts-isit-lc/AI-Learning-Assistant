@@ -25,6 +25,7 @@ async function verifyStudentAccess(sqlConn, email, courseId, moduleId) {
     WHERE u.user_email = ${email}
       AND cm.module_id = ${moduleId}
       AND e.course_id = ${courseId}
+      AND cm.status = 'active'
     LIMIT 1;
   `;
   return result.length > 0 ? result[0].enrolment_id : null;
@@ -289,6 +290,7 @@ exports.handler = async (event) => {
                   StudentEnrollment ON "Student_Modules".enrolment_id = StudentEnrollment.enrolment_id
                 WHERE
                   "Course_Concepts".course_id = ${courseId}
+                  AND "Course_Modules".status = 'active'
                 ORDER BY
                   "Course_Modules".module_number;
               `;

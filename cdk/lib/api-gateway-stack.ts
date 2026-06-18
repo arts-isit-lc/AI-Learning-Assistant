@@ -24,6 +24,8 @@ import * as appsync from "aws-cdk-lib/aws-appsync";
 import * as ses from "aws-cdk-lib/aws-ses";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as bedrock from "aws-cdk-lib/aws-bedrock";
+import * as events from "aws-cdk-lib/aws-events";
+import * as targets from "aws-cdk-lib/aws-events-targets";
 
 
 export interface LambdaFunctionInfo {
@@ -1481,6 +1483,21 @@ export class ApiGatewayStack extends cdk.Stack {
     lambdaStudentFunction.addEnvironment("BUCKET", dataIngestionBucket.bucketName);
     lambdaStudentFunction.addEnvironment("REGION", this.region);
 
+    // Add DATA_INGESTION_BUCKET env var to instructorFunction for cleanup_module route
+    lambdaInstructorFunction.addEnvironment("DATA_INGESTION_BUCKET", dataIngestionBucket.bucketName);
+
+    // Grant S3 ListBucket and DeleteObject to instructorFunction for cleanup_module route
+    lambdaInstructorFunction.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['s3:ListBucket'],
+      resources: [dataIngestionBucket.bucketArn],
+    }));
+    lambdaInstructorFunction.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['s3:DeleteObject'],
+      resources: [`${dataIngestionBucket.bucketArn}/*`],
+    }));
+
     /**
      *
      * Create Lambda with container image for data ingestion workflow in RAG pipeline
@@ -1597,6 +1614,91 @@ export class ApiGatewayStack extends cdk.Stack {
         resources: ["*"],
       })
     );
+
+    /**
+     * Orphan Cleanup Lambda — removes abandoned draft modules older than 24h
+     * and stuck 'deleting' modules older than 1h.
+     * Triggered by EventBridge schedule every 6 hours.
+     */
+    const orphanCleanupRole = new iam.Role(this, `${id}-orphanCleanupRole`, {
+      roleName: `${id}-orphanCleanupRole`,
+      assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
+    });
+
+    // CloudWatch Logs permission (scoped to the function's log group)
+    orphanCleanupRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['logs:CreateLogGroup', 'logs:CreateLogStream', 'logs:PutLogEvents'],
+      resources: [
+        `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${id}-orphanCleanupFunc:*`,
+      ],
+    }));
+
+    // SecretsManager (scoped to DB admin secret)
+    orphanCleanupRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['secretsmanager:GetSecretValue'],
+      resources: [
+        `arn:aws:secretsmanager:${this.region}:${this.account}:secret:${db.secretPathAdminName}-*`,
+      ],
+    }));
+
+    // EC2 VPC networking (resource '*' required by AWS for ENI operations)
+    orphanCleanupRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        'ec2:CreateNetworkInterface',
+        'ec2:DescribeNetworkInterfaces',
+        'ec2:DeleteNetworkInterface',
+      ],
+      resources: ['*'],
+    }));
+
+    // S3 access to data ingestion bucket (list + delete for cleanup)
+    orphanCleanupRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['s3:ListBucket'],
+      resources: [dataIngestionBucket.bucketArn],
+    }));
+    orphanCleanupRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['s3:DeleteObject'],
+      resources: [`${dataIngestionBucket.bucketArn}/*`],
+    }));
+
+    // X-Ray tracing (resource '*' acceptable — service doesn't support resource-level)
+    orphanCleanupRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['xray:PutTraceSegments', 'xray:PutTelemetryRecords'],
+      resources: ['*'],
+    }));
+
+    const orphanCleanupFunc = new lambda.Function(this, `${id}-orphanCleanupFunc`, {
+      functionName: `${id}-orphanCleanupFunc`,
+      runtime: lambda.Runtime.PYTHON_3_11,
+      code: lambda.Code.fromAsset('lambda/orphanCleanup'),
+      handler: 'orphanCleanup.handler',
+      timeout: cdk.Duration.seconds(300),
+      memorySize: 256,
+      tracing: lambda.Tracing.ACTIVE,
+      logRetention: logRetention,
+      vpc: vpcStack.vpc,
+      role: orphanCleanupRole,
+      layers: [powertoolsLayer, psycopgLayer],
+      environment: {
+        SM_DB_CREDENTIALS: db.secretPathAdminName,
+        RDS_PROXY_ENDPOINT: db.rdsProxyEndpointAdmin,
+        DATA_INGESTION_BUCKET: dataIngestionBucket.bucketName,
+        REGION: this.region,
+      },
+    });
+
+    // EventBridge schedule: run every 6 hours
+    const orphanCleanupRule = new events.Rule(this, `${id}-orphanCleanupSchedule`, {
+      schedule: events.Schedule.rate(cdk.Duration.hours(6)),
+      description: 'Triggers orphan cleanup Lambda every 6 hours to remove abandoned draft modules',
+    });
+    orphanCleanupRule.addTarget(new targets.LambdaFunction(orphanCleanupFunc));
 
     /**
      *
@@ -2402,6 +2504,7 @@ export class ApiGatewayStack extends cdk.Stack {
       { functionName: `${id}-sqsFunction`, timeoutSeconds: 60, isContainer: false },
       { functionName: `${id}-SQSTriggerDockerFunc`, timeoutSeconds: 300, isContainer: true },
       { functionName: `${id}-GetChatLogsFunction`, timeoutSeconds: 60, isContainer: false },
+      { functionName: `${id}-orphanCleanupFunc`, timeoutSeconds: 300, isContainer: false },
     ];
 
   }

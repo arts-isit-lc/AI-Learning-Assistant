@@ -1,0 +1,299 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Add status column, timestamps, nullable concept_id, and partial index to Course_Modules": [
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805256299
+      }
+    ],
+    "1. Database schema migration": [
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805256335
+      }
+    ],
+    "2.1 Implement POST /instructor/reserve_module route in instructorFunction.js": [
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805260489
+      },
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805266804
+      },
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805388315
+      }
+    ],
+    "2.2 Implement POST /instructor/finalize_module route in instructorFunction.js": [
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805260513
+      },
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805267481
+      },
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805389047
+      }
+    ],
+    "2.3 Implement POST /instructor/cleanup_module route in instructorFunction.js": [
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805260566
+      },
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805268309
+      },
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805389965
+      }
+    ],
+    "3. Checkpoint - Backend routes verification": [
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805260587
+      },
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805395153
+      }
+    ],
+    "4.1 Add API Gateway routes for reserve_module, finalize_module, cleanup_module": [
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805260607
+      },
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805395968
+      },
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805578608
+      }
+    ],
+    "4.2 Add student view isolation WHERE clause": [
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805260626
+      },
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805396501
+      },
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805577904
+      }
+    ],
+    "5.1 Add module status check to data ingestion Lambda": [
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805260658
+      },
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805397434
+      },
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805579549
+      }
+    ],
+    "6. Checkpoint - Backend complete": [
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805260694
+      },
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805584382
+      }
+    ],
+    "7.1 Create useDraftModule hook": [
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805260714
+      },
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805590698
+      },
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805834723
+      }
+    ],
+    "7.2 Refactor InstructorNewModule page to use useDraftModule": [
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805260733
+      },
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805840742
+      },
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781806297979
+      }
+    ],
+    "7.3 Implement Save action calling finalize_module": [
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805260752
+      },
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805841649
+      },
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781806298789
+      }
+    ],
+    "7.4 Implement cleanup on cancel/navigate away": [
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805260773
+      },
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805842630
+      },
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781806299701
+      }
+    ],
+    "8.1 Create orphan cleanup Lambda function": [
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805260792
+      },
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781806304741
+      },
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781806625016
+      }
+    ],
+    "8.2 Add CDK infrastructure for orphan cleanup Lambda and EventBridge schedule": [
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805260814
+      },
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781806305794
+      },
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781806624260
+      }
+    ],
+    "9. Final checkpoint - Full verification": [
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805260832
+      },
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781806630047
+      },
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781806744793
+      }
+    ],
+    "2. Backend routes — reserve, finalize, cleanup": [
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805390000
+      }
+    ],
+    "4. API Gateway routes and student view isolation": [
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805578638
+      }
+    ],
+    "5. Data ingestion Lambda guard": [
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781805579573
+      }
+    ],
+    "7. Frontend hook and page refactor": [
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781806299761
+      }
+    ],
+    "8. Orphan cleanup Lambda and EventBridge schedule": [
+      {
+        "executionId": "604aaad0-488b-4c1b-82e7-3a1c05b0ad17",
+        "chatSessionId": "sess_c9430275-1612-41dc-9040-182fb7bb967c",
+        "timestamp": 1781806625047
+      }
+    ]
+  }
+}

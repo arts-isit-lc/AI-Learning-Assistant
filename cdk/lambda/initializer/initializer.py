@@ -367,6 +367,38 @@ def handler(event, context):
             """)
             connection.commit()
 
+        # Eager Module Creation: Add status, timestamps, and nullable concept_id to Course_Modules
+        cursor.execute("""
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = 'public'
+                AND table_name = 'Course_Modules'
+                AND column_name = 'status'
+            )
+        """)
+        if not cursor.fetchone()[0]:
+            cursor.execute("""
+                ALTER TABLE "Course_Modules"
+                ADD COLUMN status VARCHAR(10) NOT NULL DEFAULT 'active',
+                ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                ADD COLUMN updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            """)
+            cursor.execute("""
+                ALTER TABLE "Course_Modules"
+                ADD CONSTRAINT chk_course_modules_status
+                CHECK (status IN ('draft', 'active', 'deleting'))
+            """)
+            cursor.execute("""
+                ALTER TABLE "Course_Modules"
+                ALTER COLUMN concept_id DROP NOT NULL
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_course_modules_status_created
+                ON "Course_Modules" (status, created_at)
+                WHERE status IN ('draft', 'deleting')
+            """)
+            connection.commit()
+
         # Generate 16 bytes username and password randomly
         username = secrets.token_hex(8)
         password = secrets.token_hex(16)

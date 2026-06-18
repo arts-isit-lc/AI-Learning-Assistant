@@ -297,6 +297,32 @@ def get_vectorstore(module_id: str, embeddings: BedrockEmbeddings) -> PGVector:
     return vectorstore
 
 
+def get_module_status(module_id: str, connection) -> str:
+    """Query the Course_Modules table to get the current module status.
+
+    Used to skip processing for modules that are being deleted or don't exist.
+
+    Args:
+        module_id: The UUID of the module.
+        connection: An active psycopg2 connection.
+
+    Returns:
+        The status string ('draft', 'active', 'deleting') or None if not found.
+    """
+    try:
+        with connection.cursor() as cur:
+            cur.execute(
+                'SELECT status FROM "Course_Modules" WHERE module_id = %s',
+                (module_id,),
+            )
+            result = cur.fetchone()
+            return result[0] if result else None
+    except Exception:
+        logger.exception("Error checking module status", extra={"module_id": module_id})
+        # On error, default to allowing processing (fail-open to avoid losing data)
+        return 'active'
+
+
 @logger.inject_lambda_context(clear_state=True)
 def handler(event, context):
     records = event.get('Records', [])
@@ -337,6 +363,16 @@ def handler(event, context):
 
         # --- ObjectCreated: file upload — incremental processing ---
         if event_name.startswith('ObjectCreated:'):
+            # Check module status — skip if deleting or not found
+            conn = connect_to_db()
+            module_status = get_module_status(module_id, conn)
+            if module_status in ('deleting', None):
+                logger.warning(
+                    "Module is deleting or not found, skipping file processing",
+                    extra={"module_id": module_id, "module_status": module_status}
+                )
+                continue  # skip to next record
+
             # Step 1: Insert/update file record in DB
             insert_file_into_db(
                 module_id=module_id,

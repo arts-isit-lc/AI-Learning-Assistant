@@ -1816,6 +1816,225 @@ paths:
         passthroughBehavior: "when_no_match"
         httpMethod: "POST"
         type: "aws_proxy"
+  /instructor/reserve_module:
+    options:
+      summary: CORS support
+      description: Enable CORS by returning correct headers
+      responses:
+        200:
+          $ref: "#/components/responses/Success"
+      x-amazon-apigateway-integration:
+        type: mock
+        requestTemplates:
+          application/json: |
+            {
+              "statusCode" : 200
+            }
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
+              method.response.header.Access-Control-Allow-Methods: "'*'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            responseTemplates:
+              application/json: |
+                {}
+    post:
+      tags:
+        - Instructor
+      summary: Reserve a draft module_id for eager module creation
+      operationId: instructor_reserve_module_POST
+      parameters:
+        - in: query
+          name: course_id
+          required: true
+          description: UUID of the course
+          schema:
+            type: string
+      responses:
+        "201":
+          description: Draft module reserved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  module_id:
+                    type: string
+                  status:
+                    type: string
+        "400":
+          description: Bad Request
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "500":
+          description: Internal Server Error
+      security:
+        - instructorAuthorizer: []
+      x-amazon-apigateway-integration:
+        uri:
+          Fn::Sub: "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${instructorFunction.Arn}/invocations"
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /instructor/finalize_module:
+    options:
+      summary: CORS support
+      description: Enable CORS by returning correct headers
+      responses:
+        200:
+          $ref: "#/components/responses/Success"
+      x-amazon-apigateway-integration:
+        type: mock
+        requestTemplates:
+          application/json: |
+            {
+              "statusCode" : 200
+            }
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
+              method.response.header.Access-Control-Allow-Methods: "'*'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            responseTemplates:
+              application/json: |
+                {}
+    post:
+      tags:
+        - Instructor
+      summary: Finalize a draft module to make it active
+      operationId: instructor_finalize_module_POST
+      parameters:
+        - in: query
+          name: module_id
+          required: true
+          description: UUID of the draft module to finalize
+          schema:
+            type: string
+        - in: query
+          name: course_id
+          required: true
+          description: UUID of the course
+          schema:
+            type: string
+        - in: query
+          name: concept_id
+          required: true
+          description: UUID of the concept to assign this module to
+          schema:
+            type: string
+        - in: query
+          name: module_name
+          required: true
+          description: Name of the module
+          schema:
+            type: string
+        - in: query
+          name: module_number
+          required: true
+          description: Module sequence number
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Module finalized successfully
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Bad Request - duplicate name or missing params
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "404":
+          description: Draft module not found
+        "409":
+          description: Conflict - files still being processed
+        "500":
+          description: Internal Server Error
+      security:
+        - instructorAuthorizer: []
+      x-amazon-apigateway-integration:
+        uri:
+          Fn::Sub: "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${instructorFunction.Arn}/invocations"
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /instructor/cleanup_module:
+    options:
+      summary: CORS support
+      description: Enable CORS by returning correct headers
+      responses:
+        200:
+          $ref: "#/components/responses/Success"
+      x-amazon-apigateway-integration:
+        type: mock
+        requestTemplates:
+          application/json: |
+            {
+              "statusCode" : 200
+            }
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
+              method.response.header.Access-Control-Allow-Methods: "'*'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            responseTemplates:
+              application/json: |
+                {}
+    post:
+      tags:
+        - Instructor
+      summary: Clean up a draft module and all its associated resources
+      operationId: instructor_cleanup_module_POST
+      parameters:
+        - in: query
+          name: module_id
+          required: true
+          description: UUID of the draft module to clean up
+          schema:
+            type: string
+        - in: query
+          name: course_id
+          required: true
+          description: UUID of the course
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Module cleaned up successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        "400":
+          description: Bad Request - module is not in draft or deleting status
+        "401":
+          description: Unauthorized
+        "403":
+          description: Forbidden
+        "500":
+          description: Internal Server Error
+      security:
+        - instructorAuthorizer: []
+      x-amazon-apigateway-integration:
+        uri:
+          Fn::Sub: "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${instructorFunction.Arn}/invocations"
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
   /instructor/generate_topics:
     options:
       summary: CORS support

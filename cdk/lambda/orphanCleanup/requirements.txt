@@ -1,0 +1,4 @@
+aws-lambda-powertools
+aws-xray-sdk
+psycopg2-binary
+boto3
