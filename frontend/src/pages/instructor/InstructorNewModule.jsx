@@ -180,6 +180,7 @@ export const InstructorNewModule = ({ courseId }) => {
         "instructor/finalize_module",
         {
           module_id: moduleId,
+          course_id: course_id,
           concept_id: selectedConcept.concept_id,
           module_name: moduleName,
           module_number: nextModuleNumber,
