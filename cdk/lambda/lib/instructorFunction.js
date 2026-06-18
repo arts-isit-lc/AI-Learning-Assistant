@@ -809,7 +809,7 @@ exports.handler = async (event) => {
           try {
             // Query to get all modules for the given course
             const courseModules = await sqlConnection`
-        SELECT cm.module_id, cm.module_name, cm.module_number, cm.module_prompt, cc.concept_name, cc.concept_number
+        SELECT cm.module_id, cm.module_name, cm.module_number, cm.module_prompt, cm.generated_topics, cm.key_topics, cc.concept_name, cc.concept_number
         FROM "Course_Modules" cm
         JOIN "Course_Concepts" cc ON cm.concept_id = cc.concept_id
         WHERE cc.course_id = ${course_id}
