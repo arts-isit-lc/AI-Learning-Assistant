@@ -1,0 +1,236 @@
+"""TableService: Structured table extraction without LLM calls.
+
+Extracts table_headers, table_rows, and generates a heuristic table_summary.
+Supports tab-separated, comma-separated, and pipe-separated table formats.
+"""
+
+from __future__ import annotations
+
+import csv
+import io
+import re
+
+from aws_lambda_powertools import Logger
+
+from ..models.data_models import (
+    ENRICHMENT_VERSION,
+    ElementType,
+    EnrichedElement,
+    IRElement,
+)
+
+logger = Logger(service="multimodal-rag-enrichment")
+
+
+class TableService:
+    """Extracts structured table data without LLM calls.
+
+    Parses table content in various formats (tab-separated, CSV,
+    pipe-separated) and generates a simple heuristic summary.
+    """
+
+    def enrich(self, element: IRElement) -> EnrichedElement:
+        """Enrich a TABLE element with structured extraction.
+
+        Args:
+            element: An IRElement with element_type=TABLE containing
+                     table data as string content.
+
+        Returns:
+            EnrichedElement with table_headers, table_rows, table_summary,
+            and embedding_text.
+
+        Raises:
+            Exception: On parsing failure. ElementRouter handles fallback.
+        """
+        content = element.content if isinstance(element.content, str) else element.content.decode("utf-8")
+
+        rows = self._parse_table(content)
+
+        if not rows:
+            logger.info(
+                "Empty table content",
+                extra={"element_id": element.element_id},
+            )
+            return EnrichedElement(
+                element_id=element.element_id,
+                element_type=ElementType.TABLE,
+                provenance=element.provenance,
+                embedding_text="Empty table",
+                table_headers=[],
+                table_rows=[],
+                table_summary="Empty table with no data.",
+                enrichment_version=ENRICHMENT_VERSION,
+            )
+
+        # First row is treated as headers
+        table_headers = rows[0]
+        table_rows = rows[1:]
+
+        table_summary = self._generate_summary(table_headers, table_rows)
+        embedding_text = table_summary
+
+        logger.info(
+            "Extracted table structure",
+            extra={
+                "element_id": element.element_id,
+                "headers_count": len(table_headers),
+                "rows_count": len(table_rows),
+            },
+        )
+
+        return EnrichedElement(
+            element_id=element.element_id,
+            element_type=ElementType.TABLE,
+            provenance=element.provenance,
+            embedding_text=embedding_text,
+            table_headers=table_headers,
+            table_rows=table_rows,
+            table_summary=table_summary,
+            enrichment_version=ENRICHMENT_VERSION,
+        )
+
+    def _parse_table(self, content: str) -> list[list[str]]:
+        """Parse table content, auto-detecting the delimiter format.
+
+        Supports:
+        - Pipe-separated (Markdown tables)
+        - Tab-separated (TSV)
+        - Comma-separated (CSV)
+
+        Args:
+            content: Raw table content string.
+
+        Returns:
+            List of rows, where each row is a list of cell values.
+        """
+        content = content.strip()
+        if not content:
+            return []
+
+        # Detect pipe-separated (Markdown table format)
+        if "|" in content:
+            return self._parse_pipe_separated(content)
+
+        # Detect tab-separated
+        if "\t" in content:
+            return self._parse_tsv(content)
+
+        # Default to CSV
+        return self._parse_csv(content)
+
+    def _parse_pipe_separated(self, content: str) -> list[list[str]]:
+        """Parse Markdown-style pipe-separated tables.
+
+        Args:
+            content: Pipe-separated table content.
+
+        Returns:
+            Parsed rows as list of lists.
+        """
+        rows: list[list[str]] = []
+        for line in content.split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            # Skip separator lines (e.g., |---|---|---|)
+            if re.match(r"^\|?[\s\-:]+(\|[\s\-:]+)*\|?$", line):
+                continue
+            # Split by pipe and clean cells
+            cells = [cell.strip() for cell in line.split("|")]
+            # Remove empty first/last cells from leading/trailing pipes
+            if cells and cells[0] == "":
+                cells = cells[1:]
+            if cells and cells[-1] == "":
+                cells = cells[:-1]
+            if cells:
+                rows.append(cells)
+        return rows
+
+    def _parse_tsv(self, content: str) -> list[list[str]]:
+        """Parse tab-separated values.
+
+        Args:
+            content: Tab-separated table content.
+
+        Returns:
+            Parsed rows as list of lists.
+        """
+        rows: list[list[str]] = []
+        for line in content.split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            cells = [cell.strip() for cell in line.split("\t")]
+            rows.append(cells)
+        return rows
+
+    def _parse_csv(self, content: str) -> list[list[str]]:
+        """Parse comma-separated values using the csv module.
+
+        Args:
+            content: CSV table content.
+
+        Returns:
+            Parsed rows as list of lists.
+        """
+        rows: list[list[str]] = []
+        reader = csv.reader(io.StringIO(content))
+        for row in reader:
+            cleaned = [cell.strip() for cell in row]
+            if any(cell for cell in cleaned):  # Skip fully empty rows
+                rows.append(cleaned)
+        return rows
+
+    def _generate_summary(self, headers: list[str], rows: list[list[str]]) -> str:
+        """Generate a heuristic table summary (1-3 sentences).
+
+        Args:
+            headers: Column header names.
+            rows: Data rows (excluding header).
+
+        Returns:
+            A short summary describing the table structure and content.
+        """
+        num_rows = len(rows)
+        num_cols = len(headers)
+        headers_str = ", ".join(headers[:5])
+        if len(headers) > 5:
+            headers_str += f", and {len(headers) - 5} more"
+
+        summary = f"Table with {num_rows} rows and {num_cols} columns."
+        summary += f" Headers: {headers_str}."
+
+        # Infer topic from headers
+        topic = self._infer_topic(headers)
+        if topic:
+            summary += f" Contains data about {topic}."
+
+        return summary
+
+    def _infer_topic(self, headers: list[str]) -> str:
+        """Infer a general topic from table headers.
+
+        Args:
+            headers: Column header names.
+
+        Returns:
+            Inferred topic string, or empty string if no inference possible.
+        """
+        if not headers:
+            return ""
+
+        # Use the non-trivial headers to build a topic phrase
+        # Filter out very generic headers
+        generic = {"id", "index", "#", "no", "no.", "number", "row", ""}
+        meaningful_headers = [
+            h for h in headers
+            if h.lower().strip() not in generic
+        ]
+
+        if not meaningful_headers:
+            return ""
+
+        # Take up to 3 meaningful headers for the topic
+        topic_parts = meaningful_headers[:3]
+        return ", ".join(topic_parts).lower()

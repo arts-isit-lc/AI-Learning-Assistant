@@ -189,13 +189,13 @@ This plan implements observability and reliability infrastructure across four pi
 - [x] 8. Checkpoint - Verify full CDK synthesis
   - Run `npx cdk synth` to ensure all stacks synthesize without errors, ask the user if questions arise.
 
-- [ ] 9. Write CDK assertion tests
+- [x] 9. Write CDK assertion tests
   - [x] 9.1 Update test helper to include ObservabilityStack
     - Modify `cdk/test/helpers/stack-setup.ts` to instantiate ObservabilityStack with test props
     - Export the ObservabilityStack template for use in test files
     - _Requirements: 2.5, 3.3, 4.3_
 
-  - [ ] 9.2 Write alarm resource tests (`cdk/test/observability-stack.test.ts`)
+  - [x] 9.2 Write alarm resource tests (`cdk/test/observability-stack.test.ts`)
     - Test SNS topics are created with encryption enabled
     - Test Lambda error rate alarms exist for each function with correct thresholds
     - Test Lambda duration alarms exist with correct percentage-of-timeout thresholds
@@ -210,19 +210,19 @@ This plan implements observability and reliability infrastructure across four pi
     - Test environment-specific threshold differences (dev vs prod)
     - _Requirements: 1.1, 1.2, 1.3, 2.1, 2.2, 3.1, 4.1, 6.1, 6.2, 7.1, 7.2, 8.3, 8.4, 9.1, 9.2, 19.4, 20.1, 21.1, 21.3_
 
-  - [ ] 9.3 Write X-Ray tracing tests (`cdk/test/lambda-tracing.test.ts`)
+  - [x] 9.3 Write X-Ray tracing tests (`cdk/test/lambda-tracing.test.ts`)
     - Test all Lambda functions have `TracingConfig.Mode: Active`
     - Test API Gateway stage has `TracingEnabled: true`
     - Test X-Ray sampling rule is created with correct fixedRate per environment
     - _Requirements: 10.1, 11.1, 11.2, 13.1, 13.2_
 
-  - [ ] 9.4 Write log retention tests (`cdk/test/log-retention.test.ts`)
+  - [x] 9.4 Write log retention tests (`cdk/test/log-retention.test.ts`)
     - Test all Lambda functions have logRetention set
     - Test dev environment uses 30-day retention
     - Test prod environment uses 90-day retention
     - _Requirements: 17.1, 17.2, 17.3_
 
-  - [ ] 9.5 Write DLQ configuration tests (`cdk/test/dlq-configuration.test.ts`)
+  - [x] 9.5 Write DLQ configuration tests (`cdk/test/dlq-configuration.test.ts`)
     - Test DLQ is created as a FIFO queue
     - Test messagesQueue has deadLetterQueue configured with maxReceiveCount 3
     - Test DLQ alarm fires on > 0 messages

@@ -1,0 +1,80 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "9.2 Write alarm resource tests (`cdk/test/observability-stack.test.ts`)": [
+      {
+        "executionId": "1c74fd1b-997e-4552-809c-b94461ad5291",
+        "chatSessionId": "sess_93513bb4-4509-4fb5-a338-324780ee3864",
+        "timestamp": 1781897423035
+      },
+      {
+        "executionId": "1c74fd1b-997e-4552-809c-b94461ad5291",
+        "chatSessionId": "sess_93513bb4-4509-4fb5-a338-324780ee3864",
+        "timestamp": 1781897447776
+      },
+      {
+        "executionId": "1c74fd1b-997e-4552-809c-b94461ad5291",
+        "chatSessionId": "sess_93513bb4-4509-4fb5-a338-324780ee3864",
+        "timestamp": 1781897766981
+      }
+    ],
+    "9.3 Write X-Ray tracing tests (`cdk/test/lambda-tracing.test.ts`)": [
+      {
+        "executionId": "1c74fd1b-997e-4552-809c-b94461ad5291",
+        "chatSessionId": "sess_93513bb4-4509-4fb5-a338-324780ee3864",
+        "timestamp": 1781897423061
+      },
+      {
+        "executionId": "1c74fd1b-997e-4552-809c-b94461ad5291",
+        "chatSessionId": "sess_93513bb4-4509-4fb5-a338-324780ee3864",
+        "timestamp": 1781897771098
+      },
+      {
+        "executionId": "1c74fd1b-997e-4552-809c-b94461ad5291",
+        "chatSessionId": "sess_93513bb4-4509-4fb5-a338-324780ee3864",
+        "timestamp": 1781897918322
+      }
+    ],
+    "9.4 Write log retention tests (`cdk/test/log-retention.test.ts`)": [
+      {
+        "executionId": "1c74fd1b-997e-4552-809c-b94461ad5291",
+        "chatSessionId": "sess_93513bb4-4509-4fb5-a338-324780ee3864",
+        "timestamp": 1781897423127
+      },
+      {
+        "executionId": "1c74fd1b-997e-4552-809c-b94461ad5291",
+        "chatSessionId": "sess_93513bb4-4509-4fb5-a338-324780ee3864",
+        "timestamp": 1781897922318
+      },
+      {
+        "executionId": "1c74fd1b-997e-4552-809c-b94461ad5291",
+        "chatSessionId": "sess_93513bb4-4509-4fb5-a338-324780ee3864",
+        "timestamp": 1781898042062
+      }
+    ],
+    "9.5 Write DLQ configuration tests (`cdk/test/dlq-configuration.test.ts`)": [
+      {
+        "executionId": "1c74fd1b-997e-4552-809c-b94461ad5291",
+        "chatSessionId": "sess_93513bb4-4509-4fb5-a338-324780ee3864",
+        "timestamp": 1781897423160
+      },
+      {
+        "executionId": "1c74fd1b-997e-4552-809c-b94461ad5291",
+        "chatSessionId": "sess_93513bb4-4509-4fb5-a338-324780ee3864",
+        "timestamp": 1781898045577
+      },
+      {
+        "executionId": "1c74fd1b-997e-4552-809c-b94461ad5291",
+        "chatSessionId": "sess_93513bb4-4509-4fb5-a338-324780ee3864",
+        "timestamp": 1781898145956
+      }
+    ],
+    "9. Write CDK assertion tests": [
+      {
+        "executionId": "1c74fd1b-997e-4552-809c-b94461ad5291",
+        "chatSessionId": "sess_93513bb4-4509-4fb5-a338-324780ee3864",
+        "timestamp": 1781898146031
+      }
+    ]
+  }
+}

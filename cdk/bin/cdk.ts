@@ -7,6 +7,7 @@ import { ApiGatewayStack } from '../lib/api-gateway-stack';
 import { DatabaseStack } from '../lib/database-stack';
 import { DBFlowStack } from '../lib/dbFlow-stack';
 import { ObservabilityStack } from '../lib/observability-stack';
+import { MultimodalRagStack } from '../lib/multimodal-rag-stack';
 import { VpcStack } from '../lib/vpc-stack';
 const app = new cdk.App();
 
@@ -40,4 +41,6 @@ const observabilityStack = new ObservabilityStack(app, `${StackPrefix}-Observabi
 observabilityStack.addDependency(apiStack);
 const dbFlowStack = new DBFlowStack(app, `${StackPrefix}-DBFlowStack`, vpcStack, dbStack, apiStack, { env });
 const amplifyStack = new AmplifyStack(app, `${StackPrefix}-AmplifyStack`, apiStack, { env });
+const multimodalRagStack = new MultimodalRagStack(app, `${StackPrefix}-MultimodalRagStack`, dbStack, vpcStack, { env, environment });
+multimodalRagStack.addDependency(dbStack);
 Tags.of(app).add("app", "AI-Learning-Assistant");

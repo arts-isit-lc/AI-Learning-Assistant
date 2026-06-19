@@ -559,22 +559,181 @@ def reason(query, ranked_results, chat_history, system_prompt, intent: QueryInte
 
 ## Correctness Properties
 
-**Property 1: Layer Isolation** — Layer 1 never calls AI/LLM services. ∀ element ∈ DocumentIR: produced without Bedrock API calls.
-**Property 2: IR Completeness** — Every supported element produces exactly one IRElement (after dedup). Nothing silently dropped except images < 100x100px.
-**Property 3: Enrichment Fault Isolation** — failure(enrich(e)) → fallback produced AND other elements unaffected.
-**Property 4: Type Cap Enforcement** — ∀ result set R with caps C: count(R, type=t) ≤ C[t].
-**Property 5: Ranking Determinism** — Identical inputs → identical output ordering. No randomness.
-**Property 6: Image Escalation Correctness** — Triggers iff QueryIntent.requires_escalation=True (from QueryAnalyzer rules or Haiku fallback) AND images with S3 keys exist in retrieved results.
-**Property 7: Backward Compatibility** — Text-only documents produce identical retrieval behavior to V1.
-**Property 8: Deduplication** — No two elements within a document share the same content_hash.
-**Property 9: Embedding Text Non-Empty** — Every stored RetrievalUnit has non-empty `embedding_text`.
-**Property 10: Score Composition** — final_score = cross_encoder_score + metadata_boost. Never negative. No type boosts.
-**Property 11: Cross-Element Coherence** — Same-page and same-parent elements are clustered together in context (deterministic). Topic-overlap clustering deferred to V3.
-**Property 12: RetrievalUnit Parent Validity** — ∀ RetrievalUnit ru: ru.parent_element_id references a valid IRElement that was used to produce ru. No orphaned units.
-**Property 13: Sibling Consistency** — ∀ RetrievalUnit ru: ∀ sid ∈ ru.sibling_ids: lookup(sid).parent_element_id == ru.parent_element_id.
-**Property 14: Token Budget Compliance** — ∀ context built by ContextBuilder: total_tokens(context) ≤ max_tokens budget.
-**Property 15: Version-Filtered Retrieval** — Queries compare only against vectors with matching embedding_version. Mixed versions allowed during migration.
-**Property 16: Cache Correctness** — Embedding cache invalidated when embedding_version changes. Enrichment cache key includes context_hash for context-sensitive types (image/table).
+*A property is a characteristic or behavior that should hold true across all valid executions of a system — essentially, a formal statement about what the system should do. Properties serve as the bridge between human-readable specifications and machine-verifiable correctness guarantees.*
+
+### Property 1: Layer 1 Isolation (No AI Calls)
+
+*For any* file processed by the Ingestion_Layer, regardless of format or content, the layer SHALL produce a DocumentIR without invoking any AI/LLM service (Bedrock, vision models, embedding models). Mocking all external AI clients and asserting zero invocations after ingestion validates this property.
+
+**Validates: Requirements 1.2, 12.4**
+
+### Property 2: Adapter Dispatch Correctness
+
+*For any* file key with a supported extension, the AdapterRegistry SHALL return the adapter registered for that extension. *For any* file key with an unsupported extension, the AdapterRegistry SHALL raise UnsupportedFormatError.
+
+**Validates: Requirements 1.1, 1.3**
+
+### Property 3: IR Deduplication and Completeness
+
+*For any* set of RawElements extracted from a document, the IRBuilder SHALL produce exactly one IRElement per unique content_hash, with no two elements sharing the same content_hash, and the total count equals unique content hashes minus images smaller than 100x100 pixels. Elements SHALL be sorted by provenance order.
+
+**Validates: Requirements 1.6, 1.7**
+
+### Property 4: IR Persistence Round-Trip
+
+*For any* valid DocumentIR, persisting to S3 and then loading from S3 SHALL produce a DocumentIR equivalent to the original (all elements, metadata, and provenance intact). The storage path SHALL follow the format `s3://ir-bucket/{course}/{module}/{file}/ir_v{version}/document_ir.json`.
+
+**Validates: Requirements 2.1, 2.2, 2.3**
+
+### Property 5: Enrichment Fault Isolation
+
+*For any* document with N elements where enrichment of element E fails, the Enrichment_Layer SHALL still produce output for all N elements — the failed element receives a fallback EnrichedElement and all other elements are enriched normally, unaffected by the failure.
+
+**Validates: Requirements 3.6, 3.7**
+
+### Property 6: Visual Cap Enforcement
+
+*For any* document with V visual elements (images + raster formulas) where V > 30, the Enrichment_Layer SHALL invoke vision LLM for at most 30 elements. Remaining visual elements SHALL receive fallback enrichment.
+
+**Validates: Requirement 3.8**
+
+### Property 7: Text Elements Never Receive Topics
+
+*For any* TEXT element processed by the TextChunker, the resulting EnrichedElement SHALL have empty topics, labels, and keywords lists. No LLM service SHALL be called for text enrichment.
+
+**Validates: Requirement 3.2**
+
+### Property 8: RetrievalUnit Structural Validity
+
+*For any* EnrichedElement processed by the RetrievalUnitBuilder: (a) at least one RetrievalUnit is produced, (b) every unit has a valid parent_element_id matching the source IRElement, (c) every unit has non-empty embedding_text, (d) all sibling_ids reference other units that share the same parent_element_id.
+
+**Validates: Requirements 4.1, 4.5, 4.6**
+
+### Property 9: Table Decomposition
+
+*For any* TABLE EnrichedElement, the RetrievalUnitBuilder SHALL produce a summary RetrievalUnit plus at least one column-level RetrievalUnit — total units > 1.
+
+**Validates: Requirement 4.2**
+
+### Property 10: Text Chunk Sibling References
+
+*For any* TEXT EnrichedElement that produces multiple RetrievalUnits, each unit's sibling_ids SHALL reference all other units from the same parent, and all siblings SHALL share the same parent_element_id.
+
+**Validates: Requirements 4.3, 4.6**
+
+### Property 11: Cache Version Isolation
+
+*For any* content_hash and two distinct versions (V_old, V_new): (a) EmbeddingCache entries stored under V_old SHALL NOT be returned when queried with V_new, (b) EnrichmentCache entries stored under V_old SHALL NOT be returned when queried with V_new. Each cache treats version changes as full invalidation of prior entries.
+
+**Validates: Requirements 6.3, 6.6**
+
+### Property 12: Context-Aware Enrichment Caching
+
+*For any* TEXT or FORMULA element, the EnrichmentCache key SHALL depend only on content_hash (context-independent) — the same content in different course contexts SHALL cache-hit. *For any* IMAGE or TABLE element, the cache key SHALL include context_hash = SHA256(course_topic + module_name) — the same image in different contexts SHALL NOT cache-hit.
+
+**Validates: Requirements 6.4, 6.5**
+
+### Property 13: Rule-Based Query Classification
+
+*For any* query containing keywords from the QueryAnalyzer rule sets, the QueryAnalyzer SHALL return a QueryIntent with the corresponding flags set to true at zero LLM cost (no Haiku invocation). The keyword matching SHALL be exact against the predefined rule lists.
+
+**Validates: Requirements 7.1, 7.2**
+
+### Property 14: Intent-Driven Type Cap Adjustment
+
+*For any* QueryIntent where requires_image=true, max_image cap SHALL be 6 (up from 4). *For any* QueryIntent where requires_formula=true, max_formula cap SHALL be 5 (up from 3). Default caps apply when the corresponding intent flag is false.
+
+**Validates: Requirements 7.4, 7.5**
+
+### Property 15: Type Cap Enforcement
+
+*For any* result set R after type-aware filtering with caps C: count of results with type=t SHALL be ≤ C[t] for all types t. Default caps: text=8, image=4, formula=3, table=2 (adjusted by QueryIntent).
+
+**Validates: Requirement 8.6**
+
+### Property 16: Cross-Encoder Output Constraints
+
+*For any* set of merged results reranked by the CrossEncoder_Reranker, the output SHALL contain at most top_k results (default 30), sorted descending by cross_encoder_score, with all scores in the range [0, 1].
+
+**Validates: Requirement 8.3**
+
+### Property 17: Score Composition and Non-Negativity
+
+*For any* reranked result, the ProductionRanker SHALL compute final_score = cross_encoder_score + metadata_boost. The final_score SHALL never be negative.
+
+**Validates: Requirement 8.5**
+
+### Property 18: Ranking Determinism
+
+*For any* identical input (same query, same collection, same allowed_file_ids, same data), the Retrieval_Layer SHALL produce identical output ordering. No randomness is permitted in the ranking pipeline.
+
+**Validates: Requirement 8.8**
+
+### Property 19: Version-Filtered Retrieval
+
+*For any* search query, the HybridSearch_Engine SHALL only compare query embeddings against vectors whose embedding_version matches the current version. Vectors with mismatched versions SHALL be excluded from results.
+
+**Validates: Requirements 8.7, 11.5**
+
+### Property 20: Token Budget Compliance
+
+*For any* context assembled by the ContextBuilder, total_tokens(context) SHALL be ≤ max_tokens budget (default 128,000). When clusters exceed the budget, the lowest-scored clusters SHALL be trimmed first.
+
+**Validates: Requirements 9.4, 9.5, 12.2**
+
+### Property 21: Sibling Expansion Guardrails
+
+*For any* result expansion, the ContextBuilder SHALL expand at most ±max_sibling_distance (2) siblings from the same parent element, and SHALL stop expanding when total added tokens exceed max_expansion_tokens (500).
+
+**Validates: Requirements 9.1, 9.2**
+
+### Property 22: Deterministic Clustering
+
+*For any* set of expanded results, elements sharing the same page AND same parent SHALL be placed in the same cluster. Clustering is deterministic — same inputs always produce same clusters.
+
+**Validates: Requirement 9.3**
+
+### Property 23: Image Escalation Trigger Correctness
+
+*For any* query where QueryIntent.requires_escalation=true AND retrieved results contain image_s3_key values, the Reasoning_Layer SHALL invoke escalation with at most 2 images. *For any* query where requires_escalation=true but no results have image_s3_key, escalation SHALL be skipped.
+
+**Validates: Requirements 10.1, 10.2**
+
+### Property 24: Reasoning Layer Fault Tolerance
+
+*For any* failure during image escalation (S3 fetch failure, vision LLM failure) or LLM answer generation, the Reasoning_Layer SHALL produce a valid (possibly degraded) ReasoningResult — the system SHALL never raise an unhandled exception to the user.
+
+**Validates: Requirements 10.4, 12.3**
+
+### Property 25: Version Metadata Completeness
+
+*For any* DocumentIR produced by the Ingestion_Layer, ir_version SHALL be non-empty. *For any* EnrichedElement, enrichment_version SHALL be non-empty. *For any* RetrievalUnit stored in pgvector, embedding_version SHALL be non-empty.
+
+**Validates: Requirements 11.1, 11.2, 11.3, 3.9, 6.7**
+
+### Property 26: IR Version Path Isolation
+
+*For any* two DocumentIR instances of the same document with different ir_versions, the IR_Persistence SHALL store them at distinct S3 paths (differing in the ir_v{version} segment) without overwriting prior versions.
+
+**Validates: Requirement 11.4**
+
+### Property 27: Backward Compatibility for Text-Only Documents
+
+*For any* text-only document (containing no images, formulas, or tables), processing through the V2 pipeline SHALL produce retrieval results equivalent to V1 behavior for the same queries. Text-only processing SHALL not require vision or formula enrichment services to be available.
+
+**Validates: Requirements 13.1, 13.2**
+
+### Property 28: Metadata-Filtered Retrieval for Lecture Queries
+
+*For any* query where QueryIntent.needs_summary=true and a lecture number N is detected, the Retrieval_Layer SHALL apply a metadata filter restricting results to DocumentSummary units with lecture_number=N.
+
+**Validates: Requirements 5.3, 7.7**
+
+### Property 29: Hybrid Search Overfetch
+
+*For any* search with requested result count k, the HybridSearch_Engine SHALL execute both vector and BM25 search with overfetch_k = 3*k before merging via reciprocal rank fusion.
+
+**Validates: Requirements 8.1, 8.2**
 
 ## Error Handling
 
