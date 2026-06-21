@@ -21,6 +21,8 @@ export class MultimodalRagStack extends cdk.Stack {
   public readonly ragIngestionFunction: lambda.DockerImageFunction;
   public readonly ragEnrichmentFunction: lambda.DockerImageFunction;
   public readonly ragRetrievalFunction: lambda.DockerImageFunction;
+  public readonly sessionStateTable: dynamodb.Table;
+  public readonly chatbotV2Function: lambda.DockerImageFunction;
 
   constructor(
     scope: Construct,
@@ -421,5 +423,205 @@ export class MultimodalRagStack extends cdk.Stack {
         batchSize: 1,
       })
     );
+
+    // ─── DynamoDB: Session_State_Table (Chatbot V2 learning session state) ────
+    this.sessionStateTable = new dynamodb.Table(this, `${id}-sessionStateTable`, {
+      tableName: `${id}-sessionStateTable`,
+      partitionKey: {
+        name: "session_id",
+        type: dynamodb.AttributeType.STRING,
+      },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    // ─── IAM Role: Chatbot V2 Lambda ──────────────────────────────────────────
+    const chatbotV2Role = new iam.Role(this, `${id}-chatbotV2Role`, {
+      roleName: `${id}-chatbotV2Role`,
+      assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
+      inlinePolicies: {
+        chatbotV2Policy: new iam.PolicyDocument({
+          statements: [
+            // Bedrock InvokeModel — Claude 3 Sonnet (generation) + Claude 3 Haiku (evaluation)
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                "bedrock:InvokeModel",
+                "bedrock:InvokeModelWithResponseStream",
+              ],
+              resources: [
+                `arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0`,
+                `arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-3-haiku-20240307-v1:0`,
+              ],
+            }),
+            // Lambda InvokeFunction — ragRetrievalFunction only
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ["lambda:InvokeFunction"],
+              resources: [this.ragRetrievalFunction.functionArn],
+            }),
+            // DynamoDB data ops — Session_State_Table (full CRUD)
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                "dynamodb:GetItem",
+                "dynamodb:PutItem",
+                "dynamodb:UpdateItem",
+              ],
+              resources: [this.sessionStateTable.tableArn],
+            }),
+            // DynamoDB data ops — Chat_History_Table (read + write)
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                "dynamodb:GetItem",
+                "dynamodb:PutItem",
+                "dynamodb:UpdateItem",
+                "dynamodb:Query",
+              ],
+              resources: [
+                `arn:aws:dynamodb:${this.region}:${this.account}:table/DynamoDB-Conversation-Table`,
+              ],
+            }),
+            // DynamoDB management (ListTables, CreateTable, DescribeTable)
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                "dynamodb:ListTables",
+                "dynamodb:CreateTable",
+                "dynamodb:DescribeTable",
+              ],
+              resources: [
+                `arn:aws:dynamodb:${this.region}:${this.account}:table/*`,
+              ],
+            }),
+            // Secrets Manager — DB secret (specific ARN)
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ["secretsmanager:GetSecretValue"],
+              resources: [db.secretPathUser.secretArn],
+            }),
+            // SSM — guardrail parameters (scoped to AILA/* path)
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ["ssm:GetParameter"],
+              resources: [
+                `arn:aws:ssm:${this.region}:${this.account}:parameter/AILA/*`,
+              ],
+            }),
+            // EC2 VPC networking — resource '*' required by AWS for ENI operations
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                "ec2:CreateNetworkInterface",
+                "ec2:DescribeNetworkInterfaces",
+                "ec2:DeleteNetworkInterface",
+                "ec2:AssignPrivateIpAddresses",
+                "ec2:UnassignPrivateIpAddresses",
+              ],
+              resources: ["*"],
+            }),
+            // RDS Proxy connect — specific instance resource ID
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ["rds-db:connect"],
+              resources: [
+                `arn:aws:rds-db:${this.region}:${this.account}:dbuser:${db.dbInstance.instanceResourceId}/*`,
+              ],
+            }),
+            // CloudWatch Logs — scoped to chatbotV2Function log group
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents",
+              ],
+              resources: [
+                `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${id}-chatbotV2Function:*`,
+              ],
+            }),
+            // X-Ray — resource '*' acceptable (service does not support resource-level scoping)
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                "xray:PutTraceSegments",
+                "xray:PutTelemetryRecords",
+              ],
+              resources: ["*"],
+            }),
+            // AppSync GraphQL mutations (sendChatChunk)
+            // TODO: Scope to specific AppSync API ID once cross-stack reference is wired
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ["appsync:GraphQL"],
+              resources: [
+                `arn:aws:appsync:${this.region}:${this.account}:apis/*/types/Mutation/fields/sendChatChunk`,
+              ],
+            }),
+            // AWS Marketplace — for Anthropic model first-time subscription
+            // Resource '*' required: Marketplace actions do not support resource-level permissions
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                "aws-marketplace:Subscribe",
+                "aws-marketplace:Unsubscribe",
+                "aws-marketplace:ViewSubscriptions",
+              ],
+              resources: ["*"],
+            }),
+          ],
+        }),
+      },
+    });
+
+    // ─── Docker Lambda: Chatbot V2 ───────────────────────────────────────────
+    this.chatbotV2Function = new lambda.DockerImageFunction(
+      this,
+      `${id}-chatbotV2Function`,
+      {
+        code: lambda.DockerImageCode.fromImageAsset("./chatbot_v2", {
+          platform: ecr_assets.Platform.LINUX_AMD64,
+        }),
+        architecture: lambda.Architecture.X86_64,
+        memorySize: 1024,
+        timeout: Duration.seconds(120),
+        tracing: lambda.Tracing.ACTIVE,
+        logRetention: logRetention,
+        functionName: `${id}-chatbotV2Function`,
+        role: chatbotV2Role,
+        vpc: vpc.vpc,
+        environment: {
+          REGION: this.region,
+          RAG_RETRIEVAL_FUNCTION_ARN: this.ragRetrievalFunction.functionArn,
+          SESSION_STATE_TABLE: this.sessionStateTable.tableName,
+          CHAT_HISTORY_TABLE: "DynamoDB-Conversation-Table", // TODO: pass from ApiGatewayStack or use env var pattern
+          DB_SECRET_ARN: db.secretPathUser.secretArn,
+          DB_PROXY_ENDPOINT: db.rdsProxyEndpoint,
+          APPSYNC_API_URL: "", // TODO: pass from ApiGatewayStack once cross-stack reference is wired
+          GUARDRAIL_ID_PARAM: "", // TODO: pass SSM param name from ApiGatewayStack
+          GUARDRAIL_VERSION_PARAM: "", // TODO: pass SSM param name from ApiGatewayStack
+        },
+      }
+    );
+
+    // Override logical ID so OpenAPI spec can reference this Lambda via Fn::Sub
+    const cfnChatbotV2Function = this.chatbotV2Function.node
+      .defaultChild as lambda.CfnFunction;
+    cfnChatbotV2Function.overrideLogicalId("chatbotV2Function");
+
+    // Grant API Gateway permission to invoke this Lambda
+    // sourceArn uses wildcard for the API Gateway resource since the API is in a different stack
+    this.chatbotV2Function.addPermission("AllowApiGatewayInvoke", {
+      principal: new iam.ServicePrincipal("apigateway.amazonaws.com"),
+      action: "lambda:InvokeFunction",
+      sourceArn: `arn:aws:execute-api:${this.region}:${this.account}:*/*/POST/student/chatbot-v2`,
+    });
+
+    // Export the Lambda ARN for cross-stack reference (used by ApiGatewayStack OpenAPI spec)
+    new cdk.CfnOutput(this, "ChatbotV2FunctionArn", {
+      value: this.chatbotV2Function.functionArn,
+      exportName: `${id}-chatbotV2FunctionArn`,
+    });
   }
 }

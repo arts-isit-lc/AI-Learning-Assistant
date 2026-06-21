@@ -1,0 +1,393 @@
+"""Chatbot V2 Lambda handler — orchestrates the structured learning pipeline."""
+
+import os
+import json
+
+import boto3
+import botocore.exceptions
+import psycopg2
+from aws_lambda_powertools import Logger
+
+logger = Logger(service="chatbot-v2")
+
+# X-Ray bootstrap
+try:
+    from aws_xray_sdk.core import patch_all, xray_recorder
+    xray_recorder.configure(context_missing='LOG_ERROR')
+    patch_all()
+except Exception as e:
+    print(f"X-Ray initialization failed (non-critical): {e}")
+
+from state_machine import (create_default_state, serialize_state, deserialize_state,
+    update_state, check_stage_advancement, check_module_completion,
+    calculate_mastery_profile, calculate_coverage)
+from evaluation import evaluate_answer
+from concept_tracker import introduce_concepts, discuss_concepts, demonstrate_concepts, record_misunderstandings
+from mode_selector import select_mode
+from prompt_builder import build_system_prompt
+from retrieval_client import invoke_retrieval, get_bounded_history as get_retrieval_history
+from streaming import stream_response
+from guardrails import load_guardrail_config, wrap_user_message, handle_guardrail_error
+from history import load_chat_history, get_bounded_history, persist_message_pair, MAX_PROMPT_TURNS
+from constants.models import RESPONSE_MODEL_ID, RESPONSE_MAX_TOKENS
+
+# Environment variables
+REGION = os.environ.get("REGION", "ca-central-1")
+RAG_RETRIEVAL_FUNCTION_ARN = os.environ.get("RAG_RETRIEVAL_FUNCTION_ARN", "")
+SESSION_STATE_TABLE = os.environ.get("SESSION_STATE_TABLE", "")
+CHAT_HISTORY_TABLE = os.environ.get("CHAT_HISTORY_TABLE", "")
+DB_SECRET_ARN = os.environ.get("DB_SECRET_ARN", "")
+DB_PROXY_ENDPOINT = os.environ.get("DB_PROXY_ENDPOINT", "")
+APPSYNC_API_URL = os.environ.get("APPSYNC_API_URL", "")
+GUARDRAIL_ID_PARAM = os.environ.get("GUARDRAIL_ID_PARAM", "")
+GUARDRAIL_VERSION_PARAM = os.environ.get("GUARDRAIL_VERSION_PARAM", "")
+# Module-level singletons (initialized once per container)
+_lambda_client = boto3.client("lambda", region_name=REGION)
+_bedrock_client = boto3.client("bedrock-runtime", region_name=REGION)
+_ssm_client = boto3.client("ssm", region_name=REGION)
+_dynamodb_resource = boto3.resource("dynamodb", region_name=REGION)
+_secrets_client = boto3.client("secretsmanager", region_name=REGION)
+
+_guardrail_id: str | None = None
+_guardrail_version: str | None = None
+_db_connection = None
+
+CORS_HEADERS = {"Content-Type": "application/json", "Access-Control-Allow-Headers": "*",
+    "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "*"}
+
+
+def _get_guardrail_config() -> tuple[str, str]:
+    global _guardrail_id, _guardrail_version
+    if _guardrail_id is None:
+        _guardrail_id, _guardrail_version = load_guardrail_config(_ssm_client, GUARDRAIL_ID_PARAM, GUARDRAIL_VERSION_PARAM)
+    return _guardrail_id, _guardrail_version
+
+
+def _get_db_connection():
+    global _db_connection
+    if _db_connection is None or _db_connection.closed:
+        secret = json.loads(_secrets_client.get_secret_value(SecretId=DB_SECRET_ARN)["SecretString"])
+        _db_connection = psycopg2.connect(
+            f"dbname={secret['dbname']} user={secret['username']} password={secret['password']} "
+            f"host={DB_PROXY_ENDPOINT} port={secret['port']} sslmode=require"
+        )
+    return _db_connection
+
+
+def _load_module_concepts(course_id: str, module_id: str) -> list[str]:
+    conn = _get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute('SELECT generated_topics FROM "Course_Modules" WHERE module_id = %s', (module_id,))
+        row = cur.fetchone()
+        cur.close()
+        if row and row[0]:
+            topics = row[0] if isinstance(row[0], list) else json.loads(row[0])
+            return topics if isinstance(topics, list) else []
+        return []
+    except Exception:
+        logger.exception("Failed to load module_concepts from DB")
+        conn.rollback()
+        raise
+
+
+def _load_other_module_names(course_id: str, current_module_id: str) -> list[str]:
+    conn = _get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("""SELECT cm.module_name FROM "Course_Modules" cm
+            JOIN "Course_Concepts" cc ON cc.concept_id = cm.concept_id
+            WHERE cc.course_id = %s AND cm.module_id != %s""", (course_id, current_module_id))
+        rows = cur.fetchall()
+        cur.close()
+        return [r[0] for r in rows if r[0]]
+    except Exception:
+        logger.exception("Failed to load other module names")
+        conn.rollback()
+        return []
+
+
+def _load_session_state(session_id: str):
+    """Load session state from DynamoDB. Raises ClientError on table access failure."""
+    table = _dynamodb_resource.Table(SESSION_STATE_TABLE)
+    item = table.get_item(Key={"session_id": session_id}).get("Item")
+    return deserialize_state(item) if item else None
+
+
+def _persist_session_state(state) -> None:
+    table = _dynamodb_resource.Table(SESSION_STATE_TABLE)
+    expected_version = state.state_version
+    state.state_version = expected_version + 1
+    item = serialize_state(state)
+    try:
+        table.put_item(
+            Item=item,
+            ConditionExpression="attribute_not_exists(state_version) OR state_version = :v",
+            ExpressionAttributeValues={":v": expected_version},
+        )
+    except _dynamodb_resource.meta.client.exceptions.ConditionalCheckFailedException:
+        logger.warning("State write conflict, retrying once", extra={"session_id": state.session_id})
+        reloaded = _load_session_state(state.session_id)
+        if reloaded:
+            state.state_version = reloaded.state_version + 1
+        item = serialize_state(state)
+        try:
+            table.put_item(Item=item)
+        except Exception:
+            logger.exception("State write retry also failed (best-effort)")
+
+
+def _get_last_ai_question(chat_history: list[dict]) -> str:
+    for msg in reversed(chat_history):
+        if msg.get("role") == "assistant":
+            return msg.get("content", "")
+    return ""
+
+
+def _stream_with_guardrail_retry(
+    system_prompt: str,
+    user_message: str,
+    prompt_history: list[dict],
+    session_id: str,
+    model_kwargs: dict,
+    guardrail_id: str,
+) -> str | dict:
+    """Stream response with guardrail error retry logic.
+
+    If a guardrail intervention occurs (content blocked), returns the redirect dict.
+    If a guardrail service error occurs, retries once without guardrails.
+    If retry also fails, raises to let the outer handler return 500.
+    Returns the LLM output string on success.
+    """
+    try:
+        return stream_response(
+            _bedrock_client, model_id=RESPONSE_MODEL_ID, system_prompt=system_prompt,
+            user_message=user_message, chat_history=prompt_history,
+            appsync_url=APPSYNC_API_URL, session_id=session_id, model_kwargs=model_kwargs,
+        )
+    except Exception as e:
+        # Check if this is a guardrail-related error
+        guardrail_result = handle_guardrail_error(e, guardrail_id)
+        if guardrail_result is not None:
+            # Guardrail intervention (input or output blocked) — return redirect message
+            return guardrail_result
+        # Guardrail service error — retry without guardrails
+        logger.warning("Guardrail service error, retrying without guardrails")
+        model_kwargs_no_guardrail = {k: v for k, v in model_kwargs.items() if k not in ("guardrail_id", "guardrail_version")}
+        try:
+            return stream_response(
+                _bedrock_client, model_id=RESPONSE_MODEL_ID, system_prompt=system_prompt,
+                user_message=user_message, chat_history=prompt_history,
+                appsync_url=APPSYNC_API_URL, session_id=session_id, model_kwargs=model_kwargs_no_guardrail,
+            )
+        except Exception:
+            logger.exception("Retry without guardrails also failed")
+            raise
+
+
+@logger.inject_lambda_context(clear_state=True)
+def handler(event, context):
+    """Chatbot V2 Lambda handler — full learning pipeline orchestration."""
+    try:
+        # Parse request
+        query_params = event.get("queryStringParameters", {}) or {}
+        course_id = query_params.get("course_id", "")
+        session_id = query_params.get("session_id", "")
+        module_id = query_params.get("module_id", "")
+        session_name = query_params.get("session_name", "New Chat")
+        body = json.loads(event.get("body", "{}") or "{}")
+        message_content = body.get("message_content", "")
+
+        # Validate required params
+        if not course_id:
+            return {"statusCode": 400, "headers": CORS_HEADERS, "body": json.dumps("Missing required parameter: course_id")}
+        if not session_id:
+            return {"statusCode": 400, "headers": CORS_HEADERS, "body": json.dumps("Missing required parameter: session_id")}
+        if not module_id:
+            return {"statusCode": 400, "headers": CORS_HEADERS, "body": json.dumps("Missing required parameter: module_id")}
+
+        logger.append_keys(session_id=session_id, course_id=course_id)
+        logger.info("Processing chatbot V2 request")
+
+        guardrail_id, guardrail_version = _get_guardrail_config()
+
+        # Step 1: Load session state — DynamoDB failure → 503
+        try:
+            state = _load_session_state(session_id)
+        except (botocore.exceptions.ClientError, botocore.exceptions.EndpointConnectionError) as e:
+            logger.exception("Session_State_Table read failure")
+            return {"statusCode": 503, "headers": CORS_HEADERS, "body": json.dumps("Service temporarily unavailable")}
+
+        is_new_session = state is None
+        if is_new_session:
+            state = create_default_state(session_id)
+
+        # Step 2: Load module_concepts on new session — DB failure → 503
+        if is_new_session:
+            try:
+                state.module_concepts = _load_module_concepts(course_id, module_id)
+                logger.info("Loaded module_concepts", extra={"count": len(state.module_concepts)})
+            except (psycopg2.OperationalError, psycopg2.InterfaceError, botocore.exceptions.ClientError) as e:
+                logger.exception("DB connection failure during module context retrieval")
+                return {"statusCode": 503, "headers": CORS_HEADERS, "body": json.dumps("Service temporarily unavailable")}
+
+        # Load chat history
+        chat_history = load_chat_history(CHAT_HISTORY_TABLE, session_id, _dynamodb_resource)
+
+        # Step 3: Evaluate answer (skip on first interaction)
+        evaluation = None
+        if state.interactions > 0 and message_content:
+            last_ai_question = _get_last_ai_question(chat_history)
+            concepts_str = ", ".join(state.concepts_exposed[-10:]) if state.concepts_exposed else ""
+            evaluation = evaluate_answer(
+                _bedrock_client, topic=session_name, stage=state.stage,
+                last_ai_question=last_ai_question, student_answer=message_content,
+                concepts=concepts_str, module_concepts=state.module_concepts,
+            )
+            logger.info("Evaluation complete", extra={"correct": evaluation.correct, "partial": evaluation.partial})
+
+        # Step 4: Update state
+        if evaluation is not None:
+            state = update_state(state, evaluation)
+
+        # Step 5: Update concept progress
+        if evaluation is not None:
+            if evaluation.concepts_demonstrated:
+                state = demonstrate_concepts(state, evaluation.concepts_demonstrated)
+                state = discuss_concepts(state, evaluation.concepts_demonstrated)
+            if evaluation.concepts_misunderstood:
+                state = record_misunderstandings(state, evaluation.concepts_misunderstood)
+
+        # Step 6: Check module completion
+        if not state.module_complete:
+            state.module_complete = check_module_completion(state)
+
+        # Step 7: Check stage advancement
+        previous_stage = state.stage
+        check_stage_advancement(state)
+        advanced = state.stage != previous_stage
+
+        # Step 8: Select mode
+        mode = select_mode(state, evaluation, advanced)
+        logger.info("Mode selected", extra={"mode": mode, "stage": state.stage})
+
+        # Step 9: Handle completion mode
+        other_modules: list[str] = []
+        if mode == "complete":
+            state.completion_message_sent = True
+            other_modules = _load_other_module_names(course_id, module_id)
+
+        # Step 10: Invoke retrieval
+        learning_context = {
+            "stage": state.stage,
+            "concepts_demonstrated": state.concepts_demonstrated,
+            "concepts_misunderstood": evaluation.concepts_misunderstood if evaluation else [],
+        }
+        retrieval_result = invoke_retrieval(
+            _lambda_client, function_arn=RAG_RETRIEVAL_FUNCTION_ARN,
+            query=message_content or f"Introduce the topic: {session_name}",
+            session_id=session_id, course_id=course_id, allowed_file_ids=[],
+            chat_history=get_retrieval_history(chat_history, 4),
+            learning_context=learning_context,
+        )
+        rag_context = retrieval_result.answer if retrieval_result else ""
+
+        # Introduce concepts from RAG context
+        if retrieval_result and state.module_concepts:
+            mentioned = [c for c in state.module_concepts if c.lower() in rag_context.lower()]
+            if mentioned:
+                state = introduce_concepts(state, mentioned)
+
+        # Step 11: Build system prompt
+        context_vars = {
+            "difficulty": state.stage,
+            "concept": state.concepts_exposed[-1] if state.concepts_exposed else session_name,
+            "missing_concept": (evaluation.concepts_misunderstood[0] if evaluation and evaluation.concepts_misunderstood else session_name),
+            "mastered_concept": (evaluation.concepts_demonstrated[0] if evaluation and evaluation.concepts_demonstrated else ""),
+            "next_concept": (state.module_concepts[len(state.concepts_discussed) % len(state.module_concepts)] if state.module_concepts else session_name),
+            "concepts_discussed": ", ".join(state.concepts_discussed),
+            "other_modules": ", ".join(other_modules) if other_modules else "explore related topics",
+        }
+        guardrail_tags = wrap_user_message(message_content) if message_content else ""
+        system_prompt = build_system_prompt(mode, session_name, context_vars, rag_context, guardrail_tags)
+
+        # Step 12: Stream response — with guardrail service error retry
+        prompt_history = get_bounded_history(chat_history, MAX_PROMPT_TURNS)
+        model_kwargs = {"max_tokens": RESPONSE_MAX_TOKENS, "guardrail_id": guardrail_id, "guardrail_version": guardrail_version}
+        user_msg = message_content or f"Start the conversation about {session_name}"
+
+        llm_output = _stream_with_guardrail_retry(
+            system_prompt=system_prompt,
+            user_message=user_msg,
+            prompt_history=prompt_history,
+            session_id=session_id,
+            model_kwargs=model_kwargs,
+            guardrail_id=guardrail_id,
+        )
+        # If guardrail retry produced a blocked redirect, return it directly
+        if isinstance(llm_output, dict) and llm_output.get("blocked"):
+            return {
+                "statusCode": 200,
+                "headers": CORS_HEADERS,
+                "body": json.dumps({
+                    "session_name": session_name,
+                    "llm_output": llm_output["message"],
+                    "llm_verdict": state.module_complete,
+                    "session_state": {
+                        "stage": state.stage,
+                        "module_complete": state.module_complete,
+                        "engagement_score": state.engagement_score,
+                        "concepts_demonstrated": state.concepts_demonstrated,
+                    },
+                }),
+            }
+
+        # Discuss concepts that appear in the student's message
+        if message_content and state.module_concepts:
+            student_concepts = [c for c in state.module_concepts if c.lower() in message_content.lower()]
+            if student_concepts:
+                state = discuss_concepts(state, student_concepts)
+
+        # Step 13: Persist state + history (best-effort)
+        try:
+            persist_message_pair(CHAT_HISTORY_TABLE, session_id, message_content or f"[Initial greeting]", llm_output, _dynamodb_resource)
+        except Exception:
+            logger.exception("Chat history persistence failed (best-effort)")
+        try:
+            _persist_session_state(state)
+        except Exception:
+            logger.exception("Session state persistence failed (best-effort)")
+
+        # Step 14: Analytics (post-response)
+        logger.info("Analytics", extra={"coverage": calculate_coverage(state), "mastery_concepts": len(calculate_mastery_profile(state))})
+
+        # Return structured response
+        return {
+            "statusCode": 200,
+            "headers": CORS_HEADERS,
+            "body": json.dumps({
+                "session_name": session_name,
+                "llm_output": llm_output,
+                "llm_verdict": state.module_complete,
+                "session_state": {
+                    "stage": state.stage,
+                    "module_complete": state.module_complete,
+                    "engagement_score": state.engagement_score,
+                    "concepts_demonstrated": state.concepts_demonstrated,
+                },
+            }),
+        }
+
+    except (psycopg2.OperationalError, psycopg2.InterfaceError):
+        logger.exception("Database connection failure")
+        return {"statusCode": 503, "headers": CORS_HEADERS, "body": json.dumps("Service temporarily unavailable")}
+    except botocore.exceptions.ClientError as e:
+        error_code = e.response.get("Error", {}).get("Code", "")
+        if error_code in ("ServiceUnavailable", "InternalServerError", "ProvisionedThroughputExceededException"):
+            logger.exception("AWS service unavailable")
+            return {"statusCode": 503, "headers": CORS_HEADERS, "body": json.dumps("Service temporarily unavailable")}
+        logger.exception("Unhandled AWS client error in chatbot V2 handler")
+        return {"statusCode": 500, "headers": CORS_HEADERS, "body": json.dumps("Internal server error")}
+    except Exception:
+        logger.exception("Unhandled error in chatbot V2 handler")
+        return {"statusCode": 500, "headers": CORS_HEADERS, "body": json.dumps("Internal server error")}

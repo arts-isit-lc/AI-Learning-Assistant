@@ -66,7 +66,7 @@ def all_files_have_topics(module_id: str, connection) -> bool:
                     COUNT(*) FILTER (
                         WHERE processing_status = 'complete'
                         AND jsonb_array_length(
-                            metadata->'topic_extraction'->'topics'
+                            metadata::jsonb->'topic_extraction'->'topics'
                         ) > 0
                     ) AS ready
                 FROM "Module_Files"

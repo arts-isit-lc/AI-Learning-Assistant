@@ -1,0 +1,409 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Create directory structure and boilerplate files": [
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781986762158
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781986776128
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781986870386
+      }
+    ],
+    "1.2 Implement SessionState, ConceptProgress, and EvaluationResult data models": [
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781986762192
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781986876345
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781987018500
+      }
+    ],
+    "2.1 Implement state machine core logic": [
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781986762219
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781987024741
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781987485827
+      }
+    ],
+    "2.2 Implement concept tracker module": [
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781986762250
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781987025512
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781987486496
+      }
+    ],
+    "2.5 Implement mode selector": [
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781986762322
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781987026226
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781987487284
+      }
+    ],
+    "2.7 Implement prompt builder": [
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781986762348
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781987026960
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781987487835
+      }
+    ],
+    "2.9 Implement evaluation response parsing": [
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781986762373
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781987027711
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781987488578
+      }
+    ],
+    "3. Checkpoint — Pure logic tests": [
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781986762397
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781987495107
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781987822284
+      }
+    ],
+    "4.1 Implement retrieval client": [
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781986762422
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781987829037
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781988156211
+      }
+    ],
+    "4.3 Implement streaming helper": [
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781986762448
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781987829754
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781988156151
+      }
+    ],
+    "4.5 Implement guardrails integration": [
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781986762473
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781987830606
+      }
+    ],
+    "4.7 Implement history manager": [
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781986762494
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781987831281
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781988154879
+      }
+    ],
+    "5. Checkpoint — Integration module tests": [
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781986762523
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781988164439
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781988283624
+      }
+    ],
+    "6.1 Implement evaluation engine Bedrock call": [
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781986762547
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781988295518
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781988835999
+      }
+    ],
+    "6.2 Implement Lambda handler and request orchestration": [
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781986762590
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781988296293
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781988836694
+      }
+    ],
+    "6.5 Implement error handling and resilience": [
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781986762625
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781988837530
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781989316742
+      }
+    ],
+    "7. Checkpoint — Handler orchestration tests": [
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781986762650
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781989317643
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781989622831
+      }
+    ],
+    "8.1 Create Session_State_Table DynamoDB resource": [
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781986762674
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781989631160
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781990417213
+      }
+    ],
+    "8.2 Create chatbotV2Role IAM role with least-privilege permissions": [
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781986762699
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781989632295
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781990418086
+      }
+    ],
+    "8.3 Create chatbotV2Function Docker Lambda": [
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781986762724
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781989633044
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781990418736
+      }
+    ],
+    "8.4 Add API Gateway route for chatbot V2": [
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781986762749
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781989634014
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781990419624
+      }
+    ],
+    "9. Final checkpoint — Full integration": [
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781986762776
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781990426897
+      },
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781990532515
+      }
+    ],
+    "1. Set up project structure and core data models": [
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781987018535
+      }
+    ],
+    "2. Implement pure logic modules (no AWS dependencies)": [
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781987488622
+      }
+    ],
+    "4. Implement AWS integration modules": [
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781988156281
+      }
+    ],
+    "6. Implement Lambda handler orchestration": [
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781989316889
+      }
+    ],
+    "8. Implement CDK infrastructure": [
+      {
+        "executionId": "21082a89-8990-401f-8230-e18b698b9dee",
+        "chatSessionId": "sess_aad462f0-123a-4289-a134-982a3482a74e",
+        "timestamp": 1781990419666
+      }
+    ]
+  }
+}
