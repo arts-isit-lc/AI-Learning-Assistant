@@ -279,7 +279,10 @@ paths:
         - studentAuthorizer: []
       x-amazon-apigateway-integration:
         uri:
-          Fn::Sub: "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${chatbotV2Function.Arn}/invocations"
+          Fn::Sub:
+            - "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ChatbotV2Arn}/invocations"
+            - ChatbotV2Arn:
+                Fn::ImportValue: "AILA-MultimodalRagStack-chatbotV2FunctionArn"
         passthroughBehavior: "when_no_match"
         httpMethod: "POST"
         type: "aws_proxy"

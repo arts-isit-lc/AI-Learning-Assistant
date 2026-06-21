@@ -43,4 +43,5 @@ const dbFlowStack = new DBFlowStack(app, `${StackPrefix}-DBFlowStack`, vpcStack,
 const amplifyStack = new AmplifyStack(app, `${StackPrefix}-AmplifyStack`, apiStack, { env });
 const multimodalRagStack = new MultimodalRagStack(app, `${StackPrefix}-MultimodalRagStack`, dbStack, vpcStack, { env, environment });
 multimodalRagStack.addDependency(dbStack);
+apiStack.addDependency(multimodalRagStack);
 Tags.of(app).add("app", "AI-Learning-Assistant");
