@@ -400,23 +400,88 @@ def _store_in_pgvector(
         },
     )
 
-    # TODO: Implement actual pgvector storage when CDK wires DB connectivity
-    # The implementation will:
-    # 1. Retrieve DB credentials from Secrets Manager using DB_SECRET_ARN
-    # 2. Connect to RDS via DB_PROXY_ENDPOINT with sslmode=require
-    # 3. For each unit with an embedding:
-    #    - INSERT INTO retrieval_units (retrieval_id, parent_element_id, embedding_text,
-    #      element_type, embedding, embedding_version, metadata, sibling_ids, ...)
-    #    - Use pgvector's vector type for the embedding column
-    # 4. Commit the transaction
+    import json as json_mod
+    import psycopg2
 
-    logger.info(
-        "pgvector storage complete (placeholder)",
-        extra={
-            "file_id": file_id,
-            "stored_count": len(units_with_embeddings),
-        },
-    )
+    try:
+        secrets_client = boto3.client("secretsmanager")
+        secret = json_mod.loads(
+            secrets_client.get_secret_value(SecretId=db_secret_arn)["SecretString"]
+        )
+        conn = psycopg2.connect(
+            dbname=secret["dbname"],
+            user=secret["username"],
+            password=secret["password"],
+            host=db_proxy_endpoint,
+            port=secret["port"],
+            sslmode="require",
+        )
+        cur = conn.cursor()
+
+        # Delete existing units for this file (incremental re-ingestion)
+        cur.execute(
+            "DELETE FROM retrieval_units WHERE metadata->>'file_id' = %s",
+            (file_id,),
+        )
+
+        # Insert each unit with embedding
+        inserted = 0
+        for unit in units_with_embeddings:
+            embedding = unit.metadata.get("embedding", [])
+            if not embedding:
+                continue
+
+            # Build metadata (exclude the embedding from stored metadata)
+            stored_metadata = {k: v for k, v in unit.metadata.items() if k != "embedding"}
+            stored_metadata["file_id"] = file_id
+            stored_metadata["course_id"] = course_id
+            stored_metadata["module_id"] = module_id
+
+            embedding_str = f"[{','.join(str(v) for v in embedding)}]"
+
+            cur.execute(
+                """INSERT INTO retrieval_units
+                   (retrieval_id, parent_element_id, embedding_text, element_type,
+                    embedding, embedding_version, metadata, sibling_ids, ts_vector)
+                   VALUES (%s, %s, %s, %s, %s::vector, %s, %s::jsonb, %s::jsonb,
+                           to_tsvector('english', %s))
+                   ON CONFLICT (retrieval_id) DO UPDATE SET
+                    embedding_text = EXCLUDED.embedding_text,
+                    embedding = EXCLUDED.embedding,
+                    metadata = EXCLUDED.metadata,
+                    sibling_ids = EXCLUDED.sibling_ids,
+                    ts_vector = EXCLUDED.ts_vector""",
+                (
+                    unit.retrieval_id,
+                    unit.parent_element_id,
+                    unit.embedding_text,
+                    unit.element_type.value if hasattr(unit.element_type, 'value') else str(unit.element_type),
+                    embedding_str,
+                    unit.embedding_version,
+                    json_mod.dumps(stored_metadata),
+                    json_mod.dumps(unit.sibling_ids),
+                    unit.embedding_text,
+                ),
+            )
+            inserted += 1
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        logger.info(
+            "pgvector storage complete",
+            extra={
+                "file_id": file_id,
+                "stored_count": inserted,
+            },
+        )
+
+    except Exception:
+        logger.exception(
+            "pgvector storage failed",
+            extra={"file_id": file_id, "retrieval_unit_count": len(units_with_embeddings)},
+        )
 
 
 def _update_processing_status(file_id: str, module_id: str, chunk_count: int) -> None:

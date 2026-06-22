@@ -187,6 +187,26 @@ def handler(event, context):
                 PRIMARY KEY (source_module_id, referenced_file_id)
             );
 
+            CREATE EXTENSION IF NOT EXISTS vector;
+
+            CREATE TABLE IF NOT EXISTS retrieval_units (
+                retrieval_id TEXT PRIMARY KEY,
+                parent_element_id TEXT NOT NULL,
+                embedding_text TEXT NOT NULL,
+                element_type TEXT NOT NULL,
+                embedding vector(1024),
+                embedding_version TEXT NOT NULL,
+                metadata JSONB DEFAULT '{}',
+                sibling_ids JSONB DEFAULT '[]',
+                ts_vector tsvector
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_retrieval_units_ts_vector
+            ON retrieval_units USING gin (ts_vector);
+
+            CREATE INDEX IF NOT EXISTS idx_retrieval_units_embedding_version
+            ON retrieval_units (embedding_version);
+
             DO $$
             BEGIN
                 IF NOT EXISTS (
