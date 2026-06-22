@@ -212,24 +212,6 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
       .some((message) => !message.student_sent);
   };
 
-  async function retrieveKnowledgeBase(message, sessionId) {
-    try {
-      const { email } = await apiClient.getAuth();
-      try {
-        const data = await apiClient.post(
-          "student/create_ai_message",
-          { session_id: sessionId, email, course_id: course.course_id, module_id: module.module_id },
-          { message_content: message }
-        );
-        setNewMessage(data[0]);
-      } catch (error) {
-        console.error("Error retreiving message:", error.message);
-      }
-    } catch (error) {
-      console.error("Error retrieving message from knowledge base:", error.message);
-    }
-  }
-
   const handleSubmit = () => {
     if (isSubmitting || isAItyping || creatingSession) return;
     setIsSubmitting(true);
@@ -263,8 +245,9 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
       .then(({ email }) => {
         userEmail = email;
 
-        // P-7: Show message optimistically and fire both calls in parallel
+        // P-7: Show message optimistically
         setNewMessage({
+          message_id: `opt-${Date.now()}`,
           message_content: messageContent,
           student_sent: true,
           session_id: newSession.session_id,
@@ -273,27 +256,17 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
         setIsAItyping(true);
         textareaRef.current.value = "";
 
-        // ARCH-1: Subscribe to streaming chunks before firing text_gen
+        // ARCH-1: Subscribe to streaming chunks before firing chatbot-v2
         subscribeToChunks(newSession.session_id);
 
-        const createMessagePromise = apiClient.postRaw(
-          "student/create_message",
-          { session_id: newSession.session_id, email: userEmail, course_id: course.course_id, module_id: module.module_id },
-          { message_content: messageContent }
-        );
-
-        const textGenPromise = apiClient.postRaw(
-          "student/text_generation",
+        // V2: Single call replaces create_message + text_generation + create_ai_message
+        return apiClient.postRaw(
+          "student/chatbot-v2",
           { course_id: course.course_id, session_id: newSession.session_id, module_id: module.module_id, session_name: newSession.session_name },
           { message_content: messageContent }
         );
-
-        return Promise.all([createMessagePromise, textGenPromise]);
       })
-      .then(([createMsgResponse, textGenResponse]) => {
-        if (!createMsgResponse.ok) {
-          console.error("Failed to persist message, but continuing with AI response");
-        }
+      .then((textGenResponse) => {
         if (!textGenResponse.ok) {
           throw new Error(
             `Failed to generate text: ${textGenResponse.statusText}`
@@ -302,9 +275,6 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
         return textGenResponse.json();
       })
       .then((textGenData) => {
-        // ARCH-1: Streaming state is now cleared in the newMessage useEffect
-        // to avoid a visual gap between streaming text and the persisted message.
-
         // ARCH-3: Generate session name client-side from AI response (Option 1a)
         const autoName = textGenData.session_name !== "New Chat"
           ? textGenData.session_name
@@ -323,6 +293,15 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
           );
         });
 
+        // V2 persists messages to RDS internally — just display the AI response
+        setNewMessage({
+          message_id: `ai-${Date.now()}`,
+          message_content: textGenData.llm_output,
+          student_sent: false,
+          session_id: newSession.session_id,
+          time_sent: new Date().toISOString(),
+        });
+
         return Promise.all([
           apiClient.putRaw(
             "student/update_session_name",
@@ -333,18 +312,12 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
             "student/update_module_score",
             { module_id: module.module_id, student_email: userEmail, course_id: course.course_id, llm_verdict: textGenData.llm_verdict }
           ),
-          textGenData,
         ]);
       })
-      .then(([response1, response2, textGenData]) => {
+      .then(([response1, response2]) => {
         if (!response1.ok || !response2.ok) {
-          throw new Error("Failed to fetch endpoints");
+          console.error("Failed to update session name or module score");
         }
-
-        return retrieveKnowledgeBase(
-          textGenData.llm_output,
-          newSession.session_id
-        );
       })
       .catch((error) => {
         setIsSubmitting(false);
@@ -371,8 +344,9 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
 
     subscribeToChunks(sessionId);
 
+    // V2: Single call handles message persistence + AI generation
     const textGenPromise = apiClient.postRaw(
-      "student/text_generation",
+      "student/chatbot-v2",
       { course_id: course.course_id, session_id: sessionId, module_id: module.module_id, session_name: sessionName },
       messageContent ? { message_content: messageContent } : undefined
     );
@@ -402,6 +376,15 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
           )
         );
 
+        // Display the AI response directly — V2 handles RDS persistence internally
+        setNewMessage({
+          message_id: `ai-retry-${Date.now()}`,
+          message_content: textGenData.llm_output,
+          student_sent: false,
+          session_id: sessionId,
+          time_sent: new Date().toISOString(),
+        });
+
         const { email } = await apiClient.getAuth();
 
         await Promise.all([
@@ -415,8 +398,6 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
             { module_id: module.module_id, student_email: email, course_id: course.course_id, llm_verdict: textGenData.llm_verdict }
           ),
         ]);
-
-        await retrieveKnowledgeBase(textGenData.llm_output, sessionId);
       })
       .catch((error) => {
         console.error("Retry failed:", error);
@@ -469,11 +450,12 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
         setSession(sessionData);
         setCreatingSession(false);
 
-        // ARCH-1: Subscribe to streaming chunks before firing text_gen
+        // ARCH-1: Subscribe to streaming chunks before firing chatbot-v2
         subscribeToChunks(sessionData.session_id);
 
+        // V2: Single call handles initial greeting + message persistence
         return apiClient.postRaw(
-          "student/text_generation",
+          "student/chatbot-v2",
           { course_id: course.course_id, session_id: sessionData.session_id, module_id: module.module_id, session_name: "New chat" }
         );
       })
@@ -486,10 +468,14 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
         return textResponse.json();
       })
       .then((textResponseData) => {
-        retrieveKnowledgeBase(
-          textResponseData.llm_output,
-          sessionData.session_id
-        );
+        // Display AI greeting directly — V2 handles RDS persistence internally
+        setNewMessage({
+          message_id: `ai-greet-${Date.now()}`,
+          message_content: textResponseData.llm_output,
+          student_sent: false,
+          session_id: sessionData.session_id,
+          time_sent: new Date().toISOString(),
+        });
         return sessionData;
       })
       .catch((error) => {

@@ -3,6 +3,7 @@ import { Template } from 'aws-cdk-lib/assertions';
 import { VpcStack } from '../../lib/vpc-stack';
 import { DatabaseStack } from '../../lib/database-stack';
 import { ApiGatewayStack } from '../../lib/api-gateway-stack';
+import { MultimodalRagStack } from '../../lib/multimodal-rag-stack';
 import { DBFlowStack } from '../../lib/dbFlow-stack';
 import { ObservabilityStack } from '../../lib/observability-stack';
 
@@ -13,12 +14,14 @@ export function createTestStacks() {
   const env = { account: '123456789012', region: 'ca-central-1' };
   const vpcStack = new VpcStack(app, 'Test-VpcStack', { env, environment: 'dev' });
   const dbStack = new DatabaseStack(app, 'Test-DatabaseStack', vpcStack, { env, environment: 'dev' });
-  const apiStack = new ApiGatewayStack(app, 'Test-ApiGatewayStack', dbStack, vpcStack, { env, environment: 'dev' });
+  const ragStack = new MultimodalRagStack(app, 'Test-MultimodalRagStack', dbStack, vpcStack, { env, environment: 'dev' });
+  const apiStack = new ApiGatewayStack(app, 'Test-ApiGatewayStack', dbStack, vpcStack, ragStack, { env, environment: 'dev' });
   const dbFlowStack = new DBFlowStack(app, 'Test-DBFlowStack', vpcStack, dbStack, apiStack, { env });
   return {
     apiTemplate: Template.fromStack(apiStack),
     dbTemplate: Template.fromStack(dbStack),
     dbFlowTemplate: Template.fromStack(dbFlowStack),
+    ragTemplate: Template.fromStack(ragStack),
   };
 }
 
@@ -48,9 +51,7 @@ export function createObservabilityTemplate(): Template {
       { functionName: 'Test-ApiGatewayStack-adminLambdaAuthorizer', timeoutSeconds: 30, isContainer: false },
       { functionName: 'Test-ApiGatewayStack-studentLambdaAuthorizer', timeoutSeconds: 30, isContainer: false },
       { functionName: 'Test-ApiGatewayStack-instructorLambdaAuthorizer', timeoutSeconds: 30, isContainer: false },
-      { functionName: 'Test-ApiGatewayStack-TextGenLambdaDockerFunc', timeoutSeconds: 300, isContainer: true },
       { functionName: 'Test-ApiGatewayStack-GeneratePreSignedURLFunc', timeoutSeconds: 30, isContainer: false },
-      { functionName: 'Test-ApiGatewayStack-DataIngestLambdaDockerFunc', timeoutSeconds: 600, isContainer: true },
       { functionName: 'Test-ApiGatewayStack-GetFilesFunction', timeoutSeconds: 30, isContainer: false },
       { functionName: 'Test-ApiGatewayStack-DeleteFileFunc', timeoutSeconds: 30, isContainer: false },
       { functionName: 'Test-ApiGatewayStack-DeleteModuleFunc', timeoutSeconds: 60, isContainer: false },
@@ -70,8 +71,6 @@ export function createObservabilityTemplate(): Template {
     dlqArn: 'arn:aws:sqs:ca-central-1:123456789012:test-messages-dlq.fifo',
     appSyncApiId: 'test-appsync-api-id',
     containerLambdaNames: [
-      'Test-ApiGatewayStack-TextGenLambdaDockerFunc',
-      'Test-ApiGatewayStack-DataIngestLambdaDockerFunc',
       'Test-ApiGatewayStack-SQSTriggerDockerFunc',
     ],
   });

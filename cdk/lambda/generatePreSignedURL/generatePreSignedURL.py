@@ -126,11 +126,20 @@ def lambda_handler(event, context):
         "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "xps": "application/oxps",
         "mobi": "application/x-mobipocket-ebook",
-        "cbz": "application/vnd.comicbook+zip"
+        "cbz": "application/vnd.comicbook+zip",
+        # V2 multimodal pipeline additions
+        "html": "text/html",
+        "htm": "text/html",
+        "tex": "application/x-tex",
+        "latex": "application/x-latex",
+        "csv": "text/csv",
+        "json": "application/json",
     }
 
     if file_type in allowed_document_types:
-        key = f"{course_id}/{module_id}/documents/{file_name}.{file_type}"
+        # V2 key format: courses/{course_id}/{module_id}/{filename}
+        # Triggers V2 ragIngestionFunction via S3 event on irBucket courses/ prefix
+        key = f"courses/{course_id}/{module_id}/{file_name}.{file_type}"
         content_type = allowed_document_types[file_type]
     else:
         return {

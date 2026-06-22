@@ -42,9 +42,7 @@ beforeAll(() => {
       { functionName: 'Test-ApiGatewayStack-adminLambdaAuthorizer', timeoutSeconds: 30, isContainer: false },
       { functionName: 'Test-ApiGatewayStack-studentLambdaAuthorizer', timeoutSeconds: 30, isContainer: false },
       { functionName: 'Test-ApiGatewayStack-instructorLambdaAuthorizer', timeoutSeconds: 30, isContainer: false },
-      { functionName: 'Test-ApiGatewayStack-TextGenLambdaDockerFunc', timeoutSeconds: 300, isContainer: true },
       { functionName: 'Test-ApiGatewayStack-GeneratePreSignedURLFunc', timeoutSeconds: 30, isContainer: false },
-      { functionName: 'Test-ApiGatewayStack-DataIngestLambdaDockerFunc', timeoutSeconds: 600, isContainer: true },
       { functionName: 'Test-ApiGatewayStack-GetFilesFunction', timeoutSeconds: 30, isContainer: false },
       { functionName: 'Test-ApiGatewayStack-DeleteFileFunc', timeoutSeconds: 30, isContainer: false },
       { functionName: 'Test-ApiGatewayStack-DeleteModuleFunc', timeoutSeconds: 60, isContainer: false },
@@ -64,8 +62,6 @@ beforeAll(() => {
     dlqArn: 'arn:aws:sqs:ca-central-1:123456789012:test-messages-dlq.fifo',
     appSyncApiId: 'test-appsync-api-id',
     containerLambdaNames: [
-      'Test-ApiGatewayStack-TextGenLambdaDockerFunc',
-      'Test-ApiGatewayStack-DataIngestLambdaDockerFunc',
       'Test-ApiGatewayStack-SQSTriggerDockerFunc',
     ],
   });
@@ -132,12 +128,6 @@ describe('Lambda Error Rate Alarms', () => {
 
   test('tier 1 functions have error rate alarms', () => {
     devTemplate.hasResourceProperties('AWS::CloudWatch::Alarm', {
-      AlarmName: Match.stringLikeRegexp('.*TextGenLambdaDockerFunc-ErrorRate-Warning'),
-    });
-    devTemplate.hasResourceProperties('AWS::CloudWatch::Alarm', {
-      AlarmName: Match.stringLikeRegexp('.*DataIngestLambdaDockerFunc-ErrorRate-Warning'),
-    });
-    devTemplate.hasResourceProperties('AWS::CloudWatch::Alarm', {
       AlarmName: Match.stringLikeRegexp('.*SQSTriggerDockerFunc-ErrorRate-Warning'),
     });
   });
@@ -185,20 +175,13 @@ describe('Lambda Duration Alarms', () => {
    * Validates: Requirement 3.1
    * Duration alarms exist for tier 1 functions with 80%-of-timeout thresholds.
    */
-  test('TextGenLambdaDockerFunc has duration alarm at 80% of 300s timeout (240000ms)', () => {
+  test('SQSTriggerDockerFunc has duration alarm at 80% of 300s timeout (240000ms)', () => {
     devTemplate.hasResourceProperties('AWS::CloudWatch::Alarm', {
-      AlarmName: Match.stringLikeRegexp('.*TextGenLambdaDockerFunc-Duration-Warning'),
+      AlarmName: Match.stringLikeRegexp('.*SQSTriggerDockerFunc-Duration-Warning'),
       Threshold: 240000,
       EvaluationPeriods: 5,
       DatapointsToAlarm: 3,
       TreatMissingData: 'notBreaching',
-    });
-  });
-
-  test('DataIngestLambdaDockerFunc has duration alarm at 80% of 600s timeout (480000ms)', () => {
-    devTemplate.hasResourceProperties('AWS::CloudWatch::Alarm', {
-      AlarmName: Match.stringLikeRegexp('.*DataIngestLambdaDockerFunc-Duration-Warning'),
-      Threshold: 480000,
     });
   });
 
@@ -234,7 +217,7 @@ describe('Lambda Throttle Alarms', () => {
    */
   test('tier 1 function has throttle alarm with correct configuration', () => {
     devTemplate.hasResourceProperties('AWS::CloudWatch::Alarm', {
-      AlarmName: Match.stringLikeRegexp('.*TextGenLambdaDockerFunc-Throttle'),
+      AlarmName: Match.stringLikeRegexp('.*SQSTriggerDockerFunc-Throttle'),
       Threshold: 0,
       EvaluationPeriods: 3,
       DatapointsToAlarm: 2,

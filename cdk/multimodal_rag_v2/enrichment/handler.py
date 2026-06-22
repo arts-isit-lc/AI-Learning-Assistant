@@ -50,7 +50,7 @@ from .table_service import TableService
 from .text_chunker import TextChunker
 from .vision_service import VisionService
 
-logger = Logger(service="multimodal-rag-enrichment")
+logger = Logger(service="multimodal-rag-enrichment", log_uncaught_exceptions=True)
 
 # ---------------------------------------------------------------------------
 # Service wiring (module-level singletons, initialized once per container)
@@ -87,7 +87,7 @@ document_summary_gen = DocumentSummaryGenerator(bedrock_client=bedrock_client)
 # ---------------------------------------------------------------------------
 
 
-@logger.inject_lambda_context(clear_state=True, log_uncaught_exceptions=True)
+@logger.inject_lambda_context(clear_state=True)
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Enrichment Lambda handler — processes SQS messages from ingestion.
 
@@ -228,6 +228,9 @@ def _process_record(record: dict[str, Any]) -> dict[str, Any]:
 
     # Step 6: Store in pgvector (placeholder — actual storage wired in CDK)
     _store_in_pgvector(retrieval_units, course_id, module_id, file_id)
+
+    # Step 7: Update Module_Files.processing_status so the UI stops showing the spinner
+    _update_processing_status(file_id, module_id, len(retrieval_units))
 
     return {
         "file_id": file_id,
@@ -411,3 +414,53 @@ def _store_in_pgvector(
             "stored_count": len(units_with_embeddings),
         },
     )
+
+
+def _update_processing_status(file_id: str, module_id: str, chunk_count: int) -> None:
+    """Update Module_Files.processing_status to 'complete' in RDS.
+
+    This signals the frontend UI to stop showing the spinner.
+    Best-effort: logs errors but never raises.
+
+    Args:
+        file_id: The file_id (from S3 key, i.e. filename without extension).
+        module_id: The module this file belongs to.
+        chunk_count: Number of retrieval units produced (stored as chunk_count).
+    """
+    import psycopg2
+
+    db_proxy_endpoint = os.environ.get("DB_PROXY_ENDPOINT", "")
+    db_secret_arn = os.environ.get("DB_SECRET_ARN", "")
+
+    if not db_proxy_endpoint or not db_secret_arn:
+        logger.warning("Cannot update processing_status: DB not configured")
+        return
+
+    try:
+        import json
+        secrets_client = boto3.client("secretsmanager")
+        secret = json.loads(
+            secrets_client.get_secret_value(SecretId=db_secret_arn)["SecretString"]
+        )
+        conn = psycopg2.connect(
+            dbname=secret["dbname"],
+            user=secret["username"],
+            password=secret["password"],
+            host=db_proxy_endpoint,
+            port=secret["port"],
+            sslmode="require",
+        )
+        cur = conn.cursor()
+        # Match by module_id and filename pattern (file_id is filename without extension)
+        cur.execute(
+            """UPDATE "Module_Files"
+               SET processing_status = 'complete', chunk_count = %s, last_processed_at = NOW()
+               WHERE module_id = %s AND filename = %s""",
+            (chunk_count, module_id, file_id),
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+        logger.info("Processing status updated to complete", extra={"file_id": file_id, "module_id": module_id})
+    except Exception:
+        logger.exception("Failed to update processing_status (best-effort)", extra={"file_id": file_id})

@@ -4,6 +4,7 @@ import { createTestStacks } from './helpers/stack-setup';
 import { VpcStack } from '../lib/vpc-stack';
 import { DatabaseStack } from '../lib/database-stack';
 import { ApiGatewayStack } from '../lib/api-gateway-stack';
+import { MultimodalRagStack } from '../lib/multimodal-rag-stack';
 
 /**
  * Bedrock Guardrail Infrastructure Tests
@@ -192,7 +193,8 @@ describe('Environment-aware Guardrail Configuration', () => {
     const env = { account: '123456789012', region: 'ca-central-1' };
     const vpcStack = new VpcStack(app, 'Prod-VpcStack', { env, environment: 'prod' });
     const dbStack = new DatabaseStack(app, 'Prod-DatabaseStack', vpcStack, { env, environment: 'prod' });
-    const apiStack = new ApiGatewayStack(app, 'Prod-ApiGatewayStack', dbStack, vpcStack, { env, environment: 'prod' });
+    const ragStack = new MultimodalRagStack(app, 'Prod-MultimodalRagStack', dbStack, vpcStack, { env, environment: 'prod' });
+    const apiStack = new ApiGatewayStack(app, 'Prod-ApiGatewayStack', dbStack, vpcStack, ragStack, { env, environment: 'prod' });
     const prodTemplate = Template.fromStack(apiStack);
 
     prodTemplate.hasResourceProperties('AWS::Bedrock::Guardrail', {

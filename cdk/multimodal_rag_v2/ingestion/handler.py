@@ -8,6 +8,7 @@ Flow: S3 event → parse key → download file → AdapterRegistry → IRBuilder
 
 from __future__ import annotations
 
+import json
 import os
 import urllib.parse
 from typing import Any
@@ -45,14 +46,16 @@ from .exceptions import (
 )
 from .ir_builder import IRBuilder
 
-logger = Logger(service="multimodal-rag-ingestion")
+logger = Logger(service="multimodal-rag-ingestion", log_uncaught_exceptions=True)
 
 # Environment variables
 IR_BUCKET_NAME = os.environ.get("IR_BUCKET_NAME", "ir-bucket")
 SOURCE_BUCKET_NAME = os.environ.get("SOURCE_BUCKET_NAME", "")
+ENRICHMENT_QUEUE_URL = os.environ.get("ENRICHMENT_QUEUE_URL", "")
 
-# Initialize S3 client
+# Initialize AWS clients
 _s3_client = boto3.client("s3")
+_sqs_client = boto3.client("sqs")
 
 # Initialize components
 _registry = AdapterRegistry()
@@ -120,7 +123,7 @@ def _build_response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-@logger.inject_lambda_context(clear_state=True, log_uncaught_exceptions=True)
+@logger.inject_lambda_context(clear_state=True)
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Ingestion Lambda handler.
 
@@ -239,6 +242,22 @@ def _process_record(record: dict[str, Any]) -> dict[str, Any]:
             s3_path = _ir_persistence.persist(document_ir)
 
         logger.info("Ingestion complete", extra={"ir_s3_path": s3_path})
+
+        # Send message to enrichment queue to trigger Layer 2 processing
+        if ENRICHMENT_QUEUE_URL:
+            _sqs_client.send_message(
+                QueueUrl=ENRICHMENT_QUEUE_URL,
+                MessageBody=json.dumps({
+                    "ir_s3_path": s3_path,
+                    "course_id": course_id,
+                    "module_id": module_id,
+                    "file_id": file_id,
+                    "ir_bucket": IR_BUCKET_NAME,
+                }),
+            )
+            logger.info("Enrichment queue message sent")
+        else:
+            logger.warning("ENRICHMENT_QUEUE_URL not configured, skipping enrichment trigger")
 
         return {
             "statusCode": 200,

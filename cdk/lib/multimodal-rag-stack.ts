@@ -47,6 +47,17 @@ export class MultimodalRagStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN,
       versioned: false,
       enforceSSL: true,
+      cors: [
+        {
+          allowedHeaders: ["*"],
+          allowedMethods: [
+            s3.HttpMethods.GET,
+            s3.HttpMethods.PUT,
+            s3.HttpMethods.HEAD,
+          ],
+          allowedOrigins: ["*"],
+        },
+      ],
     });
 
     // ─── DynamoDB: EmbeddingCache Table ───────────────────────────────────────

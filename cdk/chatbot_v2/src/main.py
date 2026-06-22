@@ -29,6 +29,7 @@ from retrieval_client import invoke_retrieval, get_bounded_history as get_retrie
 from streaming import stream_response
 from guardrails import load_guardrail_config, wrap_user_message, handle_guardrail_error
 from history import load_chat_history, get_bounded_history, persist_message_pair, MAX_PROMPT_TURNS
+from rds_projection import persist_message_to_rds, log_engagement
 from constants.models import RESPONSE_MODEL_ID, RESPONSE_MAX_TOKENS
 
 # Environment variables
@@ -198,6 +199,11 @@ def handler(event, context):
         body = json.loads(event.get("body", "{}") or "{}")
         message_content = body.get("message_content", "")
 
+        # Extract email from authorizer context (for RDS projection + engagement logging)
+        request_context = event.get("requestContext", {})
+        authorizer_ctx = request_context.get("authorizer", {})
+        user_email = authorizer_ctx.get("email", "") or query_params.get("email", "")
+
         # Validate required params
         if not course_id:
             return {"statusCode": 400, "headers": CORS_HEADERS, "body": json.dumps("Missing required parameter: course_id")}
@@ -326,6 +332,14 @@ def handler(event, context):
         )
         # If guardrail retry produced a blocked redirect, return it directly
         if isinstance(llm_output, dict) and llm_output.get("blocked"):
+            # Still persist the student message to RDS (best-effort)
+            try:
+                conn = _get_db_connection()
+                if message_content:
+                    persist_message_to_rds(conn, session_id, message_content, student_sent=True)
+                persist_message_to_rds(conn, session_id, llm_output["message"], student_sent=False)
+            except Exception:
+                logger.exception("RDS projection failed on guardrail block (best-effort)")
             return {
                 "statusCode": 200,
                 "headers": CORS_HEADERS,
@@ -349,10 +363,23 @@ def handler(event, context):
                 state = discuss_concepts(state, student_concepts)
 
         # Step 13: Persist state + history (best-effort)
+        # DynamoDB = canonical message store
         try:
             persist_message_pair(CHAT_HISTORY_TABLE, session_id, message_content or f"[Initial greeting]", llm_output, _dynamodb_resource)
         except Exception:
             logger.exception("Chat history persistence failed (best-effort)")
+
+        # RDS = synchronous projection for UI session history (transitional — Phase 2 moves to async)
+        try:
+            conn = _get_db_connection()
+            if message_content:
+                persist_message_to_rds(conn, session_id, message_content, student_sent=True)
+                log_engagement(conn, user_email, course_id, module_id, "message creation")
+            persist_message_to_rds(conn, session_id, llm_output, student_sent=False)
+            log_engagement(conn, user_email, course_id, module_id, "AI message creation")
+        except Exception:
+            logger.exception("RDS projection failed (best-effort)")
+
         try:
             _persist_session_state(state)
         except Exception:

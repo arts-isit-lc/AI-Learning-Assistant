@@ -14,6 +14,7 @@ import {
 import * as cognito from "aws-cdk-lib/aws-cognito";
 import { VpcStack } from "./vpc-stack";
 import { DatabaseStack } from "./database-stack";
+import { MultimodalRagStack } from "./multimodal-rag-stack";
 import { Fn } from "aws-cdk-lib";
 import { Asset } from "aws-cdk-lib/aws-s3-assets";
 import * as s3 from "aws-cdk-lib/aws-s3";
@@ -61,6 +62,7 @@ export class ApiGatewayStack extends cdk.Stack {
     id: string,
     db: DatabaseStack,
     vpcStack: VpcStack,
+    ragStack: MultimodalRagStack,
     props?: cdk.StackProps & { environment?: string }
   ) {
     super(scope, id, props);
@@ -1090,39 +1092,19 @@ export class ApiGatewayStack extends cdk.Stack {
       "instructorLambdaAuthorizer"
     );
 
-    // Create parameters for Bedrock LLM ID, Embedding Model ID, and Table Name in Parameter Store
-    const bedrockLLMParameter = new ssm.StringParameter(
-      this,
-      "BedrockLLMParameter",
-      {
-        parameterName: `/${id}/AILA/BedrockLLMId`,
-        description: "Parameter containing the Bedrock LLM ID",
-        stringValue: "meta.llama3-70b-instruct-v1:0",
-      }
-    );
+    // ─── Bedrock Guardrail for Text Generation ─────────────────────────
+    const filterStrength = isProd ? 'HIGH' : 'MEDIUM';
 
-    const embeddingModelParameter = new ssm.StringParameter(
-      this,
-      "EmbeddingModelParameter",
-      {
-        parameterName: `/${id}/AILA/EmbeddingModelId`,
-        description: "Parameter containing the Embedding Model ID",
-        stringValue: "amazon.titan-embed-text-v2:0",
-      }
-    );
-
+    // SSM Parameter for DynamoDB conversation table name (used by DeleteLastMessage + chatbotV2)
     const tableNameParameter = new ssm.StringParameter(
       this,
       "TableNameParameter",
       {
         parameterName: `/${id}/AILA/TableName`,
-        description: "Parameter containing the DynamoDB table name",
+        description: "Parameter containing the DynamoDB table name for chat history",
         stringValue: "DynamoDB-Conversation-Table",
       }
     );
-
-    // ─── Bedrock Guardrail for Text Generation ─────────────────────────
-    const filterStrength = isProd ? 'HIGH' : 'MEDIUM';
 
     const guardrail = new bedrock.CfnGuardrail(this, `${id}-TextGenGuardrail`, {
       name: `${id}-TextGenGuardrail`,
@@ -1220,145 +1202,6 @@ export class ApiGatewayStack extends cdk.Stack {
       stringValue: guardrailVersion.attrVersion,
     });
 
-    /**
-     *
-     * Create Lambda with container image for text generation workflow in RAG pipeline
-     */
-    const textGenLambdaDockerFunc = new lambda.DockerImageFunction(
-      this,
-      `${id}-TextGenLambdaDockerFunc`,
-      {
-        code: lambda.DockerImageCode.fromImageAsset("./text_generation"),
-        memorySize: 1024,
-        timeout: cdk.Duration.seconds(300),
-        tracing: lambda.Tracing.ACTIVE,
-        logRetention: logRetention,
-        vpc: vpcStack.vpc, // Pass the VPC
-        functionName: `${id}-TextGenLambdaDockerFunc`,
-        environment: {
-          SM_DB_CREDENTIALS: db.secretPathTableCreator.secretName,
-          RDS_PROXY_ENDPOINT: db.rdsProxyEndpointTableCreator,
-          REGION: this.region,
-          BEDROCK_LLM_PARAM: bedrockLLMParameter.parameterName,
-          EMBEDDING_MODEL_PARAM: embeddingModelParameter.parameterName,
-          TABLE_NAME_PARAM: tableNameParameter.parameterName,
-          GUARDRAIL_ID_PARAM: guardrailIdParam.parameterName,
-          GUARDRAIL_VERSION_PARAM: guardrailVersionParam.parameterName,
-        },
-      }
-    );
-
-    // Override the Logical ID of the Lambda Function to get ARN in OpenAPI
-    const cfnTextGenDockerFunc = textGenLambdaDockerFunc.node
-      .defaultChild as lambda.CfnFunction;
-    cfnTextGenDockerFunc.overrideLogicalId("TextGenLambdaDockerFunc");
-
-    // Add the permission to the Lambda function's policy to allow API Gateway access
-    textGenLambdaDockerFunc.addPermission("AllowApiGatewayInvoke", {
-      principal: new iam.ServicePrincipal("apigateway.amazonaws.com"),
-      action: "lambda:InvokeFunction",
-      sourceArn: `arn:aws:execute-api:${this.region}:${this.account}:${this.api.restApiId}/*/*/student*`,
-    });
-
-    // Custom policy statement for Bedrock access
-    const bedrockPolicyStatement = new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream", "bedrock:InvokeEndpoint"],
-      resources: [
-        "arn:aws:bedrock:" +
-        this.region +
-        "::foundation-model/meta.llama3-70b-instruct-v1:0",
-        "arn:aws:bedrock:" +
-        this.region +
-        "::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0",
-        "arn:aws:bedrock:" +
-        this.region +
-        "::foundation-model/anthropic.claude-3-haiku-20240307-v1:0",
-        "arn:aws:bedrock:" +
-        this.region +
-        "::foundation-model/amazon.titan-embed-text-v2:0",
-      ],
-    });
-
-    // Attach the custom Bedrock policy to Lambda function
-    textGenLambdaDockerFunc.addToRolePolicy(bedrockPolicyStatement);
-
-    // Grant access to Secret Manager scoped to secretPathTableCreator
-    textGenLambdaDockerFunc.addToRolePolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          //Secrets Manager
-          "secretsmanager:GetSecretValue",
-        ],
-        resources: [
-          db.secretPathTableCreator.secretArn,
-        ],
-      })
-    );
-
-    // Grant DynamoDB management actions on all tables (required for table discovery and creation)
-    textGenLambdaDockerFunc.addToRolePolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          "dynamodb:ListTables",
-          "dynamodb:CreateTable",
-          "dynamodb:DescribeTable",
-        ],
-        resources: [`arn:aws:dynamodb:${this.region}:${this.account}:table/*`],
-      })
-    );
-
-    // Grant DynamoDB data actions scoped to the specific conversation table
-    textGenLambdaDockerFunc.addToRolePolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          "dynamodb:PutItem",
-          "dynamodb:GetItem",
-          "dynamodb:UpdateItem",
-        ],
-        resources: [`arn:aws:dynamodb:${this.region}:${this.account}:table/DynamoDB-Conversation-Table`],
-      })
-    );
-
-    // Grant access to SSM Parameter Store for specific parameters
-    textGenLambdaDockerFunc.addToRolePolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ["ssm:GetParameter"],
-        resources: [
-          bedrockLLMParameter.parameterArn,
-          embeddingModelParameter.parameterArn,
-          tableNameParameter.parameterArn,
-          guardrailIdParam.parameterArn,
-          guardrailVersionParam.parameterArn,
-        ],
-      })
-    );
-
-    // Grant X-Ray tracing permissions
-    textGenLambdaDockerFunc.addToRolePolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          "xray:PutTraceSegments",
-          "xray:PutTelemetryRecords",
-        ],
-        resources: ["*"],
-      })
-    );
-
-    // Grant bedrock:ApplyGuardrail scoped to this specific guardrail
-    textGenLambdaDockerFunc.addToRolePolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ["bedrock:ApplyGuardrail"],
-        resources: [`arn:aws:bedrock:${this.region}:${this.account}:guardrail/${guardrail.attrGuardrailId}`],
-      })
-    );
-
     // Create S3 Bucket to handle documents for each course
     const dataIngestionBucket = new s3.Bucket(this, `${id}-DataIngestionBucket`, {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -1400,7 +1243,7 @@ export class ApiGatewayStack extends cdk.Stack {
         memorySize: 256,
         vpc: vpcStack.vpc,
         environment: {
-          BUCKET: dataIngestionBucket.bucketName,
+          BUCKET: ragStack.irBucket.bucketName,
           REGION: this.region,
           SM_DB_CREDENTIALS: db.secretPathAdminName,
           RDS_PROXY_ENDPOINT: db.rdsProxyEndpointAdmin,
@@ -1415,14 +1258,13 @@ export class ApiGatewayStack extends cdk.Stack {
       .defaultChild as lambda.CfnFunction;
     cfnGeneratePreSignedURL.overrideLogicalId("GeneratePreSignedURLFunc");
 
-    // Grant the Lambda function the necessary permissions
-    dataIngestionBucket.grantReadWrite(generatePreSignedURL);
+    // Grant the Lambda function permissions to upload to irBucket (V2 ingestion trigger)
     generatePreSignedURL.addToRolePolicy(
       new iam.PolicyStatement({
         actions: ["s3:PutObject", "s3:GetObject"],
         resources: [
-          dataIngestionBucket.bucketArn,
-          `${dataIngestionBucket.bucketArn}/*`,
+          ragStack.irBucket.bucketArn,
+          `${ragStack.irBucket.bucketArn}/*`,
         ],
       })
     );
@@ -1497,123 +1339,6 @@ export class ApiGatewayStack extends cdk.Stack {
       actions: ['s3:DeleteObject'],
       resources: [`${dataIngestionBucket.bucketArn}/*`],
     }));
-
-    /**
-     *
-     * Create Lambda with container image for data ingestion workflow in RAG pipeline
-     * This function will be triggered when a file in uploaded or deleted fro, the S3 Bucket
-     */
-    const dataIngestLambdaDockerFunc = new lambda.DockerImageFunction(
-      this,
-      `${id}-DataIngestLambdaDockerFunc`,
-      {
-        code: lambda.DockerImageCode.fromImageAsset("./data_ingestion"),
-        memorySize: 1024,
-        timeout: cdk.Duration.seconds(900),
-        tracing: lambda.Tracing.ACTIVE,
-        logRetention: logRetention,
-        vpc: vpcStack.vpc, // Pass the VPC
-        functionName: `${id}-DataIngestLambdaDockerFunc`,
-        environment: {
-          SM_DB_CREDENTIALS: db.secretPathAdminName,
-          RDS_PROXY_ENDPOINT: db.rdsProxyEndpointAdmin,
-          BUCKET: dataIngestionBucket.bucketName,
-          REGION: this.region,
-          EMBEDDING_BUCKET_NAME: embeddingStorageBucket.bucketName,
-          EMBEDDING_MODEL_PARAM: embeddingModelParameter.parameterName,
-        },
-      }
-    );
-
-    // Override the Logical ID of the Lambda Function to get ARN in OpenAPI
-    const cfnDataIngestLambdaDockerFunc = dataIngestLambdaDockerFunc.node
-      .defaultChild as lambda.CfnFunction;
-    cfnDataIngestLambdaDockerFunc.overrideLogicalId(
-      "DataIngestLambdaDockerFunc"
-    );
-
-    dataIngestionBucket.grantRead(dataIngestLambdaDockerFunc);
-
-    // Add ListBucket permission explicitly
-    dataIngestLambdaDockerFunc.addToRolePolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ["s3:ListBucket"],
-        resources: [dataIngestionBucket.bucketArn], // Access to the specific bucket
-      })
-    );
-
-    dataIngestLambdaDockerFunc.addToRolePolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ["s3:ListBucket"],
-        resources: [embeddingStorageBucket.bucketArn], // Access to the specific bucket
-      })
-    );
-
-    dataIngestLambdaDockerFunc.addToRolePolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          "s3:PutObject",
-          "s3:GetObject",
-          "s3:DeleteObject",
-          "s3:HeadObject",
-        ],
-        resources: [
-          `arn:aws:s3:::${embeddingStorageBucket.bucketName}/*`, // Grant access to all objects within this bucket
-        ],
-      })
-    );
-
-    // Attach the custom Bedrock policy to Lambda function
-    dataIngestLambdaDockerFunc.addToRolePolicy(bedrockPolicyStatement);
-
-    // Add the S3 event source trigger to the Lambda function
-    dataIngestLambdaDockerFunc.addEventSource(
-      new lambdaEventSources.S3EventSource(dataIngestionBucket, {
-        events: [
-          s3.EventType.OBJECT_CREATED,
-          s3.EventType.OBJECT_REMOVED,
-          s3.EventType.OBJECT_RESTORE_COMPLETED,
-        ],
-      })
-    );
-
-    // Grant access to Secret Manager scoped to secretPathAdminName
-    dataIngestLambdaDockerFunc.addToRolePolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          //Secrets Manager
-          "secretsmanager:GetSecretValue",
-        ],
-        resources: [
-          `arn:aws:secretsmanager:${this.region}:${this.account}:secret:${db.secretPathAdminName}-*`,
-        ],
-      })
-    );
-
-    // Grant access to SSM Parameter Store for specific parameters
-    dataIngestLambdaDockerFunc.addToRolePolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: ["ssm:GetParameter"],
-        resources: [embeddingModelParameter.parameterArn],
-      })
-    );
-
-    // Grant X-Ray tracing permissions
-    dataIngestLambdaDockerFunc.addToRolePolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          "xray:PutTraceSegments",
-          "xray:PutTelemetryRecords",
-        ],
-        resources: ["*"],
-      })
-    );
 
     /**
      * Orphan Cleanup Lambda — removes abandoned draft modules older than 24h
@@ -2123,9 +1848,6 @@ export class ApiGatewayStack extends cdk.Stack {
       responseMappingTemplate: appsync.MappingTemplate.fromString("$util.toJson($context.result)"),
     });
 
-    // ARCH-1: Add AppSync URL to text gen Lambda (must be after eventApi is created)
-    textGenLambdaDockerFunc.addEnvironment("APPSYNC_API_URL", this.eventApi.graphqlUrl);
-
     // Add permission to allow main.py Lambda to invoke eventNotification Lambda
     notificationFunction.grantInvoke(new iam.ServicePrincipal("lambda.amazonaws.com"));
 
@@ -2492,9 +2214,7 @@ export class ApiGatewayStack extends cdk.Stack {
       { functionName: `${id}-adminLambdaAuthorizer`, timeoutSeconds: 30, isContainer: false },
       { functionName: `${id}-studentLambdaAuthorizer`, timeoutSeconds: 30, isContainer: false },
       { functionName: `${id}-instructorLambdaAuthorizer`, timeoutSeconds: 30, isContainer: false },
-      { functionName: `${id}-TextGenLambdaDockerFunc`, timeoutSeconds: 300, isContainer: true },
       { functionName: `${id}-GeneratePreSignedURLFunc`, timeoutSeconds: 60, isContainer: false },
-      { functionName: `${id}-DataIngestLambdaDockerFunc`, timeoutSeconds: 900, isContainer: true },
       { functionName: `${id}-GetFilesFunction`, timeoutSeconds: 30, isContainer: false },
       { functionName: `${id}-DeleteFileFunc`, timeoutSeconds: 30, isContainer: false },
       { functionName: `${id}-DeleteModuleFunc`, timeoutSeconds: 60, isContainer: false },

@@ -46,7 +46,7 @@ from .hybrid_search_engine import HybridSearchEngine
 from .production_ranker import ProductionRanker
 from .query_analyzer import QueryAnalyzer
 
-logger = Logger(service="multimodal-rag-retrieval")
+logger = Logger(service="multimodal-rag-retrieval", log_uncaught_exceptions=True)
 
 # ---------------------------------------------------------------------------
 # Environment variables
@@ -165,7 +165,7 @@ def _error_response(status_code: int, message: str) -> dict[str, Any]:
 # Handler
 # ---------------------------------------------------------------------------
 
-@logger.inject_lambda_context(clear_state=True, log_uncaught_exceptions=True)
+@logger.inject_lambda_context(clear_state=True)
 def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """Retrieval + Reasoning Lambda handler.
 

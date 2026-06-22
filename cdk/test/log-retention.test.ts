@@ -4,6 +4,7 @@ import { createTestStacks } from './helpers/stack-setup';
 import { VpcStack } from '../lib/vpc-stack';
 import { DatabaseStack } from '../lib/database-stack';
 import { ApiGatewayStack } from '../lib/api-gateway-stack';
+import { MultimodalRagStack } from '../lib/multimodal-rag-stack';
 
 /**
  * Log Retention Policy Tests
@@ -34,7 +35,8 @@ beforeAll(() => {
   const env = { account: '123456789012', region: 'ca-central-1' };
   const vpcStack = new VpcStack(prodApp, 'Test-VpcStack', { env, environment: 'prod' });
   const dbStack = new DatabaseStack(prodApp, 'Test-DatabaseStack', vpcStack, { env, environment: 'prod' });
-  const apiStack = new ApiGatewayStack(prodApp, 'Test-ApiGatewayStack', dbStack, vpcStack, { env, environment: 'prod' });
+  const ragStack = new MultimodalRagStack(prodApp, 'Test-MultimodalRagStack', dbStack, vpcStack, { env, environment: 'prod' });
+  const apiStack = new ApiGatewayStack(prodApp, 'Test-ApiGatewayStack', dbStack, vpcStack, ragStack, { env, environment: 'prod' });
   prodApiTemplate = Template.fromStack(apiStack);
 });
 

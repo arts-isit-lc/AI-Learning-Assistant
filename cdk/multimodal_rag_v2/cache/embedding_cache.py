@@ -109,11 +109,14 @@ class EmbeddingCache:
             embedding_version: Version identifier (e.g., "titan-v2-1024").
         """
         try:
+            # DynamoDB requires Decimal instead of float for numeric values
+            from decimal import Decimal
+            decimal_embedding = [Decimal(str(v)) for v in embedding]
             self._table.put_item(
                 Item={
                     "content_hash": content_hash,
                     "embedding_version": embedding_version,
-                    "embedding": embedding,
+                    "embedding": decimal_embedding,
                 }
             )
         except Exception:
