@@ -1441,7 +1441,7 @@ export class ApiGatewayStack extends cdk.Stack {
       environment: {
         SM_DB_CREDENTIALS: db.secretPathUser.secretName,
         RDS_PROXY_ENDPOINT: db.rdsProxyEndpoint,
-        BUCKET: dataIngestionBucket.bucketName,
+        BUCKET: ragStack.irBucket.bucketName,
         REGION: this.region,
       },
       functionName: `${id}-GetFilesFunction`,
@@ -1453,8 +1453,8 @@ export class ApiGatewayStack extends cdk.Stack {
       .defaultChild as lambda.CfnFunction;
     cfnGetFilesFunction.overrideLogicalId("GetFilesFunction");
 
-    // Grant the Lambda function read-only permissions to the S3 bucket
-    dataIngestionBucket.grantRead(getFilesFunction);
+    // Grant the Lambda function read-only permissions to the irBucket (V2 file storage)
+    ragStack.irBucket.grantRead(getFilesFunction);
 
     // Grant access to Secret Manager scoped to secretPathUser
     getFilesFunction.addToRolePolicy(

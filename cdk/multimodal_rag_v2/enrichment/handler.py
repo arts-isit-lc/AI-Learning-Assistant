@@ -229,7 +229,10 @@ def _process_record(record: dict[str, Any]) -> dict[str, Any]:
     # Step 6: Store in pgvector (placeholder — actual storage wired in CDK)
     _store_in_pgvector(retrieval_units, course_id, module_id, file_id)
 
-    # Step 7: Update Module_Files.processing_status so the UI stops showing the spinner
+    # Step 7: Extract topics and store in Module_Files.metadata for the topic aggregation pipeline
+    _extract_and_store_topics(enriched_elements, file_id, module_id)
+
+    # Step 8: Update Module_Files.processing_status so the UI stops showing the spinner
     _update_processing_status(file_id, module_id, len(retrieval_units))
 
     return {
@@ -464,3 +467,166 @@ def _update_processing_status(file_id: str, module_id: str, chunk_count: int) ->
         logger.info("Processing status updated to complete", extra={"file_id": file_id, "module_id": module_id})
     except Exception:
         logger.exception("Failed to update processing_status (best-effort)", extra={"file_id": file_id})
+
+
+def _extract_and_store_topics(
+    enriched_elements: list,
+    file_id: str,
+    module_id: str,
+) -> None:
+    """Extract topics from document text via Claude Haiku and store in Module_Files.metadata.
+
+    This enables the topic aggregation pipeline (generate_topics endpoint) to
+    consolidate per-file topics into module-level generated_topics.
+
+    Best-effort: logs errors but never raises.
+
+    Args:
+        enriched_elements: List of EnrichedElements from enrichment.
+        file_id: File identifier (filename without extension).
+        module_id: Module identifier.
+    """
+    import psycopg2
+    from datetime import datetime, timezone
+
+    db_proxy_endpoint = os.environ.get("DB_PROXY_ENDPOINT", "")
+    db_secret_arn = os.environ.get("DB_SECRET_ARN", "")
+
+    if not db_proxy_endpoint or not db_secret_arn:
+        logger.warning("Cannot extract topics: DB not configured")
+        return
+
+    # Collect text content from enriched elements (cap at 15000 chars for Haiku)
+    text_parts = []
+    total_chars = 0
+    max_chars = 15000
+
+    for elem in enriched_elements:
+        if elem.embedding_text and total_chars < max_chars:
+            text_parts.append(elem.embedding_text)
+            total_chars += len(elem.embedding_text)
+
+    if not text_parts:
+        logger.warning("No text content for topic extraction", extra={"file_id": file_id})
+        return
+
+    full_text = "\n\n".join(text_parts)[:max_chars]
+
+    # Call Haiku for topic extraction
+    extraction_prompt = """Analyze this educational document and extract the core subject matter.
+
+Identify the specific concepts that would appear as:
+- Lecture topics or section headings
+- Exam questions or assessment items
+- Learning outcomes in a course syllabus
+
+Extract the concepts that are distinct and assessable. Do NOT collapse multiple distinct concepts into one broader category.
+
+Exclude:
+- Examples and case studies (unless they ARE the topic)
+- Citations, references, and bibliographic entries
+- Administrative content (syllabus logistics, grading policies)
+
+Return ONLY a valid JSON object (no markdown, no explanation):
+{
+    "topics": ["topic1", "topic2", ...],
+    "learning_objectives": ["objective1", "objective2", ...],
+    "confidence": 0.0
+}
+
+Limit: maximum 5 topics and 5 learning objectives.
+
+Document text:
+"""
+
+    try:
+        import json as json_mod
+        bedrock_client = boto3.client("bedrock-runtime", region_name=os.environ.get("REGION", "ca-central-1"))
+
+        request_body = json_mod.dumps({
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 1024,
+            "messages": [
+                {"role": "user", "content": extraction_prompt + full_text}
+            ]
+        })
+
+        response = bedrock_client.invoke_model(
+            modelId="anthropic.claude-3-haiku-20240307-v1:0",
+            body=request_body,
+        )
+        result = json_mod.loads(response["body"].read())
+
+        if not result.get("content") or not result["content"][0].get("text"):
+            logger.warning("Empty Haiku response for topic extraction", extra={"file_id": file_id})
+            return
+
+        content = result["content"][0]["text"].strip()
+
+        # Strip markdown fences if present
+        if content.startswith("```"):
+            content = content.split("\n", 1)[1] if "\n" in content else content[3:]
+            if content.endswith("```"):
+                content = content[:-3]
+            content = content.strip()
+
+        parsed = json_mod.loads(content)
+
+        # Validate and sanitize
+        if "topics" not in parsed or not isinstance(parsed["topics"], list):
+            logger.warning("Invalid topic extraction response", extra={"file_id": file_id})
+            return
+
+        parsed["topics"] = [t.strip() for t in parsed["topics"] if isinstance(t, str) and t.strip()][:5]
+        parsed["learning_objectives"] = [
+            o.strip() for o in parsed.get("learning_objectives", [])
+            if isinstance(o, str) and o.strip()
+        ][:5]
+
+        if "confidence" not in parsed or not isinstance(parsed.get("confidence"), (int, float)):
+            parsed["confidence"] = 0.85
+        parsed["coverage"] = 1.0 if total_chars <= max_chars else round(max_chars / total_chars, 2)
+        parsed["extracted_at"] = datetime.now(timezone.utc).isoformat()
+        parsed["model"] = "anthropic.claude-3-haiku-20240307-v1:0"
+        parsed["version"] = 2
+        parsed["extraction_method"] = "full_document" if total_chars <= max_chars else "sampled_document"
+
+        # Write to Module_Files.metadata
+        secrets_client = boto3.client("secretsmanager")
+        secret = json_mod.loads(
+            secrets_client.get_secret_value(SecretId=db_secret_arn)["SecretString"]
+        )
+        conn = psycopg2.connect(
+            dbname=secret["dbname"],
+            user=secret["username"],
+            password=secret["password"],
+            host=db_proxy_endpoint,
+            port=secret["port"],
+            sslmode="require",
+        )
+        cur = conn.cursor()
+
+        # Read existing metadata to merge
+        cur.execute('SELECT metadata FROM "Module_Files" WHERE module_id = %s AND filename = %s', (module_id, file_id))
+        row = cur.fetchone()
+        existing = {}
+        if row and row[0]:
+            existing = row[0] if isinstance(row[0], dict) else json_mod.loads(row[0])
+
+        existing["topic_extraction"] = parsed
+
+        cur.execute(
+            """UPDATE "Module_Files" SET metadata = %s::jsonb WHERE module_id = %s AND filename = %s""",
+            (json_mod.dumps(existing), module_id, file_id),
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        logger.info(
+            "Topic extraction complete",
+            extra={"file_id": file_id, "topic_count": len(parsed["topics"]), "topics": parsed["topics"]},
+        )
+
+    except Exception:
+        logger.exception("Topic extraction failed (best-effort)", extra={"file_id": file_id})

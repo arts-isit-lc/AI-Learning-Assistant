@@ -160,7 +160,7 @@ def lambda_handler(event, context):
         }
 
     try:
-        document_prefix = f"{course_id}/{module_id}/documents/"
+        document_prefix = f"courses/{course_id}/{module_id}/"
 
         document_files = list_files_in_s3_prefix(BUCKET, document_prefix)
 
