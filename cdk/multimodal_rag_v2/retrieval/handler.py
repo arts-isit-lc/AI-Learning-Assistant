@@ -485,11 +485,14 @@ def _execute_hybrid_search(
         )
 
     try:
+        # For figure/table/algorithm lookups, increase k to improve recall on exact references
+        search_k = 25 if query_intent.requires_figure_lookup else 15
+
         return _hybrid_search_engine.search(
             query=query,
             query_intent=query_intent,
             query_embedding=query_embedding,
-            k=15,
+            k=search_k,
             embedding_version=embedding_version,
         )
     except _PgvectorUnavailableError:

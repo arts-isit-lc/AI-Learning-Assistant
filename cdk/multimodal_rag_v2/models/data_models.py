@@ -158,6 +158,7 @@ class QueryIntent:
     requires_formula: bool = False
     requires_table: bool = False
     requires_escalation: bool = False
+    requires_figure_lookup: bool = False
     lecture_number: int | None = None
     week_number: int | None = None
 

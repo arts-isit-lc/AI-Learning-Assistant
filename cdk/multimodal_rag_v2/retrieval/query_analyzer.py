@@ -79,6 +79,12 @@ class QueryAnalyzer:
         ],
     }
 
+    # Regex patterns for figure/table/algorithm references that need exact-match lookup
+    _FIGURE_LOOKUP_PATTERN = re.compile(
+        r"\b(?:figure|fig|table|algorithm)\s*\d+(?:\.\d+)?",
+        re.IGNORECASE,
+    )
+
     RULES = _compile_rules(_RAW_RULES)
 
     def __init__(self, bedrock_client=None):
@@ -133,6 +139,11 @@ class QueryAnalyzer:
         # Always attempt lecture and week number extraction (independent of each other)
         intent.lecture_number = self._extract_lecture_number(query)
         intent.week_number = self._extract_week_number(query)
+
+        # Check for figure/table/algorithm reference patterns (exact-match lookup)
+        if self._FIGURE_LOOKUP_PATTERN.search(query):
+            intent.requires_figure_lookup = True
+            intent.requires_image = True  # figures are visual content
 
         return intent
 
