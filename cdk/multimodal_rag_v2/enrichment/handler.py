@@ -215,11 +215,21 @@ def _process_record(record: dict[str, Any]) -> dict[str, Any]:
     # Add the document summary RetrievalUnit
     retrieval_units.append(summary_unit)
 
+    # DEBUG: Check if caption injection and sibling linking are working
+    units_with_figure_ref = [u for u in retrieval_units if u.metadata.get("figure_ref")]
+    units_with_siblings = [u for u in retrieval_units if u.sibling_ids]
+    table_units = [u for u in retrieval_units if u.element_type.value == "table"]
+    image_units = [u for u in retrieval_units if u.element_type.value == "image"]
     logger.info(
         "RetrievalUnits built",
         extra={
             "retrieval_unit_count": len(retrieval_units),
             "summary_topics": len(doc_summary.topics),
+            "units_with_figure_ref": len(units_with_figure_ref),
+            "units_with_siblings": len(units_with_siblings),
+            "table_units": len(table_units),
+            "image_units": len(image_units),
+            "sample_table_text": table_units[0].embedding_text[:100] if table_units else "NO_TABLES",
         },
     )
 
