@@ -509,9 +509,11 @@ class RetrievalUnitBuilder:
             if unit.element_type != ElementType.TEXT:
                 continue
 
-            # Only match captions at the START of the text (re.match, not search)
-            # This avoids linking body text like "as shown in Figure 2.1..."
-            match = self._CAPTION_PATTERN.match(unit.embedding_text)
+            # Match captions within the first 150 chars of the chunk.
+            # This avoids linking deep mid-text references ("as shown in Figure 2.1...")
+            # while still catching captions that aren't at exact position 0.
+            text_head = unit.embedding_text[:150]
+            match = self._CAPTION_PATTERN.search(text_head)
             if not match:
                 continue
 
