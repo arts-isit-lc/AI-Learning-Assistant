@@ -8,7 +8,9 @@ Decomposition rules by element_type:
 
 Validation:
 - Every unit has non-empty embedding_text (discard if empty/whitespace only)
-- All sibling_ids reference units with same parent_element_id
+- TEXT chunk siblings reference units with same parent_element_id
+- Caption linking may create sibling relationships across different parent elements
+  on the same page (e.g., figure caption text ↔ page image)
 - Never halts processing on invalid elements
 """
 
@@ -404,6 +406,8 @@ class RetrievalUnitBuilder:
             metadata["module_id"] = enriched.module_id
         if enriched.provenance.page_num is not None:
             metadata["page_num"] = enriched.provenance.page_num
+            metadata["provenance_page_num"] = enriched.provenance.page_num
+        metadata["provenance_position_index"] = enriched.provenance.position_index
         return metadata
 
     @staticmethod
@@ -451,76 +455,105 @@ class RetrievalUnitBuilder:
         return metadata
 
     # -----------------------------------------------------------------------
-    # Caption-Image Sibling Linking
+    # Caption-Element Sibling Linking
     # -----------------------------------------------------------------------
 
-    # Pattern for figure/table/algorithm captions in text content
+    # Pattern for figure/table/algorithm captions at the START of text content.
+    # Uses re.match (not search) to only match chunks that begin with a caption,
+    # avoiding false positives from mid-text references like "as shown in Figure 2.1".
     _CAPTION_PATTERN = re.compile(
-        r"\b(?:figure|fig\.?|table|algorithm)\s*\d+(?:[.-]\d+)*",
+        r"\s*(?:figure|fig\.?|table|algorithm)\s*\d+(?:[.-]\d+)*",
         re.IGNORECASE,
     )
 
-    def _link_captions_to_page_images(self, units: list[RetrievalUnit]) -> None:
-        """Link text units containing figure/table captions to image units on the same page.
+    # Sub-patterns to classify caption type (compiled once at class level)
+    _FIGURE_SUBPATTERN = re.compile(r"(?:figure|fig\.?)\s*\d+", re.IGNORECASE)
+    _TABLE_SUBPATTERN = re.compile(r"table\s*\d+", re.IGNORECASE)
 
-        Creates bidirectional sibling_ids between caption text and page images.
-        This enables sibling expansion to pull in the relevant page image when
-        a figure caption is found by retrieval.
+    def _link_captions_to_page_images(self, units: list[RetrievalUnit]) -> None:
+        """Link text units containing figure/table captions to visual/data units on the same page.
+
+        Creates bidirectional sibling_ids between:
+        - Figure/image captions ↔ IMAGE elements on the same page AND file
+        - Table captions ↔ TABLE elements on the same page AND file
 
         Design note: page image is a fallback visual representation of the figure,
         not a precise figure-level extraction. A page may contain multiple figures
         and all their captions will link to the same page image.
 
+        Indexed by (file_id, page_num) to prevent cross-file collisions.
+
         Modifies units in place.
         """
-        # Index image units by page_num
-        images_by_page: dict[int, list[RetrievalUnit]] = defaultdict(list)
+        # Index image and table units by (file_id, page_num) to prevent cross-file links
+        images_by_key: dict[tuple[str, int], list[RetrievalUnit]] = defaultdict(list)
+        tables_by_key: dict[tuple[str, int], list[RetrievalUnit]] = defaultdict(list)
+
         for unit in units:
+            page_num = unit.provenance.page_num
+            file_id = unit.metadata.get("file_id", "")
+            if page_num is None:
+                continue
+            key = (file_id, page_num)
             if unit.element_type == ElementType.IMAGE:
-                page_num = unit.provenance.page_num
-                if page_num is not None:
-                    images_by_page[page_num].append(unit)
+                images_by_key[key].append(unit)
+            elif unit.element_type == ElementType.TABLE:
+                tables_by_key[key].append(unit)
 
-        if not images_by_page:
-            return  # No images to link
+        if not images_by_key and not tables_by_key:
+            return  # Nothing to link
 
-        # Find text units with caption patterns and link to page images
+        # Find text units with caption patterns and link to appropriate elements
         linked_count = 0
         for unit in units:
             if unit.element_type != ElementType.TEXT:
                 continue
 
-            # Check if this text unit contains a figure/table caption
-            match = self._CAPTION_PATTERN.search(unit.embedding_text)
+            # Only match captions at the START of the text (re.match, not search)
+            # This avoids linking body text like "as shown in Figure 2.1..."
+            match = self._CAPTION_PATTERN.match(unit.embedding_text)
             if not match:
                 continue
 
-            # Find image(s) on the same page
             page_num = unit.provenance.page_num
-            if page_num is None:
+            file_id = unit.metadata.get("file_id", "")
+            if page_num is None or not file_id:
                 continue
 
-            page_images = images_by_page.get(page_num, [])
-            if not page_images:
+            key = (file_id, page_num)
+
+            # Store the figure reference in metadata
+            unit.metadata["figure_ref"] = match.group(0).strip().lower()
+
+            # Determine what to link to based on caption type
+            caption_text = match.group(0)
+            is_table_caption = self._TABLE_SUBPATTERN.search(caption_text) is not None
+            is_figure_caption = self._FIGURE_SUBPATTERN.search(caption_text) is not None
+
+            # Build targets list without mutating the indexed lists
+            targets: list[RetrievalUnit] = []
+            if is_table_caption:
+                targets = (
+                    tables_by_key.get(key, [])
+                    + images_by_key.get(key, [])
+                )
+            elif is_figure_caption:
+                targets = list(images_by_key.get(key, []))
+
+            if not targets:
                 continue
 
-            # Store the figure reference in metadata for downstream use
-            unit.metadata["figure_ref"] = match.group(0).lower()
-
-            # Link caption text to all page images (bidirectional)
-            for image_unit in page_images:
-                # Add image to text's siblings (if not already there)
-                if image_unit.retrieval_id not in unit.sibling_ids:
-                    unit.sibling_ids.append(image_unit.retrieval_id)
-
-                # Add text to image's siblings (if not already there)
-                if unit.retrieval_id not in image_unit.sibling_ids:
-                    image_unit.sibling_ids.append(unit.retrieval_id)
+            # Create bidirectional sibling links
+            for target_unit in targets:
+                if target_unit.retrieval_id not in unit.sibling_ids:
+                    unit.sibling_ids.append(target_unit.retrieval_id)
+                if unit.retrieval_id not in target_unit.sibling_ids:
+                    target_unit.sibling_ids.append(unit.retrieval_id)
 
             linked_count += 1
 
         if linked_count > 0:
             logger.info(
-                "Caption-image sibling linking complete",
+                "Caption-element sibling linking complete",
                 extra={"linked_captions": linked_count},
             )
