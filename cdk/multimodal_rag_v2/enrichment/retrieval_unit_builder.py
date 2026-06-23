@@ -108,6 +108,10 @@ class RetrievalUnitBuilder:
                     extra={"parent_element_id": parent_id},
                 )
 
+        # Post-processing: inject table/figure captions into TABLE/IMAGE embedding_text
+        # This makes table data directly searchable by label (e.g., "Table 1.1")
+        self._inject_captions_into_elements(all_units, enriched_elements)
+
         # Post-processing: link figure/table captions to page images
         self._link_captions_to_page_images(all_units)
 
@@ -453,6 +457,76 @@ class RetrievalUnitBuilder:
         if enriched.provenance.page_num is not None:
             metadata["page_num"] = enriched.provenance.page_num
         return metadata
+
+    # -----------------------------------------------------------------------
+    # Caption Injection (makes TABLE/IMAGE units searchable by label)
+    # -----------------------------------------------------------------------
+
+    def _inject_captions_into_elements(
+        self, units: list[RetrievalUnit], enriched_elements: list[EnrichedElement]
+    ) -> None:
+        """Find table/figure captions from enriched text and prepend them to TABLE/IMAGE units.
+
+        This makes TABLE units directly searchable by their label (e.g., "Table 1.1")
+        without requiring sibling linking. Works by finding caption text on the same
+        page as a TABLE/IMAGE element and prepending it to the element's embedding_text.
+
+        Modifies units in place.
+        """
+        # Collect captions from enriched TEXT elements indexed by (file_id, page_num)
+        table_captions: dict[tuple[str, int], str] = {}
+        figure_captions: dict[tuple[str, int], str] = {}
+
+        for elem in enriched_elements:
+            if elem.element_type != ElementType.TEXT:
+                continue
+            if not elem.embedding_text:
+                continue
+
+            text_head = elem.embedding_text[:150]
+            match = self._CAPTION_PATTERN.search(text_head)
+            if not match:
+                continue
+
+            page_num = elem.provenance.page_num
+            file_id = elem.file_id
+            if page_num is None or not file_id:
+                continue
+
+            key = (file_id, page_num)
+            caption_text = elem.embedding_text.split("\n")[0][:200]  # First line, max 200 chars
+
+            if self._TABLE_SUBPATTERN.search(match.group(0)):
+                table_captions[key] = caption_text
+            elif self._FIGURE_SUBPATTERN.search(match.group(0)):
+                figure_captions[key] = caption_text
+
+        if not table_captions and not figure_captions:
+            return
+
+        # Inject captions into TABLE/IMAGE units on matching pages
+        injected = 0
+        for unit in units:
+            page_num = unit.provenance.page_num
+            file_id = unit.metadata.get("file_id", "")
+            if page_num is None or not file_id:
+                continue
+
+            key = (file_id, page_num)
+
+            if unit.element_type == ElementType.TABLE and key in table_captions:
+                caption = table_captions[key]
+                if caption.lower() not in unit.embedding_text.lower():
+                    unit.embedding_text = f"{caption}\n{unit.embedding_text}"
+                    injected += 1
+            elif unit.element_type == ElementType.IMAGE and key in figure_captions:
+                caption = figure_captions[key]
+                if caption.lower() not in unit.embedding_text.lower():
+                    unit.embedding_text = f"{caption}\n{unit.embedding_text}"
+                    injected += 1
+
+        if injected > 0:
+            logger.info("Captions injected into element units", extra={"injected_count": injected})
 
     # -----------------------------------------------------------------------
     # Caption-Element Sibling Linking
