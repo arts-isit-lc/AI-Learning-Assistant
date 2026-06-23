@@ -14,3 +14,4 @@ RUN pip install --no-cache-dir -r requirements.txt && \
 COPY . ${LAMBDA_TASK_ROOT}/multimodal_rag_v2/
 
 CMD ["multimodal_rag_v2.ingestion.handler.handler"]
+# rebuild 1782249798
