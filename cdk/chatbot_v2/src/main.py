@@ -318,6 +318,7 @@ def handler(event, context):
             learning_context=learning_context,
         )
         rag_context = retrieval_result.answer if retrieval_result else ""
+        logger.info("RAG context received", extra={"rag_context_length": len(rag_context), "rag_context_preview": rag_context[:500]})
 
         # Introduce concepts from RAG context
         if retrieval_result and state.module_concepts:

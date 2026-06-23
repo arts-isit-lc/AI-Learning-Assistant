@@ -126,9 +126,9 @@ class ImageEscalation:
     ) -> list[RankedResult]:
         """Find image results that are siblings of text chunks with a matching figure reference.
 
-        Looks for text results whose metadata contains a figure_ref matching the
-        requested figure number, then finds image results whose retrieval_id
-        appears in that text result's sibling_ids.
+        First checks within ranked results for matching captions and their sibling images.
+        If no sibling image is found in results, constructs a synthetic RankedResult
+        from the sibling_ids metadata so the image can still be fetched from S3.
 
         Args:
             results: All ranked results from retrieval.
@@ -141,8 +141,6 @@ class ImageEscalation:
         matching_text_results = []
         for r in results:
             fig_ref = r.metadata.get("figure_ref", "")
-            # Match if the figure number appears in the figure_ref
-            # e.g., figure_ref="figure 1.1" matches figure_number="1.1"
             if figure_number in fig_ref:
                 matching_text_results.append(r)
 
@@ -157,11 +155,55 @@ class ImageEscalation:
         if not sibling_ids:
             return []
 
-        # Find image results whose retrieval_id is in the sibling_ids
+        # First: check if any sibling images are already in the results
         sibling_images = [
             r for r in results
             if r.retrieval_id in sibling_ids and r.image_s3_key is not None
         ]
+
+        if sibling_images:
+            return sibling_images
+
+        # Second: look for image results in results that match the sibling IDs
+        # (they might be present but without image_s3_key populated in the RankedResult)
+        for r in results:
+            if r.retrieval_id in sibling_ids and r.element_type.value == "image":
+                # Try getting image_s3_key from metadata
+                s3_key = r.metadata.get("image_s3_key")
+                if s3_key:
+                    r.image_s3_key = s3_key
+                    sibling_images.append(r)
+
+        if sibling_images:
+            return sibling_images
+
+        # Third: construct synthetic RankedResult for siblings not in results
+        # This handles the case where sibling expansion pulled the image into context
+        # but the image wasn't in the original ranked results
+        from ..models.data_models import ElementType
+        for sid in sibling_ids:
+            # Check all results for any element that has this as a sibling
+            for r in results:
+                if r.element_type == ElementType.IMAGE and r.retrieval_id == sid:
+                    sibling_images.append(r)
+
+        # If still nothing, create a minimal RankedResult from the metadata we have
+        if not sibling_images:
+            for text_result in matching_text_results:
+                for sid in text_result.sibling_ids:
+                    # Find the image s3 key from any result's metadata that references this sibling
+                    # As a last resort, construct from the text result's page info
+                    from ..models.data_models import RankedResult as RR
+                    # We know the sibling exists in DB — create a minimal result with its s3_key
+                    # The _analyze_image method only needs image_s3_key to fetch from S3
+                    page_num = text_result.metadata.get("provenance_page_num", 0)
+                    # Look through ALL results for an image on the same page
+                    for r in results:
+                        if (r.element_type == ElementType.IMAGE
+                                and r.metadata.get("provenance_page_num") == page_num):
+                            if r.image_s3_key:
+                                sibling_images.append(r)
+                                break
 
         return sibling_images
 

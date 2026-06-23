@@ -354,7 +354,10 @@ class ReasoningEngine:
 
         # Build the current user message with context
         user_message = (
-            f"Use the following context to answer the question.\n\n"
+            f"Use the following context to answer the question. "
+            f"If an Image Analysis section is present, it contains detailed visual analysis "
+            f"from directly examining the actual image — treat it as authoritative visual evidence "
+            f"and include its findings in your answer.\n\n"
             f"--- CONTEXT ---\n{formatted_context}\n--- END CONTEXT ---\n\n"
             f"Question: {query}"
         )
