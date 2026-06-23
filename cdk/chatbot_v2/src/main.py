@@ -75,17 +75,29 @@ def _get_db_connection():
     return _db_connection
 
 
-def _load_module_concepts(course_id: str, module_id: str) -> list[str]:
+def _load_module_concepts(course_id: str, module_id: str) -> tuple[list[str], str]:
+    """Load module concepts and module name from Course_Modules.
+    
+    Returns:
+        Tuple of (concepts list, module_name string).
+    """
     conn = _get_db_connection()
     try:
         cur = conn.cursor()
-        cur.execute('SELECT generated_topics FROM "Course_Modules" WHERE module_id = %s', (module_id,))
+        cur.execute('SELECT generated_topics, module_name FROM "Course_Modules" WHERE module_id = %s', (module_id,))
         row = cur.fetchone()
         cur.close()
-        if row and row[0]:
-            topics = row[0] if isinstance(row[0], list) else json.loads(row[0])
-            return topics if isinstance(topics, list) else []
-        return []
+        if row:
+            topics_raw = row[0]
+            module_name = row[1] or ""
+            if topics_raw:
+                topics = topics_raw if isinstance(topics_raw, list) else json.loads(topics_raw)
+                # Handle double-encoded JSON (string containing a JSON string)
+                if isinstance(topics, str):
+                    topics = json.loads(topics)
+                return (topics if isinstance(topics, list) else [], module_name)
+            return ([], module_name)
+        return ([], "")
     except Exception:
         logger.exception("Failed to load module_concepts from DB")
         conn.rollback()
@@ -231,11 +243,20 @@ def handler(event, context):
         # Step 2: Load module_concepts on new session — DB failure → 503
         if is_new_session:
             try:
-                state.module_concepts = _load_module_concepts(course_id, module_id)
-                logger.info("Loaded module_concepts", extra={"count": len(state.module_concepts)})
+                state.module_concepts, module_name = _load_module_concepts(course_id, module_id)
+                logger.info("Loaded module_concepts", extra={"count": len(state.module_concepts), "module_name": module_name})
             except (psycopg2.OperationalError, psycopg2.InterfaceError, botocore.exceptions.ClientError) as e:
                 logger.exception("DB connection failure during module context retrieval")
                 return {"statusCode": 503, "headers": CORS_HEADERS, "body": json.dumps("Service temporarily unavailable")}
+        else:
+            # For existing sessions, load module name for prompt context
+            try:
+                _, module_name = _load_module_concepts(course_id, module_id)
+            except Exception:
+                module_name = session_name
+
+        # Use module_name as the topic (session_name is often just "New chat")
+        topic = module_name or session_name
 
         # Load chat history
         chat_history = load_chat_history(CHAT_HISTORY_TABLE, session_id, _dynamodb_resource)
@@ -246,7 +267,7 @@ def handler(event, context):
             last_ai_question = _get_last_ai_question(chat_history)
             concepts_str = ", ".join(state.concepts_exposed[-10:]) if state.concepts_exposed else ""
             evaluation = evaluate_answer(
-                _bedrock_client, topic=session_name, stage=state.stage,
+                _bedrock_client, topic=topic, stage=state.stage,
                 last_ai_question=last_ai_question, student_answer=message_content,
                 concepts=concepts_str, module_concepts=state.module_concepts,
             )
@@ -291,7 +312,7 @@ def handler(event, context):
         }
         retrieval_result = invoke_retrieval(
             _lambda_client, function_arn=RAG_RETRIEVAL_FUNCTION_ARN,
-            query=message_content or f"Introduce the topic: {session_name}",
+            query=message_content or f"Introduce the topic: {topic}",
             session_id=session_id, course_id=course_id, allowed_file_ids=[],
             chat_history=get_retrieval_history(chat_history, 4),
             learning_context=learning_context,
@@ -307,20 +328,20 @@ def handler(event, context):
         # Step 11: Build system prompt
         context_vars = {
             "difficulty": state.stage,
-            "concept": state.concepts_exposed[-1] if state.concepts_exposed else session_name,
-            "missing_concept": (evaluation.concepts_misunderstood[0] if evaluation and evaluation.concepts_misunderstood else session_name),
+            "concept": state.concepts_exposed[-1] if state.concepts_exposed else topic,
+            "missing_concept": (evaluation.concepts_misunderstood[0] if evaluation and evaluation.concepts_misunderstood else topic),
             "mastered_concept": (evaluation.concepts_demonstrated[0] if evaluation and evaluation.concepts_demonstrated else ""),
-            "next_concept": (state.module_concepts[len(state.concepts_discussed) % len(state.module_concepts)] if state.module_concepts else session_name),
+            "next_concept": (state.module_concepts[len(state.concepts_discussed) % len(state.module_concepts)] if state.module_concepts else topic),
             "concepts_discussed": ", ".join(state.concepts_discussed),
             "other_modules": ", ".join(other_modules) if other_modules else "explore related topics",
         }
         guardrail_tags = wrap_user_message(message_content) if message_content else ""
-        system_prompt = build_system_prompt(mode, session_name, context_vars, rag_context, guardrail_tags)
+        system_prompt = build_system_prompt(mode, topic, context_vars, rag_context, guardrail_tags)
 
         # Step 12: Stream response — with guardrail service error retry
         prompt_history = get_bounded_history(chat_history, MAX_PROMPT_TURNS)
         model_kwargs = {"max_tokens": RESPONSE_MAX_TOKENS, "guardrail_id": guardrail_id, "guardrail_version": guardrail_version}
-        user_msg = message_content or f"Start the conversation about {session_name}"
+        user_msg = message_content or f"Start the conversation about {topic}"
 
         llm_output = _stream_with_guardrail_retry(
             system_prompt=system_prompt,

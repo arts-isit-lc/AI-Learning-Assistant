@@ -1007,10 +1007,12 @@ exports.handler = async (event) => {
               break;
             }
 
-            // Generate a GET pre-signed URL using the stored filepath (1 hour TTL)
+            // Generate a GET pre-signed URL using the stored filepath or V2 key format (1 hour TTL)
+            // V2 key format: courses/{course_id}/{module_id}/{filename}.{filetype}
+            const s3Key = fileRecord.filepath || `courses/${courseId}/${fileRecord.module_id}/${fileRecord.filename}.${fileRecord.filetype}`;
             const command = new GetObjectCommand({
               Bucket: BUCKET,
-              Key: fileRecord.filepath,
+              Key: s3Key,
             });
             const presignedurl = await getSignedUrl(s3Client, command, {
               expiresIn: 3600,

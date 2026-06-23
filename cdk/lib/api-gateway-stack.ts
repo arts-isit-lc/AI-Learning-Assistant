@@ -1312,17 +1312,17 @@ export class ApiGatewayStack extends cdk.Stack {
       })
     );
 
-    // Grant S3 GetObject for student PDF viewer (read-only access to course materials)
+    // Grant S3 GetObject for student PDF viewer (read-only access to course materials in irBucket)
     dbLambdaRole.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ["s3:GetObject"],
-        resources: [`${dataIngestionBucket.bucketArn}/*`],
+        resources: [`${ragStack.irBucket.bucketArn}/*`],
       })
     );
 
     // Add BUCKET and REGION env vars to studentFunction for pre-signed URL generation
-    lambdaStudentFunction.addEnvironment("BUCKET", dataIngestionBucket.bucketName);
+    lambdaStudentFunction.addEnvironment("BUCKET", ragStack.irBucket.bucketName);
     lambdaStudentFunction.addEnvironment("REGION", this.region);
 
     // Add DATA_INGESTION_BUCKET env var to instructorFunction for cleanup_module route

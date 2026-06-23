@@ -121,10 +121,11 @@ async function generateModuleTopics(moduleId, sqlConnection) {
     }
   }
 
-  // 6. Store in Course_Modules.generated_topics
+  // 6. Store in Course_Modules.generated_topics (just the topics array for chatbot consumption)
+  const topicsJson = JSON.stringify(consolidated.topics);
   await sqlConnection`
     UPDATE "Course_Modules"
-    SET generated_topics = ${JSON.stringify(consolidated)}
+    SET generated_topics = ${topicsJson}
     WHERE module_id = ${moduleId};
   `;
 

@@ -115,6 +115,44 @@ def _get_file_extension(filename: str) -> str:
     return ext.lstrip(".").lower()
 
 
+def _upload_images_to_s3(document_ir, course_id: str, module_id: str) -> None:
+    """Upload extracted images to S3 and store the S3 key in element metadata.
+
+    Images are stored at: images/{course_id}/{module_id}/{element_id}.png
+    The S3 key is added to element.metadata["image_s3_key"] so the enrichment
+    pipeline can pass it through to retrieval_units for image escalation.
+
+    Best-effort: logs failures per image but continues processing.
+    """
+    from ..models.data_models import ElementType
+
+    image_count = 0
+    for element in document_ir.elements:
+        if element.element_type != ElementType.IMAGE:
+            continue
+        if not isinstance(element.content, bytes):
+            continue
+
+        s3_key = f"images/{course_id}/{module_id}/{element.element_id}.png"
+        try:
+            _s3_client.put_object(
+                Bucket=IR_BUCKET_NAME,
+                Key=s3_key,
+                Body=element.content,
+                ContentType="image/png",
+            )
+            element.metadata["image_s3_key"] = f"s3://{IR_BUCKET_NAME}/{s3_key}"
+            image_count += 1
+        except Exception:
+            logger.warning(
+                "Failed to upload image to S3, continuing",
+                extra={"element_id": element.element_id, "s3_key": s3_key},
+            )
+
+    if image_count > 0:
+        logger.info("Images uploaded to S3", extra={"image_count": image_count})
+
+
 def _build_response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
     """Build a Lambda response dict."""
     return {
@@ -236,6 +274,10 @@ def _process_record(record: dict[str, Any]) -> dict[str, Any]:
                 "ir_version": document_ir.ir_version,
             },
         )
+
+        # Upload extracted images to S3 for later retrieval (image escalation)
+        with _traced_subsegment("ImageUpload"):
+            _upload_images_to_s3(document_ir, course_id, module_id)
 
         # Persist DocumentIR to S3
         with _traced_subsegment("IRPersist"):
