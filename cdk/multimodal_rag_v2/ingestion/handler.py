@@ -151,6 +151,8 @@ def _upload_images_to_s3(document_ir, course_id: str, module_id: str) -> None:
 
     if image_count > 0:
         logger.info("Images uploaded to S3", extra={"image_count": image_count})
+    else:
+        logger.info("No image elements found in document IR")
 
 
 def _build_response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:

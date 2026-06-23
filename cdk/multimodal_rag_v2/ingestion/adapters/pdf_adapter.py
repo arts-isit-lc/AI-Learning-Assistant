@@ -214,6 +214,47 @@ class PdfAdapter(BaseAdapter):
             )
             position_index += 1
 
+        # --- Page-level rendering fallback for vector graphics ---
+        # If a page has drawing commands (vector diagrams/charts) but no raster
+        # images were extracted, render the full page as a PNG image.
+        page_has_raster_images = any(
+            el.element_type == ElementType.IMAGE and el.provenance.page_num == page_num
+            for el in elements
+        )
+        page_has_drawings = len(page.get_drawings()) > 5  # threshold: >5 drawing ops suggests a diagram
+
+        if not page_has_raster_images and page_has_drawings:
+            try:
+                # Render page at 2x resolution for clarity
+                pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+                render_width = pix.width
+                render_height = pix.height
+                page_image_bytes = pix.tobytes("png")
+                pix = None  # release
+
+                elements.append(
+                    RawElement(
+                        content=page_image_bytes,
+                        element_type=ElementType.IMAGE,
+                        provenance=Provenance(
+                            page_num=page_num,
+                            position_index=position_index,
+                        ),
+                        raw_metadata={
+                            "source": "pdf_page_render",
+                            "width": render_width,
+                            "height": render_height,
+                            "render_reason": "vector_graphics_detected",
+                        },
+                    )
+                )
+                position_index += 1
+            except Exception:
+                logger.warning(
+                    "Failed to render page as image fallback",
+                    extra={"page_num": page_num},
+                )
+
         return elements
 
     def _extract_tables(self, page: fitz.Page) -> list[str]:
