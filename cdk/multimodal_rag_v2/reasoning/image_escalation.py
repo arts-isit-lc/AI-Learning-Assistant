@@ -136,20 +136,29 @@ class ImageEscalation:
         """Fetch image bytes from S3.
 
         Args:
-            image_s3_key: The S3 object key for the image.
+            image_s3_key: The S3 object key or full s3:// URI for the image.
 
         Returns:
             Image bytes if successful, None on failure.
         """
         try:
-            response = self.s3_client.get_object(
-                Bucket=self.bucket_name, Key=image_s3_key
-            )
+            # Handle full s3:// URI format: s3://bucket-name/key
+            key = image_s3_key
+            bucket = self.bucket_name
+            if key.startswith("s3://"):
+                # Parse s3://bucket/key format
+                without_prefix = key[5:]  # remove "s3://"
+                parts = without_prefix.split("/", 1)
+                if len(parts) == 2:
+                    bucket = parts[0]
+                    key = parts[1]
+
+            response = self.s3_client.get_object(Bucket=bucket, Key=key)
             return response["Body"].read()
         except Exception:
             logger.exception(
                 "Failed to fetch image from S3",
-                extra={"image_s3_key": image_s3_key, "bucket": self.bucket_name},
+                extra={"image_s3_key": image_s3_key, "bucket": bucket},
             )
             return None
 

@@ -159,6 +159,7 @@ class QueryIntent:
     requires_table: bool = False
     requires_escalation: bool = False
     lecture_number: int | None = None
+    week_number: int | None = None
 
 
 @dataclass

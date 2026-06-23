@@ -189,9 +189,10 @@ class ReasoningEngine:
         """
         if (
             query_intent is not None
-            and query_intent.requires_escalation
+            and (query_intent.requires_escalation or query_intent.requires_image)
             and self.image_escalation is not None
         ):
+            # Escalate if explicitly required OR if query needs image content
             try:
                 return self.image_escalation.escalate(ranked_results, query)
             except Exception:
