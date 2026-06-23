@@ -501,7 +501,16 @@ class RetrievalUnitBuilder:
                 tables_by_key[key].append(unit)
 
         if not images_by_key and not tables_by_key:
+            logger.info("No images or tables to link", extra={"unit_count": len(units)})
             return  # Nothing to link
+
+        logger.info(
+            "Caption linking: indexing complete",
+            extra={
+                "image_keys": list(str(k) for k in images_by_key.keys()),
+                "table_keys": list(str(k) for k in tables_by_key.keys()),
+            },
+        )
 
         # Find text units with caption patterns and link to appropriate elements
         linked_count = 0
