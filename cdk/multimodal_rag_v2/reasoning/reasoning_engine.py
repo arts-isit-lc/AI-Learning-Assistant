@@ -194,7 +194,9 @@ class ReasoningEngine:
         ):
             # Escalate if explicitly required OR if query needs image content
             try:
-                return self.image_escalation.escalate(ranked_results, query)
+                return self.image_escalation.escalate(
+                    ranked_results, query, query_intent=query_intent
+                )
             except Exception:
                 logger.exception("Image escalation failed, proceeding without")
                 return EscalationResult(escalation_used=False, image_analyses=[])

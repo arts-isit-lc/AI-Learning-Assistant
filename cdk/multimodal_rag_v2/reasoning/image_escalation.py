@@ -58,22 +58,38 @@ class ImageEscalation:
         self.bucket_name = bucket_name
 
     def escalate(
-        self, results: list[RankedResult], query: str
+        self, results: list[RankedResult], query: str, query_intent=None
     ) -> EscalationResult:
         """Perform image escalation on ranked results.
 
-        Filters results to those with non-null image_s3_key, selects top 2 by
-        score, fetches from S3, and invokes vision LLM analysis.
+        When a figure_reference is present in query_intent, prefers images that
+        are siblings of text results containing matching figure captions.
+        Falls back to top-scoring images when no sibling link exists.
 
         Args:
             results: Ranked results from the retrieval layer.
             query: The user's original query for vision analysis context.
+            query_intent: Optional QueryIntent with figure_reference for targeted lookup.
 
         Returns:
             EscalationResult with escalation_used flag and image analyses.
         """
         try:
-            # Filter results to those with non-null image_s3_key
+            # Strategy 1: If figure_reference is set, find sibling-linked images
+            if query_intent is not None and query_intent.figure_reference is not None:
+                sibling_images = self._find_sibling_linked_images(
+                    results, query_intent.figure_reference.number
+                )
+                if sibling_images:
+                    analyses: list[ImageAnalysis] = []
+                    for img_result in sibling_images[:2]:  # max 2
+                        analysis = self._analyze_image(img_result, query)
+                        if analysis is not None:
+                            analyses.append(analysis)
+                    if analyses:
+                        return EscalationResult(escalation_used=True, image_analyses=analyses)
+
+            # Strategy 2: Fallback to top-scoring image results by image_s3_key
             image_results = [r for r in results if r.image_s3_key is not None]
 
             if not image_results:
@@ -85,15 +101,13 @@ class ImageEscalation:
             )
             top_results = sorted_results[:2]
 
-            analyses: list[ImageAnalysis] = []
+            analyses = []
 
             for result in top_results:
                 analysis = self._analyze_image(result, query)
                 if analysis is not None:
                     analyses.append(analysis)
 
-            # If ANY images analyzed successfully -> escalation_used=True
-            # If ALL fail -> escalation_used=False
             if analyses:
                 return EscalationResult(
                     escalation_used=True, image_analyses=analyses
@@ -106,6 +120,50 @@ class ImageEscalation:
         except Exception:
             logger.exception("Unexpected error during image escalation")
             return EscalationResult(escalation_used=False, image_analyses=[])
+
+    def _find_sibling_linked_images(
+        self, results: list[RankedResult], figure_number: str
+    ) -> list[RankedResult]:
+        """Find image results that are siblings of text chunks with a matching figure reference.
+
+        Looks for text results whose metadata contains a figure_ref matching the
+        requested figure number, then finds image results whose retrieval_id
+        appears in that text result's sibling_ids.
+
+        Args:
+            results: All ranked results from retrieval.
+            figure_number: The figure number to match (e.g., "1.1").
+
+        Returns:
+            List of image RankedResults linked as siblings to the matching caption.
+        """
+        # Find text results with matching figure_ref in metadata
+        matching_text_results = []
+        for r in results:
+            fig_ref = r.metadata.get("figure_ref", "")
+            # Match if the figure number appears in the figure_ref
+            # e.g., figure_ref="figure 1.1" matches figure_number="1.1"
+            if figure_number in fig_ref:
+                matching_text_results.append(r)
+
+        if not matching_text_results:
+            return []
+
+        # Collect sibling_ids from matching text results
+        sibling_ids: set[str] = set()
+        for text_result in matching_text_results:
+            sibling_ids.update(text_result.sibling_ids)
+
+        if not sibling_ids:
+            return []
+
+        # Find image results whose retrieval_id is in the sibling_ids
+        sibling_images = [
+            r for r in results
+            if r.retrieval_id in sibling_ids and r.image_s3_key is not None
+        ]
+
+        return sibling_images
 
     def _analyze_image(
         self, result: RankedResult, query: str

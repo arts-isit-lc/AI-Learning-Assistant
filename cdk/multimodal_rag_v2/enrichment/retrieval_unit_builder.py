@@ -14,6 +14,7 @@ Validation:
 
 from __future__ import annotations
 
+import re
 import uuid
 from collections import defaultdict
 
@@ -104,6 +105,9 @@ class RetrievalUnitBuilder:
                     "Error building text units for parent, skipping",
                     extra={"parent_element_id": parent_id},
                 )
+
+        # Post-processing: link figure/table captions to page images
+        self._link_captions_to_page_images(all_units)
 
         return all_units
 
@@ -375,6 +379,8 @@ class RetrievalUnitBuilder:
             metadata["module_id"] = enriched.module_id
         if enriched.provenance.page_num is not None:
             metadata["page_num"] = enriched.provenance.page_num
+            metadata["provenance_page_num"] = enriched.provenance.page_num
+        metadata["provenance_position_index"] = enriched.provenance.position_index
         return metadata
 
     @staticmethod
@@ -420,6 +426,8 @@ class RetrievalUnitBuilder:
             metadata["module_id"] = enriched.module_id
         if enriched.provenance.page_num is not None:
             metadata["page_num"] = enriched.provenance.page_num
+            metadata["provenance_page_num"] = enriched.provenance.page_num
+        metadata["provenance_position_index"] = enriched.provenance.position_index
         return metadata
 
     @staticmethod
@@ -441,3 +449,78 @@ class RetrievalUnitBuilder:
         if enriched.provenance.page_num is not None:
             metadata["page_num"] = enriched.provenance.page_num
         return metadata
+
+    # -----------------------------------------------------------------------
+    # Caption-Image Sibling Linking
+    # -----------------------------------------------------------------------
+
+    # Pattern for figure/table/algorithm captions in text content
+    _CAPTION_PATTERN = re.compile(
+        r"\b(?:figure|fig\.?|table|algorithm)\s*\d+(?:[.-]\d+)*",
+        re.IGNORECASE,
+    )
+
+    def _link_captions_to_page_images(self, units: list[RetrievalUnit]) -> None:
+        """Link text units containing figure/table captions to image units on the same page.
+
+        Creates bidirectional sibling_ids between caption text and page images.
+        This enables sibling expansion to pull in the relevant page image when
+        a figure caption is found by retrieval.
+
+        Design note: page image is a fallback visual representation of the figure,
+        not a precise figure-level extraction. A page may contain multiple figures
+        and all their captions will link to the same page image.
+
+        Modifies units in place.
+        """
+        # Index image units by page_num
+        images_by_page: dict[int, list[RetrievalUnit]] = defaultdict(list)
+        for unit in units:
+            if unit.element_type == ElementType.IMAGE:
+                page_num = unit.provenance.page_num
+                if page_num is not None:
+                    images_by_page[page_num].append(unit)
+
+        if not images_by_page:
+            return  # No images to link
+
+        # Find text units with caption patterns and link to page images
+        linked_count = 0
+        for unit in units:
+            if unit.element_type != ElementType.TEXT:
+                continue
+
+            # Check if this text unit contains a figure/table caption
+            match = self._CAPTION_PATTERN.search(unit.embedding_text)
+            if not match:
+                continue
+
+            # Find image(s) on the same page
+            page_num = unit.provenance.page_num
+            if page_num is None:
+                continue
+
+            page_images = images_by_page.get(page_num, [])
+            if not page_images:
+                continue
+
+            # Store the figure reference in metadata for downstream use
+            unit.metadata["figure_ref"] = match.group(0).lower()
+
+            # Link caption text to all page images (bidirectional)
+            for image_unit in page_images:
+                # Add image to text's siblings (if not already there)
+                if image_unit.retrieval_id not in unit.sibling_ids:
+                    unit.sibling_ids.append(image_unit.retrieval_id)
+
+                # Add text to image's siblings (if not already there)
+                if unit.retrieval_id not in image_unit.sibling_ids:
+                    image_unit.sibling_ids.append(unit.retrieval_id)
+
+            linked_count += 1
+
+        if linked_count > 0:
+            logger.info(
+                "Caption-image sibling linking complete",
+                extra={"linked_captions": linked_count},
+            )

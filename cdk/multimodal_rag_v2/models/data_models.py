@@ -150,6 +150,14 @@ class RetrievalUnit:
 
 
 @dataclass
+class FigureReference:
+    """A structured reference to a figure, table, or algorithm in course materials."""
+
+    ref_type: str  # "figure", "table", "algorithm"
+    number: str    # "1.1", "2.3", "4"
+
+
+@dataclass
 class QueryIntent:
     """Structured output of QueryAnalyzer."""
 
@@ -161,6 +169,7 @@ class QueryIntent:
     requires_figure_lookup: bool = False
     lecture_number: int | None = None
     week_number: int | None = None
+    figure_reference: FigureReference | None = None
 
 
 @dataclass

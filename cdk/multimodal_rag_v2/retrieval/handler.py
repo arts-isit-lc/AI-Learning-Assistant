@@ -76,8 +76,8 @@ _production_ranker = ProductionRanker()
 # In production, these are injected with real pgvector/BM25 clients.
 _hybrid_search_engine: HybridSearchEngine | None = None
 
-# Layer 4 components
-_context_builder = ContextBuilder()
+# Layer 4 components (sibling store wired lazily via _get_context_builder)
+_context_builder = ContextBuilder()  # initialized without sibling_store at import time
 _image_escalation = ImageEscalation(
     s3_client=_s3_client,
     bedrock_client=_bedrock_client,
@@ -378,7 +378,7 @@ def _handle_query(
     # Step 7: Context Building
     with _traced_subsegment("ContextBuilding"):
         ctx_start = time.time()
-        structured_context = _context_builder.build_context(
+        structured_context = _get_context_builder().build_context(
             results=final_results,
             module_id=course_id,
         )
@@ -776,6 +776,107 @@ class _FallbackBM25Store:
     ) -> list[dict]:
         """Always returns empty results (BM25 unavailable fallback)."""
         return []
+
+
+class _SiblingStore:
+    """Fetches retrieval units by ID for sibling expansion.
+
+    Implements the SiblingStoreProtocol expected by ContextBuilder.
+    """
+
+    def __init__(self, db_proxy_endpoint: str, db_secret_arn: str) -> None:
+        self._endpoint = db_proxy_endpoint
+        self._secret_arn = db_secret_arn
+        self._connection = None
+
+    def _get_connection(self):
+        if self._connection is None:
+            import json as _json
+            import psycopg2
+            secrets_client = boto3.client("secretsmanager")
+            secret = _json.loads(
+                secrets_client.get_secret_value(SecretId=self._secret_arn)["SecretString"]
+            )
+            self._connection = psycopg2.connect(
+                host=self._endpoint,
+                port=secret.get("port", 5432),
+                dbname=secret.get("dbname", "aila"),
+                user=secret.get("username"),
+                password=secret.get("password"),
+                sslmode="require",
+                connect_timeout=10,
+            )
+        return self._connection
+
+    def get_by_ids(self, retrieval_ids: list[str]) -> list:
+        """Fetch RankedResult objects by retrieval_id.
+
+        Args:
+            retrieval_ids: List of retrieval_ids to fetch.
+
+        Returns:
+            List of RankedResult-like objects with content and metadata.
+        """
+        if not retrieval_ids:
+            return []
+
+        try:
+            import json as _json
+            conn = self._get_connection()
+            cursor = conn.cursor()
+
+            # Use ANY array to fetch multiple IDs in one query
+            cursor.execute(
+                """SELECT retrieval_id, parent_element_id, embedding_text,
+                          element_type, metadata, sibling_ids
+                   FROM retrieval_units
+                   WHERE retrieval_id = ANY(%s)""",
+                (retrieval_ids,),
+            )
+
+            results = []
+            for row in cursor.fetchall():
+                metadata = _json.loads(row[4]) if isinstance(row[4], str) else (row[4] or {})
+                sibling_ids = _json.loads(row[5]) if isinstance(row[5], str) else (row[5] or [])
+
+                from ..models.data_models import ElementType, RankedResult
+                results.append(RankedResult(
+                    retrieval_id=row[0],
+                    parent_element_id=row[1],
+                    content=row[2],
+                    element_type=ElementType(row[3]) if row[3] else ElementType.TEXT,
+                    score=0.0,  # siblings don't have independent scores
+                    cross_encoder_score=0.0,
+                    metadata_boost=0.0,
+                    metadata=metadata,
+                    image_s3_key=metadata.get("image_s3_key"),
+                    sibling_ids=sibling_ids,
+                ))
+
+            cursor.close()
+            return results
+
+        except Exception:
+            logger.exception("Sibling store fetch failed")
+            return []
+
+
+def _get_context_builder() -> ContextBuilder:
+    """Get or upgrade ContextBuilder with sibling store on first call.
+
+    The ContextBuilder is created at module import without a sibling_store
+    (to avoid forward-reference issues). On first call, we attach a _SiblingStore.
+    """
+    global _context_builder
+    if _context_builder._sibling_store is None:
+        db_proxy = os.environ.get("DB_PROXY_ENDPOINT", "")
+        db_secret = os.environ.get("DB_SECRET_ARN", "")
+        if db_proxy and db_secret:
+            _context_builder._sibling_store = _SiblingStore(
+                db_proxy_endpoint=db_proxy,
+                db_secret_arn=db_secret,
+            )
+    return _context_builder
 
 
 def _estimate_cost(query_intent: QueryIntent, result: Any) -> str:

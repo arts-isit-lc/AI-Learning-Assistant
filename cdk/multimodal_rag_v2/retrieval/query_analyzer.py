@@ -80,8 +80,9 @@ class QueryAnalyzer:
     }
 
     # Regex patterns for figure/table/algorithm references that need exact-match lookup
+    # Captures: group(1) = type (figure/fig/table/algorithm), group(2) = number (1.1, 2-3, 4)
     _FIGURE_LOOKUP_PATTERN = re.compile(
-        r"\b(?:figure|fig|table|algorithm)\s*\d+(?:\.\d+)?",
+        r"\b(figure|fig\.?|table|algorithm)\s*(\d+(?:[.-]\d+)*)",
         re.IGNORECASE,
     )
 
@@ -141,9 +142,17 @@ class QueryAnalyzer:
         intent.week_number = self._extract_week_number(query)
 
         # Check for figure/table/algorithm reference patterns (exact-match lookup)
-        if self._FIGURE_LOOKUP_PATTERN.search(query):
+        fig_match = self._FIGURE_LOOKUP_PATTERN.search(query)
+        if fig_match:
             intent.requires_figure_lookup = True
             intent.requires_image = True  # figures are visual content
+
+            # Extract structured reference
+            from ..models.data_models import FigureReference
+            raw_type = fig_match.group(1).lower().rstrip(".")
+            ref_type = "figure" if raw_type in ("figure", "fig") else raw_type
+            ref_number = fig_match.group(2)
+            intent.figure_reference = FigureReference(ref_type=ref_type, number=ref_number)
 
         return intent
 
