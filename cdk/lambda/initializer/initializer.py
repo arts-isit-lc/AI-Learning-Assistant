@@ -47,9 +47,12 @@ def handler(event, context):
         ## Create tables and schema
         ##
 
-        # Create tables based on the schema
+        # Create tables based on the schema — matches production as of v2 migration
         sqlTableCreation = """
             CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+            CREATE EXTENSION IF NOT EXISTS vector;
+
+            -- ─── Users ────────────────────────────────────────────────────────────
             CREATE TABLE IF NOT EXISTS "Users" (
                 "user_id" uuid PRIMARY KEY DEFAULT (uuid_generate_v4()),
                 "user_email" varchar UNIQUE,
@@ -62,6 +65,7 @@ def handler(event, context):
                 "last_sign_in" timestamp
             );
 
+            -- ─── Courses ──────────────────────────────────────────────────────────
             CREATE TABLE IF NOT EXISTS "Courses" (
                 "course_id" uuid PRIMARY KEY DEFAULT (uuid_generate_v4()),
                 "course_name" varchar,
@@ -70,17 +74,40 @@ def handler(event, context):
                 "course_access_code" varchar,
                 "course_student_access" bool,
                 "system_prompt" text,
-                "llm_model_id" varchar DEFAULT 'meta.llama3-70b-instruct-v1:0'
+                "llm_model_id" varchar DEFAULT 'meta.llama3-70b-instruct-v1:0',
+                "conflict_metadata" jsonb DEFAULT NULL,
+                "validation_hash" text,
+                "validation_cached_report" jsonb
             );
 
+            -- ─── Course_Concepts ──────────────────────────────────────────────────
+            CREATE TABLE IF NOT EXISTS "Course_Concepts" (
+                "concept_id" uuid PRIMARY KEY DEFAULT (uuid_generate_v4()),
+                "course_id" uuid,
+                "concept_name" varchar,
+                "concept_number" integer
+            );
+
+            -- ─── Course_Modules ───────────────────────────────────────────────────
             CREATE TABLE IF NOT EXISTS "Course_Modules" (
                 "module_id" uuid PRIMARY KEY DEFAULT (uuid_generate_v4()),
                 "concept_id" uuid,
                 "module_name" varchar,
                 "module_number" integer,
-                "module_prompt" text
+                "module_prompt" text,
+                "conflict_metadata" jsonb DEFAULT NULL,
+                "generated_topics" jsonb DEFAULT NULL,
+                "validation_hash" text,
+                "validation_cached_report" jsonb,
+                "key_topics" jsonb,
+                "status" varchar(10) NOT NULL DEFAULT 'active',
+                "created_at" timestamptz NOT NULL DEFAULT NOW(),
+                "updated_at" timestamptz NOT NULL DEFAULT NOW(),
+                CONSTRAINT chk_course_modules_status
+                    CHECK (status IN ('draft', 'active', 'deleting'))
             );
 
+            -- ─── Enrolments ───────────────────────────────────────────────────────
             CREATE TABLE IF NOT EXISTS "Enrolments" (
                 "enrolment_id" uuid PRIMARY KEY DEFAULT (uuid_generate_v4()),
                 "user_id" uuid,
@@ -88,9 +115,11 @@ def handler(event, context):
                 "enrolment_type" varchar,
                 "course_completion_percentage" integer,
                 "time_spent" integer,
-                "time_enroled" timestamp
+                "time_enroled" timestamp,
+                CONSTRAINT unique_course_user UNIQUE (course_id, user_id)
             );
 
+            -- ─── Module_Files ─────────────────────────────────────────────────────
             CREATE TABLE IF NOT EXISTS "Module_Files" (
                 "file_id" uuid PRIMARY KEY DEFAULT (uuid_generate_v4()),
                 "module_id" uuid,
@@ -99,13 +128,14 @@ def handler(event, context):
                 "filepath" varchar,
                 "filename" varchar,
                 "time_uploaded" timestamp,
-                "metadata" text,
+                "metadata" jsonb,
                 "content_hash" text,
                 "processing_status" text DEFAULT 'pending',
                 "last_processed_at" timestamptz,
                 "chunk_count" integer
             );
 
+            -- ─── Student_Modules ──────────────────────────────────────────────────
             CREATE TABLE IF NOT EXISTS "Student_Modules" (
                 "student_module_id" uuid PRIMARY KEY DEFAULT (uuid_generate_v4()),
                 "course_module_id" uuid,
@@ -115,6 +145,7 @@ def handler(event, context):
                 "module_context_embedding" float[]
             );
 
+            -- ─── Sessions ─────────────────────────────────────────────────────────
             CREATE TABLE IF NOT EXISTS "Sessions" (
                 "session_id" uuid PRIMARY KEY DEFAULT (uuid_generate_v4()),
                 "student_module_id" uuid,
@@ -123,6 +154,7 @@ def handler(event, context):
                 "last_accessed" timestamp
             );
 
+            -- ─── Messages ─────────────────────────────────────────────────────────
             CREATE TABLE IF NOT EXISTS "Messages" (
                 "message_id" uuid PRIMARY KEY DEFAULT (uuid_generate_v4()),
                 "session_id" uuid,
@@ -131,13 +163,7 @@ def handler(event, context):
                 "time_sent" timestamp
             );
 
-            CREATE TABLE IF NOT EXISTS "Course_Concepts" (
-                "concept_id" uuid PRIMARY KEY DEFAULT (uuid_generate_v4()),
-                "course_id" uuid,
-                "concept_name" varchar,
-                "concept_number" integer
-            );
-
+            -- ─── User_Engagement_Log ──────────────────────────────────────────────
             CREATE TABLE IF NOT EXISTS "User_Engagement_Log" (
                 "log_id" uuid PRIMARY KEY DEFAULT (uuid_generate_v4()),
                 "user_id" uuid,
@@ -149,6 +175,7 @@ def handler(event, context):
                 "engagement_details" text
             );
 
+            -- ─── chatlogs_notifications ───────────────────────────────────────────
             CREATE TABLE IF NOT EXISTS "chatlogs_notifications" (
                 "id" uuid PRIMARY KEY DEFAULT (uuid_generate_v4()),
                 "course_id" uuid NOT NULL,
@@ -157,38 +184,14 @@ def handler(event, context):
                 "completion" boolean DEFAULT FALSE
             );
 
-            ALTER TABLE "User_Engagement_Log" ADD FOREIGN KEY ("enrolment_id") REFERENCES "Enrolments" ("enrolment_id") ON DELETE CASCADE ON UPDATE CASCADE;
-            ALTER TABLE "User_Engagement_Log" ADD FOREIGN KEY ("user_id") REFERENCES "Users" ("user_id") ON DELETE CASCADE ON UPDATE CASCADE;
-            ALTER TABLE "User_Engagement_Log" ADD FOREIGN KEY ("course_id") REFERENCES "Courses" ("course_id") ON DELETE CASCADE ON UPDATE CASCADE;
-            ALTER TABLE "User_Engagement_Log" ADD FOREIGN KEY ("module_id") REFERENCES "Course_Modules" ("module_id") ON DELETE CASCADE ON UPDATE CASCADE;
-
-            ALTER TABLE "Course_Concepts" ADD FOREIGN KEY ("course_id") REFERENCES "Courses" ("course_id") ON DELETE CASCADE ON UPDATE CASCADE;
-
-            ALTER TABLE "Course_Modules" ADD FOREIGN KEY ("concept_id") REFERENCES "Course_Concepts" ("concept_id") ON DELETE CASCADE ON UPDATE CASCADE;
-
-            ALTER TABLE "Enrolments" ADD FOREIGN KEY ("course_id") REFERENCES "Courses" ("course_id") ON DELETE CASCADE ON UPDATE CASCADE;
-            ALTER TABLE "Enrolments" ADD FOREIGN KEY ("user_id") REFERENCES "Users" ("user_id") ON DELETE CASCADE ON UPDATE CASCADE;
-
-            ALTER TABLE "Module_Files" ADD FOREIGN KEY ("module_id") REFERENCES "Course_Modules" ("module_id") ON DELETE CASCADE ON UPDATE CASCADE;
-
-            ALTER TABLE "Student_Modules" ADD FOREIGN KEY ("course_module_id") REFERENCES "Course_Modules" ("module_id") ON DELETE CASCADE ON UPDATE CASCADE;
-            ALTER TABLE "Student_Modules" ADD FOREIGN KEY ("enrolment_id") REFERENCES "Enrolments" ("enrolment_id") ON DELETE CASCADE ON UPDATE CASCADE;
-
-            ALTER TABLE "Sessions" ADD FOREIGN KEY ("student_module_id") REFERENCES "Student_Modules" ("student_module_id") ON DELETE CASCADE ON UPDATE CASCADE;
-
-            ALTER TABLE "Messages" ADD FOREIGN KEY ("session_id") REFERENCES "Sessions" ("session_id") ON DELETE CASCADE ON UPDATE CASCADE;
-
-            ALTER TABLE "chatlogs_notifications" ADD FOREIGN KEY ("course_id") REFERENCES "Courses" ("course_id") ON DELETE CASCADE ON UPDATE CASCADE;
-            ALTER TABLE "chatlogs_notifications" ADD FOREIGN KEY ("instructor_email") REFERENCES "Users" ("user_email") ON DELETE CASCADE ON UPDATE CASCADE;
-
+            -- ─── Module_File_References ───────────────────────────────────────────
             CREATE TABLE IF NOT EXISTS "Module_File_References" (
-                source_module_id   uuid REFERENCES "Course_Modules"(module_id) ON DELETE CASCADE,
-                referenced_file_id uuid REFERENCES "Module_Files"(file_id) ON DELETE CASCADE,
+                source_module_id   uuid,
+                referenced_file_id uuid,
                 PRIMARY KEY (source_module_id, referenced_file_id)
             );
 
-            CREATE EXTENSION IF NOT EXISTS vector;
-
+            -- ─── retrieval_units (multimodal-rag v2) ──────────────────────────────
             CREATE TABLE IF NOT EXISTS retrieval_units (
                 retrieval_id TEXT PRIMARY KEY,
                 parent_element_id TEXT NOT NULL,
@@ -201,25 +204,107 @@ def handler(event, context):
                 ts_vector tsvector
             );
 
+            -- ─── Foreign Keys ─────────────────────────────────────────────────────
+
+            DO $$ BEGIN
+                ALTER TABLE "Course_Concepts" ADD FOREIGN KEY ("course_id")
+                    REFERENCES "Courses" ("course_id") ON DELETE CASCADE ON UPDATE CASCADE;
+            EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+            DO $$ BEGIN
+                ALTER TABLE "Course_Modules" ADD FOREIGN KEY ("concept_id")
+                    REFERENCES "Course_Concepts" ("concept_id") ON DELETE CASCADE ON UPDATE CASCADE;
+            EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+            DO $$ BEGIN
+                ALTER TABLE "Enrolments" ADD FOREIGN KEY ("course_id")
+                    REFERENCES "Courses" ("course_id") ON DELETE CASCADE ON UPDATE CASCADE;
+            EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+            DO $$ BEGIN
+                ALTER TABLE "Enrolments" ADD FOREIGN KEY ("user_id")
+                    REFERENCES "Users" ("user_id") ON DELETE CASCADE ON UPDATE CASCADE;
+            EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+            DO $$ BEGIN
+                ALTER TABLE "Module_Files" ADD FOREIGN KEY ("module_id")
+                    REFERENCES "Course_Modules" ("module_id") ON DELETE CASCADE ON UPDATE CASCADE;
+            EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+            DO $$ BEGIN
+                ALTER TABLE "Module_File_References" ADD FOREIGN KEY (source_module_id)
+                    REFERENCES "Course_Modules" (module_id) ON DELETE CASCADE;
+            EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+            DO $$ BEGIN
+                ALTER TABLE "Module_File_References" ADD FOREIGN KEY (referenced_file_id)
+                    REFERENCES "Module_Files" (file_id) ON DELETE CASCADE;
+            EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+            DO $$ BEGIN
+                ALTER TABLE "Student_Modules" ADD FOREIGN KEY ("course_module_id")
+                    REFERENCES "Course_Modules" ("module_id") ON DELETE CASCADE ON UPDATE CASCADE;
+            EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+            DO $$ BEGIN
+                ALTER TABLE "Student_Modules" ADD FOREIGN KEY ("enrolment_id")
+                    REFERENCES "Enrolments" ("enrolment_id") ON DELETE CASCADE ON UPDATE CASCADE;
+            EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+            DO $$ BEGIN
+                ALTER TABLE "Sessions" ADD FOREIGN KEY ("student_module_id")
+                    REFERENCES "Student_Modules" ("student_module_id") ON DELETE CASCADE ON UPDATE CASCADE;
+            EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+            DO $$ BEGIN
+                ALTER TABLE "Messages" ADD FOREIGN KEY ("session_id")
+                    REFERENCES "Sessions" ("session_id") ON DELETE CASCADE ON UPDATE CASCADE;
+            EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+            DO $$ BEGIN
+                ALTER TABLE "User_Engagement_Log" ADD FOREIGN KEY ("enrolment_id")
+                    REFERENCES "Enrolments" ("enrolment_id") ON DELETE CASCADE ON UPDATE CASCADE;
+            EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+            DO $$ BEGIN
+                ALTER TABLE "User_Engagement_Log" ADD FOREIGN KEY ("user_id")
+                    REFERENCES "Users" ("user_id") ON DELETE CASCADE ON UPDATE CASCADE;
+            EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+            DO $$ BEGIN
+                ALTER TABLE "User_Engagement_Log" ADD FOREIGN KEY ("course_id")
+                    REFERENCES "Courses" ("course_id") ON DELETE CASCADE ON UPDATE CASCADE;
+            EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+            DO $$ BEGIN
+                ALTER TABLE "User_Engagement_Log" ADD FOREIGN KEY ("module_id")
+                    REFERENCES "Course_Modules" ("module_id") ON DELETE CASCADE ON UPDATE CASCADE;
+            EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+            DO $$ BEGIN
+                ALTER TABLE "chatlogs_notifications" ADD FOREIGN KEY ("course_id")
+                    REFERENCES "Courses" ("course_id") ON DELETE CASCADE ON UPDATE CASCADE;
+            EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+            DO $$ BEGIN
+                ALTER TABLE "chatlogs_notifications" ADD FOREIGN KEY ("instructor_email")
+                    REFERENCES "Users" ("user_email") ON DELETE CASCADE ON UPDATE CASCADE;
+            EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+            -- ─── Indexes ──────────────────────────────────────────────────────────
+
             CREATE INDEX IF NOT EXISTS idx_retrieval_units_ts_vector
             ON retrieval_units USING gin (ts_vector);
 
             CREATE INDEX IF NOT EXISTS idx_retrieval_units_embedding_version
             ON retrieval_units (embedding_version);
 
-            DO $$
-            BEGIN
-                IF NOT EXISTS (
-                    SELECT 1
-                    FROM pg_constraint
-                    WHERE conname = 'unique_course_user'
-                    AND conrelid = '"Enrolments"'::regclass
-                ) THEN
-                    ALTER TABLE "Enrolments" ADD CONSTRAINT unique_course_user UNIQUE (course_id, user_id);
-                END IF;
-            END $$;
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_module_files_unique_file
+            ON "Module_Files" (module_id, filename, filetype);
 
-
+            CREATE INDEX IF NOT EXISTS idx_course_modules_status_created
+            ON "Course_Modules" (status, created_at)
+            WHERE status IN ('draft', 'deleting');
         """
 
         #
@@ -229,195 +314,6 @@ def handler(event, context):
         # Execute table creation
         cursor.execute(sqlTableCreation)
         connection.commit()
-        
-        # Check if Course_Modules table exists and add module_prompt column if missing
-        cursor.execute("""
-            SELECT EXISTS (
-                SELECT 1 FROM information_schema.tables 
-                WHERE table_schema = 'public' 
-                AND table_name = 'Course_Modules'
-            )
-        """)
-        if cursor.fetchone()[0]:
-            cursor.execute("""
-                SELECT EXISTS (
-                    SELECT 1 FROM information_schema.columns 
-                    WHERE table_schema = 'public' 
-                    AND table_name = 'Course_Modules' 
-                    AND column_name = 'module_prompt'
-                )
-            """)
-            if not cursor.fetchone()[0]:
-                cursor.execute('ALTER TABLE "Course_Modules" ADD COLUMN "module_prompt" text')
-                connection.commit()
-
-        # Check if Courses table exists and add llm_model_id column if missing
-        cursor.execute("""
-            SELECT EXISTS (
-                SELECT 1 FROM information_schema.tables 
-                WHERE table_schema = 'public' 
-                AND table_name = 'Courses'
-            )
-        """)
-        if cursor.fetchone()[0]:
-            cursor.execute("""
-                SELECT EXISTS (
-                    SELECT 1 FROM information_schema.columns 
-                    WHERE table_schema = 'public' 
-                    AND table_name = 'Courses' 
-                    AND column_name = 'llm_model_id'
-                )
-            """)
-            if not cursor.fetchone()[0]:
-                cursor.execute('ALTER TABLE "Courses" ADD COLUMN "llm_model_id" varchar DEFAULT \'meta.llama3-70b-instruct-v1:0\'')
-                connection.commit()
-
-        # Check if Courses table has conflict_metadata column, add if missing
-        cursor.execute("""
-            SELECT EXISTS (
-                SELECT 1 FROM information_schema.columns
-                WHERE table_schema = 'public'
-                AND table_name = 'Courses'
-                AND column_name = 'conflict_metadata'
-            )
-        """)
-        if not cursor.fetchone()[0]:
-            cursor.execute('ALTER TABLE "Courses" ADD COLUMN "conflict_metadata" jsonb DEFAULT NULL')
-            connection.commit()
-
-        # Check if Course_Modules table has conflict_metadata column, add if missing
-        cursor.execute("""
-            SELECT EXISTS (
-                SELECT 1 FROM information_schema.columns
-                WHERE table_schema = 'public'
-                AND table_name = 'Course_Modules'
-                AND column_name = 'conflict_metadata'
-            )
-        """)
-        if not cursor.fetchone()[0]:
-            cursor.execute('ALTER TABLE "Course_Modules" ADD COLUMN "conflict_metadata" jsonb DEFAULT NULL')
-            connection.commit()
-
-        # Topic Extraction: Alter Module_Files.metadata from TEXT to JSONB
-        cursor.execute("""
-            SELECT data_type FROM information_schema.columns
-            WHERE table_schema = 'public'
-            AND table_name = 'Module_Files'
-            AND column_name = 'metadata'
-        """)
-        row = cursor.fetchone()
-        if row and row[0] == 'text':
-            cursor.execute("""
-                ALTER TABLE "Module_Files"
-                ALTER COLUMN metadata TYPE jsonb
-                USING CASE
-                    WHEN metadata = '' THEN NULL
-                    WHEN metadata IS NULL THEN NULL
-                    ELSE metadata::jsonb
-                END
-            """)
-            connection.commit()
-
-        # Topic Extraction: Add generated_topics JSONB column to Course_Modules
-        cursor.execute("""
-            SELECT EXISTS (
-                SELECT 1 FROM information_schema.columns
-                WHERE table_schema = 'public'
-                AND table_name = 'Course_Modules'
-                AND column_name = 'generated_topics'
-            )
-        """)
-        if not cursor.fetchone()[0]:
-            cursor.execute('ALTER TABLE "Course_Modules" ADD COLUMN "generated_topics" jsonb DEFAULT NULL')
-            connection.commit()
-
-        # Backfill file_id into existing vectorstore chunks
-        cursor.execute("""
-            SELECT EXISTS (
-                SELECT 1 FROM information_schema.tables
-                WHERE table_name = 'langchain_pg_embedding'
-            )
-        """)
-        if cursor.fetchone()[0]:
-            cursor.execute("""
-                SELECT file_id, module_id, filename, filetype
-                FROM "Module_Files";
-            """)
-            files = cursor.fetchall()
-            for file_id, module_id, filename, filetype in files:
-                s3_path_pattern = f"%/{module_id}/documents/{filename}.{filetype}%"
-                cursor.execute("""
-                    UPDATE langchain_pg_embedding
-                    SET cmetadata = cmetadata || jsonb_build_object('file_id', %s::text)
-                    WHERE cmetadata->>'source' LIKE %s
-                    AND cmetadata->>'file_id' IS NULL;
-                """, (str(file_id), s3_path_pattern))
-            connection.commit()
-
-        # Data Ingestion Optimization: Add incremental indexing columns to Module_Files
-        cursor.execute("""
-            SELECT EXISTS (
-                SELECT 1 FROM information_schema.columns
-                WHERE table_schema = 'public'
-                AND table_name = 'Module_Files'
-                AND column_name = 'content_hash'
-            )
-        """)
-        if not cursor.fetchone()[0]:
-            cursor.execute("""
-                ALTER TABLE "Module_Files"
-                ADD COLUMN "content_hash" text,
-                ADD COLUMN "processing_status" text DEFAULT 'pending',
-                ADD COLUMN "last_processed_at" timestamptz,
-                ADD COLUMN "chunk_count" integer
-            """)
-            connection.commit()
-
-        # Upload Progress Feedback: Add UNIQUE constraint for file upsert logic
-        cursor.execute("""
-            SELECT EXISTS (
-                SELECT 1 FROM pg_indexes
-                WHERE indexname = 'idx_module_files_unique_file'
-            )
-        """)
-        if not cursor.fetchone()[0]:
-            cursor.execute("""
-                CREATE UNIQUE INDEX idx_module_files_unique_file
-                ON "Module_Files" (module_id, filename, filetype)
-            """)
-            connection.commit()
-
-        # Eager Module Creation: Add status, timestamps, and nullable concept_id to Course_Modules
-        cursor.execute("""
-            SELECT EXISTS (
-                SELECT 1 FROM information_schema.columns
-                WHERE table_schema = 'public'
-                AND table_name = 'Course_Modules'
-                AND column_name = 'status'
-            )
-        """)
-        if not cursor.fetchone()[0]:
-            cursor.execute("""
-                ALTER TABLE "Course_Modules"
-                ADD COLUMN status VARCHAR(10) NOT NULL DEFAULT 'active',
-                ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                ADD COLUMN updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            """)
-            cursor.execute("""
-                ALTER TABLE "Course_Modules"
-                ADD CONSTRAINT chk_course_modules_status
-                CHECK (status IN ('draft', 'active', 'deleting'))
-            """)
-            cursor.execute("""
-                ALTER TABLE "Course_Modules"
-                ALTER COLUMN concept_id DROP NOT NULL
-            """)
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_course_modules_status_created
-                ON "Course_Modules" (status, created_at)
-                WHERE status IN ('draft', 'deleting')
-            """)
-            connection.commit()
 
         # Generate 16 bytes username and password randomly
         username = secrets.token_hex(8)
@@ -425,17 +321,9 @@ def handler(event, context):
         usernameTableCreator = secrets.token_hex(8)
         passwordTableCreator = secrets.token_hex(16)
 
-        # Based on the observation,
-        #   - Database name: does not reflect from the CDK dbname read more from https://stackoverflow.com/questions/51014647/aws-postgres-db-does-not-exist-when-connecting-with-pg
-        #   - Schema: uses the default schema 'public' in all tables
-        #
         # Create new user with the following permission:
-        #   - SELECT
-        #   - INSERT
-        #   - UPDATE
-        #   - DELETE
+        #   - SELECT, INSERT, UPDATE, DELETE
 
-        # comment out to 'connection.commit()' on redeployment
         sqlCreateUser = """
             DO $$
             BEGIN
@@ -481,7 +369,7 @@ def handler(event, context):
         """
 
 
-        #Execute table creation
+        # Execute user creation
         cursor.execute(
             sqlCreateUser,
             (
@@ -501,99 +389,27 @@ def handler(event, context):
         )
         connection.commit()
 
-        #also for table creator:
+        # Store table creator credentials in Secrets Manager
         authInfoTableCreator = {"username": usernameTableCreator, "password": passwordTableCreator}
-
-        # comment out to on redeployment
         dbSecret.update(authInfoTableCreator)
         sm_client = boto3.client("secretsmanager")
         sm_client.put_secret_value(
             SecretId=DB_PROXY, SecretString=json.dumps(dbSecret)
         )
 
-        #
-        ## Load client username and password to SSM
-        ##
+        # Store read/write user credentials in Secrets Manager
         authInfo = {"username": username, "password": password}
-
-        # comment out to on redeployment
         dbSecret.update(authInfo)
         sm_client = boto3.client("secretsmanager")
         sm_client.put_secret_value(
             SecretId=DB_USER_SECRET_NAME, SecretString=json.dumps(dbSecret)
         )
-        sql = """
-            SELECT * FROM "Users";
-        """
-        
-        cursor.execute(sql)
-        print(cursor.fetchall())
-        
-        sql = """
-            SELECT * FROM "LLM_Vectors";
-        """
-        cursor.execute(sql)
-        print(cursor.fetchall())
-        
-        sql = """
-            SELECT * FROM "Courses";
-        """
-        cursor.execute(sql)
-        print(cursor.fetchall())
-
-        sql = """
-            SELECT * FROM "Course_Modules";
-        """
-        cursor.execute(sql)
-        print(cursor.fetchall())
-
-        sql = """
-            SELECT * FROM "Enrolments";
-        """
-        cursor.execute(sql)
-        print(cursor.fetchall())
-
-        sql = """
-            SELECT * FROM "Module_Files";
-        """
-        cursor.execute(sql)
-        print(cursor.fetchall())
-
-        sql = """
-            SELECT * FROM "Student_Modules";
-        """
-        cursor.execute(sql)
-        print(cursor.fetchall())
-
-        sql = """
-            SELECT * FROM "Sessions";
-        """
-        cursor.execute(sql)
-        print(cursor.fetchall())
-
-        sql = """
-            SELECT * FROM "Messages";
-        """
-        cursor.execute(sql)
-        print(cursor.fetchall())
-
-        sql = """
-            SELECT * FROM "Course_Concepts";
-        """
-        cursor.execute(sql)
-        print(cursor.fetchall())
-
-        sql = """
-            SELECT * FROM "User_Engagement_Log";
-        """
-        cursor.execute(sql)
-        print(cursor.fetchall())
-
 
         # Close cursor and connection
         cursor.close()
         connection.close()
 
-        print("Initialization completed")
+        print("Initialization completed successfully")
     except Exception as e:
-        print(e)
+        print(f"Initialization error: {e}")
+        raise

@@ -1,3 +1,16 @@
+"""Vectorstore retriever using the multimodal-rag v2 retrieval_units table.
+
+Replaces the old LangChain-based hybrid search (langchain_pg_embedding) with
+direct queries against the v2 retrieval_units table which uses:
+- pgvector cosine similarity (Titan Embed v2, 1024 dimensions)
+- PostgreSQL full-text search (ts_vector column)
+- Reciprocal rank fusion for merging results
+
+The retriever returns LangChain Document objects for compatibility with the
+existing RAG chain in chat.py.
+"""
+
+import json
 import re
 import os
 import time
@@ -14,7 +27,12 @@ logger = Logger(service="text-generation")
 
 VECTOR_WEIGHT = 0.7
 KEYWORD_WEIGHT = 0.3
-TOP_K = 6
+TOP_K = 8
+OVERFETCH_FACTOR = 3
+
+# Embedding model used by v2 pipeline (must match what was used during ingestion)
+EMBEDDING_MODEL_ID = "amazon.titan-embed-text-v2:0"
+EMBEDDING_DIMENSIONS = 1024
 
 # ARCH-2: Heuristic patterns for detecting ambiguous messages that need LLM reformulation
 AMBIGUOUS_PATTERNS = [
@@ -54,150 +72,167 @@ def needs_reformulation(query: str, chat_history) -> bool:
     return False
 
 
-def hybrid_search(
+def hybrid_search_v2(
     query: str,
     query_embedding: List[float],
-    connection_string: str,
-    collection_names: List[str],
+    module_id: str,
     allowed_file_ids: Optional[List[str]],
     k: int = TOP_K,
     connection=None,
 ) -> List[Document]:
-    search_start = time.time()
+    """Hybrid search against the v2 retrieval_units table.
 
-    # P-6: Reuse passed connection if available, otherwise create a new one
-    owns_connection = connection is None
-    conn = connection if connection else psycopg2.connect(connection_string)
+    Performs vector similarity search + full-text keyword search, merges
+    results using reciprocal rank fusion, and returns LangChain Document objects.
+
+    Args:
+        query: The user's search query.
+        query_embedding: Pre-computed embedding vector (1024d, Titan Embed v2).
+        module_id: Module ID to filter results by (stored in metadata->>'module_id').
+        allowed_file_ids: Optional list of file IDs to restrict search to.
+        k: Number of results to return.
+        connection: Reusable psycopg2 connection.
+
+    Returns:
+        List of LangChain Document objects with page_content and metadata.
+    """
+    search_start = time.time()
+    overfetch_k = k * OVERFETCH_FACTOR
+
+    if connection is None:
+        logger.error("No database connection provided for hybrid_search_v2")
+        return []
 
     try:
-        cur = conn.cursor()
+        cur = connection.cursor()
 
-        file_id_filter = ""
-        collection_placeholders = ",".join(["%s"] * len(collection_names))
-        collection_filter = f"c.name IN ({collection_placeholders})"
-        params_base = list(collection_names)
+        # Build metadata filter for module_id scoping
+        where_clauses = []
+        params_vector: list = []
+        params_keyword: list = []
+
+        if module_id:
+            where_clauses.append("metadata->>'module_id' = %s")
+            params_vector.append(module_id)
+            params_keyword.append(module_id)
 
         if allowed_file_ids:
             placeholders = ",".join(["%s"] * len(allowed_file_ids))
-            file_id_filter = f"AND e.cmetadata->>'file_id' IN ({placeholders})"
-            params_base += allowed_file_ids
+            where_clauses.append(f"metadata->>'file_id' IN ({placeholders})")
+            params_vector.extend(allowed_file_ids)
+            params_keyword.extend(allowed_file_ids)
 
-        # Vector search
+        where_sql = (" AND " + " AND ".join(where_clauses)) if where_clauses else ""
+
+        # --- Vector similarity search ---
         vector_start = time.time()
+        embedding_str = f"[{','.join(str(v) for v in query_embedding)}]"
+
         vector_sql = f"""
-            SELECT
-                e.id,
-                e.document,
-                e.cmetadata,
-                1 - (e.embedding <=> %s::vector) AS vector_score
-            FROM langchain_pg_embedding e
-            JOIN langchain_pg_collection c ON e.collection_id = c.uuid
-            WHERE {collection_filter}
-            {file_id_filter}
-            ORDER BY vector_score DESC
-            LIMIT 20;
+            SELECT retrieval_id, embedding_text, element_type, metadata,
+                   1 - (embedding <=> %s::vector) AS score
+            FROM retrieval_units
+            WHERE embedding IS NOT NULL{where_sql}
+            ORDER BY embedding <=> %s::vector
+            LIMIT %s;
         """
-        cur.execute(vector_sql, [query_embedding] + params_base)
+        vector_params = [embedding_str] + params_vector + [embedding_str, overfetch_k]
+        cur.execute(vector_sql, vector_params)
         vector_rows = cur.fetchall()
         vector_latency = time.time() - vector_start
 
-        # Keyword search
+        # --- Full-text keyword search ---
         keyword_start = time.time()
         keyword_sql = f"""
-            SELECT
-                e.id,
-                ts_rank_cd(
-                    to_tsvector('english', e.document),
-                    plainto_tsquery('english', %s)
-                ) AS keyword_score
-            FROM langchain_pg_embedding e
-            JOIN langchain_pg_collection c ON e.collection_id = c.uuid
-            WHERE {collection_filter}
-            AND to_tsvector('english', e.document) @@ plainto_tsquery('english', %s)
-            {file_id_filter}
-            ORDER BY keyword_score DESC
-            LIMIT 20;
+            SELECT retrieval_id, embedding_text, element_type, metadata,
+                   ts_rank(ts_vector, plainto_tsquery('english', %s)) AS score
+            FROM retrieval_units
+            WHERE ts_vector @@ plainto_tsquery('english', %s){where_sql}
+            ORDER BY score DESC
+            LIMIT %s;
         """
-        keyword_params = [query] + list(collection_names) + [query] + (allowed_file_ids or [])
+        keyword_params = [query, query] + params_keyword + [overfetch_k]
         cur.execute(keyword_sql, keyword_params)
         keyword_rows = cur.fetchall()
         keyword_latency = time.time() - keyword_start
 
         cur.close()
 
-        # Blending logic (pure Python, no DB)
-        vector_scores = {row[0]: row for row in vector_rows}
-        keyword_scores = {row[0]: row[1] for row in keyword_rows}
+        # --- Reciprocal Rank Fusion ---
+        RRF_K = 60
+        rrf_scores: dict[str, float] = {}
+        row_data: dict[str, tuple] = {}
 
-        max_kw = max(keyword_scores.values(), default=1) or 1
-        keyword_scores_norm = {id_: score / max_kw for id_, score in keyword_scores.items()}
+        for rank, row in enumerate(vector_rows, start=1):
+            rid = row[0]
+            rrf_scores[rid] = rrf_scores.get(rid, 0.0) + 1.0 / (RRF_K + rank)
+            row_data[rid] = row
 
-        max_vec = max((row[3] for row in vector_rows), default=1) or 1
+        for rank, row in enumerate(keyword_rows, start=1):
+            rid = row[0]
+            rrf_scores[rid] = rrf_scores.get(rid, 0.0) + 1.0 / (RRF_K + rank)
+            if rid not in row_data:
+                row_data[rid] = row
 
-        all_ids = set(vector_scores.keys()) | set(keyword_scores_norm.keys())
-        blended = []
-        for id_ in all_ids:
-            v_score = (vector_scores[id_][3] / max_vec) if id_ in vector_scores else 0.0
-            k_score = keyword_scores_norm.get(id_, 0.0)
-            blended.append((id_, VECTOR_WEIGHT * v_score + KEYWORD_WEIGHT * k_score))
+        # Sort by RRF score descending, take top k
+        sorted_results = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
+        top_results = sorted_results[:k]
 
-        blended.sort(key=lambda x: x[1], reverse=True)
-        top_ids = [id_ for id_, _ in blended[:k]]
+        # Convert to LangChain Documents
+        documents: List[Document] = []
+        for rid, rrf_score in top_results:
+            row = row_data[rid]
+            embedding_text = row[1]
+            element_type = row[2]
+            metadata = row[3] if isinstance(row[3], dict) else (json.loads(row[3]) if row[3] else {})
 
-        # Fetch missing document content (keyword-only hits not in vector results)
-        id_to_row = {row[0]: row for row in vector_rows}
-        missing_ids = [id_ for id_ in top_ids if id_ not in id_to_row]
-        if missing_ids:
-            cur2 = conn.cursor()
-            placeholders = ",".join(["%s"] * len(missing_ids))
-            cur2.execute(
-                f"SELECT id, document, cmetadata FROM langchain_pg_embedding WHERE id IN ({placeholders});",
-                missing_ids
-            )
-            for row in cur2.fetchall():
-                id_to_row[row[0]] = (row[0], row[1], row[2], 0.0)
-            cur2.close()
+            # Build document metadata for downstream use
+            doc_metadata = {
+                "retrieval_id": rid,
+                "element_type": element_type,
+                "rrf_score": round(rrf_score, 5),
+                "file_id": metadata.get("file_id", ""),
+                "module_id": metadata.get("module_id", ""),
+                "page_num": metadata.get("provenance_page_num"),
+                "image_s3_key": metadata.get("image_s3_key"),
+            }
 
-        results = [
-            Document(page_content=id_to_row[id_][1], metadata=id_to_row[id_][2] or {})
-            for id_ in top_ids if id_ in id_to_row
-        ]
+            documents.append(Document(
+                page_content=embedding_text,
+                metadata=doc_metadata,
+            ))
 
         total_latency = time.time() - search_start
 
         logger.info(
-            "Hybrid search complete",
+            "V2 hybrid search complete",
             extra={
                 "vector_results": len(vector_rows),
                 "keyword_results": len(keyword_rows),
-                "blended_candidates": len(all_ids),
-                "returned_results": len(results),
+                "rrf_candidates": len(rrf_scores),
+                "returned_results": len(documents),
                 "vector_latency_ms": round(vector_latency * 1000, 2),
                 "keyword_latency_ms": round(keyword_latency * 1000, 2),
                 "total_search_latency_ms": round(total_latency * 1000, 2),
-                "collection_names": collection_names,
+                "module_id": module_id,
                 "allowed_file_ids_count": len(allowed_file_ids) if allowed_file_ids else 0,
-                "top_vector_score": round(vector_rows[0][3], 4) if vector_rows else 0,
-                "top_blended_score": round(blended[0][1], 4) if blended else 0,
+                "top_rrf_score": round(top_results[0][1], 5) if top_results else 0,
             },
         )
 
-        return results
+        return documents
 
     except Exception:
         logger.exception(
-            "Error in hybrid_search",
+            "Error in hybrid_search_v2",
             extra={
-                "collection_names": collection_names,
+                "module_id": module_id,
                 "allowed_file_ids_count": len(allowed_file_ids) if allowed_file_ids else 0,
             },
         )
-        if not owns_connection:
-            conn.rollback()
+        if connection:
+            connection.rollback()
         raise
-    finally:
-        if owns_connection and conn:
-            conn.close()
 
 
 def get_vectorstore_retriever(
@@ -208,18 +243,21 @@ def get_vectorstore_retriever(
     collection_names: Optional[List[str]] = None,
     connection=None,
 ):
-    # P-6: Removed unused get_vectorstore() call — hybrid_search uses raw SQL directly
+    """Build a retriever that searches the v2 retrieval_units table.
 
-    # Use provided collection_names or fall back to the single collection_name from config
-    search_collection_names = collection_names if collection_names else [vectorstore_config_dict['collection_name']]
-    psycopg2_connection_string = (
-        f"dbname={vectorstore_config_dict['dbname']} "
-        f"user={vectorstore_config_dict['user']} "
-        f"password={vectorstore_config_dict['password']} "
-        f"host={vectorstore_config_dict['host']} "
-        f"port={vectorstore_config_dict['port']} "
-        f"sslmode=require"
-    )
+    Returns a RunnableLambda compatible with LangChain's RAG chain.
+    The collection_names parameter is repurposed as module_id for v2 filtering.
+
+    Args:
+        llm: LangChain LLM for query reformulation.
+        vectorstore_config_dict: DB connection config (unused for connection if connection param given).
+        embeddings: LangChain embeddings model for generating query embeddings.
+        allowed_file_ids: Optional file ID filter.
+        collection_names: Module IDs — the first entry is used as the module_id filter.
+        connection: Reusable psycopg2 connection.
+    """
+    # The primary module_id is the first collection name
+    module_id = collection_names[0] if collection_names else ""
 
     def retrieve(query: str) -> List[Document]:
         embed_start = time.time()
@@ -227,15 +265,14 @@ def get_vectorstore_retriever(
         embed_latency = time.time() - embed_start
 
         logger.info(
-            "Query embedding generated",
+            "Query embedding generated for v2 search",
             extra={"embed_latency_ms": round(embed_latency * 1000, 2)},
         )
 
-        return hybrid_search(
+        return hybrid_search_v2(
             query=query,
             query_embedding=query_embedding,
-            connection_string=psycopg2_connection_string,
-            collection_names=search_collection_names,
+            module_id=module_id,
             allowed_file_ids=allowed_file_ids,
             connection=connection,
         )
