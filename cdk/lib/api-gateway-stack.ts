@@ -1092,6 +1092,27 @@ export class ApiGatewayStack extends cdk.Stack {
       "instructorLambdaAuthorizer"
     );
 
+    // ─── SSM Parameters for Text Generation Lambda ───────────────────────
+    const bedrockLLMParameter = new ssm.StringParameter(
+      this,
+      "BedrockLLMParameter",
+      {
+        parameterName: `/${id}/AILA/BedrockLLMId`,
+        description: "Parameter containing the Bedrock LLM ID",
+        stringValue: "meta.llama3-70b-instruct-v1:0",
+      }
+    );
+
+    const embeddingModelParameter = new ssm.StringParameter(
+      this,
+      "EmbeddingModelParameter",
+      {
+        parameterName: `/${id}/AILA/EmbeddingModelId`,
+        description: "Parameter containing the Embedding Model ID",
+        stringValue: "amazon.titan-embed-text-v2:0",
+      }
+    );
+
     // ─── Bedrock Guardrail for Text Generation ─────────────────────────
     const filterStrength = isProd ? 'HIGH' : 'MEDIUM';
 
@@ -1200,6 +1221,142 @@ export class ApiGatewayStack extends cdk.Stack {
       parameterName: `/${id}/AILA/GuardrailVersion`,
       description: "Bedrock Guardrail version for text generation",
       stringValue: guardrailVersion.attrVersion,
+    });
+
+    // ─── Docker Lambda: Text Generation (Chatbot) ───────────────────────
+    const textGenLambdaDockerFunc = new lambda.DockerImageFunction(this, `${id}-TextGenLambdaDockerFunc`, {
+      code: lambda.DockerImageCode.fromImageAsset("./text_generation"),
+      memorySize: 1024,
+      timeout: cdk.Duration.seconds(300),
+      tracing: lambda.Tracing.ACTIVE,
+      logRetention: logRetention,
+      vpc: vpcStack.vpc,
+      functionName: `${id}-TextGenLambdaDockerFunc`,
+      environment: {
+        SM_DB_CREDENTIALS: db.secretPathTableCreator.secretName,
+        RDS_PROXY_ENDPOINT: db.rdsProxyEndpointTableCreator,
+        REGION: this.region,
+        BEDROCK_LLM_PARAM: bedrockLLMParameter.parameterName,
+        EMBEDDING_MODEL_PARAM: embeddingModelParameter.parameterName,
+        TABLE_NAME_PARAM: tableNameParameter.parameterName,
+        GUARDRAIL_ID_PARAM: guardrailIdParam.parameterName,
+        GUARDRAIL_VERSION_PARAM: guardrailVersionParam.parameterName,
+        IR_BUCKET_NAME: ragStack.irBucket.bucketName,
+      },
+    });
+
+    // Override the Logical ID to preserve CloudFormation resource identity
+    const cfnTextGenDockerFunc = textGenLambdaDockerFunc.node
+      .defaultChild as lambda.CfnFunction;
+    cfnTextGenDockerFunc.overrideLogicalId("TextGenLambdaDockerFunc");
+
+    // Allow API Gateway to invoke this function
+    textGenLambdaDockerFunc.addPermission("AllowApiGatewayInvoke", {
+      principal: new iam.ServicePrincipal("apigateway.amazonaws.com"),
+      action: "lambda:InvokeFunction",
+      sourceArn: `arn:aws:execute-api:${this.region}:${this.account}:${this.api.restApiId}/*/*/student*`,
+    });
+
+    // Bedrock InvokeModel — LLM + embedding + vision (Haiku for image escalation)
+    textGenLambdaDockerFunc.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+      resources: [
+        `arn:aws:bedrock:${this.region}::foundation-model/meta.llama3-70b-instruct-v1:0`,
+        `arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0`,
+        `arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-3-haiku-20240307-v1:0`,
+        `arn:aws:bedrock:${this.region}::foundation-model/amazon.titan-embed-text-v2:0`,
+      ],
+    }));
+
+    // AWS Marketplace permissions for Bedrock model subscription (first-time auto-subscription)
+    textGenLambdaDockerFunc.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ["aws-marketplace:Subscribe", "aws-marketplace:Unsubscribe", "aws-marketplace:ViewSubscriptions"],
+      resources: ["*"],  // Marketplace actions do not support resource-level permissions
+    }));
+
+    // Secrets Manager — scoped to specific secret ARN
+    textGenLambdaDockerFunc.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ["secretsmanager:GetSecretValue"],
+      resources: [db.secretPathTableCreator.secretArn],
+    }));
+
+    // DynamoDB management (ListTables, CreateTable, DescribeTable)
+    textGenLambdaDockerFunc.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ["dynamodb:ListTables", "dynamodb:CreateTable", "dynamodb:DescribeTable"],
+      resources: [`arn:aws:dynamodb:${this.region}:${this.account}:table/*`],
+    }));
+
+    // DynamoDB data actions — scoped to conversation table
+    textGenLambdaDockerFunc.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ["dynamodb:PutItem", "dynamodb:GetItem", "dynamodb:UpdateItem"],
+      resources: [`arn:aws:dynamodb:${this.region}:${this.account}:table/DynamoDB-Conversation-Table`],
+    }));
+
+    // SSM GetParameter — scoped to AILA parameters
+    textGenLambdaDockerFunc.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ["ssm:GetParameter"],
+      resources: [
+        bedrockLLMParameter.parameterArn,
+        embeddingModelParameter.parameterArn,
+        tableNameParameter.parameterArn,
+        guardrailIdParam.parameterArn,
+        guardrailVersionParam.parameterArn,
+      ],
+    }));
+
+    // EC2 VPC networking — resource '*' required by AWS for ENI operations
+    textGenLambdaDockerFunc.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: [
+        "ec2:CreateNetworkInterface",
+        "ec2:DescribeNetworkInterfaces",
+        "ec2:DeleteNetworkInterface",
+        "ec2:AssignPrivateIpAddresses",
+        "ec2:UnassignPrivateIpAddresses",
+      ],
+      resources: ["*"],
+    }));
+
+    // S3 GetObject on IR bucket — for image escalation (fetching images for vision analysis)
+    textGenLambdaDockerFunc.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ["s3:GetObject"],
+      resources: [`${ragStack.irBucket.bucketArn}/*`],
+    }));
+
+    // CloudWatch Logs — scoped to specific log group
+    textGenLambdaDockerFunc.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+      resources: [`arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${id}-TextGenLambdaDockerFunc:*`],
+    }));
+
+    // X-Ray — resource '*' acceptable (service does not support resource-level scoping)
+    textGenLambdaDockerFunc.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ["xray:PutTraceSegments", "xray:PutTelemetryRecords"],
+      resources: ["*"],
+    }));
+
+    // AppSync — for streaming chat chunks
+    textGenLambdaDockerFunc.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ["appsync:GraphQL"],
+      resources: [`arn:aws:appsync:${this.region}:${this.account}:apis/${this.eventApi.apiId}/*`],
+    }));
+    textGenLambdaDockerFunc.addEnvironment("APPSYNC_API_URL", this.eventApi.graphqlUrl);
+
+    // Add to lambdaFunctionInfos for observability
+    this.lambdaFunctionInfos.push({
+      functionName: `${id}-TextGenLambdaDockerFunc`,
+      timeoutSeconds: 300,
+      isContainer: true,
     });
 
     // Create S3 Bucket to handle documents for each course

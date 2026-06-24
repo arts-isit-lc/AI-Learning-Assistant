@@ -5,6 +5,7 @@ direct queries against the v2 retrieval_units table which uses:
 - pgvector cosine similarity (Titan Embed v2, 1024 dimensions)
 - PostgreSQL full-text search (ts_vector column)
 - Reciprocal rank fusion for merging results
+- Image escalation for visual questions (Claude vision)
 
 The retriever returns LangChain Document objects for compatibility with the
 existing RAG chain in chat.py.
@@ -22,6 +23,8 @@ from langchain_core.runnables import RunnableLambda
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_classic.chains import create_history_aware_retriever
 from aws_lambda_powertools import Logger
+
+from helpers.image_escalation import escalate_image_for_query
 
 logger = Logger(service="text-generation")
 
@@ -269,13 +272,28 @@ def get_vectorstore_retriever(
             extra={"embed_latency_ms": round(embed_latency * 1000, 2)},
         )
 
-        return hybrid_search_v2(
+        documents = hybrid_search_v2(
             query=query,
             query_embedding=query_embedding,
             module_id=module_id,
             allowed_file_ids=allowed_file_ids,
             connection=connection,
         )
+
+        # Image escalation: if query references a figure, fetch and analyze the image
+        try:
+            escalation_doc = escalate_image_for_query(
+                query=query,
+                module_id=module_id,
+                connection=connection,
+            )
+            if escalation_doc is not None:
+                # Prepend the vision analysis so it appears first in context
+                documents = [escalation_doc] + documents
+        except Exception:
+            logger.exception("Image escalation failed, continuing with text results only")
+
+        return documents
 
     retriever = RunnableLambda(retrieve)
 
