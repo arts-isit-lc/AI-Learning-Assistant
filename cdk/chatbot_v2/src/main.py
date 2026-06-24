@@ -310,12 +310,22 @@ def handler(event, context):
             "concepts_demonstrated": state.concepts_demonstrated,
             "concepts_misunderstood": evaluation.concepts_misunderstood if evaluation else [],
         }
+        # For initial greeting, use generated topics for better retrieval context
+        if message_content:
+            retrieval_query = message_content
+        elif state.module_concepts:
+            retrieval_query = f"Overview of: {', '.join(state.module_concepts[:3])}"
+        else:
+            retrieval_query = f"Introduce the topic: {topic}"
+
         retrieval_result = invoke_retrieval(
             _lambda_client, function_arn=RAG_RETRIEVAL_FUNCTION_ARN,
-            query=message_content or f"Introduce the topic: {topic}",
-            session_id=session_id, course_id=course_id, allowed_file_ids=[],
+            query=retrieval_query,
+            session_id=session_id, course_id=course_id,
+            allowed_file_ids=[],
             chat_history=get_retrieval_history(chat_history, 4),
             learning_context=learning_context,
+            module_id=module_id,
         )
         rag_context = retrieval_result.answer if retrieval_result else ""
         logger.info("RAG context received", extra={"rag_context_length": len(rag_context), "rag_context_preview": rag_context[:500]})

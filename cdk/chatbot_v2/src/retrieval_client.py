@@ -27,6 +27,7 @@ def invoke_retrieval(
     allowed_file_ids: list[str],
     chat_history: list[dict],
     learning_context: dict | None = None,
+    module_id: str = "",
 ) -> RetrievalResult | None:
     """Invoke ragRetrievalFunction synchronously.
 
@@ -46,6 +47,8 @@ def invoke_retrieval(
         }
         if learning_context:
             payload["learning_context"] = learning_context
+        if module_id:
+            payload["module_id"] = module_id
 
         response = lambda_client.invoke(
             FunctionName=function_arn,

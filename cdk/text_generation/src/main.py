@@ -176,9 +176,9 @@ def connect_to_db():
             }
             connection_string = " ".join([f"{key}={value}" for key, value in connection_params.items()])
             connection = psycopg2.connect(connection_string)
-            logger.info("Connected to the database!")
-        except Exception as e:
-            logger.error(f"Failed to connect to database: {e}")
+            logger.info("Connected to the database")
+        except Exception:
+            logger.exception("Failed to connect to database")
             if connection:
                 connection.rollback()
                 connection.close()
@@ -214,7 +214,10 @@ def get_module_context(course_id, module_id):
         cur.close()
 
         if result is None:
-            logger.warning(f"No context found for course_id={course_id}, module_id={module_id}")
+            logger.warning(
+                "No context found for course/module",
+                extra={"course_id": course_id, "module_id": module_id},
+            )
             return None
 
         context = {
@@ -223,13 +226,21 @@ def get_module_context(course_id, module_id):
             'module_name': result[2],
             'module_prompt': result[3] if result[3] else "",
         }
-        logger.info(f"Module context fetched: module_name={context['module_name']}, "
-                     f"has_system_prompt={context['system_prompt'] is not None}, "
-                     f"llm_model_id={context['llm_model_id']}")
+        logger.info(
+            "Module context fetched",
+            extra={
+                "module_name": context['module_name'],
+                "has_system_prompt": context['system_prompt'] is not None,
+                "llm_model_id": context['llm_model_id'],
+            },
+        )
         return context
 
     except Exception as e:
-        logger.error(f"Error fetching module context: {e}")
+        logger.exception(
+            "Error fetching module context",
+            extra={"course_id": course_id, "module_id": module_id},
+        )
         if cur:
             cur.close()
         connection.rollback()
@@ -262,17 +273,24 @@ def get_allowed_file_ids(module_id):
             collection_names.append(str(module_id))
         return file_ids, collection_names
     except Exception as e:
-        logger.error(f"Error fetching allowed_file_ids: {e}")
+        logger.exception(
+            "Error fetching allowed_file_ids",
+            extra={"module_id": module_id},
+        )
         return [], [module_id]
 
 @logger.inject_lambda_context(clear_state=True)
 def handler(event, context):
     import time
     t_start = time.time()
-    logger.info("Text Generation Lambda function is called!")
+    logger.info("Text Generation Lambda invoked")
     initialize_constants()
     initialize_guardrail_config()
-    logger.info(f"TIMING: initialize_constants took {(time.time() - t_start)*1000:.0f}ms")
+    init_latency = time.time() - t_start
+    logger.info(
+        "Initialization complete",
+        extra={"init_latency_ms": round(init_latency * 1000)},
+    )
 
     query_params = event.get("queryStringParameters", {})
 
@@ -326,10 +344,16 @@ def handler(event, context):
     # P-2: Single combined query for course + module context
     t0 = time.time()
     module_context = get_module_context(course_id, module_id)
-    logger.info(f"TIMING: get_module_context took {(time.time() - t0)*1000:.0f}ms")
+    logger.info(
+        "Module context fetch complete",
+        extra={"latency_ms": round((time.time() - t0) * 1000)},
+    )
 
     if module_context is None:
-        logger.error(f"Error fetching context for course_id={course_id}, module_id={module_id}")
+        logger.error(
+            "Error fetching context",
+            extra={"course_id": course_id, "module_id": module_id},
+        )
         return {
             'statusCode': 400,
             "headers": {
@@ -343,7 +367,7 @@ def handler(event, context):
 
     system_prompt = module_context['system_prompt']
     if system_prompt is None:
-        logger.error(f"No system prompt found for course_id: {course_id}")
+        logger.error("No system prompt found", extra={"course_id": course_id})
         return {
             'statusCode': 400,
             "headers": {
@@ -364,16 +388,22 @@ def handler(event, context):
     else:
         effective_llm_model_id = BEDROCK_LLM_ID  # Fallback to system default
         if course_llm_model_id:
-            logger.warning(f"Invalid LLM model ID '{course_llm_model_id}' for course {course_id}, using system default")
+            logger.warning(
+                "Invalid LLM model ID for course, using system default",
+                extra={"invalid_model_id": course_llm_model_id, "course_id": course_id},
+            )
     
-    logger.info(f"Using LLM model ID: {effective_llm_model_id} for course {course_id}")
+    logger.info(
+        "LLM model selected",
+        extra={"effective_llm_model_id": effective_llm_model_id, "course_id": course_id},
+    )
     
     module_prompt = module_context['module_prompt']
     
     topic = module_context['module_name']
 
     if topic is None:
-        logger.error(f"Invalid module_id: {module_id}")
+        logger.error("Invalid module_id — no topic", extra={"module_id": module_id})
         return {
             'statusCode': 400,
             'body': json.dumps('Invalid module_id')
@@ -383,10 +413,13 @@ def handler(event, context):
     question = body.get("message_content", "")
     
     if not question:
-        logger.info(f"Start of conversation. Creating conversation history table in DynamoDB.")
+        logger.info("Start of conversation — generating initial query")
         student_query = get_initial_student_query(topic)
     else:
-        logger.info(f"Processing student question: {question}")
+        logger.info(
+            "Processing student question",
+            extra={"question_length": len(question)},
+        )
         student_query = get_student_query(question)
     
     try:
@@ -399,8 +432,8 @@ def handler(event, context):
             guardrail_id=_guardrail_id or "",
             guardrail_version=_guardrail_version or "",
         )
-    except Exception as e:
-        logger.error(f"Error getting LLM from Bedrock: {e}")
+    except Exception:
+        logger.exception("Error getting LLM from Bedrock")
         return {
             'statusCode': 500,
             "headers": {
@@ -423,8 +456,8 @@ def handler(event, context):
             'host': RDS_PROXY_ENDPOINT,
             'port': db_secret["port"]
         }
-    except Exception as e:
-        logger.error(f"Error retrieving vectorstore config: {e}")
+    except Exception:
+        logger.exception("Error retrieving vectorstore config")
         return {
             'statusCode': 500,
             "headers": {
@@ -441,8 +474,14 @@ def handler(event, context):
 
         t0 = time.time()
         allowed_file_ids, collection_names = get_allowed_file_ids(module_id)
-        logger.info(f"TIMING: get_allowed_file_ids took {(time.time() - t0)*1000:.0f}ms")
-        logger.info(f"Searching {len(collection_names)} collection(s) with {len(allowed_file_ids)} allowed file(s)")
+        logger.info(
+            "Allowed file IDs fetched",
+            extra={
+                "latency_ms": round((time.time() - t0) * 1000),
+                "collection_count": len(collection_names),
+                "allowed_file_count": len(allowed_file_ids),
+            },
+        )
 
         # P-6: Pass the global connection to avoid creating new connections in hybrid_search
         t0 = time.time()
@@ -454,9 +493,12 @@ def handler(event, context):
             collection_names=collection_names,
             connection=connect_to_db()
         )
-        logger.info(f"TIMING: get_vectorstore_retriever took {(time.time() - t0)*1000:.0f}ms")
-    except Exception as e:
-        logger.error(f"Error creating history-aware retriever: {e}")
+        logger.info(
+            "Retriever created",
+            extra={"latency_ms": round((time.time() - t0) * 1000)},
+        )
+    except Exception:
+        logger.exception("Error creating history-aware retriever")
         return {
             'statusCode': 500,
             "headers": {
@@ -549,10 +591,16 @@ def handler(event, context):
                 # No guardrails were active, this is a regular error
                 raise
 
-        logger.info(f"TIMING: get_response_streaming took {(time.time() - t0)*1000:.0f}ms")
-        logger.info(f"TIMING: total handler time {(time.time() - t_start)*1000:.0f}ms")
-    except Exception as e:
-        logger.error(f"Error getting response: {e}")
+        logger.info(
+            "Response streaming complete",
+            extra={"response_latency_ms": round((time.time() - t0) * 1000)},
+        )
+        logger.info(
+            "Total handler time",
+            extra={"total_handler_latency_ms": round((time.time() - t_start) * 1000)},
+        )
+    except Exception:
+        logger.exception("Error getting response")
         return {
             'statusCode': 500,
             "headers": {

@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Python Lambda Syntax Check",
+      "description": "Checks any edited Python Lambda file for syntax errors immediately, since there is no Python test runner configured",
+      "trigger": "PostFileSave",
+      "matcher": "cdk/.*[^/]*\\.py$",
+      "action": {
+        "type": "agent",
+        "prompt": "Run python3 -m py_compile on the edited Python file to check for syntax errors. Report the result concisely — either confirm syntax is OK or show the error."
+      },
+      "enabled": true
+    }
+  ]
+}

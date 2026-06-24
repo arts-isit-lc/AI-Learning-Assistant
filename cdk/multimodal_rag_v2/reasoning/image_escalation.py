@@ -7,6 +7,7 @@ This module only handles execution: S3 fetch + vision LLM call.
 from __future__ import annotations
 
 import base64
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -74,9 +75,29 @@ class ImageEscalation:
         Returns:
             EscalationResult with escalation_used flag and image analyses.
         """
+        escalation_start = time.time()
+        image_results_count = sum(1 for r in results if r.image_s3_key is not None)
+
+        logger.info(
+            "Starting image escalation",
+            extra={
+                "total_results": len(results),
+                "image_results_available": image_results_count,
+                "has_figure_reference": query_intent is not None and getattr(query_intent, "figure_reference", None) is not None,
+                "query_preview": query[:80],
+            },
+        )
+
         try:
             # Strategy 1: If figure_reference is set, find sibling-linked images
             if query_intent is not None and query_intent.figure_reference is not None:
+                logger.info(
+                    "Attempting sibling-linked image strategy",
+                    extra={
+                        "figure_ref_type": query_intent.figure_reference.ref_type,
+                        "figure_ref_number": query_intent.figure_reference.number,
+                    },
+                )
                 sibling_images = self._find_sibling_linked_images(
                     results, query_intent.figure_reference.number
                 )
@@ -87,12 +108,28 @@ class ImageEscalation:
                         if analysis is not None:
                             analyses.append(analysis)
                     if analyses:
+                        escalation_latency = time.time() - escalation_start
+                        logger.info(
+                            "Escalation complete via sibling-linked strategy",
+                            extra={
+                                "analyses_produced": len(analyses),
+                                "sibling_images_found": len(sibling_images),
+                                "escalation_latency_ms": round(escalation_latency * 1000, 2),
+                            },
+                        )
                         return EscalationResult(escalation_used=True, image_analyses=analyses)
+                else:
+                    logger.info("No sibling-linked images found, falling back to score-based strategy")
 
             # Strategy 2: Fallback to top-scoring image results by image_s3_key
             image_results = [r for r in results if r.image_s3_key is not None]
 
             if not image_results:
+                escalation_latency = time.time() - escalation_start
+                logger.info(
+                    "No image results available for escalation",
+                    extra={"escalation_latency_ms": round(escalation_latency * 1000, 2)},
+                )
                 return EscalationResult(escalation_used=False, image_analyses=[])
 
             # Select top 2 by score (descending)
@@ -101,6 +138,14 @@ class ImageEscalation:
             )
             top_results = sorted_results[:2]
 
+            logger.info(
+                "Using score-based image selection",
+                extra={
+                    "top_image_scores": [round(r.score, 4) for r in top_results],
+                    "top_image_keys": [r.image_s3_key for r in top_results],
+                },
+            )
+
             analyses = []
 
             for result in top_results:
@@ -108,11 +153,27 @@ class ImageEscalation:
                 if analysis is not None:
                     analyses.append(analysis)
 
+            escalation_latency = time.time() - escalation_start
+
             if analyses:
+                logger.info(
+                    "Escalation complete via score-based strategy",
+                    extra={
+                        "analyses_produced": len(analyses),
+                        "escalation_latency_ms": round(escalation_latency * 1000, 2),
+                    },
+                )
                 return EscalationResult(
                     escalation_used=True, image_analyses=analyses
                 )
             else:
+                logger.warning(
+                    "Escalation attempted but no analyses produced",
+                    extra={
+                        "images_attempted": len(top_results),
+                        "escalation_latency_ms": round(escalation_latency * 1000, 2),
+                    },
+                )
                 return EscalationResult(
                     escalation_used=False, image_analyses=[]
                 )
@@ -223,13 +284,42 @@ class ImageEscalation:
         if image_s3_key is None:
             return None
 
+        analyze_start = time.time()
+
         # Step 1: Fetch image from S3
+        fetch_start = time.time()
         image_bytes = self._fetch_image(image_s3_key)
+        fetch_latency = time.time() - fetch_start
+
         if image_bytes is None:
             return None
 
+        logger.info(
+            "Image fetched from S3",
+            extra={
+                "image_s3_key": image_s3_key,
+                "image_size_bytes": len(image_bytes),
+                "fetch_latency_ms": round(fetch_latency * 1000, 2),
+            },
+        )
+
         # Step 2: Invoke vision LLM
+        llm_start = time.time()
         analysis = self._invoke_vision_llm(image_bytes, image_s3_key, query)
+        llm_latency = time.time() - llm_start
+
+        if analysis is not None:
+            logger.info(
+                "Vision LLM analysis complete",
+                extra={
+                    "image_s3_key": image_s3_key,
+                    "analysis_length": len(analysis.analysis),
+                    "confidence": analysis.confidence,
+                    "llm_latency_ms": round(llm_latency * 1000, 2),
+                    "total_analyze_latency_ms": round((time.time() - analyze_start) * 1000, 2),
+                },
+            )
+
         return analysis
 
     def _fetch_image(self, image_s3_key: str) -> bytes | None:

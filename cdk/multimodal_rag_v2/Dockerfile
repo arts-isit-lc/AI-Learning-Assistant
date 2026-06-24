@@ -1,5 +1,8 @@
 FROM --platform=linux/amd64 public.ecr.aws/lambda/python:3.11
 
+# Force rebuild: 2026-06-24
+ENV REBUILD_MARKER=20260624d
+
 # Install system dependencies needed for native packages (psycopg2, PyMuPDF)
 RUN yum -y install postgresql-devel gcc gcc-c++ libpq make
 

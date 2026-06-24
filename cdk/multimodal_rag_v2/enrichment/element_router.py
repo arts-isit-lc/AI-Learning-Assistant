@@ -170,10 +170,27 @@ class ElementRouter:
             List of EnrichedElement instances for all elements.
             Failed elements receive fallback enrichment.
         """
+        doc_start = time.time()
         enriched_elements: list[EnrichedElement] = []
         vision_call_count: int = 0
+        fallback_count: int = 0
+        type_timings: dict[str, float] = {}
+        type_counts: dict[str, int] = {}
+
+        logger.info(
+            "Starting document enrichment",
+            extra={
+                "file_id": document_ir.file_metadata.file_id,
+                "total_elements": len(document_ir.elements),
+                "element_types": {
+                    etype.value: count
+                    for etype, count in document_ir.element_count.items()
+                } if hasattr(document_ir, "element_count") else {},
+            },
+        )
 
         for element in document_ir.elements:
+            element_start = time.time()
             try:
                 results = self._enrich_element(element, vision_call_count)
                 # Update vision call count based on what was processed
@@ -194,6 +211,15 @@ class ElementRouter:
                 )
                 fallback = _create_fallback(element)
                 enriched_elements.append(fallback)
+                fallback_count += 1
+
+            # Track per-type timing
+            element_latency = time.time() - element_start
+            etype = element.element_type.value
+            type_timings[etype] = type_timings.get(etype, 0.0) + element_latency
+            type_counts[etype] = type_counts.get(etype, 0) + 1
+
+        doc_latency = time.time() - doc_start
 
         logger.info(
             "Document enrichment complete",
@@ -202,6 +228,10 @@ class ElementRouter:
                 "total_elements": len(document_ir.elements),
                 "enriched_count": len(enriched_elements),
                 "vision_calls": vision_call_count,
+                "fallback_count": fallback_count,
+                "doc_enrichment_latency_ms": round(doc_latency * 1000, 2),
+                "per_type_latency_ms": {k: round(v * 1000, 2) for k, v in type_timings.items()},
+                "per_type_counts": type_counts,
             },
         )
         return enriched_elements

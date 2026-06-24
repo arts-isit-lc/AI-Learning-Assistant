@@ -121,14 +121,20 @@ def get_other_module_names(course_id: str, current_module_id: str, connection) -
         cur.close()
 
         other_modules = [row[0] for row in results]
-        logger.info(f"Other modules in course {course_id}: {other_modules}")
+        logger.info(
+            "Other modules fetched",
+            extra={"course_id": course_id, "module_count": len(other_modules)},
+        )
         return other_modules
 
     except Exception as e:
         if cur:
             cur.close()
         connection.rollback()
-        logger.error(f"Error fetching other module names: {e}")
+        logger.exception(
+            "Error fetching other module names",
+            extra={"course_id": course_id, "module_id": current_module_id},
+        )
         return []
 
 def get_student_query(raw_query: str) -> str:
@@ -218,7 +224,10 @@ def get_module_topics(module_id: str, connection) -> str:
         return section
 
     except Exception as e:
-        logger.warning(f"Failed to fetch module topics for module_id={module_id}: {e}")
+        logger.warning(
+            "Failed to fetch module topics",
+            extra={"module_id": module_id, "error": str(e)},
+        )
         return ""
 
 
@@ -303,6 +312,7 @@ def get_response_streaming(
     chunk_buffer = ""
     CHUNK_SIZE = 80
     first_chunk_logged = False
+    chunk_count = 0
 
     try:
         for chunk in conversational_rag_chain.stream(
@@ -312,10 +322,14 @@ def get_response_streaming(
             answer_chunk = chunk.get("answer", "")
             if answer_chunk:
                 if not first_chunk_logged:
-                    logger.info(f"TIMING: first token arrived at {(time.time() - t_stream_start)*1000:.0f}ms")
+                    logger.info(
+                        "First token arrived",
+                        extra={"time_to_first_token_ms": round((time.time() - t_stream_start) * 1000)},
+                    )
                     first_chunk_logged = True
                 full_response += answer_chunk
                 chunk_buffer += answer_chunk
+                chunk_count += 1
 
                 if len(chunk_buffer) >= CHUNK_SIZE and chunk_callback:
                     chunk_callback(chunk_buffer)
@@ -329,8 +343,21 @@ def get_response_streaming(
         if done_callback:
             done_callback()
 
-    except Exception as e:
-        logger.error(f"Error during streaming: {e}")
+        stream_latency = time.time() - t_stream_start
+        logger.info(
+            "Streaming complete",
+            extra={
+                "stream_latency_ms": round(stream_latency * 1000),
+                "response_length": len(full_response),
+                "chunk_count": chunk_count,
+            },
+        )
+
+    except Exception:
+        logger.exception(
+            "Error during streaming",
+            extra={"session_id": session_id, "partial_response_length": len(full_response)},
+        )
         if done_callback:
             done_callback()
         if not full_response:

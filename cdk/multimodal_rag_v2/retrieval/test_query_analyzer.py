@@ -79,28 +79,32 @@ class TestRuleBasedClassification:
         assert intent.requires_formula is True
 
     def test_requires_formula_fires_on_solve(self, analyzer: QueryAnalyzer) -> None:
+        # "solve" was removed as too broad — this now goes to Haiku fallback
         intent = analyzer.analyze("Can you solve this problem?")
-        assert intent.requires_formula is True
+        assert intent.requires_formula is False  # No longer triggers via rules
 
     def test_requires_formula_fires_on_calculate(self, analyzer: QueryAnalyzer) -> None:
         intent = analyzer.analyze("How to calculate the area?")
         assert intent.requires_formula is True
 
     def test_requires_table_fires_on_data(self, analyzer: QueryAnalyzer) -> None:
+        # "data" was removed as too broad — this now goes to Haiku fallback
         intent = analyzer.analyze("What data supports this conclusion?")
-        assert intent.requires_table is True
+        assert intent.requires_table is False  # No longer triggers via rules
 
     def test_requires_table_fires_on_compare(self, analyzer: QueryAnalyzer) -> None:
+        # "compare" was removed as too broad — this now goes to Haiku fallback
         intent = analyzer.analyze("Compare the two algorithms")
-        assert intent.requires_table is True
+        assert intent.requires_table is False  # No longer triggers via rules
 
     def test_requires_table_fires_on_statistics(self, analyzer: QueryAnalyzer) -> None:
         intent = analyzer.analyze("What are the statistics for this experiment?")
         assert intent.requires_table is True
 
     def test_needs_summary_fires_on_lecture(self, analyzer: QueryAnalyzer) -> None:
-        intent = analyzer.analyze("What did we cover in lecture 5?")
-        assert intent.needs_summary is True
+        # "covered" triggers needs_summary; the query must contain "covered" (not "cover")
+        intent = analyzer.analyze("What was covered in lecture 5?")
+        assert intent.needs_summary is True  # "covered" triggers needs_summary
 
     def test_needs_summary_fires_on_overview(self, analyzer: QueryAnalyzer) -> None:
         intent = analyzer.analyze("Give me an overview of the module")
@@ -133,7 +137,7 @@ class TestRuleBasedClassification:
 
     def test_multiple_rules_fire_simultaneously(self, analyzer: QueryAnalyzer) -> None:
         """Multiple rules can fire at once (e.g. 'show me the diagram')."""
-        intent = analyzer.analyze("show me the diagram with data")
+        intent = analyzer.analyze("show me the diagram with statistics")
         assert intent.requires_escalation is True
         assert intent.requires_image is True
         assert intent.requires_table is True
@@ -354,9 +358,9 @@ class TestEdgeCases:
         assert intent == QueryIntent()
 
     def test_keyword_as_substring_in_word(self, analyzer: QueryAnalyzer) -> None:
-        """Keywords match as substrings — 'table' matches in 'timetable'."""
+        """With word boundaries, 'table' no longer matches in 'timetable'."""
         intent = analyzer.analyze("What is the timetable for next week?")
-        assert intent.requires_table is True
+        assert intent.requires_table is False  # Word boundary prevents substring match
 
     def test_multiple_lecture_numbers_extracts_first(self, analyzer: QueryAnalyzer) -> None:
         """When multiple lecture references exist, extract the first match."""
@@ -365,11 +369,11 @@ class TestEdgeCases:
 
     def test_all_flags_can_fire(self, analyzer: QueryAnalyzer) -> None:
         """All rule sets can fire simultaneously."""
-        query = "Show me the diagram with formula and data covered in lecture 2"
+        query = "Show me the diagram with formula and statistics covered in the overview for lecture 2"
         intent = analyzer.analyze(query)
         assert intent.requires_image is True  # "diagram"
         assert intent.requires_formula is True  # "formula"
-        assert intent.requires_table is True  # "data"
-        assert intent.needs_summary is True  # "covered" and "lecture"
+        assert intent.requires_table is True  # "statistics"
+        assert intent.needs_summary is True  # "covered" and "overview"
         assert intent.requires_escalation is True  # "show me"
         assert intent.lecture_number == 2

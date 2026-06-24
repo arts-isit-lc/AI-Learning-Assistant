@@ -18,7 +18,7 @@ from ..models.data_models import (
 )
 from .exceptions import ExtractionFailureError
 
-logger = Logger(service="ingestion")
+logger = Logger(service="multimodal-rag-ingestion")
 
 # Minimum image dimensions (pixels) — images below this threshold are filtered out.
 _MIN_IMAGE_WIDTH = 100
@@ -68,17 +68,13 @@ class IRBuilder:
         """Internal build logic — produces the DocumentIR."""
         seen_hashes: set[str] = set()
         elements: list[IRElement] = []
+        dedup_count = 0
+        filtered_small_count = 0
 
         for raw in raw_elements:
             # Filter small images
             if raw.element_type == ElementType.IMAGE and self._is_small_image(raw):
-                logger.info(
-                    "Filtering small image",
-                    extra={
-                        "width": raw.raw_metadata.get("width"),
-                        "height": raw.raw_metadata.get("height"),
-                    },
-                )
+                filtered_small_count += 1
                 continue
 
             # Compute content bytes for hashing
@@ -89,10 +85,7 @@ class IRBuilder:
 
             # Deduplicate: first occurrence wins
             if content_hash in seen_hashes:
-                logger.info(
-                    "Deduplicating element",
-                    extra={"content_hash": content_hash[:16]},
-                )
+                dedup_count += 1
                 continue
             seen_hashes.add(content_hash)
 
@@ -121,6 +114,26 @@ class IRBuilder:
             type_counter[el.element_type] += 1
 
         element_count = dict(type_counter)
+
+        # Determine max page for diagnostics
+        max_page = max(
+            (el.provenance.page_num or 0 for el in elements), default=0
+        )
+
+        logger.info(
+            "IR build summary",
+            extra={
+                "file_id": file_metadata.file_id,
+                "file_key": file_metadata.file_key,
+                "raw_element_count": len(raw_elements),
+                "final_element_count": len(elements),
+                "deduplicated_count": dedup_count,
+                "filtered_small_images": filtered_small_count,
+                "element_type_breakdown": {k.value: v for k, v in element_count.items()},
+                "max_page_number": max_page,
+                "ir_version": IR_VERSION,
+            },
+        )
 
         return DocumentIR(
             file_metadata=file_metadata,

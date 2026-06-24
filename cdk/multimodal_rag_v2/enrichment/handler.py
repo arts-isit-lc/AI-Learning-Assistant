@@ -19,6 +19,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import time
 from typing import Any
 
 try:
@@ -185,32 +186,56 @@ def _process_record(record: dict[str, Any]) -> dict[str, Any]:
         extra={"ir_version": ir_version},
     )
 
+    record_start = time.time()
+
     # Step 1: Load DocumentIR from S3
+    ir_load_start = time.time()
     document_ir = ir_persistence.load(
         course_id=course_id,
         module_id=module_id,
         file_id=file_id,
         ir_version=ir_version,
     )
+    ir_load_latency = time.time() - ir_load_start
 
     logger.info(
         "DocumentIR loaded",
-        extra={"element_count": len(document_ir.elements)},
+        extra={
+            "element_count": len(document_ir.elements),
+            "ir_load_latency_ms": round(ir_load_latency * 1000, 2),
+        },
     )
 
     # Step 2: Enrich elements via ElementRouter (handles fallback, retries, visual cap)
+    enrich_start = time.time()
     enriched_elements = _enrich_with_cache(document_ir, course_id, module_id)
+    enrich_latency = time.time() - enrich_start
 
     logger.info(
         "Elements enriched",
-        extra={"enriched_count": len(enriched_elements)},
+        extra={
+            "enriched_count": len(enriched_elements),
+            "enrich_latency_ms": round(enrich_latency * 1000, 2),
+        },
     )
 
     # Step 3: Generate DocumentSummary
+    summary_start = time.time()
     doc_summary, summary_unit = document_summary_gen.generate(document_ir)
+    summary_latency = time.time() - summary_start
+
+    logger.info(
+        "Document summary generated",
+        extra={
+            "summary_topics": len(doc_summary.topics),
+            "summary_latency_ms": round(summary_latency * 1000, 2),
+        },
+    )
 
     # Step 4: Build RetrievalUnits from enriched elements
+    ru_build_start = time.time()
     retrieval_units = retrieval_unit_builder.build(enriched_elements)
+    ru_build_latency = time.time() - ru_build_start
 
     # Add the document summary RetrievalUnit
     retrieval_units.append(summary_unit)
@@ -230,20 +255,42 @@ def _process_record(record: dict[str, Any]) -> dict[str, Any]:
             "table_units": len(table_units),
             "image_units": len(image_units),
             "sample_table_text": table_units[0].embedding_text[:100] if table_units else "NO_TABLES",
+            "ru_build_latency_ms": round(ru_build_latency * 1000, 2),
         },
     )
 
     # Step 5: Generate embeddings for each RetrievalUnit
+    embed_start = time.time()
     _generate_embeddings(retrieval_units)
+    embed_latency = time.time() - embed_start
 
     # Step 6: Store in pgvector (placeholder — actual storage wired in CDK)
+    store_start = time.time()
     _store_in_pgvector(retrieval_units, course_id, module_id, file_id)
+    store_latency = time.time() - store_start
 
     # Step 7: Extract topics and store in Module_Files.metadata for the topic aggregation pipeline
     _extract_and_store_topics(enriched_elements, file_id, module_id)
 
     # Step 8: Update Module_Files.processing_status so the UI stops showing the spinner
     _update_processing_status(file_id, module_id, len(retrieval_units))
+
+    total_latency = time.time() - record_start
+
+    logger.info(
+        "Enrichment pipeline complete",
+        extra={
+            "file_id": file_id,
+            "retrieval_unit_count": len(retrieval_units),
+            "total_latency_ms": round(total_latency * 1000, 2),
+            "ir_load_latency_ms": round(ir_load_latency * 1000, 2),
+            "enrich_latency_ms": round(enrich_latency * 1000, 2),
+            "summary_latency_ms": round(summary_latency * 1000, 2),
+            "ru_build_latency_ms": round(ru_build_latency * 1000, 2),
+            "embed_latency_ms": round(embed_latency * 1000, 2),
+            "store_latency_ms": round(store_latency * 1000, 2),
+        },
+    )
 
     return {
         "file_id": file_id,

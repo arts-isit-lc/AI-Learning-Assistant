@@ -172,6 +172,9 @@ class QueryAnalyzer:
             logger.warning("No Bedrock client available for Haiku fallback, returning default intent")
             return QueryIntent()
 
+        import time
+        haiku_start = time.time()
+
         prompt = (
             "Classify this student query for a learning assistant. "
             "Return ONLY a JSON object with these boolean fields:\n"
@@ -213,6 +216,18 @@ class QueryAnalyzer:
 
             classification = json.loads(json_str)
 
+            haiku_latency = time.time() - haiku_start
+            logger.info(
+                "Haiku fallback classification complete",
+                extra={
+                    "query_preview": query[:80],
+                    "classification": classification,
+                    "haiku_latency_ms": round(haiku_latency * 1000, 2),
+                    "input_tokens": response_body.get("usage", {}).get("input_tokens", 0),
+                    "output_tokens": response_body.get("usage", {}).get("output_tokens", 0),
+                },
+            )
+
             return QueryIntent(
                 needs_summary=bool(classification.get("needs_summary", False)),
                 requires_image=bool(classification.get("requires_image", False)),
@@ -222,7 +237,11 @@ class QueryAnalyzer:
             )
 
         except Exception:
-            logger.exception("Haiku fallback classification failed, returning default intent")
+            haiku_latency = time.time() - haiku_start
+            logger.exception(
+                "Haiku fallback classification failed, returning default intent",
+                extra={"haiku_latency_ms": round(haiku_latency * 1000, 2)},
+            )
             return QueryIntent()
 
     @staticmethod

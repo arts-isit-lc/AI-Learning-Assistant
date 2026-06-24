@@ -243,6 +243,7 @@ def _handle_query(
     query = event.get("query", "").strip()
     session_id = event.get("session_id", "")
     course_id = event.get("course_id", "")
+    module_id = event.get("module_id", "")
     allowed_file_ids = event.get("allowed_file_ids", [])
     chat_history = event.get("chat_history", [])
     embedding_version = event.get("embedding_version", EMBEDDING_VERSION)
@@ -311,11 +312,13 @@ def _handle_query(
     # Step 4: Hybrid Search
     with _traced_subsegment("HybridSearch"):
         search_start = time.time()
+        metadata_filter = {"module_id": module_id} if module_id else None
         merged_results = _execute_hybrid_search(
             query=query,
             query_intent=query_intent,
             query_embedding=query_embedding,
             embedding_version=embedding_version,
+            metadata_filter=metadata_filter,
         )
         search_latency = time.time() - search_start
 
@@ -450,6 +453,7 @@ def _execute_hybrid_search(
     query_intent: QueryIntent,
     query_embedding: list[float],
     embedding_version: str,
+    metadata_filter: dict | None = None,
 ) -> list:
     """Execute hybrid search, handling pgvector unavailability.
 
@@ -462,6 +466,7 @@ def _execute_hybrid_search(
         query_intent: Analyzed query intent.
         query_embedding: Pre-computed query embedding.
         embedding_version: Embedding version for filtering.
+        metadata_filter: Optional dict for filtering results by metadata (e.g., module_id).
 
     Returns:
         List of MergedResult from hybrid search.
@@ -494,6 +499,7 @@ def _execute_hybrid_search(
             query_embedding=query_embedding,
             k=search_k,
             embedding_version=embedding_version,
+            metadata_filter=metadata_filter,
         )
     except _PgvectorUnavailableError:
         raise

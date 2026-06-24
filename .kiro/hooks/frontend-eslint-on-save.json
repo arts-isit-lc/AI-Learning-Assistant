@@ -1,0 +1,17 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Frontend ESLint on Save",
+      "description": "Runs ESLint on the frontend whenever a JSX or JS source file is saved, since ESLint is the only automated quality gate in the frontend",
+      "trigger": "PostFileSave",
+      "matcher": "(frontend/src/.*[^/]*\\.jsx$|frontend/src/.*[^/]*\\.js$)",
+      "action": {
+        "type": "command",
+        "command": "bash -c 'cd /Users/user/projects/AI-Learning-Assistant/frontend && npm run lint'"
+      },
+      "timeout": 30,
+      "enabled": true
+    }
+  ]
+}

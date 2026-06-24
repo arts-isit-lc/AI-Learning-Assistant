@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Protocol
 
@@ -303,6 +304,7 @@ class HybridSearchEngine:
         query_embedding: list[float] | None = None,
         k: int = 15,
         embedding_version: str = "",
+        metadata_filter: dict | None = None,
     ) -> list[MergedResult]:
         """Execute hybrid search and merge results via reciprocal rank fusion.
 
@@ -317,12 +319,16 @@ class HybridSearchEngine:
             query_embedding: Pre-computed query embedding vector.
             k: Number of results to return (default 15).
             embedding_version: Only match vectors with this version.
+            metadata_filter: Optional external metadata filter (e.g., module_id scoping).
 
         Returns:
             List of MergedResult sorted by RRF score, at most k items.
         """
+        search_start = time.time()
         overfetch_k = k * 3
-        metadata_filter = self._build_metadata_filter(query_intent)
+        intent_filter = self._build_metadata_filter(query_intent)
+        # Merge external filter with intent-based filter
+        combined_filter = {**(metadata_filter or {}), **(intent_filter or {})}
 
         logger.info(
             "Starting hybrid search",
@@ -330,7 +336,8 @@ class HybridSearchEngine:
                 "k": k,
                 "overfetch_k": overfetch_k,
                 "embedding_version": embedding_version,
-                "has_metadata_filter": metadata_filter is not None,
+                "has_metadata_filter": combined_filter is not None and len(combined_filter) > 0,
+                "metadata_filter_keys": list(combined_filter.keys()) if combined_filter else [],
                 "needs_summary": query_intent.needs_summary,
                 "lecture_number": query_intent.lecture_number,
             },
@@ -339,46 +346,57 @@ class HybridSearchEngine:
         # Execute vector and BM25 searches in parallel
         vector_results: list[dict] = []
         bm25_results: list[dict] = []
+        vector_latency_ms = 0.0
+        bm25_latency_ms = 0.0
 
         with ThreadPoolExecutor(max_workers=2) as executor:
             futures = {}
 
             if query_embedding is not None:
                 futures["vector"] = executor.submit(
-                    self._execute_vector_search,
+                    self._timed_vector_search,
                     query_embedding,
                     overfetch_k,
                     embedding_version,
-                    metadata_filter,
+                    combined_filter or None,
                 )
 
             futures["bm25"] = executor.submit(
-                self._execute_bm25_search,
+                self._timed_bm25_search,
                 query,
                 overfetch_k,
-                metadata_filter,
+                combined_filter or None,
             )
 
             for key, future in futures.items():
                 try:
-                    result = future.result()
+                    result, latency = future.result()
                     if key == "vector":
                         vector_results = result
+                        vector_latency_ms = latency
                     else:
                         bm25_results = result
+                        bm25_latency_ms = latency
                 except Exception:
-                    logger.exception(f"{key} search future raised an exception")
+                    logger.exception(
+                        "Search future raised an exception",
+                        extra={"search_backend": key},
+                    )
 
         # Merge results
+        merge_start = time.time()
         merged = self._merge_results(vector_results, bm25_results, k)
+        merge_latency_ms = round((time.time() - merge_start) * 1000, 2)
 
         # Metadata filter fallback: if filtered query returns zero results,
         # retry WITHOUT the filter (Req 5.4, 5.5)
-        if len(merged) == 0 and metadata_filter is not None:
+        used_fallback = False
+        if len(merged) == 0 and combined_filter:
             logger.info(
                 "Metadata-filtered search returned zero results, retrying without filter",
-                extra={"metadata_filter": metadata_filter},
+                extra={"metadata_filter": combined_filter},
             )
+            used_fallback = True
 
             # Retry without metadata filter
             with ThreadPoolExecutor(max_workers=2) as executor:
@@ -386,7 +404,7 @@ class HybridSearchEngine:
 
                 if query_embedding is not None:
                     futures["vector"] = executor.submit(
-                        self._execute_vector_search,
+                        self._timed_vector_search,
                         query_embedding,
                         overfetch_k,
                         embedding_version,
@@ -394,7 +412,7 @@ class HybridSearchEngine:
                     )
 
                 futures["bm25"] = executor.submit(
-                    self._execute_bm25_search,
+                    self._timed_bm25_search,
                     query,
                     overfetch_k,
                     None,  # No metadata filter
@@ -405,17 +423,22 @@ class HybridSearchEngine:
 
                 for key, future in futures.items():
                     try:
-                        result = future.result()
+                        result, latency = future.result()
                         if key == "vector":
                             vector_results = result
+                            vector_latency_ms = latency
                         else:
                             bm25_results = result
+                            bm25_latency_ms = latency
                     except Exception:
                         logger.exception(
-                            f"{key} search future raised during fallback"
+                            "Search future raised during fallback",
+                            extra={"search_backend": key},
                         )
 
             merged = self._merge_results(vector_results, bm25_results, k)
+
+        total_latency_ms = round((time.time() - search_start) * 1000, 2)
 
         logger.info(
             "Hybrid search completed",
@@ -423,8 +446,38 @@ class HybridSearchEngine:
                 "vector_count": len(vector_results),
                 "bm25_count": len(bm25_results),
                 "merged_count": len(merged),
-                "used_fallback": metadata_filter is not None and len(merged) > 0,
+                "vector_latency_ms": vector_latency_ms,
+                "bm25_latency_ms": bm25_latency_ms,
+                "merge_latency_ms": merge_latency_ms,
+                "total_search_latency_ms": total_latency_ms,
+                "used_fallback": used_fallback,
+                "top_rrf_score": round(merged[0].rrf_score, 5) if merged else 0,
             },
         )
 
         return merged
+
+    def _timed_vector_search(
+        self,
+        query_embedding: list[float],
+        k: int,
+        embedding_version: str,
+        metadata_filter: dict | None = None,
+    ) -> tuple[list[dict], float]:
+        """Execute vector search with timing."""
+        start = time.time()
+        results = self._execute_vector_search(query_embedding, k, embedding_version, metadata_filter)
+        latency_ms = round((time.time() - start) * 1000, 2)
+        return results, latency_ms
+
+    def _timed_bm25_search(
+        self,
+        query: str,
+        k: int,
+        metadata_filter: dict | None = None,
+    ) -> tuple[list[dict], float]:
+        """Execute BM25 search with timing."""
+        start = time.time()
+        results = self._execute_bm25_search(query, k, metadata_filter)
+        latency_ms = round((time.time() - start) * 1000, 2)
+        return results, latency_ms

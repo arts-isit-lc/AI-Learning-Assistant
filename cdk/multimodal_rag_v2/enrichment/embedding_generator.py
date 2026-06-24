@@ -10,6 +10,7 @@ Bedrock model: amazon.titan-embed-text-v2:0 (1024 dimensions)
 from __future__ import annotations
 
 import json
+import time
 from typing import Any
 
 from aws_lambda_powertools import Logger
@@ -74,17 +75,28 @@ class EmbeddingGenerator:
         if self._embedding_cache is not None:
             cached = self._embedding_cache.get(content_hash, self._embedding_version)
             if cached is not None:
-                logger.info(
+                logger.debug(
                     "Embedding cache hit",
                     extra={
-                        "content_hash": content_hash,
+                        "content_hash": content_hash[:16],
                         "embedding_version": self._embedding_version,
                     },
                 )
                 return cached
 
         # 2. Cache miss — invoke Bedrock
+        embed_start = time.time()
         embedding = self._invoke_bedrock(text)
+        embed_latency = time.time() - embed_start
+
+        logger.debug(
+            "Embedding generated (cache miss)",
+            extra={
+                "content_hash": content_hash[:16],
+                "text_length": len(text),
+                "embed_latency_ms": round(embed_latency * 1000, 2),
+            },
+        )
 
         # 3. Store in cache (fire-and-forget)
         if self._embedding_cache is not None:
@@ -110,11 +122,39 @@ class EmbeddingGenerator:
         Raises:
             Exception: If any Bedrock invocation fails (propagated to caller).
         """
+        batch_start = time.time()
         results: list[list[float]] = []
+        cache_hits = 0
+        cache_misses = 0
 
         for text, content_hash in items:
-            embedding = self.generate(text, content_hash)
+            # Check cache inline to count hits/misses
+            if self._embedding_cache is not None:
+                cached = self._embedding_cache.get(content_hash, self._embedding_version)
+                if cached is not None:
+                    cache_hits += 1
+                    results.append(cached)
+                    continue
+
+            cache_misses += 1
+            embedding = self._invoke_bedrock(text)
+            if self._embedding_cache is not None:
+                self._embedding_cache.put(content_hash, embedding, self._embedding_version)
             results.append(embedding)
+
+        batch_latency = time.time() - batch_start
+
+        logger.info(
+            "Embedding batch complete",
+            extra={
+                "batch_size": len(items),
+                "cache_hits": cache_hits,
+                "cache_misses": cache_misses,
+                "cache_hit_rate": round(cache_hits / len(items), 3) if items else 0,
+                "batch_latency_ms": round(batch_latency * 1000, 2),
+                "avg_latency_per_item_ms": round((batch_latency * 1000) / len(items), 2) if items else 0,
+            },
+        )
 
         return results
 
@@ -146,14 +186,5 @@ class EmbeddingGenerator:
 
         response_body = json.loads(response["body"].read())
         embedding = response_body["embedding"]
-
-        logger.info(
-            "Bedrock embedding generated",
-            extra={
-                "model_id": EMBEDDING_MODEL_ID,
-                "dimensions": len(embedding),
-                "embedding_version": self._embedding_version,
-            },
-        )
 
         return embedding

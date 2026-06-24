@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import urllib.parse
 from typing import Any
 
@@ -212,6 +213,8 @@ def _process_record(record: dict[str, Any]) -> dict[str, Any]:
     Returns:
         Result dict with status and details.
     """
+    record_start = time.time()
+
     try:
         # Extract bucket and key from the S3 event record
         s3_info = record.get("s3", {})
@@ -253,39 +256,75 @@ def _process_record(record: dict[str, Any]) -> dict[str, Any]:
         )
 
         # Download file from S3
+        download_start = time.time()
         with _traced_subsegment("S3Download"):
             file_content = _download_file(bucket, key)
+        download_latency = time.time() - download_start
+
+        logger.info(
+            "S3 download complete",
+            extra={
+                "download_latency_ms": round(download_latency * 1000, 2),
+                "content_size_bytes": len(file_content),
+            },
+        )
 
         # Process file through AdapterRegistry → RawElements
+        adapter_start = time.time()
         with _traced_subsegment("AdapterExtraction"):
             raw_elements = _registry.process_file(file_content, file_metadata)
+        adapter_latency = time.time() - adapter_start
 
         logger.info(
             "Adapter extraction complete",
-            extra={"raw_element_count": len(raw_elements)},
+            extra={
+                "raw_element_count": len(raw_elements),
+                "extension": extension,
+                "adapter_latency_ms": round(adapter_latency * 1000, 2),
+            },
         )
 
         # Build DocumentIR
+        ir_build_start = time.time()
         with _traced_subsegment("IRBuild"):
             document_ir = _ir_builder.build(raw_elements, file_metadata)
+        ir_build_latency = time.time() - ir_build_start
 
         logger.info(
             "IR build complete",
             extra={
                 "element_count": len(document_ir.elements),
                 "ir_version": document_ir.ir_version,
+                "ir_build_latency_ms": round(ir_build_latency * 1000, 2),
             },
         )
 
         # Upload extracted images to S3 for later retrieval (image escalation)
+        image_upload_start = time.time()
         with _traced_subsegment("ImageUpload"):
             _upload_images_to_s3(document_ir, course_id, module_id)
+        image_upload_latency = time.time() - image_upload_start
 
         # Persist DocumentIR to S3
+        persist_start = time.time()
         with _traced_subsegment("IRPersist"):
             s3_path = _ir_persistence.persist(document_ir)
+        persist_latency = time.time() - persist_start
 
-        logger.info("Ingestion complete", extra={"ir_s3_path": s3_path})
+        total_latency = time.time() - record_start
+
+        logger.info(
+            "Ingestion complete",
+            extra={
+                "ir_s3_path": s3_path,
+                "total_latency_ms": round(total_latency * 1000, 2),
+                "download_latency_ms": round(download_latency * 1000, 2),
+                "adapter_latency_ms": round(adapter_latency * 1000, 2),
+                "ir_build_latency_ms": round(ir_build_latency * 1000, 2),
+                "image_upload_latency_ms": round(image_upload_latency * 1000, 2),
+                "persist_latency_ms": round(persist_latency * 1000, 2),
+            },
+        )
 
         # Send message to enrichment queue to trigger Layer 2 processing
         if ENRICHMENT_QUEUE_URL:

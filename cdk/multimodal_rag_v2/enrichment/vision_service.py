@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import json
+import time
 from typing import Any
 
 from aws_lambda_powertools import Logger
@@ -63,6 +64,8 @@ class VisionService:
             Exception: On Bedrock invocation failure or response parsing error.
                 ElementRouter handles fallback logic.
         """
+        enrich_start = time.time()
+
         image_bytes = element.content if isinstance(element.content, bytes) else element.content.encode("utf-8")
         image_base64 = base64.b64encode(image_bytes).decode("utf-8")
 
@@ -95,15 +98,22 @@ class VisionService:
 
         logger.info(
             "Invoking vision model",
-            extra={"element_id": element.element_id, "model_id": MODEL_ID},
+            extra={
+                "element_id": element.element_id,
+                "model_id": MODEL_ID,
+                "image_size_bytes": len(image_bytes),
+                "media_type": media_type,
+            },
         )
 
+        llm_start = time.time()
         response = self._client.invoke_model(
             modelId=MODEL_ID,
             contentType="application/json",
             accept="application/json",
             body=json.dumps(request_body),
         )
+        llm_latency = time.time() - llm_start
 
         response_body = json.loads(response["body"].read())
         result = self._parse_response(response_body)
@@ -115,6 +125,24 @@ class VisionService:
         keywords = result.get("keywords", [])[:10]
 
         embedding_text = f"{image_type}: {image_description}"
+
+        enrich_latency = time.time() - enrich_start
+
+        logger.info(
+            "Vision enrichment complete",
+            extra={
+                "element_id": element.element_id,
+                "image_type": image_type,
+                "description_length": len(image_description),
+                "topic_count": len(topics),
+                "label_count": len(labels),
+                "keyword_count": len(keywords),
+                "llm_latency_ms": round(llm_latency * 1000, 2),
+                "total_enrich_latency_ms": round(enrich_latency * 1000, 2),
+                "input_tokens": response_body.get("usage", {}).get("input_tokens", 0),
+                "output_tokens": response_body.get("usage", {}).get("output_tokens", 0),
+            },
+        )
 
         return EnrichedElement(
             element_id=element.element_id,

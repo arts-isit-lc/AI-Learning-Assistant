@@ -1,6 +1,6 @@
-import logging
 import re
 import os
+import time
 from typing import Dict, List, Optional
 
 import psycopg2
@@ -8,8 +8,9 @@ from langchain_core.documents import Document
 from langchain_core.runnables import RunnableLambda
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_classic.chains import create_history_aware_retriever
+from aws_lambda_powertools import Logger
 
-logger = logging.getLogger(__name__)
+logger = Logger(service="text-generation")
 
 VECTOR_WEIGHT = 0.7
 KEYWORD_WEIGHT = 0.3
@@ -62,6 +63,8 @@ def hybrid_search(
     k: int = TOP_K,
     connection=None,
 ) -> List[Document]:
+    search_start = time.time()
+
     # P-6: Reuse passed connection if available, otherwise create a new one
     owns_connection = connection is None
     conn = connection if connection else psycopg2.connect(connection_string)
@@ -79,6 +82,8 @@ def hybrid_search(
             file_id_filter = f"AND e.cmetadata->>'file_id' IN ({placeholders})"
             params_base += allowed_file_ids
 
+        # Vector search
+        vector_start = time.time()
         vector_sql = f"""
             SELECT
                 e.id,
@@ -94,7 +99,10 @@ def hybrid_search(
         """
         cur.execute(vector_sql, [query_embedding] + params_base)
         vector_rows = cur.fetchall()
+        vector_latency = time.time() - vector_start
 
+        # Keyword search
+        keyword_start = time.time()
         keyword_sql = f"""
             SELECT
                 e.id,
@@ -113,6 +121,7 @@ def hybrid_search(
         keyword_params = [query] + list(collection_names) + [query] + (allowed_file_ids or [])
         cur.execute(keyword_sql, keyword_params)
         keyword_rows = cur.fetchall()
+        keyword_latency = time.time() - keyword_start
 
         cur.close()
 
@@ -149,13 +158,40 @@ def hybrid_search(
                 id_to_row[row[0]] = (row[0], row[1], row[2], 0.0)
             cur2.close()
 
-        return [
+        results = [
             Document(page_content=id_to_row[id_][1], metadata=id_to_row[id_][2] or {})
             for id_ in top_ids if id_ in id_to_row
         ]
 
-    except Exception as e:
-        logger.error(f"Error in hybrid_search: {e}")
+        total_latency = time.time() - search_start
+
+        logger.info(
+            "Hybrid search complete",
+            extra={
+                "vector_results": len(vector_rows),
+                "keyword_results": len(keyword_rows),
+                "blended_candidates": len(all_ids),
+                "returned_results": len(results),
+                "vector_latency_ms": round(vector_latency * 1000, 2),
+                "keyword_latency_ms": round(keyword_latency * 1000, 2),
+                "total_search_latency_ms": round(total_latency * 1000, 2),
+                "collection_names": collection_names,
+                "allowed_file_ids_count": len(allowed_file_ids) if allowed_file_ids else 0,
+                "top_vector_score": round(vector_rows[0][3], 4) if vector_rows else 0,
+                "top_blended_score": round(blended[0][1], 4) if blended else 0,
+            },
+        )
+
+        return results
+
+    except Exception:
+        logger.exception(
+            "Error in hybrid_search",
+            extra={
+                "collection_names": collection_names,
+                "allowed_file_ids_count": len(allowed_file_ids) if allowed_file_ids else 0,
+            },
+        )
         if not owns_connection:
             conn.rollback()
         raise
@@ -186,7 +222,15 @@ def get_vectorstore_retriever(
     )
 
     def retrieve(query: str) -> List[Document]:
+        embed_start = time.time()
         query_embedding = embeddings.embed_query(query)
+        embed_latency = time.time() - embed_start
+
+        logger.info(
+            "Query embedding generated",
+            extra={"embed_latency_ms": round(embed_latency * 1000, 2)},
+        )
+
         return hybrid_search(
             query=query,
             query_embedding=query_embedding,
@@ -223,10 +267,13 @@ def get_vectorstore_retriever(
         chat_history = input_dict.get("chat_history", [])
 
         if always_reformulate or needs_reformulation(query, chat_history):
-            logger.info("ARCH-2: Using LLM reformulation for query")
+            logger.info(
+                "Using LLM reformulation for query",
+                extra={"reason": "always_reformulate" if always_reformulate else "heuristic_match"},
+            )
             return history_aware_retriever.invoke(input_dict)
         else:
-            logger.info("ARCH-2: Skipping LLM reformulation — query appears standalone")
+            logger.info("Skipping LLM reformulation — query appears standalone")
             return retriever.invoke(query)
 
     return RunnableLambda(conditional_retriever)

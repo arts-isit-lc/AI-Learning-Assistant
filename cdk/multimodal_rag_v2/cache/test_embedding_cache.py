@@ -141,6 +141,7 @@ class TestPut:
     def test_put_stores_embedding(
         self, cache: EmbeddingCache, fake_table: FakeDynamoDBTable
     ) -> None:
+        from decimal import Decimal
         embedding = [0.1, 0.2, 0.3]
         cache.put("hash-store", embedding, "titan-v2-1024")
 
@@ -148,7 +149,8 @@ class TestPut:
         assert stored is not None
         assert stored["content_hash"] == "hash-store"
         assert stored["embedding_version"] == "titan-v2-1024"
-        assert stored["embedding"] == [0.1, 0.2, 0.3]
+        # Embedding is stored as Decimal (DynamoDB requirement)
+        assert stored["embedding"] == [Decimal("0.1"), Decimal("0.2"), Decimal("0.3")]
 
     def test_put_overwrites_existing_entry(
         self, cache: EmbeddingCache, fake_table: FakeDynamoDBTable

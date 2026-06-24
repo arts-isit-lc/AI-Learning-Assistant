@@ -9,6 +9,7 @@ Responsibilities:
 
 from __future__ import annotations
 
+import time
 from collections import OrderedDict
 from typing import Protocol
 
@@ -76,24 +77,89 @@ class ContextBuilder:
         Returns:
             StructuredContext ready for prompt formatting.
         """
+        build_start = time.time()
+
+        logger.info(
+            "Building context from ranked results",
+            extra={
+                "input_result_count": len(results),
+                "module_id": module_id,
+                "max_tokens": max_tokens,
+                "has_sibling_store": self._sibling_store is not None,
+            },
+        )
+
         # Step 1: Expand siblings
+        expand_start = time.time()
         expanded: list[RankedResult] = []
         seen_ids: list[str] = []
+        siblings_added = 0
         for result in results:
             siblings = self.expand_siblings(result)
             for sibling in siblings:
                 if sibling.retrieval_id not in seen_ids:
                     seen_ids.append(sibling.retrieval_id)
                     expanded.append(sibling)
+            siblings_added += len(siblings) - 1  # subtract the original result
+        expand_latency = time.time() - expand_start
+
+        logger.info(
+            "Sibling expansion complete",
+            extra={
+                "original_count": len(results),
+                "expanded_count": len(expanded),
+                "siblings_added": siblings_added,
+                "expand_latency_ms": round(expand_latency * 1000, 2),
+            },
+        )
 
         # Step 2: Build clusters
+        cluster_start = time.time()
         clusters = self.build_clusters(expanded, module_id)
+        cluster_latency = time.time() - cluster_start
+
+        logger.info(
+            "Clustering complete",
+            extra={
+                "cluster_count": len(clusters),
+                "total_token_cost": sum(c.token_cost for c in clusters),
+                "cluster_latency_ms": round(cluster_latency * 1000, 2),
+            },
+        )
 
         # Step 3: Allocate token budget
+        budget_start = time.time()
         budgeted_clusters = self.allocate_token_budget(clusters, max_tokens)
+        budget_latency = time.time() - budget_start
+
+        excluded_count = len(clusters) - len(budgeted_clusters)
+        logger.info(
+            "Token budget allocation complete",
+            extra={
+                "clusters_included": len(budgeted_clusters),
+                "clusters_excluded": excluded_count,
+                "budgeted_tokens": sum(c.token_cost for c in budgeted_clusters),
+                "max_tokens": max_tokens,
+                "budget_latency_ms": round(budget_latency * 1000, 2),
+            },
+        )
 
         # Step 4: Assemble StructuredContext from budgeted clusters
         context = self._assemble_context(budgeted_clusters)
+
+        total_latency = time.time() - build_start
+        logger.info(
+            "Context build complete",
+            extra={
+                "text_passages": len(context.text_passages),
+                "image_descriptions": len(context.image_descriptions),
+                "formula_results": len(context.formula_results),
+                "table_results": len(context.table_results),
+                "total_token_count": context.token_count,
+                "total_latency_ms": round(total_latency * 1000, 2),
+            },
+        )
+
         return context
 
     def expand_siblings(
@@ -127,6 +193,13 @@ class ContextBuilder:
         # Retrieve all siblings from the store
         siblings = self._sibling_store.get_by_ids(result.sibling_ids)
         if not siblings:
+            logger.debug(
+                "Sibling store returned empty for result",
+                extra={
+                    "retrieval_id": result.retrieval_id,
+                    "sibling_ids_requested": len(result.sibling_ids),
+                },
+            )
             return [result]
 
         # Sort siblings by provenance (page_num, position_index) for ordering
@@ -191,6 +264,17 @@ class ContextBuilder:
                 r.metadata.get("provenance_position_index", 0),
             )
         )
+
+        if selected:
+            logger.debug(
+                "Siblings expanded for result",
+                extra={
+                    "retrieval_id": result.retrieval_id,
+                    "siblings_selected": len(selected),
+                    "added_tokens": added_tokens,
+                    "max_expansion_tokens": max_expansion_tokens,
+                },
+            )
 
         return all_elements
 

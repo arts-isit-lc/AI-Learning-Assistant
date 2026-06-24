@@ -60,8 +60,28 @@ class RetrievalUnitBuilder:
             List of RetrievalUnit instances ready for embedding and storage.
             Elements with empty/whitespace-only embedding_text are discarded.
         """
+        logger.info("RetrievalUnitBuilder.build() v3 - with caption injection and sibling linking")
         if not enriched_elements:
             return []
+
+        # DEBUG: Check what TEXT elements contain figure/table references
+        caption_pattern = re.compile(r"(?:figure|fig\.?|table|algorithm)\s*\d+", re.IGNORECASE)
+        text_with_captions = []
+        for elem in enriched_elements:
+            if elem.element_type == ElementType.TEXT and elem.embedding_text:
+                head = elem.embedding_text[:150]
+                if caption_pattern.search(head):
+                    text_with_captions.append(head[:80])
+        logger.info(
+            "Caption detection scan",
+            extra={
+                "text_elements_with_captions": len(text_with_captions),
+                "samples": text_with_captions[:5],
+                "total_text_elements": sum(1 for e in enriched_elements if e.element_type == ElementType.TEXT),
+                "sample_file_ids": list(set(e.file_id for e in enriched_elements[:10])),
+                "sample_page_nums": [e.provenance.page_num for e in enriched_elements[:10]],
+            },
+        )
 
         all_units: list[RetrievalUnit] = []
 
@@ -473,9 +493,10 @@ class RetrievalUnitBuilder:
 
         Modifies units in place.
         """
-        # Collect captions from enriched TEXT elements indexed by (file_id, page_num)
-        table_captions: dict[tuple[str, int], str] = {}
-        figure_captions: dict[tuple[str, int], str] = {}
+        # Collect captions from enriched TEXT elements indexed by page_num
+        # Note: build() processes one file at a time, so cross-file collisions are impossible
+        table_captions: dict[int, str] = {}
+        figure_captions: dict[int, str] = {}
 
         for elem in enriched_elements:
             if elem.element_type != ElementType.TEXT:
@@ -489,17 +510,15 @@ class RetrievalUnitBuilder:
                 continue
 
             page_num = elem.provenance.page_num
-            file_id = elem.file_id
-            if page_num is None or not file_id:
+            if page_num is None:
                 continue
 
-            key = (file_id, page_num)
             caption_text = elem.embedding_text.split("\n")[0][:200]  # First line, max 200 chars
 
             if self._TABLE_SUBPATTERN.search(match.group(0)):
-                table_captions[key] = caption_text
+                table_captions[page_num] = caption_text
             elif self._FIGURE_SUBPATTERN.search(match.group(0)):
-                figure_captions[key] = caption_text
+                figure_captions[page_num] = caption_text
 
         if not table_captions and not figure_captions:
             return
@@ -508,19 +527,16 @@ class RetrievalUnitBuilder:
         injected = 0
         for unit in units:
             page_num = unit.provenance.page_num
-            file_id = unit.metadata.get("file_id", "")
-            if page_num is None or not file_id:
+            if page_num is None:
                 continue
 
-            key = (file_id, page_num)
-
-            if unit.element_type == ElementType.TABLE and key in table_captions:
-                caption = table_captions[key]
+            if unit.element_type == ElementType.TABLE and page_num in table_captions:
+                caption = table_captions[page_num]
                 if caption.lower() not in unit.embedding_text.lower():
                     unit.embedding_text = f"{caption}\n{unit.embedding_text}"
                     injected += 1
-            elif unit.element_type == ElementType.IMAGE and key in figure_captions:
-                caption = figure_captions[key]
+            elif unit.element_type == ElementType.IMAGE and page_num in figure_captions:
+                caption = figure_captions[page_num]
                 if caption.lower() not in unit.embedding_text.lower():
                     unit.embedding_text = f"{caption}\n{unit.embedding_text}"
                     injected += 1
@@ -559,30 +575,29 @@ class RetrievalUnitBuilder:
 
         Modifies units in place.
         """
-        # Index image and table units by (file_id, page_num) to prevent cross-file links
-        images_by_key: dict[tuple[str, int], list[RetrievalUnit]] = defaultdict(list)
-        tables_by_key: dict[tuple[str, int], list[RetrievalUnit]] = defaultdict(list)
+        # Index image and table units by page_num
+        # Note: build() processes one file at a time, so cross-file collisions are impossible
+        images_by_page: dict[int, list[RetrievalUnit]] = defaultdict(list)
+        tables_by_page: dict[int, list[RetrievalUnit]] = defaultdict(list)
 
         for unit in units:
             page_num = unit.provenance.page_num
-            file_id = unit.metadata.get("file_id", "")
             if page_num is None:
                 continue
-            key = (file_id, page_num)
             if unit.element_type == ElementType.IMAGE:
-                images_by_key[key].append(unit)
+                images_by_page[page_num].append(unit)
             elif unit.element_type == ElementType.TABLE:
-                tables_by_key[key].append(unit)
+                tables_by_page[page_num].append(unit)
 
-        if not images_by_key and not tables_by_key:
+        if not images_by_page and not tables_by_page:
             logger.info("No images or tables to link", extra={"unit_count": len(units)})
             return  # Nothing to link
 
         logger.info(
             "Caption linking: indexing complete",
             extra={
-                "image_keys": list(str(k) for k in images_by_key.keys()),
-                "table_keys": list(str(k) for k in tables_by_key.keys()),
+                "image_pages": list(images_by_page.keys()),
+                "table_pages": list(tables_by_page.keys()),
             },
         )
 
@@ -593,19 +608,14 @@ class RetrievalUnitBuilder:
                 continue
 
             # Match captions within the first 150 chars of the chunk.
-            # This avoids linking deep mid-text references ("as shown in Figure 2.1...")
-            # while still catching captions that aren't at exact position 0.
             text_head = unit.embedding_text[:150]
             match = self._CAPTION_PATTERN.search(text_head)
             if not match:
                 continue
 
             page_num = unit.provenance.page_num
-            file_id = unit.metadata.get("file_id", "")
-            if page_num is None or not file_id:
+            if page_num is None:
                 continue
-
-            key = (file_id, page_num)
 
             # Store the figure reference in metadata
             unit.metadata["figure_ref"] = match.group(0).strip().lower()
@@ -619,11 +629,11 @@ class RetrievalUnitBuilder:
             targets: list[RetrievalUnit] = []
             if is_table_caption:
                 targets = (
-                    tables_by_key.get(key, [])
-                    + images_by_key.get(key, [])
+                    tables_by_page.get(page_num, [])
+                    + images_by_page.get(page_num, [])
                 )
             elif is_figure_caption:
-                targets = list(images_by_key.get(key, []))
+                targets = list(images_by_page.get(page_num, []))
 
             if not targets:
                 continue
