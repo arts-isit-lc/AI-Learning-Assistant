@@ -184,7 +184,7 @@ def lambda_handler(event, context):
             HttpMethod="PUT",
         )
 
-        response_body = {"presignedurl": presigned_url}
+        response_body = {"presignedurl": presigned_url, "content_type": content_type}
         if file_id:
             response_body["file_id"] = file_id
 

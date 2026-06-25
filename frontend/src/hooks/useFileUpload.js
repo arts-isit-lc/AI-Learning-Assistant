@@ -104,7 +104,7 @@ export function useFileUpload({ courseId, moduleId, moduleName }) {
       const fileName = cleanFileName(removeFileExtension(file.name));
 
       // Step 1: Get presigned URL + file_id from backend
-      let presignedUrl, fileId;
+      let presignedUrl, fileId, contentType;
       try {
         const response = await apiClient.get("instructor/generate_presigned_url", {
           course_id: courseId,
@@ -115,6 +115,7 @@ export function useFileUpload({ courseId, moduleId, moduleName }) {
         });
         presignedUrl = response.presignedurl;
         fileId = response.file_id;
+        contentType = response.content_type;
       } catch (err) {
         // Can't get the presigned URL — don't add to state
         throw new Error(`Failed to get upload URL: ${err.message}`);
@@ -168,7 +169,7 @@ export function useFileUpload({ courseId, moduleId, moduleName }) {
 
         xhr.open("PUT", presignedUrl);
         xhr.timeout = XHR_UPLOAD_TIMEOUT_MS;
-        xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+        xhr.setRequestHeader("Content-Type", contentType || file.type || "application/octet-stream");
         xhr.send(file);
       });
     },
