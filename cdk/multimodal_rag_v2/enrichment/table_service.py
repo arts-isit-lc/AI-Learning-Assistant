@@ -38,7 +38,7 @@ class TableService:
 
         Returns:
             EnrichedElement with table_headers, table_rows, table_summary,
-            and embedding_text.
+            and embedding_text containing the full table representation.
 
         Raises:
             Exception: On parsing failure. ElementRouter handles fallback.
@@ -68,7 +68,10 @@ class TableService:
         table_rows = rows[1:]
 
         table_summary = self._generate_summary(table_headers, table_rows)
-        embedding_text = table_summary
+
+        # Build full embedding_text with caption (if present), headers, and all row data
+        # This ensures the actual data values are searchable and available in context
+        embedding_text = self._build_full_embedding_text(content, table_headers, table_rows, table_summary)
 
         logger.info(
             "Extracted table structure",
@@ -76,6 +79,7 @@ class TableService:
                 "element_id": element.element_id,
                 "headers_count": len(table_headers),
                 "rows_count": len(table_rows),
+                "embedding_text_length": len(embedding_text),
             },
         )
 
@@ -207,6 +211,53 @@ class TableService:
             summary += f" Contains data about {topic}."
 
         return summary
+
+    def _build_full_embedding_text(
+        self,
+        raw_content: str,
+        headers: list[str],
+        rows: list[list[str]],
+        summary: str,
+    ) -> str:
+        """Build full embedding text that includes the actual table data.
+
+        Includes the table caption (if detected in raw content), a readable
+        representation of headers + all rows, and the summary.
+
+        Args:
+            raw_content: Original raw content from the adapter.
+            headers: Parsed column headers.
+            rows: Parsed data rows.
+            summary: Generated summary.
+
+        Returns:
+            Full embedding text with searchable table data.
+        """
+        parts: list[str] = []
+
+        # Try to extract a caption from the raw content (first line if it looks like a title)
+        first_line = raw_content.strip().split("\n")[0].strip()
+        # Check if first line is a caption (starts with "Table" or doesn't contain separators)
+        if (
+            first_line
+            and "|" not in first_line
+            and "\t" not in first_line
+            and not first_line.startswith("---")
+        ):
+            parts.append(first_line)
+            parts.append("")
+
+        # Format as readable table with header + rows
+        if headers:
+            parts.append(" | ".join(headers))
+            parts.append("-" * min(len(" | ".join(headers)), 80))
+
+        for row in rows:
+            # Pad row to match header length
+            padded = row + [""] * (len(headers) - len(row)) if len(row) < len(headers) else row
+            parts.append(" | ".join(padded[:len(headers)]))
+
+        return "\n".join(parts)
 
     def _infer_topic(self, headers: list[str]) -> str:
         """Infer a general topic from table headers.

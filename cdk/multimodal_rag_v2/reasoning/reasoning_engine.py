@@ -140,18 +140,56 @@ class ReasoningEngine:
         # Store query_intent for use in formatting
         self._last_query_intent = query_intent
 
+        # If escalation succeeded with a direct figure lookup, return the vision
+        # analysis directly as the answer — bypasses the reasoning LLM which tends
+        # to hallucinate "figure not found" despite having the analysis in context.
+        if (
+            escalation_result.escalation_used
+            and escalation_result.image_analyses
+            and query_intent is not None
+            and hasattr(query_intent, "figure_reference")
+            and query_intent.figure_reference is not None
+        ):
+            figure_ref = f"{query_intent.figure_reference.ref_type.title()} {query_intent.figure_reference.number}"
+            vision_analysis = escalation_result.image_analyses[0].analysis
+            answer = (
+                f"Based on my visual analysis of {figure_ref}, here is what I can see:\n\n"
+                f"{vision_analysis}"
+            )
+            sources = self._extract_sources(context)
+            logger.info(
+                "Returning vision analysis directly (bypassing reasoning LLM)",
+                extra={"figure_ref": figure_ref, "answer_length": len(answer)},
+            )
+            return ReasoningResult(
+                answer=answer,
+                sources=sources,
+                escalation_used=True,
+                image_analyses=escalation_result.image_analyses,
+            )
+
         # Step 2: Format context for prompt
         formatted_context = self._format_context_with_escalation(
             context=context,
             escalation_result=escalation_result,
         )
 
-        # Step 3: Invoke Bedrock LLM
+        # Step 3: Invoke Bedrock LLM — add system guidance when escalation was used
+        effective_system_prompt = system_prompt
+        if escalation_result.escalation_used and not system_prompt:
+            effective_system_prompt = (
+                "You are a helpful learning assistant. Answer the student's question based on the provided context. "
+                "IMPORTANT: If a 'Visual Analysis of Referenced Figure' section is present in the context, "
+                "it contains a detailed analysis of an image the student is asking about. "
+                "Use that visual analysis to answer their question directly and specifically. "
+                "Do NOT say the figure is not found if a visual analysis for it exists in the context."
+            )
+
         answer = self._invoke_llm(
             query=query,
             formatted_context=formatted_context,
             chat_history=chat_history,
-            system_prompt=system_prompt,
+            system_prompt=effective_system_prompt,
         )
 
         # Step 4: On LLM failure (fallback answer), return graceful fallback
@@ -226,13 +264,13 @@ class ReasoningEngine:
         # Format the base context
         formatted = self.context_builder.format_for_prompt(context)
 
-        # Inject escalation results if available
+        # Inject escalation results if available — PREPEND so it's prioritized by the LLM
         if escalation_result.escalation_used and escalation_result.image_analyses:
             escalation_section = self._format_escalation_section(
                 escalation_result.image_analyses,
                 query_intent=getattr(self, '_last_query_intent', None),
             )
-            formatted = f"{formatted}\n\n{escalation_section}"
+            formatted = f"{escalation_section}\n\n{formatted}"
             logger.info(
                 "Escalation analysis injected into context",
                 extra={
@@ -315,6 +353,16 @@ class ReasoningEngine:
                 chat_history=chat_history,
             )
 
+            # Log a preview of what's being sent to the LLM
+            logger.info(
+                "Invoking reasoning LLM",
+                extra={
+                    "formatted_context_length": len(formatted_context),
+                    "context_preview": formatted_context[:300],
+                    "has_system_prompt": bool(system_prompt),
+                },
+            )
+
             body = {
                 "anthropic_version": "bedrock-2023-05-31",
                 "max_tokens": 4096,
@@ -386,10 +434,11 @@ class ReasoningEngine:
 
         # Build the current user message with context
         user_message = (
-            f"Use the following context to answer the question. "
-            f"If an Image Analysis section is present, it contains detailed visual analysis "
-            f"from directly examining the actual image — treat it as authoritative visual evidence "
-            f"and include its findings in your answer.\n\n"
+            f"Use the following context to answer the question.\n\n"
+            f"CRITICAL: If a 'Visual Analysis of Referenced Figure' section appears in the context below, "
+            f"it contains a detailed description from directly examining the actual image. "
+            f"This IS the figure the student is asking about — use it to answer their question with specific details "
+            f"about colors, labels, axes, data, and any visible elements.\n\n"
             f"--- CONTEXT ---\n{formatted_context}\n--- END CONTEXT ---\n\n"
             f"Question: {query}"
         )

@@ -395,6 +395,53 @@ class ImageEscalation:
                             sibling_ids=[],
                         )
 
+            # Strategy C: For tables — find the table's page and look for a page-render image
+            if ref_type == "table":
+                cur.execute("""
+                    SELECT metadata->>'provenance_page_num' as page_num
+                    FROM retrieval_units
+                    WHERE element_type = 'table'
+                    AND LOWER(embedding_text) LIKE LOWER(%s)
+                    LIMIT 1;
+                """, (f"%{ref_type} {number}%",))
+
+                row = cur.fetchone()
+                if row and row[0]:
+                    page_num = row[0]
+                    # Look for a page-render image on the same page
+                    cur.execute("""
+                        SELECT retrieval_id, embedding_text, metadata
+                        FROM retrieval_units
+                        WHERE element_type = 'image'
+                        AND metadata->>'provenance_page_num' = %s
+                        AND metadata->>'image_s3_key' IS NOT NULL
+                        ORDER BY
+                            CASE WHEN metadata->>'render_reason' = 'vector_graphics_detected' THEN 0 ELSE 1 END
+                        LIMIT 1;
+                    """, (page_num,))
+
+                    img_row = cur.fetchone()
+                    if img_row:
+                        metadata = img_row[2] if isinstance(img_row[2], dict) else (_json.loads(img_row[2]) if img_row[2] else {})
+                        cur.close()
+                        from ..models.data_models import ElementType
+                        logger.info(
+                            "Found page-render image for table reference",
+                            extra={"retrieval_id": img_row[0], "ref_type": ref_type, "number": number, "page_num": page_num},
+                        )
+                        return RankedResult(
+                            retrieval_id=img_row[0],
+                            parent_element_id="",
+                            content=img_row[1],
+                            element_type=ElementType.IMAGE,
+                            score=1.0,
+                            cross_encoder_score=0.0,
+                            metadata_boost=0.0,
+                            metadata=metadata,
+                            image_s3_key=metadata.get("image_s3_key"),
+                            sibling_ids=[],
+                        )
+
             cur.close()
             logger.info(
                 "Direct DB lookup found no image for figure reference",
