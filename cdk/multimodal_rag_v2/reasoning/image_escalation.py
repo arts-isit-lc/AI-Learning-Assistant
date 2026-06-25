@@ -46,6 +46,7 @@ class ImageEscalation:
         s3_client: Any = None,
         bedrock_client: Any = None,
         bucket_name: str = "",
+        db_connection_factory: Any = None,
     ) -> None:
         """Initialize ImageEscalation with AWS clients.
 
@@ -53,10 +54,12 @@ class ImageEscalation:
             s3_client: Boto3 S3 client (injected for testing).
             bedrock_client: Boto3 Bedrock Runtime client (injected for testing).
             bucket_name: S3 bucket name where images are stored.
+            db_connection_factory: Callable that returns a psycopg2 connection for direct DB lookups.
         """
         self.s3_client = s3_client
         self.bedrock_client = bedrock_client
         self.bucket_name = bucket_name
+        self._db_connection_factory = db_connection_factory
 
     def escalate(
         self, results: list[RankedResult], query: str, query_intent=None
@@ -120,6 +123,26 @@ class ImageEscalation:
                         return EscalationResult(escalation_used=True, image_analyses=analyses)
                 else:
                     logger.info("No sibling-linked images found, falling back to score-based strategy")
+
+            # Strategy 1.5: Direct DB lookup for the figure's image by figure_ref metadata
+            if query_intent is not None and query_intent.figure_reference is not None and self._db_connection_factory:
+                db_image = self._find_image_by_figure_ref_in_db(
+                    query_intent.figure_reference.ref_type,
+                    query_intent.figure_reference.number,
+                )
+                if db_image is not None:
+                    analysis = self._analyze_image(db_image, query)
+                    if analysis is not None:
+                        escalation_latency = time.time() - escalation_start
+                        logger.info(
+                            "Escalation complete via direct DB lookup",
+                            extra={
+                                "analyses_produced": 1,
+                                "retrieval_id": db_image.retrieval_id,
+                                "escalation_latency_ms": round(escalation_latency * 1000, 2),
+                            },
+                        )
+                        return EscalationResult(escalation_used=True, image_analyses=[analysis])
 
             # Strategy 2: Fallback to top-scoring image results by image_s3_key
             image_results = [r for r in results if r.image_s3_key is not None]
@@ -267,6 +290,121 @@ class ImageEscalation:
                                 break
 
         return sibling_images
+
+    def _find_image_by_figure_ref_in_db(
+        self, ref_type: str, number: str
+    ) -> RankedResult | None:
+        """Query the database directly for an image linked to a figure reference.
+
+        This bypasses the ranked results and finds the image by:
+        1. Looking for a text retrieval unit with matching figure_ref metadata
+        2. Getting its sibling image via sibling_ids
+        3. Constructing a RankedResult for the image
+
+        Args:
+            ref_type: Type of reference ("figure", "table", "algorithm").
+            number: The number (e.g., "1.1").
+
+        Returns:
+            RankedResult for the image if found, None otherwise.
+        """
+        if self._db_connection_factory is None:
+            return None
+
+        try:
+            import json as _json
+            conn = self._db_connection_factory()
+            if conn is None:
+                return None
+
+            cur = conn.cursor()
+
+            # Strategy A: Find image directly by matching embedding_text
+            figure_pattern = f"%{ref_type} {number}%"
+            cur.execute("""
+                SELECT retrieval_id, embedding_text, metadata
+                FROM retrieval_units
+                WHERE element_type = 'image'
+                AND LOWER(embedding_text) LIKE LOWER(%s)
+                LIMIT 1;
+            """, (figure_pattern,))
+
+            row = cur.fetchone()
+            if row:
+                metadata = row[2] if isinstance(row[2], dict) else (_json.loads(row[2]) if row[2] else {})
+                cur.close()
+                from ..models.data_models import ElementType
+                logger.info(
+                    "Found image via direct DB lookup (embedding_text match)",
+                    extra={"retrieval_id": row[0], "ref_type": ref_type, "number": number},
+                )
+                return RankedResult(
+                    retrieval_id=row[0],
+                    parent_element_id="",
+                    content=row[1],
+                    element_type=ElementType.IMAGE,
+                    score=1.0,
+                    cross_encoder_score=0.0,
+                    metadata_boost=0.0,
+                    metadata=metadata,
+                    image_s3_key=metadata.get("image_s3_key"),
+                    sibling_ids=[],
+                )
+
+            # Strategy B: Find text caption with figure_ref, then get sibling image
+            figure_ref_value = f"{ref_type} {number}"
+            cur.execute("""
+                SELECT sibling_ids
+                FROM retrieval_units
+                WHERE metadata->>'figure_ref' ILIKE %s
+                LIMIT 1;
+            """, (figure_ref_value,))
+
+            row = cur.fetchone()
+            if row:
+                sibling_ids = row[0] if isinstance(row[0], list) else (_json.loads(row[0]) if row[0] else [])
+                if sibling_ids:
+                    placeholders = ",".join(["%s"] * len(sibling_ids))
+                    cur.execute(f"""
+                        SELECT retrieval_id, embedding_text, metadata
+                        FROM retrieval_units
+                        WHERE retrieval_id IN ({placeholders})
+                        AND element_type = 'image'
+                        LIMIT 1;
+                    """, sibling_ids)
+
+                    img_row = cur.fetchone()
+                    if img_row:
+                        metadata = img_row[2] if isinstance(img_row[2], dict) else (_json.loads(img_row[2]) if img_row[2] else {})
+                        cur.close()
+                        from ..models.data_models import ElementType
+                        logger.info(
+                            "Found image via direct DB lookup (sibling of figure_ref caption)",
+                            extra={"retrieval_id": img_row[0], "ref_type": ref_type, "number": number},
+                        )
+                        return RankedResult(
+                            retrieval_id=img_row[0],
+                            parent_element_id="",
+                            content=img_row[1],
+                            element_type=ElementType.IMAGE,
+                            score=1.0,
+                            cross_encoder_score=0.0,
+                            metadata_boost=0.0,
+                            metadata=metadata,
+                            image_s3_key=metadata.get("image_s3_key"),
+                            sibling_ids=[],
+                        )
+
+            cur.close()
+            logger.info(
+                "Direct DB lookup found no image for figure reference",
+                extra={"ref_type": ref_type, "number": number},
+            )
+            return None
+
+        except Exception:
+            logger.exception("Error during direct DB lookup for figure reference")
+            return None
 
     def _analyze_image(
         self, result: RankedResult, query: str

@@ -78,10 +78,42 @@ _hybrid_search_engine: HybridSearchEngine | None = None
 
 # Layer 4 components (sibling store wired lazily via _get_context_builder)
 _context_builder = ContextBuilder()  # initialized without sibling_store at import time
+
+
+def _get_db_connection():
+    """Get a database connection for direct figure reference lookups.
+
+    Reuses the same credentials as the vector/BM25 stores.
+    Returns None if DB is not configured.
+    """
+    if not DB_PROXY_ENDPOINT or not DB_SECRET_ARN:
+        return None
+    try:
+        import json as _json
+        import psycopg2
+        secrets_client = boto3.client("secretsmanager")
+        secret = _json.loads(
+            secrets_client.get_secret_value(SecretId=DB_SECRET_ARN)["SecretString"]
+        )
+        return psycopg2.connect(
+            host=DB_PROXY_ENDPOINT,
+            port=secret.get("port", 5432),
+            dbname=secret.get("dbname", "aila"),
+            user=secret.get("username"),
+            password=secret.get("password"),
+            sslmode="require",
+            connect_timeout=10,
+        )
+    except Exception:
+        logger.exception("Failed to create DB connection for image escalation")
+        return None
+
+
 _image_escalation = ImageEscalation(
     s3_client=_s3_client,
     bedrock_client=_bedrock_client,
     bucket_name=IR_BUCKET_NAME,
+    db_connection_factory=_get_db_connection,
 )
 _reasoning_engine = ReasoningEngine(
     bedrock_client=_bedrock_client,

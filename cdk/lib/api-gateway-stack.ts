@@ -1344,21 +1344,6 @@ export class ApiGatewayStack extends cdk.Stack {
       resources: ["*"],
     }));
 
-    // AppSync — for streaming chat chunks
-    textGenLambdaDockerFunc.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ["appsync:GraphQL"],
-      resources: [`arn:aws:appsync:${this.region}:${this.account}:apis/${this.eventApi.apiId}/*`],
-    }));
-    textGenLambdaDockerFunc.addEnvironment("APPSYNC_API_URL", this.eventApi.graphqlUrl);
-
-    // Add to lambdaFunctionInfos for observability
-    this.lambdaFunctionInfos.push({
-      functionName: `${id}-TextGenLambdaDockerFunc`,
-      timeoutSeconds: 300,
-      isContainer: true,
-    });
-
     // Create S3 Bucket to handle documents for each course
     const dataIngestionBucket = new s3.Bucket(this, `${id}-DataIngestionBucket`, {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -1878,6 +1863,9 @@ export class ApiGatewayStack extends cdk.Stack {
 
     this.appSyncApiId = this.eventApi.apiId;
 
+    // Add APPSYNC_API_URL to text generation Lambda (must be after eventApi is created)
+    textGenLambdaDockerFunc.addEnvironment("APPSYNC_API_URL", this.eventApi.graphqlUrl);
+
     // Per-function IAM role for notificationFunction
     const notificationLambdaRole = new iam.Role(this, `${id}-notificationLambdaRole`, {
       roleName: `${id}-notificationLambdaRole`,
@@ -2382,6 +2370,7 @@ export class ApiGatewayStack extends cdk.Stack {
       { functionName: `${id}-SQSTriggerDockerFunc`, timeoutSeconds: 300, isContainer: true },
       { functionName: `${id}-GetChatLogsFunction`, timeoutSeconds: 60, isContainer: false },
       { functionName: `${id}-orphanCleanupFunc`, timeoutSeconds: 300, isContainer: false },
+      { functionName: `${id}-TextGenLambdaDockerFunc`, timeoutSeconds: 300, isContainer: true },
     ];
 
   }

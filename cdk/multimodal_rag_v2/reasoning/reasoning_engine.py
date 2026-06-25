@@ -137,6 +137,9 @@ class ReasoningEngine:
             query_intent=query_intent,
         )
 
+        # Store query_intent for use in formatting
+        self._last_query_intent = query_intent
+
         # Step 2: Format context for prompt
         formatted_context = self._format_context_with_escalation(
             context=context,
@@ -226,28 +229,57 @@ class ReasoningEngine:
         # Inject escalation results if available
         if escalation_result.escalation_used and escalation_result.image_analyses:
             escalation_section = self._format_escalation_section(
-                escalation_result.image_analyses
+                escalation_result.image_analyses,
+                query_intent=getattr(self, '_last_query_intent', None),
             )
             formatted = f"{formatted}\n\n{escalation_section}"
+            logger.info(
+                "Escalation analysis injected into context",
+                extra={
+                    "base_context_length": len(formatted) - len(escalation_section) - 2,
+                    "escalation_section_length": len(escalation_section),
+                    "total_formatted_length": len(formatted),
+                    "image_analyses_count": len(escalation_result.image_analyses),
+                },
+            )
+        else:
+            logger.info(
+                "No escalation results to inject",
+                extra={
+                    "escalation_used": escalation_result.escalation_used,
+                    "image_analyses_count": len(escalation_result.image_analyses) if escalation_result.image_analyses else 0,
+                },
+            )
 
         return formatted
 
     def _format_escalation_section(
-        self, image_analyses: list[ImageAnalysis]
+        self, image_analyses: list[ImageAnalysis], query_intent=None
     ) -> str:
         """Format image analyses into a prompt section.
 
         Args:
             image_analyses: List of ImageAnalysis results.
+            query_intent: Optional query intent with figure reference for labeling.
 
         Returns:
             Formatted escalation section string.
         """
-        sections: list[str] = ["## Image Analysis"]
+        # Determine the figure label from query intent
+        figure_label = ""
+        if query_intent and hasattr(query_intent, "figure_reference") and query_intent.figure_reference:
+            ref = query_intent.figure_reference
+            figure_label = f"{ref.ref_type.title()} {ref.number}"
+
+        sections: list[str] = ["## Visual Analysis of Referenced Figure"]
         for i, analysis in enumerate(image_analyses, 1):
+            if figure_label:
+                header = f"### {figure_label} (Visual Analysis)"
+            else:
+                header = f"### Image {i}"
             sections.append(
-                f"\n### Image {i} ({analysis.image_s3_key})\n"
-                f"Confidence: {analysis.confidence:.2f}\n"
+                f"\n{header}\n"
+                f"The following is a detailed visual analysis of {figure_label or 'the referenced image'}:\n\n"
                 f"{analysis.analysis}"
             )
         return "\n".join(sections)
