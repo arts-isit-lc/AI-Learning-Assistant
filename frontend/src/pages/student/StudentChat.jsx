@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import AIMessage from "../../components/AIMessage";
 import Session from "../../components/Session";
 import StudentMessage from "../../components/StudentMessage";
-import PdfViewerPanel from "../../components/PdfViewerPanel";
+import FileViewerPanel from "../../components/FileViewerPanel";
 import apiClient from "../../services/api";
 import { useNavigate } from "react-router-dom";
 import { signOut } from "aws-amplify/auth";
@@ -851,12 +851,12 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
         </div>
       </div>
 
-      {/* PDF Viewer Panel */}
+      {/* File Viewer Panel */}
       {pdfPanelOpen && (
         <div className="hidden md:block w-2/5 h-full transition-all duration-200">
-          <PdfViewerPanel
+          <FileViewerPanel
             file={selectedFile}
-            pdfUrl={pdfUrl}
+            fileUrl={pdfUrl}
             files={moduleFiles}
             onFileSelect={handleFileSelect}
             onClose={handlePdfClose}
@@ -865,12 +865,12 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
           />
         </div>
       )}
-      {/* Mobile: PDF panel renders as full-screen overlay from within PdfViewerPanel */}
+      {/* Mobile: File panel renders as full-screen overlay from within FileViewerPanel */}
       {pdfPanelOpen && (
         <div className="md:hidden">
-          <PdfViewerPanel
+          <FileViewerPanel
             file={selectedFile}
-            pdfUrl={pdfUrl}
+            fileUrl={pdfUrl}
             files={moduleFiles}
             onFileSelect={handleFileSelect}
             onClose={handlePdfClose}
