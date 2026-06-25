@@ -17,6 +17,7 @@ from ambiguity_gate import check_ambiguity, AmbiguityResult
 from validator import validate_input, ValidationResult
 from compute import execute_computation, ComputeResult
 from verifier import verify_result, VerificationResult
+from step_generator import generate_steps
 
 logger = Logger(service="math-compute")
 
@@ -153,10 +154,19 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     # ─── Build Response ────────────────────────────────────────────────────
     status = "verified" if verification_result.passed else "partial"
 
+    # ─── Generate Solution Steps (V2) ──────────────────────────────────────
+    steps = []
+    try:
+        step_objects = generate_steps(parse_result.operation, parse_result, compute_result)
+        steps = [s.to_dict() for s in step_objects]
+    except Exception:
+        logger.exception("Step generation failed (non-blocking)")
+
     return _build_response(
         status=status,
         answer=compute_result.answer,
         verification=verification_result.to_dict(),
+        steps=steps,
         trace_id=trace_id,
         stages=stages,
         start_time=start_time,
@@ -170,6 +180,7 @@ def _build_response(
     start_time: float,
     answer: dict | None = None,
     verification: dict | None = None,
+    steps: list[dict] | None = None,
     failure_reason: str | None = None,
     failure_message: str | None = None,
     clarification_needed: list | None = None,
@@ -181,6 +192,7 @@ def _build_response(
         "status": status,
         "answer": answer,
         "verification": verification,
+        "steps": steps or [],
         "failure_reason": failure_reason,
         "failure_message": failure_message,
         "clarification_needed": clarification_needed,

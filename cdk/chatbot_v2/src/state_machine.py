@@ -52,6 +52,7 @@ class SessionState:
     hint_level: int = 0
     hint_count: int = 0
     state_version: int = 0
+    tutor_state: dict = field(default_factory=dict)  # V2: math tutoring state (step progression)
 
 
 def create_default_state(session_id: str) -> SessionState:

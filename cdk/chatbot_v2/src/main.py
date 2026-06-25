@@ -33,6 +33,10 @@ from rds_projection import persist_message_to_rds, log_engagement
 from constants.models import RESPONSE_MODEL_ID, RESPONSE_MAX_TOKENS
 from math_classifier import classify_math_intent
 from math_compute_client import invoke_math_compute
+from tutor_integration import (
+    is_tutor_active, should_enter_tutoring, create_tutor_state,
+    process_tutor_turn, get_initial_tutor_prompt,
+)
 
 # Environment variables
 REGION = os.environ.get("REGION", "ca-central-1")
@@ -264,6 +268,59 @@ def handler(event, context):
         # Load chat history
         chat_history = load_chat_history(CHAT_HISTORY_TABLE, session_id, _dynamodb_resource)
 
+        # ─── V2 Math Tutoring: if tutor is active, route through tutor runtime ───
+        if message_content and is_tutor_active(state):
+            logger.info("Math tutor active — routing through tutor runtime")
+            state.tutor_state, tutor_prompt = process_tutor_turn(state.tutor_state, message_content)
+
+            if tutor_prompt:
+                # Use tutor prompt as system prompt for LLM rendering
+                guardrail_tags = wrap_user_message(message_content) if message_content else ""
+                system_prompt = f"{tutor_prompt}\n\n{guardrail_tags}"
+
+                prompt_history = get_bounded_history(chat_history, MAX_PROMPT_TURNS)
+                model_kwargs = {"max_tokens": RESPONSE_MAX_TOKENS, "guardrail_id": guardrail_id, "guardrail_version": guardrail_version}
+
+                llm_output = _stream_with_guardrail_retry(
+                    system_prompt=system_prompt,
+                    user_message=message_content,
+                    prompt_history=prompt_history,
+                    session_id=session_id,
+                    model_kwargs=model_kwargs,
+                    guardrail_id=guardrail_id,
+                )
+
+                # Handle guardrail block
+                if isinstance(llm_output, dict) and llm_output.get("blocked"):
+                    try:
+                        conn = _get_db_connection()
+                        persist_message_to_rds(conn, session_id, message_content, student_sent=True)
+                        persist_message_to_rds(conn, session_id, llm_output["message"], student_sent=False)
+                    except Exception:
+                        logger.exception("RDS projection failed on guardrail block (best-effort)")
+                    return {"statusCode": 200, "headers": CORS_HEADERS, "body": json.dumps({"llm_output": llm_output["message"], "session_state": state.to_dict() if hasattr(state, 'to_dict') else {}})}
+
+                # Persist messages
+                try:
+                    conn = _get_db_connection()
+                    persist_message_to_rds(conn, session_id, message_content, student_sent=True)
+                    persist_message_to_rds(conn, session_id, llm_output, student_sent=False)
+                except Exception:
+                    logger.exception("RDS projection failed (best-effort)")
+
+                persist_message_pair(CHAT_HISTORY_TABLE, session_id, message_content, llm_output, _dynamodb_resource)
+                state.interactions += 1
+                _persist_session_state(state)
+
+                return {
+                    "statusCode": 200,
+                    "headers": CORS_HEADERS,
+                    "body": json.dumps({
+                        "llm_output": llm_output,
+                        "session_state": {"tutor_active": is_tutor_active(state)},
+                    }),
+                }
+
         # Step 3: Evaluate answer (skip on first interaction)
         evaluation = None
         if state.interactions > 0 and message_content:
@@ -350,12 +407,33 @@ def handler(event, context):
                     classification=math_class,
                 )
                 if compute_result is not None:
-                    math_compute_context = compute_result.get_prompt_injection()
+                    # Check if we should enter tutoring mode (V2)
+                    if should_enter_tutoring(math_class, compute_result):
+                        # Store steps in answer for tutor state creation
+                        compute_result.answer["_steps"] = compute_result.answer.get("_steps", [])
+                        # If steps came from Lambda response, use them
+                        if hasattr(compute_result, '_raw_response'):
+                            compute_result.answer["_steps"] = compute_result._raw_response.get("steps", [])
+                        compute_result.answer["_operation"] = math_class.operation_hint
+
+                        state.tutor_state = create_tutor_state(compute_result)
+                        math_compute_context = get_initial_tutor_prompt(state.tutor_state)
+                        logger.info(
+                            "Entering math tutoring mode",
+                            extra={
+                                "operation": math_class.operation_hint,
+                                "step_count": len(state.tutor_state.get("step_list", [])),
+                            },
+                        )
+                    else:
+                        # V1 behavior: inject verified result directly
+                        math_compute_context = compute_result.get_prompt_injection()
                     logger.info(
-                        "Math compute injected",
+                        "Math compute processed",
                         extra={
                             "status": compute_result.status,
                             "has_answer": compute_result.success,
+                            "tutoring_mode": is_tutor_active(state),
                             "injection_length": len(math_compute_context),
                         },
                     )
@@ -363,7 +441,7 @@ def handler(event, context):
                 # V1: explicit rejection of discourse references for compute
                 math_compute_context = (
                     "MATH COMPUTE: The student is referencing a previous mathematical object "
-                    "(e.g., 'the matrix above', 'that one'). In V1, you cannot resolve this.\n"
+                    "(e.g., 'the matrix above', 'that one'). You cannot resolve this.\n"
                     "Ask the student to provide the matrix or equation directly so you can "
                     "compute it accurately. Be helpful and suggest a format like [[2,1],[1,2]]."
                 )

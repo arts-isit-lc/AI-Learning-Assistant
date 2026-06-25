@@ -191,6 +191,11 @@ def invoke_math_compute(
         failure_reason = response_payload.get("failure_reason")
         failure_message = response_payload.get("failure_message")
         clarification = response_payload.get("clarification_needed")
+        steps = response_payload.get("steps", [])
+
+        # Attach steps to answer for tutor state creation
+        if answer and steps:
+            answer["_steps"] = steps
 
         logger.info(
             "Math compute result received",
