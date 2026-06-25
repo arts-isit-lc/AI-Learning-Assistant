@@ -147,7 +147,7 @@ const FileManagement = ({
       {/* Upload area */}
       <label className="flex items-center justify-center gap-2 border border-border rounded-lg p-4 cursor-pointer hover:bg-muted/50 transition-colors">
         <input
-          accept=".pdf,.docx,.pptx,.txt,.xlsx,.xps,.mobi,.cbz"
+          accept=".pdf,.docx,.pptx,.txt,.xlsx,.xps,.mobi,.cbz,.html,.htm,.tex,.latex,.csv,.json,.png,.jpg,.jpeg,.gif,.tiff,.tif,.bmp,.webp"
           type="file"
           multiple
           hidden

@@ -134,6 +134,15 @@ def lambda_handler(event, context):
         "latex": "application/x-latex",
         "csv": "text/csv",
         "json": "application/json",
+        # V2 image adapter support
+        "png": "image/png",
+        "jpg": "image/jpeg",
+        "jpeg": "image/jpeg",
+        "gif": "image/gif",
+        "tiff": "image/tiff",
+        "tif": "image/tiff",
+        "bmp": "image/bmp",
+        "webp": "image/webp",
     }
 
     if file_type in allowed_document_types:
