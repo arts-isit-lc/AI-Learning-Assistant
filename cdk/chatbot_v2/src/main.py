@@ -31,6 +31,8 @@ from guardrails import load_guardrail_config, wrap_user_message, handle_guardrai
 from history import load_chat_history, get_bounded_history, persist_message_pair, MAX_PROMPT_TURNS
 from rds_projection import persist_message_to_rds, log_engagement
 from constants.models import RESPONSE_MODEL_ID, RESPONSE_MAX_TOKENS
+from math_classifier import classify_math_intent
+from math_compute_client import invoke_math_compute
 
 # Environment variables
 REGION = os.environ.get("REGION", "ca-central-1")
@@ -42,6 +44,7 @@ DB_PROXY_ENDPOINT = os.environ.get("DB_PROXY_ENDPOINT", "")
 APPSYNC_API_URL = os.environ.get("APPSYNC_API_URL", "")
 GUARDRAIL_ID_PARAM = os.environ.get("GUARDRAIL_ID_PARAM", "")
 GUARDRAIL_VERSION_PARAM = os.environ.get("GUARDRAIL_VERSION_PARAM", "")
+MATH_COMPUTE_FUNCTION_ARN = os.environ.get("MATH_COMPUTE_FUNCTION_ARN", "")
 # Module-level singletons (initialized once per container)
 _lambda_client = boto3.client("lambda", region_name=REGION)
 _bedrock_client = boto3.client("bedrock-runtime", region_name=REGION)
@@ -336,6 +339,35 @@ def handler(event, context):
             if mentioned:
                 state = introduce_concepts(state, mentioned)
 
+        # Step 10.5: Math compute (if query contains explicit math)
+        math_compute_context = ""
+        if message_content:
+            math_class = classify_math_intent(message_content)
+            if math_class.needs_compute_lambda():
+                compute_result = invoke_math_compute(
+                    _lambda_client,
+                    function_arn=MATH_COMPUTE_FUNCTION_ARN,
+                    classification=math_class,
+                )
+                if compute_result is not None:
+                    math_compute_context = compute_result.get_prompt_injection()
+                    logger.info(
+                        "Math compute injected",
+                        extra={
+                            "status": compute_result.status,
+                            "has_answer": compute_result.success,
+                            "injection_length": len(math_compute_context),
+                        },
+                    )
+            elif math_class.is_discourse_reference and math_class.compute:
+                # V1: explicit rejection of discourse references for compute
+                math_compute_context = (
+                    "MATH COMPUTE: The student is referencing a previous mathematical object "
+                    "(e.g., 'the matrix above', 'that one'). In V1, you cannot resolve this.\n"
+                    "Ask the student to provide the matrix or equation directly so you can "
+                    "compute it accurately. Be helpful and suggest a format like [[2,1],[1,2]]."
+                )
+
         # Step 11: Build system prompt
         context_vars = {
             "difficulty": state.stage,
@@ -348,6 +380,10 @@ def handler(event, context):
         }
         guardrail_tags = wrap_user_message(message_content) if message_content else ""
         system_prompt = build_system_prompt(mode, topic, context_vars, rag_context, guardrail_tags)
+
+        # Inject math compute results into system prompt (before guardrail tags, after RAG context)
+        if math_compute_context:
+            system_prompt = f"{system_prompt}\n\n{math_compute_context}"
 
         # Step 12: Stream response — with guardrail service error retry
         prompt_history = get_bounded_history(chat_history, MAX_PROMPT_TURNS)

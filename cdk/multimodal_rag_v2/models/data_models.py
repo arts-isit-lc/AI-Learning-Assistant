@@ -16,7 +16,7 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 IR_VERSION: str = "ir-v1"
-ENRICHMENT_VERSION: str = "haiku-v3-2026-06"
+ENRICHMENT_VERSION: str = "haiku-v5-2026-06"
 EMBEDDING_VERSION: str = "titan-v2-1024"
 
 

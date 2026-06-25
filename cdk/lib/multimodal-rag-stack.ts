@@ -435,6 +435,50 @@ export class MultimodalRagStack extends cdk.Stack {
       })
     );
 
+    // ─── Docker Lambda: Math Compute (SymPy) ────────────────────────────────
+    const mathComputeRole = new iam.Role(this, `${id}-mathComputeRole`, {
+      roleName: `${id}-mathComputeRole`,
+      assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
+      inlinePolicies: {
+        mathComputePolicy: new iam.PolicyDocument({
+          statements: [
+            // CloudWatch Logs — scoped to specific log group
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+              resources: [`arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${id}-mathComputeFunction:*`],
+            }),
+            // X-Ray — resource '*' acceptable
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ["xray:PutTraceSegments", "xray:PutTelemetryRecords"],
+              resources: ["*"],
+            }),
+          ],
+        }),
+      },
+    });
+
+    const mathComputeFunction = new lambda.DockerImageFunction(
+      this,
+      `${id}-mathComputeFunction`,
+      {
+        code: lambda.DockerImageCode.fromImageAsset("./math_compute", {
+          platform: ecr_assets.Platform.LINUX_AMD64,
+        }),
+        architecture: lambda.Architecture.X86_64,
+        memorySize: 256,
+        timeout: Duration.seconds(30),
+        tracing: lambda.Tracing.ACTIVE,
+        logRetention: logRetention,
+        functionName: `${id}-mathComputeFunction`,
+        role: mathComputeRole,
+        environment: {
+          REGION: this.region,
+        },
+      }
+    );
+
     // ─── DynamoDB: Session_State_Table (Chatbot V2 learning session state) ────
     this.sessionStateTable = new dynamodb.Table(this, `${id}-sessionStateTable`, {
       tableName: `${id}-sessionStateTable`,
@@ -469,7 +513,7 @@ export class MultimodalRagStack extends cdk.Stack {
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: ["lambda:InvokeFunction"],
-              resources: [this.ragRetrievalFunction.functionArn],
+              resources: [this.ragRetrievalFunction.functionArn, mathComputeFunction.functionArn],
             }),
             // DynamoDB data ops — Session_State_Table (full CRUD)
             new iam.PolicyStatement({
@@ -605,6 +649,7 @@ export class MultimodalRagStack extends cdk.Stack {
         environment: {
           REGION: this.region,
           RAG_RETRIEVAL_FUNCTION_ARN: this.ragRetrievalFunction.functionArn,
+          MATH_COMPUTE_FUNCTION_ARN: mathComputeFunction.functionArn,
           SESSION_STATE_TABLE: this.sessionStateTable.tableName,
           CHAT_HISTORY_TABLE: "DynamoDB-Conversation-Table", // TODO: pass from ApiGatewayStack or use env var pattern
           DB_SECRET_ARN: db.secretPathUser.secretArn,

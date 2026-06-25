@@ -223,6 +223,8 @@ class TableService:
 
         Includes the table caption (if detected in raw content), a readable
         representation of headers + all rows, and the summary.
+        Falls back to the raw content when parsing produces poor results
+        (e.g., only 1 column detected for a multi-column table).
 
         Args:
             raw_content: Original raw content from the adapter.
@@ -236,15 +238,34 @@ class TableService:
         parts: list[str] = []
 
         # Try to extract a caption from the raw content (first line if it looks like a title)
-        first_line = raw_content.strip().split("\n")[0].strip()
+        lines = raw_content.strip().split("\n")
+        first_line = lines[0].strip() if lines else ""
+
         # Check if first line is a caption (starts with "Table" or doesn't contain separators)
+        caption = ""
         if (
             first_line
             and "|" not in first_line
             and "\t" not in first_line
             and not first_line.startswith("---")
         ):
-            parts.append(first_line)
+            caption = first_line
+
+        # If parsing produced a poor result (1 column for what's clearly multi-column),
+        # use the raw content directly as embedding_text
+        raw_lines = [l.strip() for l in lines if l.strip()]
+        raw_has_pipes = any("|" in l for l in raw_lines)
+        raw_has_tabs = any("\t" in l for l in raw_lines)
+
+        if len(headers) <= 1 and len(rows) > 2 and (raw_has_pipes or raw_has_tabs):
+            # Parser likely failed — use raw content which preserves the real structure
+            if caption:
+                return f"{caption}\n\n{raw_content}"
+            return raw_content
+
+        # Normal path: build structured representation
+        if caption:
+            parts.append(caption)
             parts.append("")
 
         # Format as readable table with header + rows
@@ -257,7 +278,15 @@ class TableService:
             padded = row + [""] * (len(headers) - len(row)) if len(row) < len(headers) else row
             parts.append(" | ".join(padded[:len(headers)]))
 
-        return "\n".join(parts)
+        result = "\n".join(parts)
+
+        # Final fallback: if the structured result is suspiciously short, use raw content
+        if len(result) < len(raw_content) * 0.5 and len(raw_content) > 50:
+            if caption:
+                return f"{caption}\n\n{raw_content}"
+            return raw_content
+
+        return result
 
     def _infer_topic(self, headers: list[str]) -> str:
         """Infer a general topic from table headers.
