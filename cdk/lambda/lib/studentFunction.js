@@ -1059,11 +1059,21 @@ exports.handler = async (event) => {
             }
 
             // Strategy 2: Look up by image_s3_key (used when figure_id is an S3 key)
-            if (!figureRecord && figureId.startsWith("courses/")) {
+            if (!figureRecord && (figureId.startsWith("courses/") || figureId.startsWith("images/") || figureId.startsWith("s3://"))) {
+              // Strip s3://bucket-name/ prefix if present
+              let lookupKey = figureId;
+              if (figureId.startsWith("s3://")) {
+                // s3://bucket-name/path → path
+                const withoutProtocol = figureId.slice(5); // remove "s3://"
+                const slashIndex = withoutProtocol.indexOf("/");
+                lookupKey = slashIndex >= 0 ? withoutProtocol.slice(slashIndex + 1) : withoutProtocol;
+              }
+
               const s3KeyResult = await sqlConnection`
                 SELECT retrieval_id, element_type, metadata
                 FROM retrieval_units
-                WHERE metadata->>'image_s3_key' = ${figureId}
+                WHERE metadata->>'image_s3_key' = ${lookupKey}
+                   OR metadata->>'image_s3_key' = ${figureId}
                 LIMIT 1;
               `;
               if (s3KeyResult.length > 0) {
@@ -1076,10 +1086,17 @@ exports.handler = async (event) => {
 
             if (!figureRecord) {
               // Strategy 3: If figure_id looks like an S3 key, generate URL directly
-              if (figureId.startsWith("courses/")) {
+              let directKey = figureId;
+              if (figureId.startsWith("s3://")) {
+                const withoutProtocol = figureId.slice(5);
+                const slashIndex = withoutProtocol.indexOf("/");
+                directKey = slashIndex >= 0 ? withoutProtocol.slice(slashIndex + 1) : withoutProtocol;
+              }
+
+              if (directKey.startsWith("courses/") || directKey.startsWith("images/")) {
                 const command = new GetObjectCommand({
                   Bucket: BUCKET,
-                  Key: figureId,
+                  Key: directKey,
                 });
                 const url = await getSignedUrl(s3Client, command, {
                   expiresIn: 3600,
@@ -1103,6 +1120,14 @@ exports.handler = async (event) => {
               response.statusCode = 404;
               response.body = JSON.stringify({ error: "Figure has no associated image" });
               break;
+            }
+
+            // Strip s3://bucket/ prefix from image_s3_key if present
+            let resolvedKey = imageS3Key;
+            if (imageS3Key.startsWith("s3://")) {
+              const withoutProtocol = imageS3Key.slice(5);
+              const slashIndex = withoutProtocol.indexOf("/");
+              resolvedKey = slashIndex >= 0 ? withoutProtocol.slice(slashIndex + 1) : withoutProtocol;
             }
 
             // Verify student access via the module that owns this figure
@@ -1138,7 +1163,7 @@ exports.handler = async (event) => {
             // Generate presigned GET URL (1 hour TTL)
             const command = new GetObjectCommand({
               Bucket: BUCKET,
-              Key: imageS3Key,
+              Key: resolvedKey,
             });
             const url = await getSignedUrl(s3Client, command, {
               expiresIn: 3600,
