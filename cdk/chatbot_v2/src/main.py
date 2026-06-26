@@ -535,12 +535,22 @@ def handler(event, context):
         logger.info("Analytics", extra={"coverage": calculate_coverage(state), "mastery_concepts": len(calculate_mastery_profile(state))})
 
         # Return structured response
+        # Figure selection: deterministic, based on retrieval results
+        try:
+            from figure_selection import select_figures as select_figs, assemble_blocks
+            selected_figures = select_figs(retrieval_result, retrieval_query)
+            blocks = assemble_blocks(llm_output, selected_figures)
+        except Exception:
+            logger.exception("Figure selection failed, returning text-only blocks")
+            blocks = [{"type": "text", "content": llm_output}]
+
         return {
             "statusCode": 200,
             "headers": CORS_HEADERS,
             "body": json.dumps({
                 "session_name": session_name,
                 "llm_output": llm_output,
+                "blocks": blocks,
                 "llm_verdict": state.module_complete,
                 "session_state": {
                     "stage": state.stage,

@@ -1039,7 +1039,10 @@ exports.handler = async (event) => {
           const figureId = event.queryStringParameters.figure_id;
 
           try {
-            // Look up the figure by retrieval_id or figure_id in retrieval_units metadata
+            // Strategy 1: Look up by retrieval_id or figure_id in metadata
+            let figureRecord = null;
+            let metadata = {};
+
             const figureResult = await sqlConnection`
               SELECT retrieval_id, element_type, metadata
               FROM retrieval_units
@@ -1048,16 +1051,52 @@ exports.handler = async (event) => {
               LIMIT 1;
             `;
 
-            if (figureResult.length === 0) {
+            if (figureResult.length > 0) {
+              figureRecord = figureResult[0];
+              metadata = typeof figureRecord.metadata === "string"
+                ? JSON.parse(figureRecord.metadata)
+                : figureRecord.metadata || {};
+            }
+
+            // Strategy 2: Look up by image_s3_key (used when figure_id is an S3 key)
+            if (!figureRecord && figureId.startsWith("courses/")) {
+              const s3KeyResult = await sqlConnection`
+                SELECT retrieval_id, element_type, metadata
+                FROM retrieval_units
+                WHERE metadata->>'image_s3_key' = ${figureId}
+                LIMIT 1;
+              `;
+              if (s3KeyResult.length > 0) {
+                figureRecord = s3KeyResult[0];
+                metadata = typeof figureRecord.metadata === "string"
+                  ? JSON.parse(figureRecord.metadata)
+                  : figureRecord.metadata || {};
+              }
+            }
+
+            if (!figureRecord) {
+              // Strategy 3: If figure_id looks like an S3 key, generate URL directly
+              if (figureId.startsWith("courses/")) {
+                const command = new GetObjectCommand({
+                  Bucket: BUCKET,
+                  Key: figureId,
+                });
+                const url = await getSignedUrl(s3Client, command, {
+                  expiresIn: 3600,
+                });
+                response.body = JSON.stringify({
+                  url,
+                  figure_id: figureId,
+                  caption: null,
+                  page: null,
+                });
+                break;
+              }
+
               response.statusCode = 404;
               response.body = JSON.stringify({ error: "Figure not found" });
               break;
             }
-
-            const figureRecord = figureResult[0];
-            const metadata = typeof figureRecord.metadata === "string"
-              ? JSON.parse(figureRecord.metadata)
-              : figureRecord.metadata || {};
 
             const imageS3Key = metadata.image_s3_key;
             if (!imageS3Key) {

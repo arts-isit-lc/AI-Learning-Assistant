@@ -477,6 +477,18 @@ def _handle_query(
             }
             for ia in reasoning_result.image_analyses
         ],
+        "image_results": [
+            {
+                "retrieval_id": r.retrieval_id,
+                "score": r.score,
+                "image_s3_key": r.image_s3_key,
+                "page_num": r.metadata.get("provenance_page_num"),
+                "module_id": r.metadata.get("module_id"),
+                "element_type": r.element_type.value if hasattr(r.element_type, "value") else r.element_type,
+            }
+            for r in final_results
+            if r.image_s3_key
+        ],
     })
 
 
