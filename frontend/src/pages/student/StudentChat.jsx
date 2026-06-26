@@ -653,7 +653,21 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
       const data = await apiClient.get("student/get_messages", {
         session_id: session.session_id,
       });
-      setMessages(data);
+      // Preserve blocks from the most recent in-memory messages (blocks aren't persisted in RDS yet)
+      setMessages((prevMessages) => {
+        // Build a map of blocks keyed by message_content (since message_ids differ between live and RDS)
+        const blocksMap = new Map();
+        prevMessages.forEach((msg) => {
+          if (msg.blocks && msg.message_content) {
+            blocksMap.set(msg.message_content, msg.blocks);
+          }
+        });
+        if (blocksMap.size === 0) return data;
+        return data.map((msg) => ({
+          ...msg,
+          blocks: msg.blocks || blocksMap.get(msg.message_content) || undefined,
+        }));
+      });
     } catch (error) {
       console.error("Error fetching session:", error.message);
       setMessages([]);
