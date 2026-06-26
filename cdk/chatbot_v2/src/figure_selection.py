@@ -1,7 +1,16 @@
-"""Deterministic figure selection for chatbot V2 responses.
+"""Deterministic block selection for chatbot V2 responses.
 
-Selects figures to display based on retrieval results and escalation data
-returned by the ragRetrievalFunction. No embedding calls, no LLM involvement.
+Selects figures, tables, and formulas to display based on retrieval results
+and escalation data returned by the ragRetrievalFunction.
+
+No embedding calls. No LLM involvement. Pure rule-based selection running
+in parallel with LLM generation on shared retrieval outputs.
+
+Block types:
+- text: LLM prose answer
+- figure: image from course materials (frontend resolves via figure_url endpoint)
+- table: table content from retrieval (markdown format for now, structured later)
+- formula: LaTeX formula from retrieval
 """
 
 from __future__ import annotations
@@ -14,7 +23,19 @@ logger = Logger(service="chatbot-v2")
 
 # Regex to detect figure/table/algorithm references in query
 _FIGURE_REF_PATTERN = re.compile(
-    r"\b(figure|fig\.?|table|algorithm)\s*(\d+(?:[.-]\d+)*)",
+    r"\b(figure|fig\.?|table|algorithm|diagram|image|chart|graph)\s*(\d+(?:[.-]\d+)*)?",
+    re.IGNORECASE,
+)
+
+# Regex to detect table-related questions
+_TABLE_REF_PATTERN = re.compile(
+    r"\b(table|comparison|compare|row|column|data)\b",
+    re.IGNORECASE,
+)
+
+# Regex to detect formula-related questions
+_FORMULA_REF_PATTERN = re.compile(
+    r"\b(formula|equation|derivation|proof|theorem)\b",
     re.IGNORECASE,
 )
 
@@ -26,12 +47,10 @@ def select_figures(
     score_threshold: float = 0.4,
     high_confidence_threshold: float = 0.8,
 ) -> list[str]:
-    """Select figure IDs to attach to the response.
+    """Select figure retrieval_ids to attach to the response.
 
-    Selection rules (priority order):
-    1. Escalated figure (always first — user explicitly asked about it)
-    2. High-scoring image results from retrieval (if query references images)
-    3. High-confidence fallback (score > 0.8, bypasses intent check)
+    Uses retrieval_id as content identity — never S3 keys or URIs.
+    The figure_url endpoint resolves retrieval_id → presigned URL.
 
     Args:
         retrieval_result: RetrievalResult from invoke_retrieval().
@@ -41,7 +60,7 @@ def select_figures(
         high_confidence_threshold: Score above which figures attach regardless.
 
     Returns:
-        Ordered list of figure identifiers (retrieval_ids).
+        Ordered list of retrieval_ids for figure blocks.
     """
     if retrieval_result is None:
         return []
@@ -51,38 +70,37 @@ def select_figures(
 
     has_figure_ref = _FIGURE_REF_PATTERN.search(query) is not None
 
-    # Priority 1: Escalated figure
-    if retrieval_result.escalation_used and retrieval_result.image_analyses:
-        for analysis in retrieval_result.image_analyses:
-            s3_key = analysis.get("image_s3_key")
-            if s3_key and s3_key not in seen:
-                # Use s3_key as the identifier (figure_url endpoint resolves it)
-                selected.append(s3_key)
-                seen.add(s3_key)
+    # Priority 1: Escalated figure — use retrieval_id from image_results that matches
+    if retrieval_result.escalation_used and retrieval_result.image_results:
+        for img in retrieval_result.image_results:
+            rid = img.get("retrieval_id")
+            if rid and rid not in seen:
+                selected.append(rid)
+                seen.add(rid)
                 if len(selected) >= max_figures:
                     break
 
-    # Priority 2: Image results from retrieval
+    # Priority 2: Image results from retrieval (if query references figures)
     if has_figure_ref or retrieval_result.escalation_used:
         for img in retrieval_result.image_results:
             if len(selected) >= max_figures:
                 break
-            s3_key = img.get("image_s3_key")
+            rid = img.get("retrieval_id")
             score = img.get("score", 0)
-            if s3_key and s3_key not in seen and score > score_threshold:
-                selected.append(s3_key)
-                seen.add(s3_key)
+            if rid and rid not in seen and score > score_threshold:
+                selected.append(rid)
+                seen.add(rid)
 
     # Priority 3: High-confidence fallback (even without figure reference)
     if not selected:
         for img in retrieval_result.image_results:
             if len(selected) >= max_figures:
                 break
-            s3_key = img.get("image_s3_key")
+            rid = img.get("retrieval_id")
             score = img.get("score", 0)
-            if s3_key and s3_key not in seen and score > high_confidence_threshold:
-                selected.append(s3_key)
-                seen.add(s3_key)
+            if rid and rid not in seen and score > high_confidence_threshold:
+                selected.append(rid)
+                seen.add(rid)
 
     if selected:
         logger.info(
@@ -91,20 +109,94 @@ def select_figures(
                 "count": len(selected),
                 "has_figure_ref": has_figure_ref,
                 "escalation_used": retrieval_result.escalation_used,
+                "retrieval_ids": selected,
             },
         )
 
     return selected
 
 
-def assemble_blocks(llm_output: str, selected_figures: list[str]) -> list[dict]:
+def select_tables(
+    retrieval_result,
+    query: str,
+    max_tables: int = 2,
+    score_threshold: float = 0.5,
+) -> list[dict]:
+    """Select table blocks from retrieval results.
+
+    Returns table content as markdown (for now). When ingestion stores
+    structured headers/rows, this will return structured data instead.
+
+    Args:
+        retrieval_result: RetrievalResult from invoke_retrieval().
+        query: Student's question.
+        max_tables: Maximum table blocks to attach.
+        score_threshold: Minimum score for selection.
+
+    Returns:
+        List of table block dicts with type and markdown content.
+    """
+    if retrieval_result is None:
+        return []
+
+    has_table_ref = _TABLE_REF_PATTERN.search(query) is not None
+    if not has_table_ref:
+        return []
+
+    # Table results come through as regular retrieval results with element_type="table"
+    # They're embedded in the RAG context already, but we can also render them as blocks
+    # For now, we don't have separate table results in the retrieval response
+    # This will be populated when we add table_results to the retrieval handler response
+    return []
+
+
+def select_formulas(
+    retrieval_result,
+    query: str,
+    max_formulas: int = 2,
+) -> list[dict]:
+    """Select formula blocks from retrieval results.
+
+    Returns formula content as LaTeX. When ingestion stores structured
+    formula data, this will return richer metadata.
+
+    Args:
+        retrieval_result: RetrievalResult from invoke_retrieval().
+        query: Student's question.
+        max_formulas: Maximum formula blocks to attach.
+
+    Returns:
+        List of formula block dicts with type, latex, and description.
+    """
+    if retrieval_result is None:
+        return []
+
+    has_formula_ref = _FORMULA_REF_PATTERN.search(query) is not None
+    if not has_formula_ref:
+        return []
+
+    # Formula results come through as regular retrieval results with element_type="formula"
+    # For now, we don't have separate formula results in the retrieval response
+    # This will be populated when we add formula_results to the retrieval handler response
+    return []
+
+
+def assemble_blocks(
+    llm_output: str,
+    selected_figures: list[str],
+    table_blocks: list[dict] | None = None,
+    formula_blocks: list[dict] | None = None,
+) -> list[dict]:
     """Assemble canonical block response.
 
-    Text block + figure blocks grouped at end.
+    Text block + typed content blocks grouped at end.
+    Order: text → tables → formulas → figures
 
     Args:
         llm_output: LLM prose answer.
-        selected_figures: Ordered figure identifiers (image_s3_keys).
+        selected_figures: Ordered retrieval_ids for figure blocks.
+        table_blocks: Optional table block dicts.
+        formula_blocks: Optional formula block dicts.
 
     Returns:
         List of blocks — the canonical response format.
@@ -114,7 +206,16 @@ def assemble_blocks(llm_output: str, selected_figures: list[str]) -> list[dict]:
     if llm_output and llm_output.strip():
         blocks.append({"type": "text", "content": llm_output.strip()})
 
-    for figure_id in selected_figures:
-        blocks.append({"type": "figure", "id": figure_id})
+    # Tables after text
+    if table_blocks:
+        blocks.extend(table_blocks)
+
+    # Formulas after tables
+    if formula_blocks:
+        blocks.extend(formula_blocks)
+
+    # Figures last (they're the heaviest visual element)
+    for retrieval_id in selected_figures:
+        blocks.append({"type": "figure", "id": retrieval_id})
 
     return blocks

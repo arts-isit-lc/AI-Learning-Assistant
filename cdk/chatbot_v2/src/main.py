@@ -537,9 +537,11 @@ def handler(event, context):
         # Return structured response
         # Figure selection: deterministic, based on retrieval results
         try:
-            from figure_selection import select_figures as select_figs, assemble_blocks
+            from figure_selection import select_figures as select_figs, select_tables, select_formulas, assemble_blocks
             selected_figures = select_figs(retrieval_result, retrieval_query)
-            blocks = assemble_blocks(llm_output, selected_figures)
+            table_blocks = select_tables(retrieval_result, retrieval_query)
+            formula_blocks = select_formulas(retrieval_result, retrieval_query)
+            blocks = assemble_blocks(llm_output, selected_figures, table_blocks, formula_blocks)
         except Exception:
             logger.exception("Figure selection failed, returning text-only blocks")
             blocks = [{"type": "text", "content": llm_output}]

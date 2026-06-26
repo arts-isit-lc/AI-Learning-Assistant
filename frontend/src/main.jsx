@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
 import "./index.css";
+import "katex/dist/katex.min.css";
 // mui theming
 import { ThemeProvider } from "@mui/material/styles";
 import theme from "./Theme";
