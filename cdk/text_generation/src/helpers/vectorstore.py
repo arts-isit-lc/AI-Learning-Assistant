@@ -245,6 +245,7 @@ def get_vectorstore_retriever(
     allowed_file_ids: Optional[List[str]] = None,
     collection_names: Optional[List[str]] = None,
     connection=None,
+    image_results_collector: Optional[List] = None,
 ):
     """Build a retriever that searches the v2 retrieval_units table.
 
@@ -258,6 +259,10 @@ def get_vectorstore_retriever(
         allowed_file_ids: Optional file ID filter.
         collection_names: Module IDs — the first entry is used as the module_id filter.
         connection: Reusable psycopg2 connection.
+        image_results_collector: Optional mutable list that will be populated with
+            all retrieval Documents during search. Used by figure_selection module
+            to separate image/text results and run deterministic figure selection
+            in parallel with LLM generation.
     """
     # The primary module_id is the first collection name
     module_id = collection_names[0] if collection_names else ""
@@ -279,6 +284,13 @@ def get_vectorstore_retriever(
             allowed_file_ids=allowed_file_ids,
             connection=connection,
         )
+
+        # Collect image results for figure selection (side-channel)
+        if image_results_collector is not None:
+            image_results_collector.clear()
+            for doc in documents:
+                # Collect all documents — handler separates image/text for figure selection
+                image_results_collector.append(doc)
 
         # Image escalation: if query references a figure, fetch and analyze the image
         try:

@@ -1031,6 +1031,98 @@ exports.handler = async (event) => {
           });
         }
         break;
+      case "GET /student/figure_url":
+        if (
+          event.queryStringParameters != null &&
+          event.queryStringParameters.figure_id
+        ) {
+          const figureId = event.queryStringParameters.figure_id;
+
+          try {
+            // Look up the figure by retrieval_id or figure_id in retrieval_units metadata
+            const figureResult = await sqlConnection`
+              SELECT retrieval_id, element_type, metadata
+              FROM retrieval_units
+              WHERE retrieval_id = ${figureId}
+                 OR metadata->>'figure_id' = ${figureId}
+              LIMIT 1;
+            `;
+
+            if (figureResult.length === 0) {
+              response.statusCode = 404;
+              response.body = JSON.stringify({ error: "Figure not found" });
+              break;
+            }
+
+            const figureRecord = figureResult[0];
+            const metadata = typeof figureRecord.metadata === "string"
+              ? JSON.parse(figureRecord.metadata)
+              : figureRecord.metadata || {};
+
+            const imageS3Key = metadata.image_s3_key;
+            if (!imageS3Key) {
+              response.statusCode = 404;
+              response.body = JSON.stringify({ error: "Figure has no associated image" });
+              break;
+            }
+
+            // Verify student access via the module that owns this figure
+            const figureModuleId = metadata.module_id;
+            if (figureModuleId) {
+              const courseResult = await sqlConnection`
+                SELECT cc.course_id
+                FROM "Course_Modules" cm
+                JOIN "Course_Concepts" cc ON cc.concept_id = cm.concept_id
+                WHERE cm.module_id = ${figureModuleId}
+                LIMIT 1;
+              `;
+
+              if (courseResult.length > 0) {
+                const courseId = courseResult[0].course_id;
+                const enrolmentId = await verifyStudentAccess(
+                  sqlConnection,
+                  userEmailAttribute,
+                  courseId,
+                  figureModuleId
+                );
+
+                if (!enrolmentId) {
+                  response.statusCode = 403;
+                  response.body = JSON.stringify({
+                    error: "Access denied. Student is not enrolled in this course.",
+                  });
+                  break;
+                }
+              }
+            }
+
+            // Generate presigned GET URL (1 hour TTL)
+            const command = new GetObjectCommand({
+              Bucket: BUCKET,
+              Key: imageS3Key,
+            });
+            const url = await getSignedUrl(s3Client, command, {
+              expiresIn: 3600,
+            });
+
+            response.body = JSON.stringify({
+              url,
+              figure_id: metadata.figure_id || figureRecord.retrieval_id,
+              caption: metadata.caption || metadata.image_description || null,
+              page: metadata.provenance_page_num || null,
+            });
+          } catch (err) {
+            console.error(err);
+            response.statusCode = 500;
+            response.body = JSON.stringify({ error: "Internal server error" });
+          }
+        } else {
+          response.statusCode = 400;
+          response.body = JSON.stringify({
+            error: "figure_id is required",
+          });
+        }
+        break;
       default:
         throw new Error(`Unsupported route: "${pathData}"`);
     }

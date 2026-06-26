@@ -297,6 +297,7 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
         setNewMessage({
           message_id: `ai-${Date.now()}`,
           message_content: textGenData.llm_output,
+          blocks: textGenData.blocks || null,
           student_sent: false,
           session_id: newSession.session_id,
           time_sent: new Date().toISOString(),
@@ -380,6 +381,7 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
         setNewMessage({
           message_id: `ai-retry-${Date.now()}`,
           message_content: textGenData.llm_output,
+          blocks: textGenData.blocks || null,
           student_sent: false,
           session_id: sessionId,
           time_sent: new Date().toISOString(),
@@ -472,6 +474,7 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
         setNewMessage({
           message_id: `ai-greet-${Date.now()}`,
           message_content: textResponseData.llm_output,
+          blocks: textResponseData.blocks || null,
           student_sent: false,
           session_id: sessionData.session_id,
           time_sent: new Date().toISOString(),
@@ -818,6 +821,7 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
             ) : (
               <AIMessage
                 key={message.message_id}
+                blocks={message.blocks}
                 message={message.message_content}
               />
             )

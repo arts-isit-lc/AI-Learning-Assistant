@@ -484,6 +484,8 @@ def handler(event, context):
         )
 
         # P-6: Pass the global connection to avoid creating new connections in hybrid_search
+        # Image results collector: populated during retrieval for figure selection
+        image_results_collector = []
         t0 = time.time()
         history_aware_retriever = get_vectorstore_retriever(
             llm=llm,
@@ -491,7 +493,8 @@ def handler(event, context):
             embeddings=embeddings,
             allowed_file_ids=allowed_file_ids,
             collection_names=collection_names,
-            connection=connect_to_db()
+            connection=connect_to_db(),
+            image_results_collector=image_results_collector,
         )
         logger.info(
             "Retriever created",
@@ -615,6 +618,42 @@ def handler(event, context):
     # ARCH-3: Session naming removed from critical path.
     # The frontend generates a name client-side (Option 1a).
     logger.info("Returning the generated response.")
+
+    # Figure selection: deterministic, runs on shared retrieval outputs
+    # (image_results_collector was populated during retrieval)
+    try:
+        from helpers.figure_selection import get_eligible_figures, select_figures, assemble_blocks
+
+        llm_output = response.get("llm_output", "LLM failed to create response")
+
+        # Separate image and text results from the retrieval collector
+        image_results = [doc for doc in image_results_collector
+                         if doc.metadata.get("element_type") == "image"
+                         and doc.metadata.get("image_s3_key")]
+        text_results = [doc for doc in image_results_collector
+                        if doc.metadata.get("element_type") != "image"
+                        and doc.metadata.get("element_type") != "image_escalation"]
+
+        # Check if escalation produced a figure
+        escalation_figure_id = None
+        for doc in image_results_collector:
+            if doc.metadata.get("element_type") == "image_escalation":
+                escalation_figure_id = doc.metadata.get("retrieval_id")
+                break
+
+        eligible = get_eligible_figures(
+            image_results=image_results,
+            text_results=text_results,
+            query=student_query,
+            escalation_figure_id=escalation_figure_id,
+        )
+        selected_figures = select_figures(eligible, query=student_query)
+        blocks = assemble_blocks(llm_output, selected_figures)
+    except Exception:
+        logger.exception("Figure selection failed, returning text-only blocks")
+        llm_output = response.get("llm_output", "LLM failed to create response")
+        blocks = [{"type": "text", "content": llm_output}]
+
     return {
         "statusCode": 200,
         "headers": {
@@ -625,6 +664,7 @@ def handler(event, context):
             },
         "body": json.dumps({
             "session_name": session_name,
+            "blocks": blocks,
             "llm_output": response.get("llm_output", "LLM failed to create response"),
             "llm_verdict": response.get("llm_verdict", "LLM failed to create verdict")
         })
