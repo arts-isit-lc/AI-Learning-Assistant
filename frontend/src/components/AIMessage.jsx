@@ -49,6 +49,8 @@ const AIMessage = ({ blocks, message }) => {
       ? blocks
       : [{ type: "text", content: message || "" }];
 
+  console.log("[AIMessage] rendering", { blocks, message, renderBlocks });
+
   return (
     <div className="ml-16 mb-6 mr-16">
       <div className="flex flex-row items-start gap-4">
@@ -57,12 +59,14 @@ const AIMessage = ({ blocks, message }) => {
         </div>
         <div className="text-start text-foreground min-w-0 max-w-prose break-words">
           {renderBlocks.map((block, i) => {
+            console.log("[AIMessage] rendering block", i, block);
             switch (block.type) {
               case "text":
                 return <MarkdownRender key={i} content={block.content} />;
               case "figure":
                 return <FigureImage key={i} figureId={block.id} />;
               default:
+                console.warn("[AIMessage] unknown block type", block.type);
                 return null;
             }
           })}

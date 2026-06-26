@@ -18,23 +18,27 @@ const FigureImage = ({ figureId }) => {
 
   useEffect(() => {
     if (!figureId) {
+      console.warn("[FigureImage] no figureId provided");
       setLoading(false);
       setError(true);
       return;
     }
 
+    console.log("[FigureImage] fetching figure_url for:", figureId);
     let cancelled = false;
 
     apiClient
       .get("student/figure_url", { figure_id: figureId })
       .then((result) => {
         if (!cancelled) {
+          console.log("[FigureImage] got result:", result);
           setData(result);
           setLoading(false);
         }
       })
-      .catch(() => {
+      .catch((err) => {
         if (!cancelled) {
+          console.error("[FigureImage] error fetching figure_url:", err);
           setError(true);
           setLoading(false);
         }
@@ -45,11 +49,14 @@ const FigureImage = ({ figureId }) => {
     };
   }, [figureId]);
 
+  console.log("[FigureImage] render state:", { figureId, loading, error, hasData: !!data });
+
   if (loading) {
     return <Skeleton className="h-48 w-full rounded" />;
   }
 
   if (error || !data?.url) {
+    console.warn("[FigureImage] not rendering — error:", error, "data:", data);
     return null;
   }
 
