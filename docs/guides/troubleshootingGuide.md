@@ -149,7 +149,20 @@ To verify that embeddings are properly created, you first need to find the right
 3. **View embedding collections**
    - You can now view the collections stored in your project.
 
-   - To see **all collections** in the project:
+   **V2 system (current — `retrieval_units` table):**
+
+   ```sql
+   SELECT element_type, COUNT(*) 
+   FROM retrieval_units 
+   WHERE module_id = '<module_id>'
+   GROUP BY element_type;
+   ```
+
+   This shows how many retrieval units exist per content type (text, image, table, formula) for a given module.
+
+   **V1 system (legacy — `langchain_pg_*` tables, idle after V2 deployment):**
+
+   To see **all collections** in the legacy V1 system:
 
      ```sql
      SELECT * FROM langchain_pg_collection;
@@ -209,12 +222,19 @@ To verify that embeddings are properly created, you first need to find the right
 
 ### Overview
 
-Docker is used in this project to run two important workflows in the RAG pipeline using AWS Lambda container images:
+Docker is used in this project to build container images for the following Lambda functions:
 
-- **Text Generation**: This Lambda function runs a container image from the `./text_generation` folder to handle prompt processing, document retrieval, and Bedrock LLM generation.
-- **Data Ingestion**: This Lambda function uses the `./data_ingestion` folder to process and embed uploaded documents into the vector store.
+| Container | Source Directory | Purpose |
+|-----------|-----------------|---------|
+| Text Generation | `./text_generation` | LangChain-based LLM generation (V1 chatbot path) |
+| Multimodal RAG Ingestion | `./multimodal_rag_v2` | Parse files into Document IR (CMD: `ingestion.handler.handler`) |
+| Multimodal RAG Enrichment | `./multimodal_rag_v2` | Vision AI + embeddings (CMD: `enrichment.handler.handler`) |
+| Multimodal RAG Retrieval | `./multimodal_rag_v2` | Hybrid search + reasoning (CMD: `retrieval.handler.handler`) |
+| Chatbot V2 | `./chatbot_v2` | Structured learning engine |
+| Math Compute | `./math_compute` | Verified math computation (SymPy) |
+| SQS Trigger | `./sqsTrigger` | Async processing (chat log export) |
 
-Both Lambda functions are defined in the CDK using `lambda.DockerImageFunction` and are built as Docker images pushed to AWS Elastic Container Registry (ECR).
+All are built via `lambda.DockerImageFunction` in CDK and pushed to ECR automatically during deployment.
 
 > **Note**: You do **not** need to sign into the Docker Desktop app itself. These images are built and uploaded automatically through CDK during deployment.
 

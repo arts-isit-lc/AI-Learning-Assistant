@@ -1,6 +1,5 @@
 ---
-inclusion: fileMatch
-fileMatchPattern: "frontend/**"
+inclusion: manual
 ---
 
 # UI Design System Contract

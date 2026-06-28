@@ -1,105 +1,85 @@
 # AI Learning Assistant
 
-This prototype explores how Large Language Models (LLMs) can enhance education by offering a personalized and adaptive learning experience. The LLM complements an instructor's role by providing tailored feedback, identifying knowledge gaps, and recommending targeted resources to students. This approach resonates with the core principles of personalized education, transforming the learning experience into a journey of self-discovery and growth.
+A RAG-powered educational chatbot that provides personalized, adaptive learning experiences. The system processes course materials (PDF, PPTX, DOCX, LaTeX, CSV, HTML) into a multimodal knowledge base and delivers that knowledge through AI-guided conversations that track engagement, evaluate understanding, and adapt difficulty.
 
+Three user roles: **Admin** (platform management), **Instructor** (course materials, analytics), **Student** (AI chat, learning sessions).
 
-| Index                                                   | Description                                             |
-| :------------------------------------------------------ | :------------------------------------------------------ |
-| [High Level Architecture](#high-level-architecture)     | High level overview illustrating component interactions |
-| [Deployment](#deployment-guide)                         | How to deploy the project                               |
-| [User Guide](#user-guide)                               | The working solution                                    |
-| [Security & Network Guide](#security-guide-and-network-configuration) | Analysis on network architecture and security            |
-| [Directories](#directories)                             | General project directory structure                     |
-| [RAG Documentation](#rag-documentation)                 | Documentation on how the project uses RAG               |
-| [API Documentation](#api-documentation)                 | Documentation on the API the project uses               |
-| [Optional Modifications](#optional-modifications)       | Documentation on how to make optional project modifications               |
-| [Troubleshooting Guide](#troubleshooting-guide)         | Documentation on how to troubleshoot common issues      |
-| [Changelog](#changelog)                                 | Any changes post publish                                |
-| [Credits](#credits)                                     | Meet the team behind the solution                       |
-| [License](#license)                                     | License details                                         |
+| Index | Description |
+|:------|:------------|
+| [Architecture](#architecture) | System overview and component interactions |
+| [Deployment](#deployment) | How to deploy the project |
+| [User Guide](#user-guide) | Working solution walkthrough |
+| [Security](#security) | Network architecture and security |
+| [Troubleshooting](#troubleshooting) | Common issues and fixes |
+| [Directories](#directories) | Project directory structure |
+| [API Documentation](#api-documentation) | REST API reference |
+| [Credits](#credits) | Team behind the solution |
 
 ---
 
-## High-Level Architecture
+## Architecture
 
-The following architecture diagram illustrates the various AWS components utilized to deliver the solution. For an in-depth explanation of the frontend and backend stacks, please look at the [Architecture Guide](docs/architectureDeepDive.md).
+The system uses a 4-layer Multimodal RAG pipeline (Ingestion → Enrichment → Retrieval → Reasoning) paired with a structured learning engine that controls teaching strategy, concept tracking, and progression.
 
-![Alt text](docs/images/architecture.png)
+![Architecture Diagram](docs/images/architecture.png)
 
-## Deployment Guide
+For detailed documentation:
+- [Architecture Overview](docs/architecture-overview.md) — full system design with all CDK stacks
+- [Multimodal RAG Pipeline](docs/multimodal-rag-pipeline.md) — 4-layer processing pipeline
+- [Chatbot V2 Flow](docs/chatbot-v2-flow.md) — structured learning engine
+- [End-to-End Data Flow](docs/data-flow.md) — complete data journey from upload to answer
+- [V1 vs V2 Comparison](docs/v1-vs-v2-data-comparison.md) — what changed and why
 
-To deploy this solution, please follow the steps laid out in the [Deployment Guide](./docs/deploymentGuide.md)
+## Deployment
+
+See the [Deployment Guide](docs/guides/deploymentGuide.md) for full instructions.
+
+**Requirements:** git, AWS Account, AWS CLI, AWS CDK v2, npm, Node.js 20+, Docker
 
 ## User Guide
 
-Please refer to the [Web App User Guide](./docs/userGuide.md) for instructions on navigating the web app interface.
+See the [User Guide](docs/guides/userGuide.md) for navigating the web app interface.
 
+## Security
 
-## Security Guide and Network Configuration
+See the [Security Guide](docs/guides/securityGuide.md) for network architecture and security analysis.
 
-Please refer to the [Security Guide](./docs/securityGuide.md) for an analysis on the network architecture and security of the project
+## Troubleshooting
 
+See the [Troubleshooting Guide](docs/guides/troubleshootingGuide.md) for common issues and debugging.
 
 ## Directories
 
 ```
-├── cdk
-│   ├── bin
-│   ├── data_ingestion
-│   ├── lambda
-│   ├── layers
-│   ├── lib
-│   ├── text_generation
-├── docs
-└── frontend
-    ├── public
-    └── src
-        ├── assets
-        ├── components
-        ├── functions
-        └── pages
-            ├── admin
-            ├── instructor
-            └── student
+├── cdk/
+│   ├── bin/                # CDK app entrypoint
+│   ├── lib/                # 7 CDK stack definitions
+│   ├── lambda/             # 13 zip Lambda functions (Node.js 22 + Python 3.11)
+│   ├── text_generation/    # Docker Lambda — LangChain text generation (V1 path)
+│   ├── multimodal_rag_v2/  # Docker Lambda — 4-layer RAG pipeline (V2)
+│   ├── chatbot_v2/         # Docker Lambda — structured learning engine (V2)
+│   ├── math_compute/       # Docker Lambda — verified math computation (SymPy)
+│   ├── sqsTrigger/         # Docker Lambda — async processing
+│   ├── layers/             # Lambda layers (jwt-verify, psycopg2, powertools)
+│   ├── graphql/            # AppSync schema
+│   └── test/               # Jest CDK assertion tests
+├── docs/                   # Project documentation
+└── frontend/               # React 18 SPA (Vite + Tailwind + MUI v9)
+    ├── src/
+    │   ├── components/     # Shared components (AIMessage, chat, file viewers)
+    │   ├── pages/          # Role-based pages (admin, instructor, student)
+    │   ├── services/       # API client
+    │   └── utils/          # Auth, formatters
+    └── public/
 ```
-
-1. `/cdk`: Contains the deployment code for the app's AWS infrastructure
-    - `/bin`: Contains the instantiation of CDK stack
-    - `/data_ingestion`: Contains the code required for the Data Ingestion step in retrieval-augmented generation. This folder is used by a Lambda function that runs a container which updates the vectorstore for a course when files are uploaded or deleted.
-    - `/lambda`: Contains the lambda functions for the project
-    - `/layers`: Contains the required layers for lambda functions
-    - `/lib`: Contains the deployment code for all infrastructure stacks
-    - `/text_generation`: Contains the code required for the Text Generation step in retrieval-augmented generation. This folder is used by a Lambda function that runs a container which retrieves specific documents and invokes the LLM to generate appropriate responses during a conversation.
-2. `/docs`: Contains documentation for the application
-3. `/frontend`: Contains the user interface of the application
-    - `/public`: public assets used in the application
-    - `/src`: contains the frontend code of the application
-        - `/assets`: Contains assets used in the application
-        - `/components`: Contains components used in the application
-        - `/functions`: Contains utility functions used in the application
-        - `/pages`: Contains pages used in the application
-            - `/admin`: Contains admin pages used in the application
-            - `/instructor`: Contains instructor pages used in the application
-            - `/student`: Contains student pages used in the application
-
-## RAG Documentation
-
-Here you can learn about how this project performs retrieval-augmented generation (RAG). For a deeper dive into how we use Large Language Models (LLMs) to generate text, please refer to the [Text Generation](./docs/text_generation) folder. For more knowledge on how data is consumed and interpreted for the LLM, please refer to the [Data Ingestion](./docs/data_ingestion) folder.
 
 ## API Documentation
 
-Here you can learn about the API the project uses: [API Documentation](./docs/api-documentation.pdf).
+See the [OpenAPI definition](cdk/OpenAPI_Swagger_Definition.yaml) or the [API PDF](docs/api-documentation.pdf).
 
 ## Optional Modifications
 
-Steps to implement optional modifications such as restricting sign-up to certain email domains and allowing instructors to create courses can be found [here](./docs/optionalModifications.md)
-
-## Troubleshooting Guide
-
-This guide helps you check if everything in the project is working as expected using a notebook tool. It also shows how to navigate through a common Docker issue [here](./docs/troubleshootingGuide.md)
-
-## Changelog
-N/A
+See [Optional Modifications](docs/guides/optionalModifications.md) for configuration tweaks (email domain restrictions, course creation settings).
 
 ## Credits
 
@@ -109,11 +89,6 @@ This application was architected and developed by [Sean Woo](https://www.linkedi
 
 This project is distributed under the [MIT License](LICENSE).
 
-Licenses of libraries and tools used by the system are listed below:
-
-[PostgreSQL license](https://www.postgresql.org/about/licence/)
-- For PostgreSQL and pgvector
-- "a liberal Open Source license, similar to the BSD or MIT licenses."
-
-[LLaMa 3 Community License Agreement](https://llama.meta.com/llama3/license/)
-- For Llama 3 70B Instruct model
+Licenses of libraries and tools used by the system:
+- [PostgreSQL License](https://www.postgresql.org/about/licence/) — PostgreSQL and pgvector
+- [LLaMa 3 Community License](https://llama.meta.com/llama3/license/) — Llama 3 70B Instruct model

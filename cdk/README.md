@@ -1,14 +1,57 @@
-# Welcome to your CDK TypeScript project
+# CDK Infrastructure
 
-This is a blank project for CDK development with TypeScript.
+AWS CDK (TypeScript) infrastructure for the AI Learning Assistant. Deploys 7 stacks.
 
-The `cdk.json` file tells the CDK Toolkit how to execute your app.
+## Stacks
 
-## Useful commands
+| Stack | Purpose |
+|-------|---------|
+| VpcStack | VPC, subnets, security groups |
+| DatabaseStack | RDS PostgreSQL (pgvector), 3 RDS Proxies, DynamoDB, Secrets Manager |
+| MultimodalRagStack | RAG pipeline (ingestion/enrichment/retrieval), chatbot V2, math compute |
+| ApiGatewayStack | REST API (WAF), AppSync, zip Lambdas, text_generation, SQS, S3, Cognito |
+| ObservabilityStack | 30+ CloudWatch Alarms, SNS, Dashboard, X-Ray sampling |
+| DBFlowStack | Schema initializer Lambda |
+| AmplifyStack | Frontend hosting |
 
-* `npm run build`   compile typescript to js
-* `npm run watch`   watch for changes and compile
-* `npm run test`    perform the jest unit tests
-* `npx cdk deploy`  deploy this stack to your default AWS account/region
-* `npx cdk diff`    compare deployed stack with current state
-* `npx cdk synth`   emits the synthesized CloudFormation template
+## Commands
+
+```bash
+npx tsc --noEmit       # Type-check (no Docker needed)
+npm test               # Jest assertion tests (requires Docker)
+npm run deploy         # Test + cdk deploy --all (dev)
+npm run deploy:prod    # Test + cdk deploy --all -c environment=prod
+npx cdk synth          # Full synthesis (requires Docker)
+```
+
+## Requirements
+
+- Node.js 20+, npm
+- Docker (running) — required for container Lambda image builds
+- AWS CLI configured with appropriate credentials
+- No AWS credentials needed for `npm test` (Jest uses mock templates)
+
+## Container Lambdas (Docker)
+
+| Directory | Lambda Functions | Runtime |
+|-----------|-----------------|---------|
+| `text_generation/` | TextGenLambdaDockerFunc | Python 3.11 |
+| `multimodal_rag_v2/` | ragIngestion, ragEnrichment, ragRetrieval | Python 3.11 |
+| `chatbot_v2/` | chatbotV2Function | Python 3.11 |
+| `math_compute/` | mathComputeFunction | Python 3.11 |
+| `sqsTrigger/` | SQSTriggerDockerFunc | Python 3.11 |
+
+## Zip Lambdas
+
+Located in `lambda/`. Runtime: Node.js 22. Includes student, instructor, admin functions, authorizers, Cognito triggers, file operations, and notifications.
+
+## Testing
+
+Jest 29 + ts-jest. All tests use `Template.fromStack()` assertions against synthesized CloudFormation.
+
+```bash
+npm test                    # Full suite
+npx jest --testPathPattern="iam"  # Run specific test file
+```
+
+Test helpers: `test/helpers/stack-setup.ts` provides `createTestStacks()` and `createObservabilityTemplate()`.

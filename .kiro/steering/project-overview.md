@@ -2,58 +2,48 @@
 inclusion: always
 ---
 
-# AI Learning Assistant — Project Overview
+# Project Overview
 
-RAG chatbot for personalized education. Three user roles: Admin, Instructor, Student. Uses LangChain + LLMs (Claude, Llama) grounded in course materials.
+RAG chatbot for personalized education. Roles: Admin, Instructor, Student. LangChain + LLMs (Claude, Llama) grounded in course materials.
 
-## Repository Structure
+## Repo Structure
 ```
-AI-Learning-Assistant/
-├── frontend/              # React 18 SPA (Vite + Tailwind + MUI v9)
-├── cdk/
-│   ├── bin/cdk.ts         # CDK app entrypoint
-│   ├── lib/               # 6 CDK stack definitions
-│   ├── lambda/            # 13 zip Lambda functions (Node.js 22 + Python 3.11)
-│   ├── text_generation/   # Docker container Lambda (Python, LangChain)
-│   ├── data_ingestion/    # Docker container Lambda (Python, LangChain)
-│   ├── sqsTrigger/        # Docker container Lambda (Python)
-│   ├── layers/            # Lambda layers (jwt-verify, psycopg2, postgres)
-│   ├── graphql/           # AppSync schema
-│   └── test/              # Jest CDK assertion tests
-├── docs/
-└── .kiro/specs/
+frontend/              # React 18 SPA (Vite + Tailwind + MUI v9)
+cdk/
+├── bin/cdk.ts         # CDK app entrypoint
+├── lib/               # 7 CDK stacks
+├── lambda/            # 13 zip Lambdas (Node.js 22 + Python 3.11)
+├── text_generation/   # Docker Lambda (Python, LangChain)
+├── multimodal_rag_v2/ # Docker Lambda (Python, RAG pipeline)
+├── chatbot_v2/        # Docker Lambda (Python, structured learning)
+├── math_compute/      # Docker Lambda (Python, SymPy)
+├── sqsTrigger/        # Docker Lambda (Python)
+├── layers/            # Lambda layers (jwt-verify, psycopg2, postgres)
+├── graphql/           # AppSync schema
+└── test/              # Jest CDK assertion tests
 ```
 
-## CDK Stack Deployment Order
-1. **VpcStack** — VPC, subnets, security groups
-2. **DatabaseStack** — RDS PostgreSQL (pgvector), 3 RDS proxies, DynamoDB, Secrets Manager
-3. **ApiGatewayStack** — REST API (WAF), AppSync, all Lambdas, SQS, S3, Cognito
-4. **ObservabilityStack** — CloudWatch Alarms (30+), SNS topics, Dashboard, X-Ray sampling
-5. **DBFlowStack** — initializer Lambda (schema migration)
-6. **AmplifyStack** — Amplify Hosting (frontend)
+## Stack Dependency Order
+```
+VpcStack -> DatabaseStack -> MultimodalRagStack -> ApiGatewayStack -+-> ObservabilityStack
+                                                                    +-> DBFlowStack -> AmplifyStack
+```
+Naming: `${StackPrefix}-${StackName}` | Context: `StackPrefix`, `environment` (`dev`|`prod`)
 
-Stack naming: `${StackPrefix}-${StackName}` | Context vars: `StackPrefix`, `environment` (`dev`|`prod`)
-
-## Development Commands
+## Commands
 ```bash
-# CDK — run from cdk/
-npm test               # Jest assertion tests (requires Docker)
-npm run deploy         # runs npm test then cdk deploy --all
-npm run deploy:prod    # same with -c environment=prod
-npx tsc --noEmit       # type-check only (no Docker)
-npx cdk synth          # full synthesis (requires Docker)
+# CDK (from cdk/)
+npm test             # Jest (requires Docker)
+npm run deploy       # test + cdk deploy --all
+npx tsc --noEmit     # type-check only (no Docker)
 
-# Frontend — run from frontend/
-npm run dev            # Vite dev server
-npm run build          # production build
-npm run lint           # ESLint
+# Frontend (from frontend/)
+npm run dev          # Vite dev server
+npm run build        # production build
+npm run lint         # ESLint
 ```
 
 ## Hard Constraints
-- **Docker required** for CDK tests/synth (`textGenLambdaDockerFunc`, `dataIngestLambdaDockerFunc`)
-- **No frontend test framework** — ESLint is the only frontend quality gate
-- **Pre-deploy gate** — `predeploy` npm hook runs `npm test` before every deploy; never bypass
-
-## Active Specs
-- `infrastructure-hardening` — ✅ Complete
-- `observability-reliability` — 🔄 In progress (CDK assertion tests 9.2–9.5 pending)
+- Docker required for CDK tests/synth (5 container Lambdas)
+- No frontend test framework — ESLint only
+- `predeploy` hook runs `npm test` before every deploy; never bypass

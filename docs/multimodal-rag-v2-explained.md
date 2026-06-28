@@ -1,12 +1,12 @@
-# The Upgraded System: Multimodal RAG V2 — Explained Simply
+# Multimodal RAG V2 — Explained Simply
 
-This document explains the planned upgrade to how AILA processes course materials and answers questions. It's written for anyone — no programming background required.
+This document explains how AILA processes course materials and answers questions. It's written for anyone — no programming background required.
 
 ---
 
-## Why Upgrade?
+## Why V2?
 
-The current system treats every file the same way: open it with one tool (PyMuPDF), extract raw text page by page, and store it. This works, but has real limitations:
+The original system (V1) treated every file the same way: open it with one tool (PyMuPDF), extract raw text page by page, and store it. This worked, but had real limitations:
 
 | Current Problem | Impact on Students |
 |----------------|-------------------|
@@ -400,12 +400,11 @@ A key principle: **one failure never brings down the whole system.**
 
 ---
 
-## Future (V3 and Beyond)
+## Future Improvements
 
-Things intentionally deferred to keep V2 focused:
+Potential enhancements beyond the current system:
 
-- **Calculator tool** — AI can compute math, not just explain it
-- **Table query engine** — "What's the value in row 3, column B?"
-- **Citation linking** — AI response links to exact page/slide
+- **Table query engine** — structured SQL-like queries against extracted tables
+- **Citation linking** — AI response links to exact page/slide in the source document
 - **Topic-overlap clustering** — group results by theme (needs usage data first)
 - **Swappable search backends** — currently tied to pgvector; future could use OpenSearch or others

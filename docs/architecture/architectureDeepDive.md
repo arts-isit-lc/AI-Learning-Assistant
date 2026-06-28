@@ -1,5 +1,7 @@
 # Architecture Deep Dive
 
+> **Note:** This document primarily covers the V1 architecture and database schema. For the current V2 system architecture, see [architecture-overview.md](../architecture-overview.md). For the V2 RAG pipeline, see [multimodal-rag-pipeline.md](../multimodal-rag-pipeline.md). For the V2 chatbot, see [chatbot-v2-flow.md](../chatbot-v2-flow.md).
+
 ## Architecture
 
 ![Archnitecture Diagram](./images/architecture.png)

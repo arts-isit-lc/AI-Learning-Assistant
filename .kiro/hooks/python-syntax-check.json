@@ -3,13 +3,14 @@
   "hooks": [
     {
       "name": "Python Lambda Syntax Check",
-      "description": "Checks any edited Python Lambda file for syntax errors immediately, since there is no Python test runner configured",
+      "description": "Checks the saved Python file for syntax errors. Extracts file path from stdin JSON context.",
       "trigger": "PostFileSave",
-      "matcher": "cdk/.*[^/]*\\.py$",
+      "matcher": "cdk/.*\\.py$",
       "action": {
-        "type": "agent",
-        "prompt": "Run python3 -m py_compile on the edited Python file to check for syntax errors. Report the result concisely — either confirm syntax is OK or show the error."
+        "type": "command",
+        "command": "python3 -c \"import json,sys,py_compile;d=json.load(sys.stdin);py_compile.compile(d.get('filePath',d.get('path','')),doraise=True)\""
       },
+      "timeout": 10,
       "enabled": true
     }
   ]

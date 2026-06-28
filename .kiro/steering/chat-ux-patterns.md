@@ -1,6 +1,5 @@
 ---
-inclusion: fileMatch
-fileMatchPattern: "frontend/src/pages/student/**,frontend/src/components/**"
+inclusion: manual
 ---
 
 # Chat UX Patterns

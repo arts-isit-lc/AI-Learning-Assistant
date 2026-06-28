@@ -1,6 +1,5 @@
 ---
-inclusion: fileMatch
-fileMatchPattern: "frontend/**"
+inclusion: manual
 ---
 
 # Figma to Code Workflow
@@ -117,33 +116,4 @@ Unchanged:
 
 ## Chat UI Patterns
 
-The primary interface is a chat. Apply these patterns consistently:
-
-**Layout:**
-- Always `SplitLayout` — sidebar left (sessions), main right (chat)
-- Sidebar: `w-64` fixed, `bg-secondary`, scrollable session list
-- Main: `flex flex-col` — header (fixed) + message thread (flex-grow, scrollable) + input (sticky bottom)
-
-**Messages:**
-- `AIMessage` — left-aligned, no background bubble, markdown rendered
-- `StudentMessage` — right-aligned, `bg-secondary rounded-xl` bubble
-- `TypingIndicator` — shown only when AI is processing and no streaming text present
-- Streaming text renders as `AIMessage` with `isStreaming=true`
-
-**Chat input:**
-- `Textarea` auto-resizing up to `max-h-32`
-- Send on Enter (Shift+Enter for newline)
-- Disabled while `isSubmitting` or `isAItyping`
-- Send icon: `SendHorizontal` from lucide-react
-
-**States:**
-- Empty session: show `TypingIndicator` immediately (AI sends the first message)
-- Error: `RetryBanner` below thread — never a modal
-- Loading history: `Skeleton` rows in message area, not a spinner
-
-**Session sidebar:**
-- "New Chat" button at top with `Plus` icon
-- `Separator` between button and history list
-- Active session: `bg-primary text-primary-foreground`
-- Hover: `bg-muted`
-- Delete: appears on hover as `ghost` icon button with `Trash2` icon
+See `chat-ux-patterns.md` for the canonical chat interface specification (loaded automatically when editing student/chat components).

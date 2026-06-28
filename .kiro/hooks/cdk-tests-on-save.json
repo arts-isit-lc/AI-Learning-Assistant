@@ -2,10 +2,10 @@
   "version": "v1",
   "hooks": [
     {
-      "name": "CDK Jest Tests on Edit",
-      "description": "Runs the full Jest CDK assertion test suite whenever a CDK stack or test file is saved, keeping tests green during development",
+      "name": "CDK Jest Tests on Test File Edit",
+      "description": "Runs the full Jest CDK assertion test suite when a test file is saved. Lib file saves only trigger typecheck (faster, no Docker).",
       "trigger": "PostFileSave",
-      "matcher": "(cdk/lib/.*[^/]*\\.ts$|cdk/test/.*[^/]*\\.ts$)",
+      "matcher": "cdk/test/.*\\.ts$",
       "action": {
         "type": "command",
         "command": "bash -c 'cd /Users/user/projects/AI-Learning-Assistant/cdk && npm test'"
