@@ -24,6 +24,30 @@ logger = Logger(service="multimodal-rag-enrichment")
 
 MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0"
 
+# Bedrock Claude vision accepts jpeg, png, gif, and webp. Adapters do not
+# normalize image formats (except the PDF adapter, which emits PNG), so the
+# media type must be detected from the actual bytes — a static default would
+# mislabel JPEG/GIF/WebP images and Bedrock would reject them.
+def _detect_media_type(image_bytes: bytes) -> str | None:
+    """Detect a Bedrock-supported image media type from leading magic bytes.
+
+    Returns "image/png", "image/jpeg", "image/gif", or "image/webp" when the
+    header is recognized, otherwise None (caller falls back to a metadata hint
+    or PNG).
+    """
+    if not image_bytes or len(image_bytes) < 12:
+        return None
+    header = image_bytes[:12]
+    if header.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if header.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if header.startswith(b"GIF87a") or header.startswith(b"GIF89a"):
+        return "image/gif"
+    if header[:4] == b"RIFF" and header[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
 VISION_PROMPT = """\
 Analyze this image and return a JSON object with exactly these fields:
 - "image_type": a short label (e.g., "diagram", "chart", "photograph", "screenshot", "graph", "table", "illustration")
@@ -69,8 +93,10 @@ class VisionService:
         image_bytes = element.content if isinstance(element.content, bytes) else element.content.encode("utf-8")
         image_base64 = base64.b64encode(image_bytes).decode("utf-8")
 
-        # Determine media type from metadata or default to png
-        media_type = element.metadata.get("media_type", "image/png")
+        # Determine the media type from the actual image bytes. Falls back to an
+        # explicit metadata hint, then PNG. (Detecting from bytes is required
+        # because adapters keep the original format — only PDF emits PNG.)
+        media_type = _detect_media_type(image_bytes) or element.metadata.get("media_type", "image/png")
 
         request_body = {
             "anthropic_version": "bedrock-2023-05-31",

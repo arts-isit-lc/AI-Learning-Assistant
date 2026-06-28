@@ -6,9 +6,12 @@ and math environments (FORMULA elements). No AI/LLM calls.
 
 from __future__ import annotations
 
+import re
+
 from aws_lambda_powertools import Logger
 from pylatexenc.latexwalker import (
     LatexEnvironmentNode,
+    LatexMacroNode,
     LatexMathNode,
     LatexWalker,
 )
@@ -34,6 +37,12 @@ _MATH_ENVIRONMENTS = frozenset({
     "eqnarray",
     "eqnarray*",
 })
+
+# Environment names that contain tabular/grid data → TABLE elements
+_TABULAR_ENVIRONMENTS = frozenset({"tabular", "tabular*", "array", "longtable", "tabularx"})
+
+# Regex to pull the filename out of \includegraphics[opts]{file}
+_INCLUDEGRAPHICS_PATTERN = re.compile(r"\\includegraphics(?:\[[^\]]*\])?\{([^}]*)\}")
 
 
 class LatexAdapter(BaseAdapter):
@@ -92,11 +101,30 @@ class LatexAdapter(BaseAdapter):
             ) from exc
 
         elements: list[RawElement] = []
-        position_index = 0
+        position_index_counter = [0]
 
         self._walk_nodes(
-            nodelist, latex_text, elements, position_index_counter=[0]
+            nodelist, latex_text, elements, position_index_counter
         )
+
+        # \includegraphics references → searchable TEXT. The referenced image
+        # files are external to the .tex source (no bytes available), so we index
+        # them as figure references rather than attempting to fetch them.
+        for match in _INCLUDEGRAPHICS_PATTERN.finditer(latex_text):
+            filename = match.group(1).strip()
+            if filename:
+                elements.append(
+                    RawElement(
+                        content=f"Figure: {filename}",
+                        element_type=ElementType.TEXT,
+                        provenance=Provenance(
+                            page_num=1,
+                            position_index=position_index_counter[0],
+                        ),
+                        raw_metadata={"source": "latex_includegraphics", "graphic": filename},
+                    )
+                )
+                position_index_counter[0] += 1
 
         logger.info(
             "LaTeX extraction complete",
@@ -108,6 +136,9 @@ class LatexAdapter(BaseAdapter):
                 ),
                 "formula_count": sum(
                     1 for e in elements if e.element_type == ElementType.FORMULA
+                ),
+                "table_count": sum(
+                    1 for e in elements if e.element_type == ElementType.TABLE
                 ),
             },
         )
@@ -177,12 +208,41 @@ class LatexAdapter(BaseAdapter):
                         )
                         position_index_counter[0] += 1
                 else:
-                    # Non-math environment: recurse into its children
-                    if hasattr(node, "nodelist") and node.nodelist:
+                    # Tabular/grid environment → TABLE element
+                    if env_name.lower() in _TABULAR_ENVIRONMENTS:
+                        self._flush_text_buffer(
+                            text_buffer, elements, position_index_counter
+                        )
+                        table_text = self._tabular_to_text(
+                            self._get_node_latex(node, source)
+                        )
+                        if table_text.strip():
+                            elements.append(
+                                RawElement(
+                                    content=table_text,
+                                    element_type=ElementType.TABLE,
+                                    provenance=Provenance(
+                                        page_num=1,
+                                        position_index=position_index_counter[0],
+                                    ),
+                                    raw_metadata={
+                                        "source": "latex_tabular",
+                                        "environment": env_name,
+                                    },
+                                )
+                            )
+                            position_index_counter[0] += 1
+                    # Non-math, non-tabular environment: recurse into its children
+                    elif hasattr(node, "nodelist") and node.nodelist:
                         self._walk_nodes(
                             node.nodelist, source, elements, position_index_counter
                         )
             else:
+                # \includegraphics is handled separately (full-source scan emits a
+                # clean "Figure: <file>" TEXT element); skip it here to avoid
+                # accumulating raw LaTeX into the text buffer.
+                if isinstance(node, LatexMacroNode) and (node.macroname or "") == "includegraphics":
+                    continue
                 # Text node or other node types — accumulate text
                 node_text = self._get_node_text(node, source)
                 if node_text.strip():
@@ -236,3 +296,56 @@ class LatexAdapter(BaseAdapter):
             if node.pos is not None and node.pos_end is not None:
                 return source[node.pos : node.pos_end]
         return ""
+
+    @staticmethod
+    def _tabular_to_text(tabular_latex: str) -> str:
+        """Convert a LaTeX tabular/array environment to pipe-separated rows.
+
+        Heuristic (no full LaTeX rendering): strips the \\begin/\\end wrappers and
+        column spec, splits rows on ``\\\\``, splits cells on unescaped ``&``, and
+        removes rule/formatting commands. Produces readable, searchable rows.
+        """
+        body = tabular_latex.strip()
+        body = re.sub(r"\\begin\{[^}]*\}", "", body, count=1)
+        body = re.sub(r"\\end\{[^}]*\}", "", body)
+        body = body.strip()
+
+        # Strip a leading balanced column-spec group, e.g. {|l|c|r|} or {p{3cm}l}
+        if body.startswith("{"):
+            depth = 0
+            end = 0
+            for i, ch in enumerate(body):
+                if ch == "{":
+                    depth += 1
+                elif ch == "}":
+                    depth -= 1
+                    if depth == 0:
+                        end = i + 1
+                        break
+            body = body[end:]
+
+        rows: list[str] = []
+        for raw_row in re.split(r"\\\\", body):
+            cleaned = re.sub(r"\\(?:hline|toprule|midrule|bottomrule)\b", "", raw_row)
+            cleaned = re.sub(r"\\cline\{[^}]*\}", "", cleaned)
+            cells = [
+                LatexAdapter._strip_latex_cell(cell)
+                for cell in re.split(r"(?<!\\)&", cleaned)
+            ]
+            if any(cell for cell in cells):
+                rows.append(" | ".join(cells))
+        return "\n".join(rows)
+
+    @staticmethod
+    def _strip_latex_cell(cell: str) -> str:
+        """Reduce a single tabular cell's LaTeX to plain text."""
+        text = cell.strip()
+        text = re.sub(r"\\multicolumn\{[^}]*\}\{[^}]*\}", "", text)
+        text = re.sub(
+            r"\\(?:textbf|textit|emph|texttt|textsf|mathrm|text)\s*\{([^{}]*)\}",
+            r"\1",
+            text,
+        )
+        text = re.sub(r"\\[a-zA-Z]+\*?", "", text)
+        text = text.replace("{", "").replace("}", "").replace("\\&", "&")
+        return text.strip()

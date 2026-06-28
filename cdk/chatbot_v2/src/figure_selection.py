@@ -139,15 +139,48 @@ def select_tables(
     if retrieval_result is None:
         return []
 
-    has_table_ref = _TABLE_REF_PATTERN.search(query) is not None
-    if not has_table_ref:
+    tables = getattr(retrieval_result, "table_results", None) or []
+    if not tables:
         return []
 
-    # Table results come through as regular retrieval results with element_type="table"
-    # They're embedded in the RAG context already, but we can also render them as blocks
-    # For now, we don't have separate table results in the retrieval response
-    # This will be populated when we add table_results to the retrieval handler response
-    return []
+    has_table_ref = _TABLE_REF_PATTERN.search(query) is not None
+
+    selected: list[dict] = []
+    seen: set[str] = set()
+    for t in tables:
+        if len(selected) >= max_tables:
+            break
+        rid = t.get("retrieval_id")
+        if rid in seen:
+            continue
+        score = t.get("score", 0) or 0
+        # Attach when the query is table-related, or the table scored very high
+        # on its own (mirrors the figure high-confidence fallback).
+        if not (has_table_ref or score >= 0.8):
+            continue
+        if score < score_threshold:
+            continue
+        block = {
+            "type": "table",
+            "id": rid,
+            "headers": t.get("headers", []),
+            "rows": t.get("rows", []),
+            "summary": t.get("summary", ""),
+            "page": t.get("page_num"),
+        }
+        # Fall back to raw table text when structured headers/rows are unavailable.
+        if not block["headers"] and not block["rows"]:
+            block["content"] = t.get("content", "")
+        selected.append(block)
+        if rid:
+            seen.add(rid)
+
+    if selected:
+        logger.info(
+            "Tables selected for display",
+            extra={"count": len(selected), "has_table_ref": has_table_ref},
+        )
+    return selected
 
 
 def select_formulas(
@@ -171,14 +204,39 @@ def select_formulas(
     if retrieval_result is None:
         return []
 
-    has_formula_ref = _FORMULA_REF_PATTERN.search(query) is not None
-    if not has_formula_ref:
+    formulas = getattr(retrieval_result, "formula_results", None) or []
+    if not formulas:
         return []
 
-    # Formula results come through as regular retrieval results with element_type="formula"
-    # For now, we don't have separate formula results in the retrieval response
-    # This will be populated when we add formula_results to the retrieval handler response
-    return []
+    has_formula_ref = _FORMULA_REF_PATTERN.search(query) is not None
+
+    selected: list[dict] = []
+    seen: set[str] = set()
+    for f in formulas:
+        if len(selected) >= max_formulas:
+            break
+        rid = f.get("retrieval_id")
+        if rid in seen:
+            continue
+        score = f.get("score", 0) or 0
+        if not (has_formula_ref or score >= 0.8):
+            continue
+        selected.append({
+            "type": "formula",
+            "id": rid,
+            "latex": f.get("latex") or f.get("content", ""),
+            "description": f.get("content", ""),
+            "page": f.get("page_num"),
+        })
+        if rid:
+            seen.add(rid)
+
+    if selected:
+        logger.info(
+            "Formulas selected for display",
+            extra={"count": len(selected), "has_formula_ref": has_formula_ref},
+        )
+    return selected
 
 
 def assemble_blocks(

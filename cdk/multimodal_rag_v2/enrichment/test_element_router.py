@@ -229,14 +229,37 @@ class TestFallback:
         assert result[0].embedding_text == "hello"
         assert result[0].enrichment_version == ENRICHMENT_VERSION
 
-    def test_image_failure_produces_fallback_empty_text(self) -> None:
+    def test_image_failure_produces_fallback_preserves_image(self) -> None:
         vision = FakeVisionService(fail=True)
         router = _make_router(vision_service=vision)
         element = _make_element(ElementType.IMAGE, content=b"\x89PNG")
         doc = _make_document_ir([element])
         result = router.enrich_document(doc)
         assert len(result) == 1
-        assert result[0].embedding_text == ""
+        # Issue #5: image fallback keeps a non-empty embedding_text so the image
+        # is not discarded by the retrieval-unit builder.
+        assert result[0].embedding_text != ""
+        assert result[0].embedding_text.startswith("Image")
+
+    def test_image_fallback_preserves_s3_key_and_alt(self) -> None:
+        """Issue #5: a vision-failed image keeps its image_s3_key and uses alt text."""
+        vision = FakeVisionService(fail=True)
+        router = _make_router(vision_service=vision)
+        element = IRElement(
+            element_id="img-alt",
+            content=b"\x89PNG",
+            element_type=ElementType.IMAGE,
+            provenance=Provenance(page_num=2, position_index=0),
+            content_hash="hash-img-alt",
+            metadata={
+                "image_s3_key": "s3://bucket/images/c/m/img-alt.png",
+                "alt": "A bar chart of scores",
+            },
+        )
+        result = router.enrich_document(_make_document_ir([element]))
+        assert len(result) == 1
+        assert result[0].image_s3_key == "s3://bucket/images/c/m/img-alt.png"
+        assert result[0].embedding_text == "A bar chart of scores"
 
     def test_failure_does_not_affect_other_elements(self) -> None:
         """Requirement 3.6: failed element gets fallback, others unaffected."""
@@ -255,8 +278,8 @@ class TestFallback:
         # Text elements enriched normally
         assert result[0].embedding_text == "enriched-t1"
         assert result[2].embedding_text == "enriched-t2"
-        # Image got fallback
-        assert result[1].embedding_text == ""
+        # Image got fallback — but with a non-empty embedding_text (Issue #5)
+        assert result[1].embedding_text != ""
 
 
 # ---------------------------------------------------------------------------
@@ -288,8 +311,8 @@ class TestExponentialBackoff:
         element = _make_element(ElementType.IMAGE, content=b"img")
         doc = _make_document_ir([element])
         result = router.enrich_document(doc)
-        # Should get fallback (empty for binary)
-        assert result[0].embedding_text == ""
+        # Should get fallback — image fallback keeps a non-empty embedding_text (Issue #5)
+        assert result[0].embedding_text != ""
         # 3 retries: sleeps at attempt 0, 1, 2 — then fails at attempt 3
         assert mock_sleep.call_count == 3
 
@@ -301,7 +324,7 @@ class TestExponentialBackoff:
         element = _make_element(ElementType.IMAGE, content=b"img")
         doc = _make_document_ir([element])
         result = router.enrich_document(doc)
-        assert result[0].embedding_text == ""
+        assert result[0].embedding_text != ""
         assert mock_sleep.call_count == 0
 
 
@@ -327,9 +350,9 @@ class TestVisualCap:
         assert vision.call_count == VISUAL_CAP
         for r in result[:VISUAL_CAP]:
             assert r.embedding_text.startswith("enriched-")
-        # Remaining 5 got fallback (empty for binary)
+        # Remaining 5 got fallback — image fallback keeps non-empty text (Issue #5)
         for r in result[VISUAL_CAP:]:
-            assert r.embedding_text == ""
+            assert r.embedding_text != ""
 
     def test_raster_formula_counts_toward_cap(self) -> None:
         """Raster formula elements (bytes content) count toward the visual cap."""
@@ -352,8 +375,8 @@ class TestVisualCap:
         doc = _make_document_ir(elements)
         result = router.enrich_document(doc)
         assert len(result) == 31
-        # Last image should be fallback
-        assert result[-1].embedding_text == ""
+        # Last image hit the cap → fallback, which keeps non-empty text (Issue #5)
+        assert result[-1].embedding_text != ""
 
     def test_text_formula_does_not_count_toward_cap(self) -> None:
         """Text-layer formula (str content) does NOT count toward visual cap."""

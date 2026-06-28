@@ -14,6 +14,8 @@ class RetrievalResult:
     escalation_used: bool = False
     image_analyses: list[dict] = field(default_factory=list)
     image_results: list[dict] = field(default_factory=list)
+    table_results: list[dict] = field(default_factory=list)
+    formula_results: list[dict] = field(default_factory=list)
 
 
 def get_bounded_history(history: list[dict], max_turns: int) -> list[dict]:
@@ -76,6 +78,8 @@ def invoke_retrieval(
             escalation_used=body.get("escalation_used", False),
             image_analyses=body.get("image_analyses", []),
             image_results=body.get("image_results", []),
+            table_results=body.get("table_results", []),
+            formula_results=body.get("formula_results", []),
         )
     except Exception:
         logger.exception("Retrieval invocation failed")

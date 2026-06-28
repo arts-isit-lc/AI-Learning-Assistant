@@ -422,6 +422,14 @@ class RetrievalUnitBuilder:
         }
         if column_index is not None:
             metadata["column_index"] = column_index
+        # Structured table data for client-side rendering (Issue #2). Rows are
+        # capped to bound the JSONB metadata size; course tables are small.
+        if enriched.table_headers:
+            metadata["table_headers"] = enriched.table_headers
+        if enriched.table_rows:
+            metadata["table_rows"] = enriched.table_rows[:50]
+        if enriched.table_summary:
+            metadata["table_summary"] = enriched.table_summary
         if enriched.file_id:
             metadata["file_id"] = enriched.file_id
         if enriched.course_id:

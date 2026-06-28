@@ -104,17 +104,43 @@ def _create_fallback(element: IRElement) -> EnrichedElement:
     """Create a fallback EnrichedElement when enrichment fails.
 
     Per Requirement 3.6: embedding_text = raw content string (or empty string for binary content).
+
+    For IMAGE elements specifically, preserve `image_s3_key` and synthesize a
+    non-empty `embedding_text` (from alt text, else a page/source label) so the
+    image is NOT discarded by the retrieval-unit builder. This keeps images that
+    failed vision enrichment — or exceeded the per-document visual cap — both
+    retrievable and available for query-time image escalation, instead of being
+    orphaned in S3.
     """
     if isinstance(element.content, str):
         embedding_text = element.content
     else:
         embedding_text = ""
 
+    image_s3_key = None
+    image_description = None
+    if element.element_type == ElementType.IMAGE:
+        image_s3_key = element.metadata.get("image_s3_key")
+        alt = (element.metadata.get("alt") or "").strip()
+        if alt:
+            embedding_text = alt
+            image_description = alt
+        else:
+            source = element.metadata.get("source") or element.metadata.get("source_format") or ""
+            parts = ["Image"]
+            if element.provenance.page_num is not None:
+                parts.append(f"from page {element.provenance.page_num}")
+            if source:
+                parts.append(f"({source})")
+            embedding_text = " ".join(parts)
+
     return EnrichedElement(
         element_id=element.element_id,
         element_type=element.element_type,
         provenance=element.provenance,
         embedding_text=embedding_text,
+        image_s3_key=image_s3_key,
+        image_description=image_description,
         enrichment_version=ENRICHMENT_VERSION,
     )
 

@@ -252,20 +252,25 @@ class HtmlAdapter(BaseAdapter):
                     )
                     return None
 
-        # URL-referenced image — store the src as string content
-        return RawElement(
-            content=src,
-            element_type=ElementType.IMAGE,
-            provenance=Provenance(
-                section=current_section,
-                position_index=position_index,
-            ),
-            raw_metadata={
-                "source": "html_image_url",
-                "src": src,
-                "alt": alt_text,
-            },
-        )
+        # URL-referenced image. We deliberately do NOT fetch external URLs from
+        # the ingestion Lambda (SSRF risk, latency, reliability). Instead preserve
+        # the semantic content via the alt text as a searchable TEXT element.
+        # Without alt text there is nothing useful to index, so skip it.
+        if alt_text and alt_text.strip():
+            return RawElement(
+                content=f"Image: {alt_text.strip()}",
+                element_type=ElementType.TEXT,
+                provenance=Provenance(
+                    section=current_section,
+                    position_index=position_index,
+                ),
+                raw_metadata={
+                    "source": "html_image_url_alt",
+                    "src": src,
+                    "alt": alt_text,
+                },
+            )
+        return None
 
     def _extract_table(
         self, table_tag: Tag, current_section: str, position_index: int

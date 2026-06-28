@@ -192,6 +192,57 @@ def _error_response(status_code: int, message: str) -> dict[str, Any]:
     return _build_response(status_code, {"error": message})
 
 
+def _element_type_value(result: Any) -> str:
+    """Return the element_type as a plain string (enum or str)."""
+    et = result.element_type
+    return et.value if hasattr(et, "value") else et
+
+
+def _build_table_results(final_results: list) -> list[dict[str, Any]]:
+    """Structured TABLE blocks for the client, deduped by parent element.
+
+    A single table produces a summary unit plus one unit per column (all sharing
+    a parent_element_id); we surface one structured entry per table, using the
+    highest-scoring unit (final_results is already score-sorted).
+    """
+    seen: set[str] = set()
+    out: list[dict[str, Any]] = []
+    for r in final_results:
+        if _element_type_value(r) != "table" or r.parent_element_id in seen:
+            continue
+        seen.add(r.parent_element_id)
+        out.append({
+            "retrieval_id": r.retrieval_id,
+            "score": r.score,
+            "page_num": r.metadata.get("provenance_page_num") or r.metadata.get("page_num"),
+            "module_id": r.metadata.get("module_id"),
+            "headers": r.metadata.get("table_headers", []),
+            "rows": r.metadata.get("table_rows", []),
+            "summary": r.metadata.get("table_summary") or "",
+            "content": r.content,
+        })
+    return out
+
+
+def _build_formula_results(final_results: list) -> list[dict[str, Any]]:
+    """Structured FORMULA blocks for the client, deduped by parent element."""
+    seen: set[str] = set()
+    out: list[dict[str, Any]] = []
+    for r in final_results:
+        if _element_type_value(r) != "formula" or r.parent_element_id in seen:
+            continue
+        seen.add(r.parent_element_id)
+        out.append({
+            "retrieval_id": r.retrieval_id,
+            "score": r.score,
+            "page_num": r.metadata.get("page_num") or r.metadata.get("provenance_page_num"),
+            "module_id": r.metadata.get("module_id"),
+            "latex": r.metadata.get("latex_repr") or r.content,
+            "content": r.content,
+        })
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Handler
 # ---------------------------------------------------------------------------
@@ -507,6 +558,8 @@ def _handle_query(
             for r in final_results
             if r.image_s3_key
         ],
+        "table_results": _build_table_results(final_results),
+        "formula_results": _build_formula_results(final_results),
     })
 
 

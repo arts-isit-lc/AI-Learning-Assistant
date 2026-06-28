@@ -9,6 +9,7 @@ import pytest
 from ...models.data_models import ElementType, FileMetadata, Provenance
 from ..exceptions import ExtractionFailureError
 from .csv_adapter import CsvAdapter
+from .html_adapter import HtmlAdapter
 from .image_adapter import ImageAdapter
 from .json_adapter import JsonAdapter
 from .latex_adapter import LatexAdapter
@@ -376,3 +377,76 @@ Conclusion text.
 
         for element in result:
             assert element.provenance.page_num == 1
+
+
+# ===========================================================================
+# HtmlAdapter — URL-referenced images (Issue #3)
+# ===========================================================================
+
+
+class TestHtmlAdapterUrlImages:
+    def test_url_image_with_alt_becomes_text_element(self) -> None:
+        adapter = HtmlAdapter()
+        html = b'<html><body><img src="https://example.com/x.png" alt="A diagram of recursion"></body></html>'
+        result = adapter.extract(html, _make_metadata(extension="html"))
+
+        # No string-content IMAGE element should exist (that path is removed).
+        for el in result:
+            assert not (el.element_type == ElementType.IMAGE and isinstance(el.content, str))
+
+        text_els = [el for el in result if el.element_type == ElementType.TEXT]
+        assert any("A diagram of recursion" in str(el.content) for el in text_els)
+
+    def test_url_image_without_alt_is_skipped(self) -> None:
+        adapter = HtmlAdapter()
+        html = b'<html><body><p>Intro</p><img src="https://example.com/y.png"></body></html>'
+        result = adapter.extract(html, _make_metadata(extension="html"))
+
+        # The image contributes nothing; no string IMAGE and no "Image:" text from it.
+        for el in result:
+            assert not (el.element_type == ElementType.IMAGE and isinstance(el.content, str))
+
+    def test_base64_image_still_produces_bytes_image(self) -> None:
+        adapter = HtmlAdapter()
+        # 1x1 transparent PNG
+        b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
+        html = f'<html><body><img src="data:image/png;base64,{b64}" alt="dot"></body></html>'.encode()
+        result = adapter.extract(html, _make_metadata(extension="html"))
+        image_els = [el for el in result if el.element_type == ElementType.IMAGE]
+        assert image_els
+        assert all(isinstance(el.content, bytes) for el in image_els)
+
+
+# ===========================================================================
+# LatexAdapter — tabular + includegraphics (Issue #4)
+# ===========================================================================
+
+
+class TestLatexAdapterTablesAndFigures:
+    def test_tabular_becomes_table_element(self) -> None:
+        adapter = LatexAdapter()
+        tex = (
+            b"\\documentclass{article}\\begin{document}\n"
+            b"\\begin{tabular}{l c}\n\\hline\nName & Score \\\\\n\\hline\n"
+            b"Alice & 90 \\\\\nBob & 85 \\\\\n\\hline\n\\end{tabular}\n"
+            b"\\end{document}\n"
+        )
+        result = adapter.extract(tex, _make_metadata(extension="tex"))
+        tables = [el for el in result if el.element_type == ElementType.TABLE]
+        assert len(tables) == 1
+        content = tables[0].content
+        assert "Name | Score" in content
+        assert "Alice | 90" in content
+
+    def test_includegraphics_becomes_text_reference(self) -> None:
+        adapter = LatexAdapter()
+        tex = (
+            b"\\documentclass{article}\\begin{document}\n"
+            b"\\begin{figure}\\includegraphics[width=0.5\\textwidth]{diagram.png}\\end{figure}\n"
+            b"\\end{document}\n"
+        )
+        result = adapter.extract(tex, _make_metadata(extension="tex"))
+        text_els = [el for el in result if el.element_type == ElementType.TEXT]
+        assert any("diagram.png" in str(el.content) for el in text_els)
+        # No raw LaTeX command leaked as its own element
+        assert all("\\includegraphics" not in str(el.content) for el in result)
