@@ -1,3 +1,10 @@
+> **SUPERSEDED — not implemented.** This spec proposed a `ThreadPoolExecutor` refactor of the
+> `DataIngestLambdaDockerFunc` container (`topic_aggregation.py`, `aggregate_module_topics`) that
+> was never landed. It was superseded by (1) the **topic-extraction** spec's `generateTopics.js`
+> endpoint (`POST /instructor/generate_topics`) for module-level topic consolidation, triggered
+> from the frontend, and (2) the **multimodal-rag-v2** pipeline, which replaced the monolithic
+> data-ingestion container. Retained for historical context only — do not implement.
+
 # Design Document — Topic Extraction Pipeline
 
 ## Overview

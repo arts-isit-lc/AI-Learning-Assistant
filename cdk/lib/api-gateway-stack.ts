@@ -578,6 +578,30 @@ export class ApiGatewayStack extends cdk.Stack {
       })
     );
 
+    // SSM parameter for the prompt-conflict validation model ID. Stored as a
+    // parameter (not a hardcoded env var) so the model can be changed at runtime
+    // without redeploying — instructorFunction reads it via VALIDATION_MODEL_ID_PARAM.
+    const validationModelIdParam = new ssm.StringParameter(
+      this,
+      `${id}-ValidationModelIdParam`,
+      {
+        parameterName: `/AILA/${environment}/ValidationModelId`,
+        description: "Bedrock model ID used by the instructor prompt conflict checker",
+        stringValue: "anthropic.claude-3-haiku-20240307-v1:0",
+      }
+    );
+
+    // Grant the instructor function (dbLambdaRole) read access scoped to that parameter
+    dbLambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ["ssm:GetParameter"],
+        resources: [
+          `arn:aws:ssm:${this.region}:${this.account}:parameter/AILA/${environment}/ValidationModelId`,
+        ],
+      })
+    );
+
     const lambdaStudentFunction = new lambda.Function(this, `${id}-studentFunction`, {
       runtime: lambda.Runtime.NODEJS_22_X,
       code: lambda.Code.fromAsset("lambda/lib"),
@@ -622,7 +646,7 @@ export class ApiGatewayStack extends cdk.Stack {
           SM_DB_CREDENTIALS: db.secretPathUser.secretName,
           RDS_PROXY_ENDPOINT: db.rdsProxyEndpoint,
           REGION: this.region,
-          VALIDATION_MODEL_ID: "anthropic.claude-3-haiku-20240307-v1:0",
+          VALIDATION_MODEL_ID_PARAM: validationModelIdParam.parameterName,
         },
         functionName: `${id}-instructorFunction`,
         memorySize: 256,
@@ -1266,6 +1290,15 @@ export class ApiGatewayStack extends cdk.Stack {
         `arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0`,
         `arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-3-haiku-20240307-v1:0`,
         `arn:aws:bedrock:${this.region}::foundation-model/amazon.titan-embed-text-v2:0`,
+      ],
+    }));
+
+    // Bedrock ApplyGuardrail — scoped to the specific guardrail created in this stack
+    textGenLambdaDockerFunc.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ["bedrock:ApplyGuardrail"],
+      resources: [
+        `arn:aws:bedrock:${this.region}:${this.account}:guardrail/${guardrail.attrGuardrailId}`,
       ],
     }));
 

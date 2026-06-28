@@ -179,6 +179,21 @@ def _process_record(record: dict[str, Any]) -> dict[str, Any]:
         extra={"ir_version": ir_version},
     )
 
+    # eager-module-creation Req 5.9/5.10: do not process work for a module that is
+    # being deleted (or no longer exists). Skip and return a normal (non-failure)
+    # result so the SQS message is acked rather than retried, and no orphan
+    # embeddings are written to pgvector.
+    if _module_is_deleting_or_missing(module_id):
+        logger.warning(
+            "Module is deleting or missing — skipping enrichment and discarding event",
+            extra={"module_id": module_id, "file_id": file_id},
+        )
+        return {
+            "file_id": file_id,
+            "retrieval_unit_count": 0,
+            "status": "skipped_module_deleting",
+        }
+
     record_start = time.time()
 
     # Step 1: Load DocumentIR from S3
@@ -400,6 +415,75 @@ def _generate_embeddings(retrieval_units: list[RetrievalUnit]) -> None:
                     "parent_element_id": unit.parent_element_id,
                 },
             )
+
+
+def _module_is_deleting_or_missing(module_id: str) -> bool:
+    """Return True if the module is in 'deleting' status or no longer exists.
+
+    Implements eager-module-creation Req 5.9/5.10: the enrichment pipeline must
+    not write embeddings for a module that is being cleaned up (or was deleted
+    mid-flight). Queries Course_Modules.status via the RDS proxy.
+
+    Fails open (returns False) when the DB is not configured or the status check
+    errors transiently, so legitimate work is never silently dropped — a genuine
+    DB outage surfaces later in _store_in_pgvector, which raises and triggers an
+    SQS retry rather than losing the write.
+
+    Args:
+        module_id: The module identifier parsed from the ingestion event.
+
+    Returns:
+        True  -> skip processing (status == 'deleting' or module row not found).
+        False -> proceed (active/draft module, or status could not be determined).
+    """
+    db_proxy_endpoint = os.environ.get("DB_PROXY_ENDPOINT", "")
+    db_secret_arn = os.environ.get("DB_SECRET_ARN", "")
+
+    if not db_proxy_endpoint or not db_secret_arn:
+        # DB not configured (e.g. local/dev) — cannot check, so proceed.
+        return False
+
+    import json as json_mod
+    import psycopg2
+
+    conn = None
+    try:
+        secrets_client = boto3.client("secretsmanager")
+        secret = json_mod.loads(
+            secrets_client.get_secret_value(SecretId=db_secret_arn)["SecretString"]
+        )
+        conn = psycopg2.connect(
+            dbname=secret["dbname"],
+            user=secret["username"],
+            password=secret["password"],
+            host=db_proxy_endpoint,
+            port=secret["port"],
+            sslmode="require",
+        )
+        cur = conn.cursor()
+        cur.execute(
+            'SELECT status FROM "Course_Modules" WHERE module_id = %s',
+            (module_id,),
+        )
+        row = cur.fetchone()
+        cur.close()
+
+        if row is None:
+            # Req 5.9: module record not found — discard without error.
+            return True
+        return row[0] == "deleting"
+    except Exception:
+        logger.warning(
+            "Could not verify module status; proceeding with enrichment",
+            extra={"module_id": module_id},
+        )
+        return False
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 def _store_in_pgvector(

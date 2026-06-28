@@ -204,9 +204,34 @@ def get_module_topics(module_id: str, connection) -> str:
         if not result or not result[0]:
             return ""
 
-        topics_data = result[0] if isinstance(result[0], dict) else {}
-        topics = topics_data.get("topics", [])
-        objectives = topics_data.get("learning_objectives", [])
+        # `generated_topics` may be stored as:
+        #   - a bare JSON array of topic strings (written by generateTopics.js), or
+        #   - a dict with "topics"/"learning_objectives" keys (legacy shape), or
+        #   - a JSON string (or double-encoded JSON string) of either of the above.
+        # Normalize all of these so topic injection works regardless of writer.
+        raw = result[0]
+        for _ in range(2):  # unwrap up to one layer of double-encoding
+            if isinstance(raw, str):
+                try:
+                    raw = json.loads(raw)
+                except (ValueError, TypeError):
+                    return ""
+            else:
+                break
+
+        if isinstance(raw, list):
+            topics = raw
+            objectives = []
+        elif isinstance(raw, dict):
+            topics = raw.get("topics", [])
+            objectives = raw.get("learning_objectives", [])
+        else:
+            return ""
+
+        if not isinstance(topics, list):
+            topics = []
+        if not isinstance(objectives, list):
+            objectives = []
 
         if not topics:
             return ""

@@ -3,11 +3,16 @@ const {
   BedrockRuntimeClient,
   InvokeModelCommand,
 } = require("@aws-sdk/client-bedrock-runtime");
+const { SSMClient, GetParameterCommand } = require("@aws-sdk/client-ssm");
 const crypto = require("crypto");
 
-const VALIDATION_MODEL_ID =
+// Validation model ID. Resolved at runtime from the SSM parameter named by
+// VALIDATION_MODEL_ID_PARAM so the model is configurable without a redeploy.
+// Falls back to the VALIDATION_MODEL_ID env var, then a hardcoded default.
+let VALIDATION_MODEL_ID =
   process.env.VALIDATION_MODEL_ID ||
   "anthropic.claude-3-haiku-20240307-v1:0";
+const VALIDATION_MODEL_ID_PARAM = process.env.VALIDATION_MODEL_ID_PARAM || "";
 const REGION = process.env.REGION || "ca-central-1";
 const BEDROCK_TIMEOUT_MS = 30000;
 const RETRY_DELAY_MS = 2000;
@@ -16,6 +21,34 @@ const MAX_CONCURRENT_BATCHES = 3;
 const VALIDATOR_VERSION = "3";
 
 const bedrockClient = new BedrockRuntimeClient({ region: REGION });
+
+// Lazily resolve the validation model ID from SSM once per container, caching
+// the result. Best-effort: on any failure we keep the env/hardcoded fallback so
+// validation never breaks just because the parameter is unreadable.
+const ssmClient = new SSMClient({ region: REGION });
+let _modelIdResolved = false;
+async function ensureValidationModelId() {
+  if (_modelIdResolved || !VALIDATION_MODEL_ID_PARAM) return;
+  try {
+    const data = await ssmClient.send(
+      new GetParameterCommand({ Name: VALIDATION_MODEL_ID_PARAM })
+    );
+    if (data.Parameter && data.Parameter.Value) {
+      VALIDATION_MODEL_ID = data.Parameter.Value;
+    }
+  } catch (err) {
+    console.log(JSON.stringify({
+      level: "WARN",
+      service: "validate-prompt",
+      event: "ssm_model_id_resolve_failed",
+      param: VALIDATION_MODEL_ID_PARAM,
+      error: err.message,
+      timestamp: new Date().toISOString(),
+    }));
+  } finally {
+    _modelIdResolved = true;
+  }
+}
 
 // --- Retryable error detection ---
 const RETRYABLE_ERROR_CODES = new Set([
@@ -51,6 +84,7 @@ function isRetryable(err) {
  * @returns {Promise<object>} Conflict_Report
  */
 async function validatePrompt({ prompt, scope, course_id, module_id, sqlConnection }) {
+  await ensureValidationModelId();
   if (!prompt || !prompt.trim()) {
     return buildReport("validation_skipped", [], scope, "No validation performed: prompt is empty.");
   }

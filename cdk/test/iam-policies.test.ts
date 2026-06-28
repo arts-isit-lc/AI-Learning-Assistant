@@ -368,32 +368,83 @@ describe('IAM Policy Guardrails', () => {
   });
 
   /**
-   * Validates: Prompt Conflict Checker - Req 8
-   * dbLambdaRole has bedrock:InvokeModel scoped to Claude 3 Haiku model ARN for validation.
+   * Validates: Prompt Conflict Checker - Req 8, Req 9
+   * The validation model ID is stored in an SSM parameter (runtime-configurable),
+   * and the instructorFunction reads it via the VALIDATION_MODEL_ID_PARAM env var
+   * (the parameter name) rather than a hardcoded model id.
    */
-  test('instructorFunction has VALIDATION_MODEL_ID set to Claude 3 Haiku', () => {
-    // The Haiku model is configured via the VALIDATION_MODEL_ID environment variable
-    // on the instructorFunction for prompt conflict validation.
+  test('validation model ID is an SSM parameter wired into instructorFunction', () => {
     const json = apiTemplate.toJSON();
     const resources = json.Resources ?? {};
 
-    let foundValidationModel = false;
-    for (const [, resource] of Object.entries(resources)) {
+    // (1) SSM parameter exists with the Haiku default value (environment = 'dev' in tests)
+    let validationParamLogicalId: string | undefined;
+    let validationParamProps: Record<string, unknown> | undefined;
+    for (const [logicalId, resource] of Object.entries(resources)) {
       const res = resource as Record<string, unknown>;
-      if (res.Type !== 'AWS::Lambda::Function') continue;
+      if (res.Type !== 'AWS::SSM::Parameter') continue;
       const props = res.Properties as Record<string, unknown> | undefined;
-      if (!props) continue;
-      const env = props.Environment as Record<string, unknown> | undefined;
-      if (!env) continue;
-      const vars = env.Variables as Record<string, unknown> | undefined;
-      if (!vars) continue;
-      if (vars.VALIDATION_MODEL_ID === 'anthropic.claude-3-haiku-20240307-v1:0') {
-        foundValidationModel = true;
+      if (props?.Name === '/AILA/dev/ValidationModelId') {
+        validationParamLogicalId = logicalId;
+        validationParamProps = props;
         break;
       }
     }
 
-    expect(foundValidationModel).toBe(true);
+    expect(validationParamLogicalId).toBeDefined();
+    expect(validationParamProps!.Value).toBe('anthropic.claude-3-haiku-20240307-v1:0');
+
+    // (2) instructorFunction reads it via VALIDATION_MODEL_ID_PARAM (a Ref to the param,
+    // which resolves to the parameter name at deploy time — not a hardcoded model id)
+    let foundParamEnv = false;
+    for (const [, resource] of Object.entries(resources)) {
+      const res = resource as Record<string, unknown>;
+      if (res.Type !== 'AWS::Lambda::Function') continue;
+      const props = res.Properties as Record<string, unknown> | undefined;
+      const env = props?.Environment as Record<string, unknown> | undefined;
+      const vars = env?.Variables as Record<string, unknown> | undefined;
+      const v = vars?.VALIDATION_MODEL_ID_PARAM;
+      if (
+        v &&
+        typeof v === 'object' &&
+        (v as Record<string, unknown>).Ref === validationParamLogicalId
+      ) {
+        foundParamEnv = true;
+        break;
+      }
+    }
+    expect(foundParamEnv).toBe(true);
+  });
+
+  /**
+   * Validates: Prompt Conflict Checker - Req 9, IAM Security Policy
+   * dbLambdaRole has ssm:GetParameter scoped to exactly the ValidationModelId
+   * parameter ARN (no wildcards).
+   */
+  test('dbLambdaRole has ssm:GetParameter scoped to the ValidationModelId parameter', () => {
+    const statements = collectPolicyStatements(apiTemplate);
+    const validationSsm = statements.filter(({ logicalId, statement }) => {
+      if (!logicalId.toLowerCase().includes('dblambdarole')) return false;
+      if (!statementHasAction(statement, 'ssm:GetParameter')) return false;
+      const resource = statement.Resource;
+      const resList = Array.isArray(resource) ? resource : [resource];
+      return resList.some(
+        (r) => typeof r === 'string' && r.includes('parameter/AILA/dev/ValidationModelId')
+      );
+    });
+
+    expect(validationSsm.length).toBeGreaterThanOrEqual(1);
+
+    // No wildcard resources on that statement
+    for (const { statement } of validationSsm) {
+      const resource = statement.Resource;
+      const resList = Array.isArray(resource) ? resource : [resource];
+      for (const r of resList) {
+        if (typeof r === 'string') {
+          expect(r).not.toBe('*');
+        }
+      }
+    }
   });
 
   /**
@@ -452,7 +503,7 @@ describe('IAM Policy Guardrails', () => {
     }
   });
 
-  test('dbLambdaRole does not have s3:PutObject or s3:DeleteObject or s3:ListBucket on data ingestion bucket', () => {
+  test('dbLambdaRole has no s3:PutObject; any s3:DeleteObject/ListBucket is scoped (instructor cleanup_module)', () => {
     const statements = collectPolicyStatements(apiTemplate);
 
     // Find statements from dbLambdaRole's policy
@@ -461,10 +512,24 @@ describe('IAM Policy Guardrails', () => {
     );
 
     for (const { statement } of dbRolePolicies) {
-      // Verify dbLambdaRole policies don't grant PutObject/DeleteObject/ListBucket
+      // dbLambdaRole (student + instructor) must never WRITE objects to a bucket.
+      // Uploads go through a separate presigned-URL function, not this role.
       expect(statementHasAction(statement, 's3:PutObject')).toBe(false);
-      expect(statementHasAction(statement, 's3:DeleteObject')).toBe(false);
-      expect(statementHasAction(statement, 's3:ListBucket')).toBe(false);
+
+      // instructorFunction's cleanup_module route legitimately needs ListBucket + DeleteObject
+      // on the data ingestion bucket. These are allowed, but must be scoped (never wildcard '*').
+      if (
+        statementHasAction(statement, 's3:DeleteObject') ||
+        statementHasAction(statement, 's3:ListBucket')
+      ) {
+        const resource = statement.Resource;
+        const resources = Array.isArray(resource) ? resource : [resource];
+        for (const r of resources) {
+          if (typeof r === 'string') {
+            expect(r).not.toBe('*');
+          }
+        }
+      }
     }
   });
 });
