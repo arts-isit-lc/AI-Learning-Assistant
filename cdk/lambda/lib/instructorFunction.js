@@ -1,3 +1,39 @@
+/**
+ * Instructor Lambda — Route index:
+ *   GET    /instructor/student_course
+ *   GET    /instructor/courses
+ *   GET    /instructor/analytics
+ *   POST   /instructor/create_concept
+ *   PUT    /instructor/edit_concept
+ *   PUT    /instructor/update_metadata
+ *   POST   /instructor/create_module
+ *   PUT    /instructor/reorder_module
+ *   PUT    /instructor/edit_module
+ *   PUT    /instructor/prompt
+ *   GET    /instructor/view_students
+ *   DELETE /instructor/delete_student
+ *   GET    /instructor/view_modules
+ *   GET    /instructor/view_concepts
+ *   DELETE /instructor/delete_concept
+ *   DELETE /instructor/delete_module
+ *   GET    /instructor/get_prompt
+ *   GET    /instructor/view_student_messages
+ *   PUT    /instructor/generate_access_code
+ *   GET    /instructor/get_access_code
+ *   GET    /instructor/previous_prompts
+ *   GET    /instructor/student_modules_messages
+ *   GET    /instructor/check_notifications_status
+ *   DELETE /instructor/remove_completed_notification
+ *   GET    /instructor/course_files
+ *   GET    /instructor/module_file_references
+ *   PUT    /instructor/module_file_references
+ *   POST   /instructor/validate_prompt
+ *   POST   /instructor/generate_topics
+ *   GET    /instructor/file_processing_statuses
+ *   POST   /instructor/reserve_module
+ *   POST   /instructor/finalize_module
+ *   POST   /instructor/cleanup_module
+ */
 const { initializeConnection } = require("./lib.js");
 const { validatePrompt } = require("./validatePrompt.js");
 const { generateModuleTopics } = require("./generateTopics.js");

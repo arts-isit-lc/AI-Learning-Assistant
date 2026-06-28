@@ -1,3 +1,22 @@
+/**
+ * Student Lambda — Route index:
+ *   POST   /student/create_user
+ *   GET    /student/get_user_roles
+ *   GET    /student/get_name
+ *   GET    /student/course
+ *   GET    /student/course_page
+ *   GET    /student/module
+ *   POST   /student/create_session
+ *   DELETE /student/delete_session
+ *   GET    /student/get_messages
+ *   POST   /student/enroll_student
+ *   GET    /session/messages
+ *   PUT    /student/update_session_name
+ *   POST   /student/update_module_score
+ *   GET    /student/files
+ *   GET    /student/file_url
+ *   GET    /student/figure_url
+ */
 const { initializeConnection } = require("./lib.js");
 const { S3Client, GetObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");

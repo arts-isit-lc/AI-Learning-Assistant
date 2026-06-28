@@ -1,3 +1,18 @@
+/**
+ * Admin Lambda — Route index:
+ *   GET    /admin/instructors
+ *   GET    /admin/courses
+ *   POST   /admin/enroll_instructor
+ *   POST   /admin/create_course
+ *   GET    /admin/courseInstructors
+ *   GET    /admin/instructorCourses
+ *   POST   /admin/updateCourseAccess
+ *   DELETE /admin/delete_instructor_enrolments
+ *   DELETE /admin/delete_course_instructor_enrolments
+ *   DELETE /admin/delete_course
+ *   POST   /admin/elevate_instructor
+ *   POST   /admin/lower_instructor
+ */
 const { initializeConnection } = require("./libadmin.js");
 
 let { SM_DB_CREDENTIALS, RDS_PROXY_ENDPOINT } = process.env;
