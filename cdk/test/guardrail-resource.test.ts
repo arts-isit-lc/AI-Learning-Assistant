@@ -171,11 +171,11 @@ describe('Bedrock Guardrail Resource', () => {
    */
   test('SSM parameters created for GuardrailId and GuardrailVersion', () => {
     apiTemplate.hasResourceProperties('AWS::SSM::Parameter', {
-      Name: Match.stringLikeRegexp('.*/AILA/GuardrailId'),
+      Name: Match.stringLikeRegexp('/AILA/.*/GuardrailId'),
       Type: 'String',
     });
     apiTemplate.hasResourceProperties('AWS::SSM::Parameter', {
-      Name: Match.stringLikeRegexp('.*/AILA/GuardrailVersion'),
+      Name: Match.stringLikeRegexp('/AILA/.*/GuardrailVersion'),
       Type: 'String',
     });
   });

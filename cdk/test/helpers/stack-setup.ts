@@ -61,6 +61,7 @@ export function createObservabilityTemplate(): Template {
       { functionName: 'Test-ApiGatewayStack-sqsFunction', timeoutSeconds: 60, isContainer: false },
       { functionName: 'Test-ApiGatewayStack-SQSTriggerDockerFunc', timeoutSeconds: 300, isContainer: true },
       { functionName: 'Test-ApiGatewayStack-GetChatLogsFunction', timeoutSeconds: 60, isContainer: false },
+      { functionName: 'Test-ApiGatewayStack-TextGenLambdaDockerFunc', timeoutSeconds: 300, isContainer: true },
     ],
     rdsInstanceId: 'test-rds-instance',
     rdsAllocatedStorage: 100,

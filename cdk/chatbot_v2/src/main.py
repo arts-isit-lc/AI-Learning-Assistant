@@ -46,6 +46,7 @@ CHAT_HISTORY_TABLE = os.environ.get("CHAT_HISTORY_TABLE", "")
 DB_SECRET_ARN = os.environ.get("DB_SECRET_ARN", "")
 DB_PROXY_ENDPOINT = os.environ.get("DB_PROXY_ENDPOINT", "")
 APPSYNC_API_URL = os.environ.get("APPSYNC_API_URL", "")
+APPSYNC_API_URL_PARAM = os.environ.get("APPSYNC_API_URL_PARAM", "")
 GUARDRAIL_ID_PARAM = os.environ.get("GUARDRAIL_ID_PARAM", "")
 GUARDRAIL_VERSION_PARAM = os.environ.get("GUARDRAIL_VERSION_PARAM", "")
 MATH_COMPUTE_FUNCTION_ARN = os.environ.get("MATH_COMPUTE_FUNCTION_ARN", "")
@@ -61,6 +62,7 @@ _secrets_client = boto3.client("secretsmanager", region_name=REGION)
 
 _guardrail_id: str | None = None
 _guardrail_version: str | None = None
+_appsync_url: str | None = None
 _db_connection = None
 
 CORS_HEADERS = {"Content-Type": "application/json", "Access-Control-Allow-Headers": "*",
@@ -72,6 +74,34 @@ def _get_guardrail_config() -> tuple[str, str]:
     if _guardrail_id is None:
         _guardrail_id, _guardrail_version = load_guardrail_config(_ssm_client, GUARDRAIL_ID_PARAM, GUARDRAIL_VERSION_PARAM)
     return _guardrail_id, _guardrail_version
+
+
+def _get_appsync_url() -> str:
+    """Resolve the AppSync GraphQL URL, cached per container.
+
+    Prefers the direct APPSYNC_API_URL env var; otherwise reads it once from the
+    SSM parameter named by APPSYNC_API_URL_PARAM. The AppSync API is created in
+    ApiGatewayStack (which depends on this function's stack), so the URL is passed
+    indirectly via SSM to avoid a circular cross-stack dependency. Best-effort:
+    on failure returns "" and streaming is silently skipped (see streaming.send_chunk).
+    """
+    global _appsync_url
+    if _appsync_url is not None:
+        return _appsync_url
+    if APPSYNC_API_URL:
+        _appsync_url = APPSYNC_API_URL
+    elif APPSYNC_API_URL_PARAM:
+        try:
+            _appsync_url = _ssm_client.get_parameter(Name=APPSYNC_API_URL_PARAM)["Parameter"]["Value"]
+        except Exception:
+            logger.warning(
+                "Failed to resolve AppSync URL from SSM; token streaming disabled",
+                extra={"param": APPSYNC_API_URL_PARAM},
+            )
+            _appsync_url = ""
+    else:
+        _appsync_url = ""
+    return _appsync_url
 
 
 def _get_db_connection():
@@ -218,7 +248,7 @@ def _stream_with_guardrail_retry(
         return stream_response(
             _bedrock_client, model_id=RESPONSE_MODEL_ID, system_prompt=system_prompt,
             user_message=user_message, chat_history=prompt_history,
-            appsync_url=APPSYNC_API_URL, session_id=session_id, model_kwargs=model_kwargs,
+            appsync_url=_get_appsync_url(), session_id=session_id, model_kwargs=model_kwargs,
         )
     except Exception as e:
         # Check if this is a guardrail-related error
@@ -233,7 +263,7 @@ def _stream_with_guardrail_retry(
             return stream_response(
                 _bedrock_client, model_id=RESPONSE_MODEL_ID, system_prompt=system_prompt,
                 user_message=user_message, chat_history=prompt_history,
-                appsync_url=APPSYNC_API_URL, session_id=session_id, model_kwargs=model_kwargs_no_guardrail,
+                appsync_url=_get_appsync_url(), session_id=session_id, model_kwargs=model_kwargs_no_guardrail,
             )
         except Exception:
             logger.exception("Retry without guardrails also failed")

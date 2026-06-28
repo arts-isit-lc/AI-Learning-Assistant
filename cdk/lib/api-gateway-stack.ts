@@ -1234,15 +1234,18 @@ export class ApiGatewayStack extends cdk.Stack {
     });
     guardrailVersion.addDependency(guardrail);
 
-    // SSM Parameters for guardrail runtime config
+    // SSM Parameters for guardrail runtime config.
+    // Deterministic path (/AILA/${environment}/...) so the chatbotV2Function in
+    // MultimodalRagStack can reference these by literal name without a circular
+    // cross-stack dependency. textGenLambdaDockerFunc reads them via the Ref below.
     const guardrailIdParam = new ssm.StringParameter(this, `${id}-GuardrailIdParam`, {
-      parameterName: `/${id}/AILA/GuardrailId`,
+      parameterName: `/AILA/${environment}/GuardrailId`,
       description: "Bedrock Guardrail ID for text generation",
       stringValue: guardrail.attrGuardrailId,
     });
 
     const guardrailVersionParam = new ssm.StringParameter(this, `${id}-GuardrailVersionParam`, {
-      parameterName: `/${id}/AILA/GuardrailVersion`,
+      parameterName: `/AILA/${environment}/GuardrailVersion`,
       description: "Bedrock Guardrail version for text generation",
       stringValue: guardrailVersion.attrVersion,
     });
@@ -1898,6 +1901,16 @@ export class ApiGatewayStack extends cdk.Stack {
 
     // Add APPSYNC_API_URL to text generation Lambda (must be after eventApi is created)
     textGenLambdaDockerFunc.addEnvironment("APPSYNC_API_URL", this.eventApi.graphqlUrl);
+
+    // Publish the AppSync GraphQL URL to a deterministic SSM parameter so the
+    // chatbotV2Function (in MultimodalRagStack, which this stack depends on) can
+    // resolve it at runtime — passing it directly would create a circular
+    // cross-stack dependency.
+    new ssm.StringParameter(this, `${id}-AppSyncApiUrlParam`, {
+      parameterName: `/AILA/${environment}/AppSyncApiUrl`,
+      description: "AppSync GraphQL endpoint URL for chatbot token streaming",
+      stringValue: this.eventApi.graphqlUrl,
+    });
 
     // Per-function IAM role for notificationFunction
     const notificationLambdaRole = new iam.Role(this, `${id}-notificationLambdaRole`, {

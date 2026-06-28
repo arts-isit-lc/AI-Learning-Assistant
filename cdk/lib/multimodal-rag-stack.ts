@@ -557,12 +557,12 @@ export class MultimodalRagStack extends cdk.Stack {
               actions: ["secretsmanager:GetSecretValue"],
               resources: [db.secretPathUser.secretArn],
             }),
-            // SSM — guardrail parameters (scoped to AILA/* path)
+            // SSM — guardrail + AppSync URL params (scoped to this environment's path)
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: ["ssm:GetParameter"],
               resources: [
-                `arn:aws:ssm:${this.region}:${this.account}:parameter/AILA/*`,
+                `arn:aws:ssm:${this.region}:${this.account}:parameter/AILA/${environment}/*`,
               ],
             }),
             // EC2 VPC networking — resource '*' required by AWS for ENI operations
@@ -656,9 +656,13 @@ export class MultimodalRagStack extends cdk.Stack {
           CHAT_HISTORY_TABLE: "DynamoDB-Conversation-Table", // TODO: pass from ApiGatewayStack or use env var pattern
           DB_SECRET_ARN: db.secretPathUser.secretArn,
           DB_PROXY_ENDPOINT: db.rdsProxyEndpoint,
-          APPSYNC_API_URL: "", // TODO: pass from ApiGatewayStack once cross-stack reference is wired
-          GUARDRAIL_ID_PARAM: "", // TODO: pass SSM param name from ApiGatewayStack
-          GUARDRAIL_VERSION_PARAM: "", // TODO: pass SSM param name from ApiGatewayStack
+          // Resolved at runtime from SSM. The AppSync API and guardrail params are
+          // created in ApiGatewayStack (which depends on this stack), so they are
+          // referenced by deterministic parameter name rather than passed directly —
+          // a direct reference would create a circular cross-stack dependency.
+          APPSYNC_API_URL_PARAM: `/AILA/${environment}/AppSyncApiUrl`,
+          GUARDRAIL_ID_PARAM: `/AILA/${environment}/GuardrailId`,
+          GUARDRAIL_VERSION_PARAM: `/AILA/${environment}/GuardrailVersion`,
         },
       }
     );

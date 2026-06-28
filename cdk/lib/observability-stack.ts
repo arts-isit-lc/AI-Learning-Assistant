@@ -63,10 +63,9 @@ export class ObservabilityStack extends cdk.Stack {
     });
 
     // --- Email subscriptions ---
-    this.warningTopic.addSubscription(
-      new snsSubscriptions.EmailSubscription("vincent.lam@ubc.ca")
-    );
-
+    // Only the Critical topic emails on-call. The Warning topic intentionally has
+    // NO subscription: warning-level alarms remain visible on the dashboard and in
+    // the console for investigation, but do not generate email (avoids alert fatigue).
     this.criticalTopic.addSubscription(
       new snsSubscriptions.EmailSubscription("vincent.lam@ubc.ca")
     );
@@ -200,12 +199,14 @@ export class ObservabilityStack extends cdk.Stack {
         comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
       });
 
-      // Non-prod: route both to warning topic; Prod: critical goes to critical topic
-      if (this.isProd) {
-        criticalAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.criticalTopic));
-      } else {
-        criticalAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.warningTopic));
-      }
+      // Only the TextGen (chatbot) critical error rate is page-worthy email. Every
+      // other Lambda's critical failures surface via the API Gateway 5xx Critical
+      // and composite alarms, so they route to the silent Warning topic (dashboard
+      // and console only — no email).
+      const isCriticalPathFn = fn.functionName.endsWith("TextGenLambdaDockerFunc");
+      criticalAlarm.addAlarmAction(
+        new cloudwatchActions.SnsAction(isCriticalPathFn ? this.criticalTopic : this.warningTopic)
+      );
       this.lambdaErrorCriticalAlarms.push(criticalAlarm);
 
       // --- Lambda duration alarm (p99, 80% of timeout) — Tier 1 only ---
@@ -270,12 +271,8 @@ export class ObservabilityStack extends cdk.Stack {
         comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
       });
 
-      // Non-prod: route to warning topic; Prod: route to critical topic (Req 19.1)
-      if (this.isProd) {
-        throttleAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.criticalTopic));
-      } else {
-        throttleAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.warningTopic));
-      }
+      // Throttles are not in the critical-email set — route to the silent Warning topic.
+      throttleAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.warningTopic));
       lambdaThrottleAlarms.push(throttleAlarm);
       } // end tier 1 throttle alarm
     }
@@ -357,11 +354,8 @@ export class ObservabilityStack extends cdk.Stack {
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
     });
 
-    if (this.isProd) {
-      this.apiGateway5xxCriticalAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.criticalTopic));
-    } else {
-      this.apiGateway5xxCriticalAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.warningTopic));
-    }
+    // Critical: always emails (Critical topic) in every environment.
+    this.apiGateway5xxCriticalAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.criticalTopic));
 
     // --- Missing traffic alarm (Req 22.1, 22.2, 22.3, 22.4, 22.5) ---
     const apiGwTrafficMetric = new cloudwatch.Metric({
@@ -392,11 +386,9 @@ export class ObservabilityStack extends cdk.Stack {
       actionsEnabled: this.isProd,
     });
 
-    if (this.isProd) {
-      missingTrafficAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.criticalTopic));
-    } else {
-      missingTrafficAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.warningTopic));
-    }
+    // Critical: always routes to the Critical (email) topic. Note actionsEnabled is
+    // prod-only above, so a quiet dev environment never trips this on zero traffic.
+    missingTrafficAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.criticalTopic));
 
     // --- RDS Database Alarms (Req 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 19.4, 23.2) ---
 
@@ -458,11 +450,8 @@ export class ObservabilityStack extends cdk.Stack {
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
     });
 
-    if (this.isProd) {
-      this.rdsCpuCriticalAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.criticalTopic));
-    } else {
-      this.rdsCpuCriticalAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.warningTopic));
-    }
+    // Critical: always emails (Critical topic) in every environment.
+    this.rdsCpuCriticalAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.criticalTopic));
 
     // --- RDS Storage Warning Alarm (Req 7.3) ---
     const storageWarningBytes = props.rdsAllocatedStorage * 1024 * 1024 * 1024 * 0.20;
@@ -516,11 +505,8 @@ export class ObservabilityStack extends cdk.Stack {
       comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
     });
 
-    if (this.isProd) {
-      rdsStorageCriticalAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.criticalTopic));
-    } else {
-      rdsStorageCriticalAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.warningTopic));
-    }
+    // Critical: always emails (Critical topic) in every environment.
+    rdsStorageCriticalAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.criticalTopic));
 
     // --- RDS Connections Alarm (Req 7.5) ---
     const connectionsThreshold = Math.floor(maxConnections * (thresholds.rdsConnectionsPercent / 100));
@@ -630,11 +616,8 @@ export class ObservabilityStack extends cdk.Stack {
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
     });
 
-    if (this.isProd) {
-      this.dlqAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.criticalTopic));
-    } else {
-      this.dlqAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.warningTopic));
-    }
+    // Critical: DLQ messages mean permanent processing failure — always emails.
+    this.dlqAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.criticalTopic));
 
     // --- SQS Queue Depth Alarm (Req 8.4) ---
     const sqsQueueDepthMetric = new cloudwatch.Metric({
@@ -785,11 +768,8 @@ export class ObservabilityStack extends cdk.Stack {
       ].join("\n"),
     });
 
-    if (this.isProd) {
-      systemHealthCriticalAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.criticalTopic));
-    } else {
-      systemHealthCriticalAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.warningTopic));
-    }
+    // Critical: multi-subsystem failure — always emails (Critical topic).
+    systemHealthCriticalAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.criticalTopic));
 
     // DataPipelineHealth: ALARM when DLQ alarm AND (queue depth OR queue age) are in ALARM
     const dataPipelineRule = cloudwatch.AlarmRule.allOf(
@@ -815,11 +795,8 @@ export class ObservabilityStack extends cdk.Stack {
       ].join("\n"),
     });
 
-    if (this.isProd) {
-      dataPipelineHealthAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.criticalTopic));
-    } else {
-      dataPipelineHealthAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.warningTopic));
-    }
+    // Critical: data pipeline is dead (DLQ + backlog) — always emails (Critical topic).
+    dataPipelineHealthAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.criticalTopic));
 
     // --- CloudWatch Dashboard (Req 20.1, 20.2, 20.3, 20.4, 20.5, 20.6, 20.7, 18.3) ---
 

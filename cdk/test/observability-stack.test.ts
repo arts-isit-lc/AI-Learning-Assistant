@@ -52,6 +52,7 @@ beforeAll(() => {
       { functionName: 'Test-ApiGatewayStack-sqsFunction', timeoutSeconds: 60, isContainer: false },
       { functionName: 'Test-ApiGatewayStack-SQSTriggerDockerFunc', timeoutSeconds: 300, isContainer: true },
       { functionName: 'Test-ApiGatewayStack-GetChatLogsFunction', timeoutSeconds: 60, isContainer: false },
+      { functionName: 'Test-ApiGatewayStack-TextGenLambdaDockerFunc', timeoutSeconds: 300, isContainer: true },
     ],
     rdsInstanceId: 'test-rds-instance',
     rdsAllocatedStorage: 100,
@@ -88,14 +89,98 @@ describe('SNS Topics', () => {
     });
   });
 
-  test('email subscriptions exist on both topics', () => {
-    const subscriptions = devTemplate.findResources('AWS::SNS::Subscription', {
-      Properties: {
-        Protocol: 'email',
-        Endpoint: 'vincent.lam@ubc.ca',
-      },
+  test('email subscription exists only on the Critical topic', () => {
+    // Exactly one email subscription, and it must target the Critical topic.
+    const emailSubs = devTemplate.findResources('AWS::SNS::Subscription', {
+      Properties: { Protocol: 'email', Endpoint: 'vincent.lam@ubc.ca' },
     });
-    expect(Object.keys(subscriptions).length).toBe(2);
+    expect(Object.keys(emailSubs).length).toBe(1);
+
+    const criticalTopicId = Object.keys(
+      devTemplate.findResources('AWS::SNS::Topic', { Properties: { TopicName: 'AILA-dev-Critical' } })
+    )[0];
+
+    const sub = Object.values(emailSubs)[0] as { Properties: { TopicArn: { Ref?: string } } };
+    expect(sub.Properties.TopicArn).toEqual({ Ref: criticalTopicId });
+  });
+
+  test('warning topic has no email subscription (silent — dashboard/console only)', () => {
+    const warningTopicId = Object.keys(
+      devTemplate.findResources('AWS::SNS::Topic', { Properties: { TopicName: 'AILA-dev-Warning' } })
+    )[0];
+
+    const allSubs = devTemplate.findResources('AWS::SNS::Subscription');
+    for (const sub of Object.values(allSubs) as Array<{ Properties: { TopicArn?: { Ref?: string } } }>) {
+      expect(sub.Properties.TopicArn?.Ref).not.toBe(warningTopicId);
+    }
+  });
+});
+
+describe('Critical-only email routing', () => {
+  /**
+   * Validates the curated critical-email model: only "absolutely critical" alarms
+   * route to the Critical (email) topic — in EVERY environment, not just prod —
+   * and everything else routes to the silent Warning topic.
+   */
+  function topicId(template: Template, topicName: string): string {
+    return Object.keys(
+      template.findResources('AWS::SNS::Topic', { Properties: { TopicName: topicName } })
+    )[0];
+  }
+
+  function alarmActions(template: Template, alarmName: string): unknown[] {
+    const standard = template.findResources('AWS::CloudWatch::Alarm', {
+      Properties: { AlarmName: alarmName },
+    });
+    const composite = template.findResources('AWS::CloudWatch::CompositeAlarm', {
+      Properties: { AlarmName: alarmName },
+    });
+    const found = Object.values({ ...standard, ...composite })[0] as
+      | { Properties: { AlarmActions?: unknown[] } }
+      | undefined;
+    return found?.Properties.AlarmActions ?? [];
+  }
+
+  test.each([
+    'AILA-dev-ApiGateway-5xx-Critical',
+    'AILA-dev-ApiGateway-MissingTraffic',
+    'AILA-dev-RDS-CPU-Critical',
+    'AILA-dev-RDS-Storage-Critical',
+    'AILA-dev-DLQ-Depth',
+    'AILA-dev-Guardrail-Failure',
+    'AILA-dev-SystemHealthCritical',
+    'AILA-dev-DataPipelineHealth',
+  ])('critical alarm %s routes to the Critical (email) topic even in dev', (alarmName) => {
+    const criticalId = topicId(devTemplate, 'AILA-dev-Critical');
+    expect(alarmActions(devTemplate, alarmName)).toContainEqual({ Ref: criticalId });
+  });
+
+  test('TextGen critical error rate routes to the Critical topic', () => {
+    const criticalId = topicId(devTemplate, 'AILA-dev-Critical');
+    expect(
+      alarmActions(devTemplate, 'AILA-dev-Test-ApiGatewayStack-TextGenLambdaDockerFunc-ErrorRate-Critical')
+    ).toContainEqual({ Ref: criticalId });
+  });
+
+  test('non-TextGen Lambda critical (studentFunction) does NOT email — routes to Warning', () => {
+    const criticalId = topicId(devTemplate, 'AILA-dev-Critical');
+    const warningId = topicId(devTemplate, 'AILA-dev-Warning');
+    const actions = alarmActions(devTemplate, 'AILA-dev-Test-ApiGatewayStack-studentFunction-ErrorRate-Critical');
+    expect(actions).toContainEqual({ Ref: warningId });
+    expect(actions).not.toContainEqual({ Ref: criticalId });
+  });
+
+  test.each([
+    'AILA-dev-RDS-CPU-Warning',
+    'AILA-dev-SQS-QueueDepth-Warning',
+    'AILA-dev-AppSync-5xx-Warning',
+    'AILA-dev-ApiGateway-5xx-Warning',
+  ])('warning alarm %s routes to the silent Warning topic (no email)', (alarmName) => {
+    const warningId = topicId(devTemplate, 'AILA-dev-Warning');
+    const criticalId = topicId(devTemplate, 'AILA-dev-Critical');
+    const actions = alarmActions(devTemplate, alarmName);
+    expect(actions).toContainEqual({ Ref: warningId });
+    expect(actions).not.toContainEqual({ Ref: criticalId });
   });
 });
 
