@@ -166,7 +166,8 @@ class HybridSearchEngine:
     - 3x overfetch factor for better RRF merging
     - Embedding version filtering (only matching versions searched)
     - Metadata filtering (is_document_summary, lecture_number) for summary queries
-    - Fallback: if filtered query returns zero results, retry without filter
+    - Fallback: if the filtered query returns zero results, retry with the
+      external scope filter only (intent filter dropped, scope never dropped)
     """
 
     def __init__(
@@ -311,7 +312,9 @@ class HybridSearchEngine:
         Executes vector search and BM25 search in parallel with 3x overfetch.
         Filters vector search to only matching embedding_version.
         Applies metadata filter for summary queries with lecture_number.
-        Falls back to unfiltered search if filtered returns zero results.
+        Falls back to scope-only search (dropping the intent filter but keeping
+        the external scope filter, e.g. module_id) if the filtered query returns
+        zero results.
 
         Args:
             query: The user's search query.
@@ -327,7 +330,10 @@ class HybridSearchEngine:
         search_start = time.time()
         overfetch_k = k * 3
         intent_filter = self._build_metadata_filter(query_intent)
-        # Merge external filter with intent-based filter
+        # External scope filter (e.g. module_id) — must ALWAYS be preserved,
+        # including on fallback, so course/module isolation is never dropped.
+        scope_filter = metadata_filter or None
+        # Merge external scope filter with intent-based filter (summary/lecture).
         combined_filter = {**(metadata_filter or {}), **(intent_filter or {})}
 
         logger.info(
@@ -388,17 +394,19 @@ class HybridSearchEngine:
         merged = self._merge_results(vector_results, bm25_results, k)
         merge_latency_ms = round((time.time() - merge_start) * 1000, 2)
 
-        # Metadata filter fallback: if filtered query returns zero results,
-        # retry WITHOUT the filter (Req 5.4, 5.5)
+        # Metadata filter fallback: if the filtered query returns zero results,
+        # relax ONLY the intent-based filter (summary / lecture_number). The
+        # external scope filter (e.g. module_id) is ALWAYS preserved, so a
+        # zero-result query can never leak content from other modules/courses.
         used_fallback = False
-        if len(merged) == 0 and combined_filter:
+        if len(merged) == 0 and intent_filter:
             logger.info(
-                "Metadata-filtered search returned zero results, retrying without filter",
-                extra={"metadata_filter": combined_filter},
+                "Intent-filtered search returned zero results, retrying with scope filter only",
+                extra={"scope_filter": scope_filter, "dropped_intent_filter": intent_filter},
             )
             used_fallback = True
 
-            # Retry without metadata filter
+            # Retry with the scope filter only (intent filter dropped)
             with ThreadPoolExecutor(max_workers=2) as executor:
                 futures = {}
 
@@ -408,14 +416,14 @@ class HybridSearchEngine:
                         query_embedding,
                         overfetch_k,
                         embedding_version,
-                        None,  # No metadata filter
+                        scope_filter,  # Preserve module/course scope
                     )
 
                 futures["bm25"] = executor.submit(
                     self._timed_bm25_search,
                     query,
                     overfetch_k,
-                    None,  # No metadata filter
+                    scope_filter,  # Preserve module/course scope
                 )
 
                 vector_results = []

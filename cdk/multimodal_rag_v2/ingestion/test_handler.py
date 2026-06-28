@@ -101,6 +101,17 @@ class TestParseS3Key:
         assert result["file_id"] == "notes"
         assert result["filename"] == "notes.docx"
 
+    def test_uuid_keyed_path_yields_uuid_file_id(self) -> None:
+        # Cross-module referencing: the upload key now uses the canonical UUID
+        # file_id as the object name, so file_id MUST parse out as that UUID
+        # (matching Module_Files.file_id and Module_File_References).
+        uuid = "3f2504e0-4f89-41d3-9a0c-0305e82c3301"
+        result = _parse_s3_key(f"courses/course-1/module-2/{uuid}.pdf")
+        assert result["file_id"] == uuid
+        assert result["filename"] == f"{uuid}.pdf"
+        assert result["course_id"] == "course-1"
+        assert result["module_id"] == "module-2"
+
     def test_invalid_key_missing_prefix(self) -> None:
         with pytest.raises(ValueError, match="does not match expected format"):
             _parse_s3_key("uploads/course-1/module-1/file.pdf")

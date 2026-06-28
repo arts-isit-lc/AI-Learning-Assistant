@@ -326,16 +326,17 @@ def _process_record(record: dict[str, Any]) -> dict[str, Any]:
             },
         )
 
-        # Send message to enrichment queue to trigger Layer 2 processing
+        # Send message to enrichment queue to trigger Layer 2 processing.
+        # Send the exact ir_version that was persisted so enrichment loads the
+        # correct S3 path even if IR_VERSION is bumped in the future.
         if ENRICHMENT_QUEUE_URL:
             _sqs_client.send_message(
                 QueueUrl=ENRICHMENT_QUEUE_URL,
                 MessageBody=json.dumps({
-                    "ir_s3_path": s3_path,
                     "course_id": course_id,
                     "module_id": module_id,
                     "file_id": file_id,
-                    "ir_bucket": IR_BUCKET_NAME,
+                    "ir_version": document_ir.ir_version,
                 }),
             )
             logger.info("Enrichment queue message sent")

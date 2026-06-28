@@ -71,9 +71,8 @@ _query_analyzer = QueryAnalyzer(bedrock_client=_bedrock_client)
 _cross_encoder_reranker = CrossEncoderReranker()
 _production_ranker = ProductionRanker()
 
-# Hybrid search requires vector/BM25 store backends.
-# These are placeholder implementations that connect via DB_PROXY_ENDPOINT.
-# In production, these are injected with real pgvector/BM25 clients.
+# Hybrid search backends (real pgvector + PostgreSQL FTS stores) are built
+# lazily on first query via _create_vector_store() / _create_bm25_store().
 _hybrid_search_engine: HybridSearchEngine | None = None
 
 # Layer 4 components (sibling store wired lazily via _get_context_builder)
@@ -344,7 +343,26 @@ def _handle_query(
     # Step 4: Hybrid Search
     with _traced_subsegment("HybridSearch"):
         search_start = time.time()
-        metadata_filter = {"module_id": module_id} if module_id else None
+        # Scope selection: prefer the authoritative allowed_file_ids set (a module's
+        # own files + its cross-module references). Fall back to module_id scoping
+        # when the caller did not supply a file set.
+        if allowed_file_ids:
+            metadata_filter = {"file_id": allowed_file_ids}
+            scope_kind = "file_id"
+        elif module_id:
+            metadata_filter = {"module_id": module_id}
+            scope_kind = "module_id"
+        else:
+            metadata_filter = None
+            scope_kind = "none"
+        logger.info(
+            "Retrieval scope selected",
+            extra={
+                "query_id": query_id,
+                "scope_kind": scope_kind,
+                "allowed_file_ids_count": len(allowed_file_ids),
+            },
+        )
         merged_results = _execute_hybrid_search(
             query=query,
             query_intent=query_intent,
@@ -415,7 +433,7 @@ def _handle_query(
         ctx_start = time.time()
         structured_context = _get_context_builder().build_context(
             results=final_results,
-            module_id=course_id,
+            module_id=module_id,
         )
         ctx_latency = time.time() - ctx_start
 
@@ -605,6 +623,34 @@ def _create_bm25_store() -> Any:
         return _FallbackBM25Store()
 
 
+# Scope keys promoted to first-class indexed columns on retrieval_units.
+# Cross-module file referencing filters on these directly (indexed) instead of
+# extracting from the metadata JSON.
+_COLUMN_SCOPE_KEYS = {"file_id", "module_id"}
+
+
+def _append_metadata_filter(
+    where_clauses: list, params: list, metadata_filter: dict | None
+) -> None:
+    """Append WHERE clauses + params for a metadata/scope filter.
+
+    - Promoted keys (file_id, module_id) filter on first-class indexed columns;
+      all other keys (e.g. is_document_summary, lecture_number) use metadata->>'key'.
+    - List/tuple values produce `= ANY(%s)` (psycopg2 adapts the list to an array);
+      scalar values produce `= %s`.
+    """
+    if not metadata_filter:
+        return
+    for key, value in metadata_filter.items():
+        col = key if key in _COLUMN_SCOPE_KEYS else f"metadata->>'{key}'"
+        if isinstance(value, (list, tuple)):
+            where_clauses.append(f"{col} = ANY(%s)")
+            params.append([str(v) for v in value])
+        else:
+            where_clauses.append(f"{col} = %s")
+            params.append(str(value))
+
+
 class _PgvectorStore:
     """pgvector-backed vector similarity search.
 
@@ -668,10 +714,7 @@ class _PgvectorStore:
             where_clauses = ["embedding_version = %s"]
             params: list[Any] = [embedding_version]
 
-            if metadata_filter:
-                for key, value in metadata_filter.items():
-                    where_clauses.append(f"metadata->>'{key}' = %s")
-                    params.append(str(value))
+            _append_metadata_filter(where_clauses, params, metadata_filter)
 
             where_sql = " AND ".join(where_clauses)
 
@@ -767,10 +810,7 @@ class _BM25Store:
             where_clauses = ["ts_vector @@ plainto_tsquery('english', %s)"]
             params: list[Any] = [query]
 
-            if metadata_filter:
-                for key, value in metadata_filter.items():
-                    where_clauses.append(f"metadata->>'{key}' = %s")
-                    params.append(str(value))
+            _append_metadata_filter(where_clauses, params, metadata_filter)
 
             where_sql = " AND ".join(where_clauses)
 

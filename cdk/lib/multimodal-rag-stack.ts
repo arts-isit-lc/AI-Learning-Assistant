@@ -432,6 +432,7 @@ export class MultimodalRagStack extends cdk.Stack {
     this.ragEnrichmentFunction.addEventSource(
       new lambdaEventSources.SqsEventSource(this.enrichmentQueue, {
         batchSize: 1,
+        reportBatchItemFailures: true,
       })
     );
 
@@ -650,6 +651,7 @@ export class MultimodalRagStack extends cdk.Stack {
           REGION: this.region,
           RAG_RETRIEVAL_FUNCTION_ARN: this.ragRetrievalFunction.functionArn,
           MATH_COMPUTE_FUNCTION_ARN: mathComputeFunction.functionArn,
+          ENABLE_CROSS_MODULE_REFERENCING: "true", // runtime kill switch; set "false" to revert to module_id-only scoping
           SESSION_STATE_TABLE: this.sessionStateTable.tableName,
           CHAT_HISTORY_TABLE: "DynamoDB-Conversation-Table", // TODO: pass from ApiGatewayStack or use env var pattern
           DB_SECRET_ARN: db.secretPathUser.secretArn,

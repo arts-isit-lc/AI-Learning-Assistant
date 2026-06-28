@@ -83,6 +83,26 @@ def upsert_file_record(module_id, file_name, file_type):
         raise
 
 
+def update_file_record_filepath(file_id, filepath):
+    """Persist the canonical S3 key for a file so reads use it directly.
+
+    The retrieval/read paths prefer Module_Files.filepath over reconstructing
+    the key, so this must be written on every upload.
+    """
+    conn = connect_to_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                'UPDATE "Module_Files" SET filepath = %s WHERE file_id = %s;',
+                (filepath, file_id),
+            )
+            conn.commit()
+    except Exception:
+        conn.rollback()
+        logger.exception("Failed to update file record filepath")
+        raise
+
+
 @logger.inject_lambda_context(log_event=True)
 def lambda_handler(event, context):
     # Use .get() to safely extract query string parameters
@@ -146,9 +166,8 @@ def lambda_handler(event, context):
     }
 
     if file_type in allowed_document_types:
-        # V2 key format: courses/{course_id}/{module_id}/{filename}
-        # Triggers V2 ragIngestionFunction via S3 event on irBucket courses/ prefix
-        key = f"courses/{course_id}/{module_id}/{file_name}.{file_type}"
+        # content_type validated here; the S3 key is built after the DB upsert
+        # so it can use the canonical UUID file_id as the object identifier.
         content_type = allowed_document_types[file_type]
     else:
         return {
@@ -172,6 +191,20 @@ def lambda_handler(event, context):
                 logger.info("File record upserted", extra={"file_id": file_id})
             except Exception:
                 logger.exception("DB upsert failed, continuing without file_id")
+
+        # V2 key format: courses/{course_id}/{module_id}/{file_id}.{file_type}
+        # The canonical UUID file_id is the object identifier, so it propagates
+        # unchanged through ingestion -> IR -> enrichment -> retrieval_units and
+        # matches Module_File_References.referenced_file_id for cross-module scope.
+        # Fall back to the filename only if the DB upsert could not produce a file_id.
+        if file_id:
+            key = f"courses/{course_id}/{module_id}/{file_id}.{file_type}"
+            try:
+                update_file_record_filepath(file_id, key)
+            except Exception:
+                logger.exception("Failed to persist filepath, continuing")
+        else:
+            key = f"courses/{course_id}/{module_id}/{file_name}.{file_type}"
 
         presigned_url = s3.generate_presigned_url(
             ClientMethod="put_object",

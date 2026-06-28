@@ -49,6 +49,9 @@ APPSYNC_API_URL = os.environ.get("APPSYNC_API_URL", "")
 GUARDRAIL_ID_PARAM = os.environ.get("GUARDRAIL_ID_PARAM", "")
 GUARDRAIL_VERSION_PARAM = os.environ.get("GUARDRAIL_VERSION_PARAM", "")
 MATH_COMPUTE_FUNCTION_ARN = os.environ.get("MATH_COMPUTE_FUNCTION_ARN", "")
+# Runtime kill switch for cross-module file referencing. Defaults on; set to
+# "false" to revert to module_id-only retrieval scoping without a redeploy.
+ENABLE_CROSS_MODULE_REFERENCING = os.environ.get("ENABLE_CROSS_MODULE_REFERENCING", "true").lower() != "false"
 # Module-level singletons (initialized once per container)
 _lambda_client = boto3.client("lambda", region_name=REGION)
 _bedrock_client = boto3.client("bedrock-runtime", region_name=REGION)
@@ -80,6 +83,38 @@ def _get_db_connection():
             f"host={DB_PROXY_ENDPOINT} port={secret['port']} sslmode=require"
         )
     return _db_connection
+
+
+def _get_allowed_file_ids(module_id: str) -> list[str]:
+    """Return the file_ids a module can retrieve: its own files + cross-module
+    references (Module_File_References). Reuses the warm module-level connection.
+
+    Best-effort: on any error returns [] so retrieval falls back to module_id
+    scoping (safe default — never broadens scope on failure).
+    """
+    if not ENABLE_CROSS_MODULE_REFERENCING or not module_id:
+        return []
+    if not DB_SECRET_ARN or not DB_PROXY_ENDPOINT:
+        return []
+    try:
+        conn = _get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            '''SELECT file_id FROM "Module_Files" WHERE module_id = %s
+               UNION
+               SELECT referenced_file_id FROM "Module_File_References" WHERE source_module_id = %s''',
+            (module_id, module_id),
+        )
+        rows = cur.fetchall()
+        cur.close()
+        return [str(r[0]) for r in rows if r[0] is not None]
+    except Exception:
+        logger.exception("Failed to compute allowed_file_ids; falling back to module scope")
+        try:
+            _get_db_connection().rollback()
+        except Exception:
+            pass
+        return []
 
 
 def _load_module_concepts(course_id: str, module_id: str) -> tuple[list[str], str]:
@@ -382,7 +417,7 @@ def handler(event, context):
             _lambda_client, function_arn=RAG_RETRIEVAL_FUNCTION_ARN,
             query=retrieval_query,
             session_id=session_id, course_id=course_id,
-            allowed_file_ids=[],
+            allowed_file_ids=_get_allowed_file_ids(module_id),
             chat_history=get_retrieval_history(chat_history, 4),
             learning_context=learning_context,
             module_id=module_id,

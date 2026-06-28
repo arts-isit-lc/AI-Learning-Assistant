@@ -421,7 +421,7 @@ class TestImageEscalation:
         call_args = mock_client.invoke_model.call_args
         body = json.loads(call_args[1]["body"])
         user_message = body["messages"][-1]["content"]
-        assert "Image Analysis" in user_message
+        assert "Visual Analysis of Referenced Figure" in user_message
         assert "A flowchart showing process steps" in user_message
 
 

@@ -1026,9 +1026,19 @@ exports.handler = async (event) => {
               break;
             }
 
-            // Generate a GET pre-signed URL using the stored filepath or V2 key format (1 hour TTL)
-            // V2 key format: courses/{course_id}/{module_id}/{filename}.{filetype}
-            const s3Key = fileRecord.filepath || `courses/${courseId}/${fileRecord.module_id}/${fileRecord.filename}.${fileRecord.filetype}`;
+            // Use the canonical stored filepath (written at upload time). With the
+            // UUID-keyed convention the S3 key cannot be reliably reconstructed from
+            // the filename, so a missing filepath is a hard error rather than a
+            // silent 404 against a wrong key.
+            if (!fileRecord.filepath) {
+              console.error("Module_Files.filepath missing for file_id:", fileId);
+              response.statusCode = 500;
+              response.body = JSON.stringify({
+                error: "File is not available (missing storage path). Please re-upload.",
+              });
+              break;
+            }
+            const s3Key = fileRecord.filepath;
             const command = new GetObjectCommand({
               Bucket: BUCKET,
               Key: s3Key,

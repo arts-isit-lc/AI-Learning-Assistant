@@ -106,7 +106,7 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     5. Generate DocumentSummary
     6. Build RetrievalUnits via RetrievalUnitBuilder
     7. Generate embeddings via EmbeddingGenerator
-    8. Store in pgvector (placeholder)
+    8. Store in pgvector
 
     Args:
         event: SQS event with Records array.
@@ -118,42 +118,35 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     records = event.get("Records", [])
     if not records:
         logger.warning("No records in SQS event")
-        return {"statusCode": 200, "body": json.dumps({"processed": 0})}
+        return {"batchItemFailures": []}
 
     results: list[dict[str, Any]] = []
-    failed_count = 0
+    batch_item_failures: list[dict[str, str]] = []
 
     for record in records:
         try:
             result = _process_record(record)
             results.append(result)
         except Exception:
-            failed_count += 1
             message_id = record.get("messageId", "unknown")
             logger.exception(
-                "Failed to process SQS record",
+                "Failed to process SQS record — will be retried via SQS",
                 extra={"message_id": message_id},
             )
-
-    response = {
-        "statusCode": 200,
-        "body": json.dumps({
-            "processed": len(results),
-            "failed": failed_count,
-            "results": results,
-        }),
-    }
+            batch_item_failures.append({"itemIdentifier": message_id})
 
     logger.info(
         "Enrichment batch complete",
         extra={
             "total_records": len(records),
             "processed": len(results),
-            "failed": failed_count,
+            "failed": len(batch_item_failures),
         },
     )
 
-    return response
+    # SQS partial batch response: only the listed message IDs are retried.
+    # Requires reportBatchItemFailures=true on the event source mapping.
+    return {"batchItemFailures": batch_item_failures}
 
 
 def _process_record(record: dict[str, Any]) -> dict[str, Any]:
@@ -264,7 +257,7 @@ def _process_record(record: dict[str, Any]) -> dict[str, Any]:
     _generate_embeddings(retrieval_units)
     embed_latency = time.time() - embed_start
 
-    # Step 6: Store in pgvector (placeholder — actual storage wired in CDK)
+    # Step 6: Store in pgvector
     store_start = time.time()
     _store_in_pgvector(retrieval_units, course_id, module_id, file_id)
     store_latency = time.time() - store_start
@@ -417,8 +410,10 @@ def _store_in_pgvector(
 ) -> None:
     """Store RetrievalUnits in pgvector with all metadata.
 
-    Placeholder implementation — actual pgvector storage will be wired in CDK
-    when database connectivity is configured via DB_SECRET_ARN and DB_PROXY_ENDPOINT.
+    Connects to RDS via Proxy (DB_SECRET_ARN + DB_PROXY_ENDPOINT), deletes any
+    existing units for this file (incremental re-ingestion), then inserts each
+    unit with its embedding and ts_vector. Raises on failure so the SQS message
+    is retried (and eventually dead-lettered) rather than the write being lost.
 
     Args:
         retrieval_units: List of RetrievalUnits with embeddings attached.
@@ -499,15 +494,18 @@ def _store_in_pgvector(
             cur.execute(
                 """INSERT INTO retrieval_units
                    (retrieval_id, parent_element_id, embedding_text, element_type,
-                    embedding, embedding_version, metadata, sibling_ids, ts_vector)
+                    embedding, embedding_version, metadata, sibling_ids, ts_vector,
+                    file_id, module_id)
                    VALUES (%s, %s, %s, %s, %s::vector, %s, %s::jsonb, %s::jsonb,
-                           to_tsvector('english', %s))
+                           to_tsvector('english', %s), %s, %s)
                    ON CONFLICT (retrieval_id) DO UPDATE SET
                     embedding_text = EXCLUDED.embedding_text,
                     embedding = EXCLUDED.embedding,
                     metadata = EXCLUDED.metadata,
                     sibling_ids = EXCLUDED.sibling_ids,
-                    ts_vector = EXCLUDED.ts_vector""",
+                    ts_vector = EXCLUDED.ts_vector,
+                    file_id = EXCLUDED.file_id,
+                    module_id = EXCLUDED.module_id""",
                 (
                     unit.retrieval_id,
                     unit.parent_element_id,
@@ -518,6 +516,8 @@ def _store_in_pgvector(
                     json_mod.dumps(stored_metadata),
                     json_mod.dumps(unit.sibling_ids),
                     unit.embedding_text,
+                    file_id,
+                    module_id,
                 ),
             )
             inserted += 1
@@ -539,6 +539,9 @@ def _store_in_pgvector(
             "pgvector storage failed",
             extra={"file_id": file_id, "retrieval_unit_count": len(units_with_embeddings)},
         )
+        # Re-raise so the enrichment record fails, the SQS message is retried,
+        # and processing_status is NOT marked 'complete' on a failed write.
+        raise
 
 
 def _update_processing_status(file_id: str, module_id: str, chunk_count: int) -> None:
