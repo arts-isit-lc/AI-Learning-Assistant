@@ -85,3 +85,48 @@ class TestSelectFormulas:
 
     def test_empty_when_no_formula_results(self):
         assert fs.select_formulas(_rr(), "equation") == []
+
+
+class TestSelectFigures:
+    def test_escalated_image_attaches_regardless_of_score(self):
+        rr = _rr(escalation_used=True, image_results=[{"retrieval_id": "i1", "score": 0.1}])
+        assert fs.select_figures(rr, "tell me about it") == ["i1"]
+
+    def test_figure_ref_attaches_at_or_above_intent_floor(self):
+        rr = _rr(image_results=[{"retrieval_id": "i1", "score": 0.55}])
+        assert fs.select_figures(rr, "show me figure 2") == ["i1"]
+
+    def test_figure_ref_below_floor_excluded(self):
+        rr = _rr(image_results=[{"retrieval_id": "i1", "score": 0.3}])
+        assert fs.select_figures(rr, "show me the diagram") == []
+
+    def test_no_ref_requires_high_confidence(self):
+        assert fs.select_figures(_rr(image_results=[{"retrieval_id": "i1", "score": 0.6}]), "what is recursion?") == []
+        assert fs.select_figures(_rr(image_results=[{"retrieval_id": "i2", "score": 0.85}]), "what is recursion?") == ["i2"]
+
+    def test_none_result(self):
+        assert fs.select_figures(None, "figure") == []
+
+
+class TestHarmonizedAndConfigurable:
+    def test_formula_with_intent_below_floor_excluded(self):
+        # Harmonized: even with formula intent, below the intent floor is excluded.
+        rr = _rr(formula_results=[{"retrieval_id": "f1", "score": 0.3, "latex": "x", "content": "x"}])
+        assert fs.select_formulas(rr, "show the equation") == []
+
+    def test_high_confidence_threshold_is_configurable(self, monkeypatch):
+        # Raising the bar means a 0.85 table without intent no longer attaches.
+        monkeypatch.setattr(fs, "_HIGH_CONFIDENCE_THRESHOLD", 0.95)
+        rr = _rr(table_results=[{"retrieval_id": "t1", "score": 0.85, "headers": ["A"], "rows": [["1"]]}])
+        assert fs.select_tables(rr, "what is recursion?") == []
+
+    def test_intent_floor_is_configurable(self, monkeypatch):
+        # select_formulas reads the intent floor at call time, so the env-backed
+        # module value drives it. Raising it excludes a mid-scoring formula.
+        monkeypatch.setattr(fs, "_INTENT_SCORE_FLOOR", 0.7)
+        rr = _rr(formula_results=[{"retrieval_id": "f1", "score": 0.6, "latex": "x", "content": "x"}])
+        assert fs.select_formulas(rr, "show the equation") == []
+
+    def test_log_candidate_scores_handles_empty(self):
+        fs._log_candidate_scores("table", [])
+        fs._log_candidate_scores("table", None)

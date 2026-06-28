@@ -450,3 +450,24 @@ class TestLatexAdapterTablesAndFigures:
         assert any("diagram.png" in str(el.content) for el in text_els)
         # No raw LaTeX command leaked as its own element
         assert all("\\includegraphics" not in str(el.content) for el in result)
+
+
+    def test_figure_caption_and_label_extracted(self) -> None:
+        adapter = LatexAdapter()
+        tex = (
+            b"\\documentclass{article}\\begin{document}\n"
+            b"\\begin{figure}\n\\includegraphics{bfs.png}\n"
+            b"\\caption{BFS traversal order on a sample graph}\n\\label{fig:bfs}\n"
+            b"\\end{figure}\n\\end{document}\n"
+        )
+        result = adapter.extract(tex, _make_metadata(extension="tex"))
+        text_els = [el for el in result if el.element_type == ElementType.TEXT]
+        fig_text = next(
+            (str(el.content) for el in text_els if "BFS traversal" in str(el.content)), ""
+        )
+        # Caption (the real semantic content), label, and filename are all captured.
+        assert "BFS traversal order on a sample graph" in fig_text
+        assert "fig:bfs" in fig_text
+        assert "bfs.png" in fig_text
+        # Filename consumed by the figure env → not duplicated as a bare reference.
+        assert sum(1 for el in text_els if "bfs.png" in str(el.content)) == 1

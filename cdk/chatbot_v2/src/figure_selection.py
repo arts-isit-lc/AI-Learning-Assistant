@@ -15,11 +15,24 @@ Block types:
 
 from __future__ import annotations
 
+import os
 import re
 
 from aws_lambda_powertools import Logger
 
 logger = Logger(service="chatbot-v2")
+
+# --- Block-attachment thresholds (env-tunable without redeploy) -------------
+# Harmonized across figures, tables, and formulas:
+#   - with explicit query intent  -> attach candidates scoring >= the intent floor
+#   - without intent              -> attach only very-high-confidence candidates
+# The defaults are starting points; tune them against the candidate-score logs
+# (see _log_candidate_scores) emitted in production.
+_INTENT_SCORE_FLOOR = float(os.environ.get("BLOCK_INTENT_SCORE_FLOOR", "0.5"))
+_HIGH_CONFIDENCE_THRESHOLD = float(os.environ.get("BLOCK_HIGH_CONFIDENCE_THRESHOLD", "0.8"))
+_MAX_FIGURES = int(os.environ.get("BLOCK_MAX_FIGURES", "3"))
+_MAX_TABLES = int(os.environ.get("BLOCK_MAX_TABLES", "2"))
+_MAX_FORMULAS = int(os.environ.get("BLOCK_MAX_FORMULAS", "2"))
 
 # Regex to detect figure/table/algorithm references in query
 _FIGURE_REF_PATTERN = re.compile(
@@ -40,12 +53,33 @@ _FORMULA_REF_PATTERN = re.compile(
 )
 
 
+def _log_candidate_scores(block_type: str, candidates: list | None) -> None:
+    """Log the score distribution of candidate blocks (for threshold tuning).
+
+    Emitted regardless of whether anything is selected, so the absolute
+    thresholds can be validated/tuned against real production scores.
+    """
+    if not candidates:
+        return
+    scores = sorted((round(c.get("score", 0) or 0, 4) for c in candidates), reverse=True)
+    logger.info(
+        "Block candidate scores",
+        extra={
+            "block_type": block_type,
+            "candidate_count": len(scores),
+            "scores": scores,
+            "intent_floor": _INTENT_SCORE_FLOOR,
+            "high_confidence_threshold": _HIGH_CONFIDENCE_THRESHOLD,
+        },
+    )
+
+
 def select_figures(
     retrieval_result,
     query: str,
-    max_figures: int = 3,
-    score_threshold: float = 0.4,
-    high_confidence_threshold: float = 0.8,
+    max_figures: int = _MAX_FIGURES,
+    score_threshold: float = _INTENT_SCORE_FLOOR,
+    high_confidence_threshold: float = _HIGH_CONFIDENCE_THRESHOLD,
 ) -> list[str]:
     """Select figure retrieval_ids to attach to the response.
 
@@ -64,6 +98,8 @@ def select_figures(
     """
     if retrieval_result is None:
         return []
+
+    _log_candidate_scores("figure", retrieval_result.image_results)
 
     selected = []
     seen: set[str] = set()
@@ -86,8 +122,8 @@ def select_figures(
             if len(selected) >= max_figures:
                 break
             rid = img.get("retrieval_id")
-            score = img.get("score", 0)
-            if rid and rid not in seen and score > score_threshold:
+            score = img.get("score", 0) or 0
+            if rid and rid not in seen and score >= score_threshold:
                 selected.append(rid)
                 seen.add(rid)
 
@@ -97,8 +133,8 @@ def select_figures(
             if len(selected) >= max_figures:
                 break
             rid = img.get("retrieval_id")
-            score = img.get("score", 0)
-            if rid and rid not in seen and score > high_confidence_threshold:
+            score = img.get("score", 0) or 0
+            if rid and rid not in seen and score >= high_confidence_threshold:
                 selected.append(rid)
                 seen.add(rid)
 
@@ -119,8 +155,8 @@ def select_figures(
 def select_tables(
     retrieval_result,
     query: str,
-    max_tables: int = 2,
-    score_threshold: float = 0.5,
+    max_tables: int = _MAX_TABLES,
+    score_threshold: float = _INTENT_SCORE_FLOOR,
 ) -> list[dict]:
     """Select table blocks from retrieval results.
 
@@ -143,6 +179,8 @@ def select_tables(
     if not tables:
         return []
 
+    _log_candidate_scores("table", tables)
+
     has_table_ref = _TABLE_REF_PATTERN.search(query) is not None
 
     selected: list[dict] = []
@@ -156,7 +194,7 @@ def select_tables(
         score = t.get("score", 0) or 0
         # Attach when the query is table-related, or the table scored very high
         # on its own (mirrors the figure high-confidence fallback).
-        if not (has_table_ref or score >= 0.8):
+        if not (has_table_ref or score >= _HIGH_CONFIDENCE_THRESHOLD):
             continue
         if score < score_threshold:
             continue
@@ -186,7 +224,7 @@ def select_tables(
 def select_formulas(
     retrieval_result,
     query: str,
-    max_formulas: int = 2,
+    max_formulas: int = _MAX_FORMULAS,
 ) -> list[dict]:
     """Select formula blocks from retrieval results.
 
@@ -208,6 +246,8 @@ def select_formulas(
     if not formulas:
         return []
 
+    _log_candidate_scores("formula", formulas)
+
     has_formula_ref = _FORMULA_REF_PATTERN.search(query) is not None
 
     selected: list[dict] = []
@@ -219,7 +259,9 @@ def select_formulas(
         if rid in seen:
             continue
         score = f.get("score", 0) or 0
-        if not (has_formula_ref or score >= 0.8):
+        if not (has_formula_ref or score >= _HIGH_CONFIDENCE_THRESHOLD):
+            continue
+        if score < _INTENT_SCORE_FLOOR:
             continue
         selected.append({
             "type": "formula",

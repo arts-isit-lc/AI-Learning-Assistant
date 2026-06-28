@@ -44,6 +44,13 @@ _TABULAR_ENVIRONMENTS = frozenset({"tabular", "tabular*", "array", "longtable", 
 # Regex to pull the filename out of \includegraphics[opts]{file}
 _INCLUDEGRAPHICS_PATTERN = re.compile(r"\\includegraphics(?:\[[^\]]*\])?\{([^}]*)\}")
 
+# Figure-like environments whose \caption/\label carry the real semantic description.
+# Group 1 = environment name, group 2 = environment body.
+_FIGURE_ENV_PATTERN = re.compile(
+    r"\\begin\{(figure\*?|wrapfigure|SCfigure\*?|sidewaysfigure)\}(.*?)\\end\{\1\}",
+    re.DOTALL,
+)
+
 
 class LatexAdapter(BaseAdapter):
     """Extracts text blocks and formula elements from LaTeX files."""
@@ -107,24 +114,12 @@ class LatexAdapter(BaseAdapter):
             nodelist, latex_text, elements, position_index_counter
         )
 
-        # \includegraphics references → searchable TEXT. The referenced image
-        # files are external to the .tex source (no bytes available), so we index
-        # them as figure references rather than attempting to fetch them.
-        for match in _INCLUDEGRAPHICS_PATTERN.finditer(latex_text):
-            filename = match.group(1).strip()
-            if filename:
-                elements.append(
-                    RawElement(
-                        content=f"Figure: {filename}",
-                        element_type=ElementType.TEXT,
-                        provenance=Provenance(
-                            page_num=1,
-                            position_index=position_index_counter[0],
-                        ),
-                        raw_metadata={"source": "latex_includegraphics", "graphic": filename},
-                    )
-                )
-                position_index_counter[0] += 1
+        # Figure references → searchable TEXT. The image files themselves are
+        # external to the .tex source (no bytes available), so we index their
+        # caption/label/filename rather than fetching them.
+        elements.extend(
+            self._extract_figure_references(latex_text, position_index_counter)
+        )
 
         logger.info(
             "LaTeX extraction complete",
@@ -349,3 +344,112 @@ class LatexAdapter(BaseAdapter):
         text = re.sub(r"\\[a-zA-Z]+\*?", "", text)
         text = text.replace("{", "").replace("}", "").replace("\\&", "&")
         return text.strip()
+
+    def _extract_figure_references(
+        self, latex_text: str, position_index_counter: list[int]
+    ) -> list[RawElement]:
+        """Build TEXT elements describing figures.
+
+        A figure environment contributes a rich reference built from its
+        ``\\caption`` (the real semantic content), ``\\label``, and graphic
+        filename. Bare ``\\includegraphics`` outside a figure environment
+        contributes a filename-only reference. Image bytes are external to the
+        .tex source, so figures are indexed as searchable text, not fetched.
+        """
+        results: list[RawElement] = []
+        consumed_graphics: set[str] = set()
+
+        for match in _FIGURE_ENV_PATTERN.finditer(latex_text):
+            body = match.group(2)
+            filename = (self._extract_command_arg(body, "\\includegraphics") or "").strip()
+            caption = (self._extract_command_arg(body, "\\caption") or "").strip()
+            label = (self._extract_command_arg(body, "\\label") or "").strip()
+
+            label_part = f" [{label}]" if label else ""
+            caption_part = f": {self._strip_latex_cell(caption)}" if caption else ""
+            file_part = f" (file: {filename})" if filename else ""
+
+            if not (label_part or caption_part or file_part):
+                continue
+            if filename:
+                consumed_graphics.add(filename)
+
+            raw_meta: dict = {"source": "latex_figure"}
+            if filename:
+                raw_meta["graphic"] = filename
+            if label:
+                raw_meta["label"] = label
+
+            results.append(
+                RawElement(
+                    content=f"Figure{label_part}{caption_part}{file_part}".strip(),
+                    element_type=ElementType.TEXT,
+                    provenance=Provenance(
+                        page_num=1, position_index=position_index_counter[0]
+                    ),
+                    raw_metadata=raw_meta,
+                )
+            )
+            position_index_counter[0] += 1
+
+        # Bare \includegraphics not already covered by a figure environment
+        for match in _INCLUDEGRAPHICS_PATTERN.finditer(latex_text):
+            filename = match.group(1).strip()
+            if filename and filename not in consumed_graphics:
+                results.append(
+                    RawElement(
+                        content=f"Figure: {filename}",
+                        element_type=ElementType.TEXT,
+                        provenance=Provenance(
+                            page_num=1, position_index=position_index_counter[0]
+                        ),
+                        raw_metadata={"source": "latex_includegraphics", "graphic": filename},
+                    )
+                )
+                position_index_counter[0] += 1
+
+        return results
+
+    @staticmethod
+    def _extract_command_arg(text: str, command: str) -> str | None:
+        """Return the first balanced ``{...}`` argument of ``command``, or None.
+
+        Skips an optional trailing ``*`` and an optional ``[...]`` argument
+        between the command and its ``{...}`` argument. Handles nested braces.
+        """
+        idx = text.find(command)
+        if idx == -1:
+            return None
+        i = idx + len(command)
+        n = len(text)
+        if i < n and text[i] == "*":
+            i += 1
+        while i < n and text[i].isspace():
+            i += 1
+        # Skip an optional [..] option argument
+        if i < n and text[i] == "[":
+            depth = 0
+            while i < n:
+                if text[i] == "[":
+                    depth += 1
+                elif text[i] == "]":
+                    depth -= 1
+                    if depth == 0:
+                        i += 1
+                        break
+                i += 1
+            while i < n and text[i].isspace():
+                i += 1
+        if i >= n or text[i] != "{":
+            return None
+        depth = 0
+        start = i
+        while i < n:
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[start + 1 : i]
+            i += 1
+        return None
