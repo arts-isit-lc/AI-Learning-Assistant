@@ -416,12 +416,13 @@ export class MultimodalRagStack extends cdk.Stack {
           DB_PROXY_ENDPOINT: db.rdsProxyEndpoint,
           IR_BUCKET_NAME: this.irBucket.bucketName,
           REGION: this.region,
-          // Optimization feature flags. Behavior-preserving ones are enabled
-          // everywhere; behavioral ones are dev-only (prod-gated) until the
-          // offline eval harness is green for them — then drop the isProd guard.
+          // Optimization feature flags — all enabled in every environment per
+          // operator decision. Each remains instantly revertible: set a flag back
+          // to "false" + redeploy. (Behavioral flags ideally pass the eval harness
+          // in eval_harness/ before being relied on in prod.)
           QUERY_EMBEDDING_CACHE: "true", // #5: behavior-preserving (cached embeddings)
-          RAG_RETURN_PASSAGES: isProd ? "false" : "true", // #1: behavioral — dev-on, prod-gated until eval
-          STRICT_IMAGE_ESCALATION: isProd ? "false" : "true", // #9: behavioral — dev-on, prod-gated until eval
+          RAG_RETURN_PASSAGES: "true", // #1: return passages + skip reasoning LLM (eliminates double generation)
+          STRICT_IMAGE_ESCALATION: "true", // #9: gate vision escalation to explicit figure references
         },
       }
     );
@@ -689,12 +690,14 @@ export class MultimodalRagStack extends cdk.Stack {
           APPSYNC_API_URL_PARAM: `/AILA/${environment}/AppSyncApiUrl`,
           GUARDRAIL_ID_PARAM: `/AILA/${environment}/GuardrailId`,
           GUARDRAIL_VERSION_PARAM: `/AILA/${environment}/GuardrailVersion`,
-          // Optimization feature flags. #10 is behavior-preserving (enabled).
-          // #11 is a safety-posture change, not a perf win — left off; enable it
-          // deliberately rather than as part of a cost/perf rollout.
+          // Optimization feature flags — all enabled in every environment per
+          // operator decision. #11 is a safety-posture change (fail closed on a
+          // guardrail service error instead of retrying ungated). Each remains
+          // instantly revertible: set a flag back to "false" + redeploy.
           CACHE_MODULE_METADATA: "true", // #10: behavior-preserving (cached per-module metadata)
-          GUARDRAIL_FAIL_CLOSED: "false", // #11: safety change — off by default
-          ASYNC_RDS_PROJECTION: isProd ? "false" : "true", // #8: dev-on (routes via new SQS infra), prod-gated
+          PARALLEL_EVAL_RETRIEVAL: "true", // #7: run evaluation + retrieval concurrently
+          GUARDRAIL_FAIL_CLOSED: "true", // #11: fail closed on guardrail service error (safer posture)
+          ASYNC_RDS_PROJECTION: "true", // #8: offload RDS projection to the SQS consumer
           RDS_PROJECTION_QUEUE_URL: rdsProjectionQueue.queueUrl,
         },
       }

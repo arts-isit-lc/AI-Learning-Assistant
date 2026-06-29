@@ -176,12 +176,11 @@ The active V2 path uses:
 ## Performance & Cost Optimizations
 
 The RAG and chatbot paths carry a set of cost/latency optimizations, each behind
-an environment-variable feature flag. **Behavior-preserving** flags (identical
-student-facing output) are enabled in all environments. **Behavior-changing**
-flags are enabled in **dev** but gated **off in prod** until the offline eval
-harness (`cdk/multimodal_rag_v2/eval_harness/`) validates them there — promoting
-to prod is then a one-line change (drop the `isProd` guard in
-`multimodal-rag-stack.ts`).
+an environment-variable feature flag. **All flags are currently enabled in every
+environment** (operator decision). Each remains instantly revertible: set its
+value back to `"false"` in `multimodal-rag-stack.ts` and redeploy. Behavioral
+flags should ideally be validated with the offline eval harness
+(`cdk/multimodal_rag_v2/eval_harness/`) before being relied on in production.
 
 ### Always-on (behavior-preserving)
 - **Per-call cost/latency instrumentation** — every Bedrock call emits a
@@ -193,16 +192,16 @@ to prod is then a one-line change (drop the `isProd` guard in
 - **Batched sibling expansion** — context assembly fetches all siblings in one
   query instead of one-per-result (same result set).
 
-### Flag-gated
+### Flag-gated (all currently enabled)
 | Flag (env var) | Lambda | Default | Optimization |
 |---|---|---|---|
 | `QUERY_EMBEDDING_CACHE` | ragRetrievalFunction | **on** (all envs) | Serve repeat query embeddings from the DynamoDB EmbeddingCache |
 | `CACHE_MODULE_METADATA` | chatbotV2Function | **on** (all envs) | Cache `module_name` + `allowed_file_ids` in session state instead of re-querying Postgres each turn |
-| `RAG_RETURN_PASSAGES` | ragRetrievalFunction | **dev on / prod off** | Return ranked passages and skip the reasoning LLM; the chatbot's Sonnet pass generates once from passages (eliminates double generation) |
-| `STRICT_IMAGE_ESCALATION` | ragRetrievalFunction | **dev on / prod off** | Only run vision escalation on an explicit figure reference, not bare keywords |
-| `PARALLEL_EVAL_RETRIEVAL` | chatbotV2Function | **dev on / prod off** | Run answer evaluation and RAG retrieval concurrently (retrieval uses the pre-evaluation learning state — minor staleness in the retrieval hint only) |
-| `ASYNC_RDS_PROJECTION` | chatbotV2Function | **dev on / prod off** | Offload the post-stream RDS projection + engagement logging to an SQS queue + consumer Lambda (DynamoDB stays the synchronous source of truth) |
-| `GUARDRAIL_FAIL_CLOSED` | chatbotV2Function | off | On a guardrail **service** error, return a safe fallback instead of regenerating without guardrails (a safety-posture change, enabled deliberately) |
+| `RAG_RETURN_PASSAGES` | ragRetrievalFunction | **on** (all envs) | Return ranked passages and skip the reasoning LLM; the chatbot's Sonnet pass generates once from passages (eliminates double generation) |
+| `STRICT_IMAGE_ESCALATION` | ragRetrievalFunction | **on** (all envs) | Only run vision escalation on an explicit figure reference, not bare keywords |
+| `PARALLEL_EVAL_RETRIEVAL` | chatbotV2Function | **on** (all envs) | Run answer evaluation and RAG retrieval concurrently (retrieval uses the pre-evaluation learning state — minor staleness in the retrieval hint only) |
+| `ASYNC_RDS_PROJECTION` | chatbotV2Function | **on** (all envs) | Offload the post-stream RDS projection + engagement logging to an SQS queue + consumer Lambda (DynamoDB stays the synchronous source of truth) |
+| `GUARDRAIL_FAIL_CLOSED` | chatbotV2Function | **on** (all envs) | On a guardrail **service** error, return a safe fallback instead of regenerating without guardrails (a safety-posture change) |
 
 ### Deferred / data-gated (not yet implemented)
 - **Lambda right-sizing** — pending CloudWatch max-memory metrics (the new `bedrock_call` logs now feed this).
