@@ -2,6 +2,7 @@
 
 import os
 import json
+from concurrent.futures import ThreadPoolExecutor
 
 import boto3
 import botocore.exceptions
@@ -28,7 +29,7 @@ from prompt_builder import build_system_prompt
 from retrieval_client import invoke_retrieval, get_bounded_history as get_retrieval_history
 from streaming import stream_response
 from guardrails import load_guardrail_config, wrap_user_message, handle_guardrail_error, GUARDRAIL_SERVICE_ERROR_MESSAGE
-from flags import GUARDRAIL_FAIL_CLOSED, CACHE_MODULE_METADATA
+from flags import GUARDRAIL_FAIL_CLOSED, CACHE_MODULE_METADATA, PARALLEL_EVAL_RETRIEVAL, ASYNC_RDS_PROJECTION
 from history import load_chat_history, get_bounded_history, persist_message_pair, MAX_PROMPT_TURNS
 from rds_projection import persist_message_to_rds, log_engagement
 from constants.models import RESPONSE_MODEL_ID, RESPONSE_MAX_TOKENS
@@ -51,6 +52,7 @@ APPSYNC_API_URL_PARAM = os.environ.get("APPSYNC_API_URL_PARAM", "")
 GUARDRAIL_ID_PARAM = os.environ.get("GUARDRAIL_ID_PARAM", "")
 GUARDRAIL_VERSION_PARAM = os.environ.get("GUARDRAIL_VERSION_PARAM", "")
 MATH_COMPUTE_FUNCTION_ARN = os.environ.get("MATH_COMPUTE_FUNCTION_ARN", "")
+RDS_PROJECTION_QUEUE_URL = os.environ.get("RDS_PROJECTION_QUEUE_URL", "")
 # Runtime kill switch for cross-module file referencing. Defaults on; set to
 # "false" to revert to module_id-only retrieval scoping without a redeploy.
 ENABLE_CROSS_MODULE_REFERENCING = os.environ.get("ENABLE_CROSS_MODULE_REFERENCING", "true").lower() != "false"
@@ -60,6 +62,7 @@ _bedrock_client = boto3.client("bedrock-runtime", region_name=REGION)
 _ssm_client = boto3.client("ssm", region_name=REGION)
 _dynamodb_resource = boto3.resource("dynamodb", region_name=REGION)
 _secrets_client = boto3.client("secretsmanager", region_name=REGION)
+_sqs_client = boto3.client("sqs", region_name=REGION)
 
 _guardrail_id: str | None = None
 _guardrail_version: str | None = None
@@ -228,6 +231,29 @@ def _get_last_ai_question(chat_history: list[dict]) -> str:
         if msg.get("role") == "assistant":
             return msg.get("content", "")
     return ""
+
+
+def _eval_and_retrieve(run_evaluation, run_retrieval, parallel: bool):
+    """Coordinate the evaluation and retrieval calls for a turn (#7).
+
+    Args:
+        run_evaluation: zero-arg callable returning the EvaluationResult or None.
+        run_retrieval: callable taking a misunderstood-concepts list, returning
+            the RetrievalResult or None.
+        parallel: when True, run both concurrently (retrieval gets an empty
+            misunderstood list = pre-evaluation learning state) and mark
+            retrieval done; when False, run only the evaluation and leave
+            retrieval to the caller (so it can use the post-evaluation context).
+
+    Returns:
+        (evaluation, retrieval_result_or_None, retrieval_done) tuple.
+    """
+    if parallel:
+        with ThreadPoolExecutor(max_workers=2) as ex:
+            eval_future = ex.submit(run_evaluation)
+            retrieval_future = ex.submit(run_retrieval, [])
+            return eval_future.result(), retrieval_future.result(), True
+    return run_evaluation(), None, False
 
 
 def _stream_with_guardrail_retry(
@@ -405,16 +431,71 @@ def handler(event, context):
                     }),
                 }
 
-        # Step 3: Evaluate answer (skip on first interaction)
-        evaluation = None
-        if state.interactions > 0 and message_content:
+        # Steps 3-10 (evaluation + eval-driven state updates + retrieval).
+        #
+        # Retrieval inputs that do NOT depend on this turn's evaluation are
+        # computed up front, so retrieval can optionally run concurrently with
+        # the evaluation LLM call (#7, PARALLEL_EVAL_RETRIEVAL).
+        if message_content:
+            retrieval_query = message_content
+        elif state.module_concepts:
+            retrieval_query = f"Overview of: {', '.join(state.module_concepts[:3])}"
+        else:
+            retrieval_query = f"Introduce the topic: {topic}"
+
+        # Allowed file ids are static per module; cache in session state (#10)
+        # when enabled to avoid the Module_Files UNION query every turn. Note the
+        # staleness tradeoff (files added mid-session aren't seen until the
+        # session resets) — acceptable for short learning sessions, hence flagged.
+        if CACHE_MODULE_METADATA and state.allowed_file_ids:
+            allowed_file_ids = state.allowed_file_ids
+        else:
+            allowed_file_ids = _get_allowed_file_ids(module_id)
+            if CACHE_MODULE_METADATA and allowed_file_ids:
+                state.allowed_file_ids = allowed_file_ids
+
+        eval_should_run = bool(state.interactions > 0 and message_content)
+
+        def _run_evaluation():
+            if not eval_should_run:
+                return None
             last_ai_question = _get_last_ai_question(chat_history)
             concepts_str = ", ".join(state.concepts_exposed[-10:]) if state.concepts_exposed else ""
-            evaluation = evaluate_answer(
+            return evaluate_answer(
                 _bedrock_client, topic=topic, stage=state.stage,
                 last_ai_question=last_ai_question, student_answer=message_content,
                 concepts=concepts_str, module_concepts=state.module_concepts,
             )
+
+        def _run_retrieval(concepts_misunderstood):
+            learning_context = {
+                "stage": state.stage,
+                "concepts_demonstrated": state.concepts_demonstrated,
+                "concepts_misunderstood": concepts_misunderstood,
+            }
+            return invoke_retrieval(
+                _lambda_client, function_arn=RAG_RETRIEVAL_FUNCTION_ARN,
+                query=retrieval_query,
+                session_id=session_id, course_id=course_id,
+                allowed_file_ids=allowed_file_ids,
+                chat_history=get_retrieval_history(chat_history, 4),
+                learning_context=learning_context,
+                module_id=module_id,
+            )
+
+        # Run evaluation and retrieval — concurrently when PARALLEL_EVAL_RETRIEVAL
+        # is on AND an evaluation will happen this turn (#7). In parallel mode
+        # retrieval uses the pre-evaluation learning state (minor staleness in the
+        # retrieval hint only); the sequential path runs retrieval below with the
+        # post-evaluation context. Helpers only READ state + call thread-safe boto3
+        # clients, so there is no shared-mutable-state race.
+        evaluation, retrieval_result, retrieval_done = _eval_and_retrieve(
+            _run_evaluation,
+            _run_retrieval,
+            parallel=PARALLEL_EVAL_RETRIEVAL and eval_should_run,
+        )
+
+        if evaluation is not None:
             logger.info("Evaluation complete", extra={"correct": evaluation.correct, "partial": evaluation.partial})
 
         # Step 4: Update state
@@ -448,40 +529,13 @@ def handler(event, context):
             state.completion_message_sent = True
             other_modules = _load_other_module_names(course_id, module_id)
 
-        # Step 10: Invoke retrieval
-        learning_context = {
-            "stage": state.stage,
-            "concepts_demonstrated": state.concepts_demonstrated,
-            "concepts_misunderstood": evaluation.concepts_misunderstood if evaluation else [],
-        }
-        # For initial greeting, use generated topics for better retrieval context
-        if message_content:
-            retrieval_query = message_content
-        elif state.module_concepts:
-            retrieval_query = f"Overview of: {', '.join(state.module_concepts[:3])}"
-        else:
-            retrieval_query = f"Introduce the topic: {topic}"
-
-        # Allowed file ids are static per module; cache in session state (#10)
-        # when enabled to avoid the Module_Files UNION query every turn. Note the
-        # staleness tradeoff (files added mid-session aren't seen until the
-        # session resets) — acceptable for short learning sessions, hence flagged.
-        if CACHE_MODULE_METADATA and state.allowed_file_ids:
-            allowed_file_ids = state.allowed_file_ids
-        else:
-            allowed_file_ids = _get_allowed_file_ids(module_id)
-            if CACHE_MODULE_METADATA and allowed_file_ids:
-                state.allowed_file_ids = allowed_file_ids
-
-        retrieval_result = invoke_retrieval(
-            _lambda_client, function_arn=RAG_RETRIEVAL_FUNCTION_ARN,
-            query=retrieval_query,
-            session_id=session_id, course_id=course_id,
-            allowed_file_ids=allowed_file_ids,
-            chat_history=get_retrieval_history(chat_history, 4),
-            learning_context=learning_context,
-            module_id=module_id,
-        )
+        # Step 10: Retrieval. The sequential path runs it now with the
+        # post-evaluation learning context (unchanged behavior); the parallel
+        # path already ran it above.
+        if not retrieval_done:
+            retrieval_result = _run_retrieval(
+                evaluation.concepts_misunderstood if evaluation else []
+            )
         rag_context = retrieval_result.answer if retrieval_result else ""
         logger.info("RAG context received", extra={"rag_context_length": len(rag_context), "rag_context_preview": rag_context[:500]})
 
@@ -610,16 +664,36 @@ def handler(event, context):
         except Exception:
             logger.exception("Chat history persistence failed (best-effort)")
 
-        # RDS = synchronous projection for UI session history (transitional — Phase 2 moves to async)
-        try:
-            conn = _get_db_connection()
-            if message_content:
-                persist_message_to_rds(conn, session_id, message_content, student_sent=True)
-                log_engagement(conn, user_email, course_id, module_id, "message creation")
-            persist_message_to_rds(conn, session_id, llm_output, student_sent=False)
-            log_engagement(conn, user_email, course_id, module_id, "AI message creation")
-        except Exception:
-            logger.exception("RDS projection failed (best-effort)")
+        # RDS = projection for UI session history. Synchronous by default; when
+        # ASYNC_RDS_PROJECTION is on (#8) it is enqueued to SQS and written by a
+        # dedicated consumer Lambda, taking ~4 RDS round-trips off the billed
+        # response path. DynamoDB above remains the synchronous source of truth,
+        # so a delayed/failed projection never loses a message.
+        if ASYNC_RDS_PROJECTION and RDS_PROJECTION_QUEUE_URL:
+            try:
+                _sqs_client.send_message(
+                    QueueUrl=RDS_PROJECTION_QUEUE_URL,
+                    MessageBody=json.dumps({
+                        "session_id": session_id,
+                        "message_content": message_content,
+                        "llm_output": llm_output,
+                        "user_email": user_email,
+                        "course_id": course_id,
+                        "module_id": module_id,
+                    }),
+                )
+            except Exception:
+                logger.exception("RDS projection enqueue failed (best-effort)")
+        else:
+            try:
+                conn = _get_db_connection()
+                if message_content:
+                    persist_message_to_rds(conn, session_id, message_content, student_sent=True)
+                    log_engagement(conn, user_email, course_id, module_id, "message creation")
+                persist_message_to_rds(conn, session_id, llm_output, student_sent=False)
+                log_engagement(conn, user_email, course_id, module_id, "AI message creation")
+            except Exception:
+                logger.exception("RDS projection failed (best-effort)")
 
         try:
             _persist_session_state(state)

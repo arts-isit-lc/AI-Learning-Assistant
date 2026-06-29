@@ -175,12 +175,13 @@ The active V2 path uses:
 
 ## Performance & Cost Optimizations
 
-The RAG and chatbot paths carry a set of cost/latency optimizations. Each
-behavior-changing optimization is gated by an environment-variable feature flag
-that **defaults to `"false"` (pre-optimization behavior)**, so deploying the
-code changes nothing until an operator sets the flag to `"true"` and redeploys.
-Behavioral flags should only be enabled after the offline eval harness
-(`cdk/multimodal_rag_v2/eval_harness/`) is green for that change.
+The RAG and chatbot paths carry a set of cost/latency optimizations, each behind
+an environment-variable feature flag. **Behavior-preserving** flags (identical
+student-facing output) are enabled in all environments. **Behavior-changing**
+flags are enabled in **dev** but gated **off in prod** until the offline eval
+harness (`cdk/multimodal_rag_v2/eval_harness/`) validates them there — promoting
+to prod is then a one-line change (drop the `isProd` guard in
+`multimodal-rag-stack.ts`).
 
 ### Always-on (behavior-preserving)
 - **Per-call cost/latency instrumentation** — every Bedrock call emits a
@@ -192,20 +193,20 @@ Behavioral flags should only be enabled after the offline eval harness
 - **Batched sibling expansion** — context assembly fetches all siblings in one
   query instead of one-per-result (same result set).
 
-### Flag-gated (default off)
-| Flag (env var) | Lambda | Optimization |
-|---|---|---|
-| `RAG_RETURN_PASSAGES` | ragRetrievalFunction | Return ranked passages and skip the reasoning LLM; the chatbot's Sonnet pass generates once from passages (eliminates double generation) |
-| `QUERY_EMBEDDING_CACHE` | ragRetrievalFunction | Serve repeat query embeddings from the DynamoDB EmbeddingCache |
-| `STRICT_IMAGE_ESCALATION` | ragRetrievalFunction | Only run vision escalation on an explicit figure reference, not bare keywords |
-| `CACHE_MODULE_METADATA` | chatbotV2Function | Cache `module_name` + `allowed_file_ids` in session state instead of re-querying Postgres each turn |
-| `GUARDRAIL_FAIL_CLOSED` | chatbotV2Function | On a guardrail **service** error, return a safe fallback instead of regenerating without guardrails |
+### Flag-gated
+| Flag (env var) | Lambda | Default | Optimization |
+|---|---|---|---|
+| `QUERY_EMBEDDING_CACHE` | ragRetrievalFunction | **on** (all envs) | Serve repeat query embeddings from the DynamoDB EmbeddingCache |
+| `CACHE_MODULE_METADATA` | chatbotV2Function | **on** (all envs) | Cache `module_name` + `allowed_file_ids` in session state instead of re-querying Postgres each turn |
+| `RAG_RETURN_PASSAGES` | ragRetrievalFunction | **dev on / prod off** | Return ranked passages and skip the reasoning LLM; the chatbot's Sonnet pass generates once from passages (eliminates double generation) |
+| `STRICT_IMAGE_ESCALATION` | ragRetrievalFunction | **dev on / prod off** | Only run vision escalation on an explicit figure reference, not bare keywords |
+| `PARALLEL_EVAL_RETRIEVAL` | chatbotV2Function | **dev on / prod off** | Run answer evaluation and RAG retrieval concurrently (retrieval uses the pre-evaluation learning state — minor staleness in the retrieval hint only) |
+| `ASYNC_RDS_PROJECTION` | chatbotV2Function | **dev on / prod off** | Offload the post-stream RDS projection + engagement logging to an SQS queue + consumer Lambda (DynamoDB stays the synchronous source of truth) |
+| `GUARDRAIL_FAIL_CLOSED` | chatbotV2Function | off | On a guardrail **service** error, return a safe fallback instead of regenerating without guardrails (a safety-posture change, enabled deliberately) |
 
 ### Deferred / data-gated (not yet implemented)
-- **Async RDS projection** — needs an SQS queue + consumer Lambda (a fire-and-forget thread is unreliable under Lambda freeze).
-- **Parallelize eval ∥ retrieval** — needs a handler restructure (retrieval consumes the evaluation output).
-- **Lambda right-sizing** — pending CloudWatch max-memory metrics.
-- **Claude 3 → 3.5 migration** — pending Bedrock access + a quality eval.
+- **Lambda right-sizing** — pending CloudWatch max-memory metrics (the new `bedrock_call` logs now feed this).
+- **Claude 3 → 3.5 migration** — pending Bedrock model access + a quality eval.
 
 ---
 

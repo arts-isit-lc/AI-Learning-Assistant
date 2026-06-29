@@ -416,11 +416,12 @@ export class MultimodalRagStack extends cdk.Stack {
           DB_PROXY_ENDPOINT: db.rdsProxyEndpoint,
           IR_BUCKET_NAME: this.irBucket.bucketName,
           REGION: this.region,
-          // Optimization feature flags — default "false" (= current behavior).
-          // Flip to "true" + redeploy to enable, after the eval harness is green.
-          QUERY_EMBEDDING_CACHE: "false", // #5: cache query embeddings
-          RAG_RETURN_PASSAGES: "false", // #1: return passages + skip reasoning LLM (eliminates double generation)
-          STRICT_IMAGE_ESCALATION: "false", // #9: only escalate to vision on explicit figure references
+          // Optimization feature flags. Behavior-preserving ones are enabled
+          // everywhere; behavioral ones are dev-only (prod-gated) until the
+          // offline eval harness is green for them — then drop the isProd guard.
+          QUERY_EMBEDDING_CACHE: "true", // #5: behavior-preserving (cached embeddings)
+          RAG_RETURN_PASSAGES: isProd ? "false" : "true", // #1: behavioral — dev-on, prod-gated until eval
+          STRICT_IMAGE_ESCALATION: isProd ? "false" : "true", // #9: behavioral — dev-on, prod-gated until eval
         },
       }
     );
@@ -497,6 +498,20 @@ export class MultimodalRagStack extends cdk.Stack {
     });
 
     // ─── IAM Role: Chatbot V2 Lambda ──────────────────────────────────────────
+    // ─── SQS: RDS Projection Queue (#8 — async UI-history projection) ─────────
+    // chatbotV2 enqueues here when ASYNC_RDS_PROJECTION is on; a dedicated
+    // consumer Lambda writes the relational projection off the response path.
+    const rdsProjectionDlq = new sqs.Queue(this, `${id}-rdsProjectionDlq`, {
+      queueName: `${id}-rdsProjectionDlq`,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+    const rdsProjectionQueue = new sqs.Queue(this, `${id}-rdsProjectionQueue`, {
+      queueName: `${id}-rdsProjectionQueue`,
+      visibilityTimeout: Duration.seconds(120),
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      deadLetterQueue: { queue: rdsProjectionDlq, maxReceiveCount: 3 },
+    });
+
     const chatbotV2Role = new iam.Role(this, `${id}-chatbotV2Role`, {
       roleName: `${id}-chatbotV2Role`,
       assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
@@ -561,6 +576,12 @@ export class MultimodalRagStack extends cdk.Stack {
               effect: iam.Effect.ALLOW,
               actions: ["secretsmanager:GetSecretValue"],
               resources: [db.secretPathUser.secretArn],
+            }),
+            // SQS SendMessage — RDS projection queue (#8 async projection enqueue)
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ["sqs:SendMessage"],
+              resources: [rdsProjectionQueue.queueArn],
             }),
             // SSM — guardrail + AppSync URL params (scoped to this environment's path)
             new iam.PolicyStatement({
@@ -668,10 +689,13 @@ export class MultimodalRagStack extends cdk.Stack {
           APPSYNC_API_URL_PARAM: `/AILA/${environment}/AppSyncApiUrl`,
           GUARDRAIL_ID_PARAM: `/AILA/${environment}/GuardrailId`,
           GUARDRAIL_VERSION_PARAM: `/AILA/${environment}/GuardrailVersion`,
-          // Optimization feature flags — default "false" (= current behavior).
-          // Flip to "true" + redeploy to enable.
-          CACHE_MODULE_METADATA: "false", // #10: cache module_name + allowed_file_ids in session state
-          GUARDRAIL_FAIL_CLOSED: "false", // #11: fail closed on guardrail service error (no ungated retry)
+          // Optimization feature flags. #10 is behavior-preserving (enabled).
+          // #11 is a safety-posture change, not a perf win — left off; enable it
+          // deliberately rather than as part of a cost/perf rollout.
+          CACHE_MODULE_METADATA: "true", // #10: behavior-preserving (cached per-module metadata)
+          GUARDRAIL_FAIL_CLOSED: "false", // #11: safety change — off by default
+          ASYNC_RDS_PROJECTION: isProd ? "false" : "true", // #8: dev-on (routes via new SQS infra), prod-gated
+          RDS_PROJECTION_QUEUE_URL: rdsProjectionQueue.queueUrl,
         },
       }
     );
@@ -688,6 +712,103 @@ export class MultimodalRagStack extends cdk.Stack {
       action: "lambda:InvokeFunction",
       sourceArn: `arn:aws:execute-api:${this.region}:${this.account}:*/*/POST/student/chatbot-v2`,
     });
+
+    // ─── IAM Role: RDS Projection Consumer Lambda (#8) ────────────────────────
+    // Minimal: write the relational projection (Secrets + RDS Proxy via VPC) and
+    // consume from the projection queue. No Bedrock/S3/DynamoDB/Cognito.
+    const rdsProjectionConsumerRole = new iam.Role(this, `${id}-rdsProjectionConsumerRole`, {
+      roleName: `${id}-rdsProjectionConsumerRole`,
+      assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
+      inlinePolicies: {
+        rdsProjectionConsumerPolicy: new iam.PolicyDocument({
+          statements: [
+            // Secrets Manager — DB secret (specific ARN)
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ["secretsmanager:GetSecretValue"],
+              resources: [db.secretPathUser.secretArn],
+            }),
+            // EC2 VPC networking — resource '*' required by AWS for ENI operations
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                "ec2:CreateNetworkInterface",
+                "ec2:DescribeNetworkInterfaces",
+                "ec2:DeleteNetworkInterface",
+                "ec2:AssignPrivateIpAddresses",
+                "ec2:UnassignPrivateIpAddresses",
+              ],
+              resources: ["*"],
+            }),
+            // RDS Proxy connect — specific instance resource ID
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ["rds-db:connect"],
+              resources: [
+                `arn:aws:rds-db:${this.region}:${this.account}:dbuser:${db.dbInstance.instanceResourceId}/*`,
+              ],
+            }),
+            // CloudWatch Logs — scoped to consumer function log group
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents",
+              ],
+              resources: [
+                `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${id}-rdsProjectionConsumerFunction:*`,
+              ],
+            }),
+            // X-Ray — resource '*' acceptable (no resource-level scoping)
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ["xray:PutTraceSegments", "xray:PutTelemetryRecords"],
+              resources: ["*"],
+            }),
+            // SQS consume — RDS projection queue
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                "sqs:ReceiveMessage",
+                "sqs:DeleteMessage",
+                "sqs:GetQueueAttributes",
+              ],
+              resources: [rdsProjectionQueue.queueArn],
+            }),
+          ],
+        }),
+      },
+    });
+
+    // Reuses the chatbot_v2 image (psycopg2 + rds_projection) with a different CMD.
+    const rdsProjectionConsumerFunction = new lambda.DockerImageFunction(
+      this,
+      `${id}-rdsProjectionConsumerFunction`,
+      {
+        code: lambda.DockerImageCode.fromImageAsset("./chatbot_v2", {
+          cmd: ["rds_projection_consumer.handler"],
+          platform: ecr_assets.Platform.LINUX_AMD64,
+        }),
+        architecture: lambda.Architecture.X86_64,
+        memorySize: 256,
+        timeout: Duration.seconds(60),
+        tracing: lambda.Tracing.ACTIVE,
+        logRetention: logRetention,
+        functionName: `${id}-rdsProjectionConsumerFunction`,
+        role: rdsProjectionConsumerRole,
+        vpc: vpc.vpc,
+        environment: {
+          REGION: this.region,
+          DB_SECRET_ARN: db.secretPathUser.secretArn,
+          DB_PROXY_ENDPOINT: db.rdsProxyEndpoint,
+        },
+      }
+    );
+
+    rdsProjectionConsumerFunction.addEventSource(
+      new lambdaEventSources.SqsEventSource(rdsProjectionQueue, { batchSize: 10 })
+    );
 
     // Export the Lambda ARN for cross-stack reference (used by ApiGatewayStack OpenAPI spec)
     new cdk.CfnOutput(this, "ChatbotV2FunctionArn", {
