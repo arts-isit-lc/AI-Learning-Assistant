@@ -72,27 +72,27 @@ The system processes uploaded course materials (PDF, PPTX, DOCX, LaTeX, CSV, HTM
 
 ---
 
-## Two Chatbot Paths
+## Chatbot Paths
 
-The system maintains two chatbot implementations, accessible via separate API routes:
+The active student chatbot is **Chatbot V2**, served at `POST /student/chatbot-v2`. The frontend talks only to this path.
 
-### V1: Text Generation (`POST /student/text_generation`)
-
-The original chatbot path. Uses LangChain with a configurable LLM (Claude 3 Sonnet or Llama 3 70B). Retrieves context via pgvector similarity search directly from the Lambda. Supports instructor-configured system prompts and model selection per course.
-
-**Best for:** Open-ended Q&A without structured learning goals.
+An earlier V1 "text generation" chatbot Lambda (`TextGenLambdaDockerFunc`) is still deployed in `ApiGatewayStack`, but it is **no longer wired to any API Gateway route or Function URL** — it is a dormant legacy artifact, not an active path. (It is not referenced in the OpenAPI definition and the frontend never calls it.)
 
 ### V2: Chatbot V2 (`POST /student/chatbot-v2`)
 
-The new structured learning chatbot. Combines the V2 multimodal retrieval pipeline with an application-controlled learning engine. Tracks per-concept progress, adapts conversation difficulty via learning stages, and determines module completion through engagement metrics.
+The structured learning chatbot. Combines the V2 multimodal retrieval pipeline with an application-controlled learning engine. Tracks per-concept progress, adapts conversation difficulty via learning stages, and determines module completion through engagement metrics.
 
 **Best for:** Guided learning sessions where students work through module concepts with adaptive scaffolding.
 
-Both paths share:
-- The same Cognito authentication
-- The same AppSync WebSocket streaming to the frontend
-- The same Bedrock Guardrails integration
-- The same DynamoDB chat history table
+### V1: Text Generation (legacy, unrouted)
+
+The original LangChain-based chatbot: a configurable LLM (Claude 3 Sonnet or Llama 3 70B), pgvector similarity search from within the Lambda, and instructor-configured system prompts with per-course model selection. The Lambda remains deployed but is not currently exposed to clients.
+
+The active V2 path uses:
+- Cognito authentication
+- AppSync WebSocket streaming to the frontend
+- Bedrock Guardrails integration
+- The DynamoDB chat history table
 
 ---
 
@@ -107,7 +107,7 @@ Both paths share:
 | **Amazon S3** | File storage (uploads bucket + IR persistence bucket) |
 | **AWS AppSync** | Real-time WebSocket streaming of LLM responses to frontend |
 | **Amazon SQS** | Async decoupling (enrichment queue, chat export queue) |
-| **AWS Lambda** | All compute (13 zip + 7 Docker container functions) |
+| **AWS Lambda** | All compute (20 zip + 7 Docker container functions) |
 | **API Gateway** | REST API with WAF protection |
 | **AWS X-Ray** | Distributed tracing across all Lambda functions |
 | **CloudWatch** | Alarms, dashboards, structured logging via Powertools |

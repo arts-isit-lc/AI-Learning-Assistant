@@ -12,7 +12,7 @@ frontend/              # React 18 SPA (Vite + Tailwind + MUI v9)
 cdk/
 ├── bin/cdk.ts         # CDK app entrypoint
 ├── lib/               # 7 CDK stacks
-├── lambda/            # 13 zip Lambdas (Node.js 22 + Python 3.11)
+├── lambda/            # zip Lambda handler sources (Node.js 22 + Python 3.11)
 ├── text_generation/   # Docker Lambda (Python, LangChain)
 ├── multimodal_rag_v2/ # Docker Lambda (Python, RAG pipeline)
 ├── chatbot_v2/        # Docker Lambda (Python, structured learning)
@@ -44,6 +44,6 @@ npm run lint         # ESLint
 ```
 
 ## Hard Constraints
-- Docker required for CDK tests/synth (5 container Lambdas)
+- Docker required for CDK tests/synth (5 container images -> 7 Lambda functions)
 - No frontend test framework — ESLint only
 - `predeploy` hook runs `npm test` before every deploy; never bypass
