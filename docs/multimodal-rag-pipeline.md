@@ -428,6 +428,18 @@ cdk/multimodal_rag_v2/
 
 ---
 
+## Performance & Cost Notes
+
+The retrieval + reasoning layers carry several optimizations: an HNSW ANN index
+on `retrieval_units.embedding`, batched sibling expansion (one query, not N),
+per-call `bedrock_call` cost/latency logging, and two flag-gated changes
+(default off) — `RAG_RETURN_PASSAGES` (return passages and skip the reasoning
+LLM to eliminate double generation) and `STRICT_IMAGE_ESCALATION` (gate vision
+on explicit figure references). `QUERY_EMBEDDING_CACHE` reuses cached query
+embeddings. See [Performance & Cost Optimizations](./architecture-overview.md#performance--cost-optimizations).
+
+---
+
 ## Related Documentation
 
 - [Architecture Overview](./architecture-overview.md) — system-wide architecture

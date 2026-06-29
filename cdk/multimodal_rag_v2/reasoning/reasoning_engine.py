@@ -22,6 +22,7 @@ from ..models.data_models import (
     ReasoningResult,
     StructuredContext,
 )
+from ..flags import RAG_RETURN_PASSAGES, STRICT_IMAGE_ESCALATION
 from ..pricing import estimate_cost_usd
 from .context_builder import ContextBuilder
 from .image_escalation import EscalationResult, ImageEscalation
@@ -187,6 +188,29 @@ class ReasoningEngine:
                 "Do NOT say the figure is not found if a visual analysis for it exists in the context."
             )
 
+        if RAG_RETURN_PASSAGES:
+            # #1 (eliminate double generation): skip the reasoning LLM call and
+            # return the already-built formatted context as the "answer". The
+            # downstream consumer (chatbot's Sonnet pass) generates the final
+            # answer once from these passages, so we don't pay for a Haiku
+            # generation that only becomes context for another generation.
+            # Escalation/vision ran above, so its analysis is in the passages.
+            logger.info(
+                "RAG_RETURN_PASSAGES enabled: returning formatted passages, "
+                "skipping reasoning LLM generation",
+                extra={
+                    "event": "passages_mode",
+                    "passages_length": len(formatted_context),
+                    "escalation_used": escalation_result.escalation_used,
+                },
+            )
+            return ReasoningResult(
+                answer=formatted_context,
+                sources=self._extract_sources(context),
+                escalation_used=escalation_result.escalation_used,
+                image_analyses=escalation_result.image_analyses,
+            )
+
         answer = self._invoke_llm(
             query=query,
             formatted_context=formatted_context,
@@ -230,12 +254,24 @@ class ReasoningEngine:
         Returns:
             EscalationResult (escalation_used=False if not triggered or fails).
         """
-        if (
-            query_intent is not None
-            and (query_intent.requires_escalation or query_intent.requires_image)
-            and self.image_escalation is not None
-        ):
-            # Escalate if explicitly required OR if query needs image content
+        if query_intent is None or self.image_escalation is None:
+            return EscalationResult(escalation_used=False, image_analyses=[])
+
+        # Escalate if explicitly required OR if the query needs image content.
+        should_escalate = (
+            query_intent.requires_escalation or query_intent.requires_image
+        )
+        if STRICT_IMAGE_ESCALATION:
+            # Stricter gate (#9): only escalate on an explicit escalation flag
+            # or a concrete figure reference — not on bare keyword matches
+            # (figure/graph/chart/image/...), which over-trigger costly vision
+            # calls. Reduces unnecessary Bedrock vision + S3 fetches.
+            has_figure_ref = (
+                getattr(query_intent, "figure_reference", None) is not None
+            )
+            should_escalate = query_intent.requires_escalation or has_figure_ref
+
+        if should_escalate:
             try:
                 return self.image_escalation.escalate(
                     ranked_results, query, query_intent=query_intent

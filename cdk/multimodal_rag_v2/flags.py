@@ -48,5 +48,7 @@ STRICT_IMAGE_ESCALATION = _flag("STRICT_IMAGE_ESCALATION", default=False)
 # --- Behavior-preserving optimizations (default OFF for a no-op deploy) --------
 # #5: cache query embeddings in the existing DynamoDB EmbeddingCache.
 QUERY_EMBEDDING_CACHE = _flag("QUERY_EMBEDDING_CACHE", default=False)
-# #4: parallelize the two independent image-escalation vision calls.
-PARALLEL_IMAGE_ESCALATION = _flag("PARALLEL_IMAGE_ESCALATION", default=False)
+
+# NOTE: a flag for #4 (parallelize the two image-escalation vision calls) is
+# intentionally not defined — that optimization is deferred. Add it when the
+# behavior lands, so every flag here maps to an implemented code path.

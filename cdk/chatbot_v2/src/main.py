@@ -27,7 +27,8 @@ from mode_selector import select_mode
 from prompt_builder import build_system_prompt
 from retrieval_client import invoke_retrieval, get_bounded_history as get_retrieval_history
 from streaming import stream_response
-from guardrails import load_guardrail_config, wrap_user_message, handle_guardrail_error
+from guardrails import load_guardrail_config, wrap_user_message, handle_guardrail_error, GUARDRAIL_SERVICE_ERROR_MESSAGE
+from flags import GUARDRAIL_FAIL_CLOSED, CACHE_MODULE_METADATA
 from history import load_chat_history, get_bounded_history, persist_message_pair, MAX_PROMPT_TURNS
 from rds_projection import persist_message_to_rds, log_engagement
 from constants.models import RESPONSE_MODEL_ID, RESPONSE_MAX_TOKENS
@@ -256,7 +257,18 @@ def _stream_with_guardrail_retry(
         if guardrail_result is not None:
             # Guardrail intervention (input or output blocked) — return redirect message
             return guardrail_result
-        # Guardrail service error — retry without guardrails
+        # Guardrail SERVICE error (not a content intervention).
+        if GUARDRAIL_FAIL_CLOSED:
+            # Fail closed (#11): do NOT regenerate without guardrails (that would
+            # emit ungated content). Return a safe blocked-style message that the
+            # handler already surfaces to the student.
+            logger.warning("Guardrail service error; failing closed (no ungated retry)")
+            return {
+                "message": GUARDRAIL_SERVICE_ERROR_MESSAGE,
+                "blocked": True,
+                "type": "service_error",
+            }
+        # Default behavior: retry once without guardrails.
         logger.warning("Guardrail service error, retrying without guardrails")
         model_kwargs_no_guardrail = {k: v for k, v in model_kwargs.items() if k not in ("guardrail_id", "guardrail_version")}
         try:
@@ -316,16 +328,23 @@ def handler(event, context):
         if is_new_session:
             try:
                 state.module_concepts, module_name = _load_module_concepts(course_id, module_id)
+                if CACHE_MODULE_METADATA:
+                    state.module_name = module_name
                 logger.info("Loaded module_concepts", extra={"count": len(state.module_concepts), "module_name": module_name})
             except (psycopg2.OperationalError, psycopg2.InterfaceError, botocore.exceptions.ClientError) as e:
                 logger.exception("DB connection failure during module context retrieval")
                 return {"statusCode": 503, "headers": CORS_HEADERS, "body": json.dumps("Service temporarily unavailable")}
         else:
-            # For existing sessions, load module name for prompt context
-            try:
-                _, module_name = _load_module_concepts(course_id, module_id)
-            except Exception:
-                module_name = session_name
+            # For existing sessions, load module name for prompt context.
+            if CACHE_MODULE_METADATA and state.module_name:
+                module_name = state.module_name  # cached (#10) — skip the Postgres round-trip
+            else:
+                try:
+                    _, module_name = _load_module_concepts(course_id, module_id)
+                except Exception:
+                    module_name = session_name
+                if CACHE_MODULE_METADATA:
+                    state.module_name = module_name
 
         # Use module_name as the topic (session_name is often just "New chat")
         topic = module_name or session_name
@@ -443,11 +462,22 @@ def handler(event, context):
         else:
             retrieval_query = f"Introduce the topic: {topic}"
 
+        # Allowed file ids are static per module; cache in session state (#10)
+        # when enabled to avoid the Module_Files UNION query every turn. Note the
+        # staleness tradeoff (files added mid-session aren't seen until the
+        # session resets) — acceptable for short learning sessions, hence flagged.
+        if CACHE_MODULE_METADATA and state.allowed_file_ids:
+            allowed_file_ids = state.allowed_file_ids
+        else:
+            allowed_file_ids = _get_allowed_file_ids(module_id)
+            if CACHE_MODULE_METADATA and allowed_file_ids:
+                state.allowed_file_ids = allowed_file_ids
+
         retrieval_result = invoke_retrieval(
             _lambda_client, function_arn=RAG_RETRIEVAL_FUNCTION_ARN,
             query=retrieval_query,
             session_id=session_id, course_id=course_id,
-            allowed_file_ids=_get_allowed_file_ids(module_id),
+            allowed_file_ids=allowed_file_ids,
             chat_history=get_retrieval_history(chat_history, 4),
             learning_context=learning_context,
             module_id=module_id,

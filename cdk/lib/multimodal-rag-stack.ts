@@ -416,6 +416,11 @@ export class MultimodalRagStack extends cdk.Stack {
           DB_PROXY_ENDPOINT: db.rdsProxyEndpoint,
           IR_BUCKET_NAME: this.irBucket.bucketName,
           REGION: this.region,
+          // Optimization feature flags — default "false" (= current behavior).
+          // Flip to "true" + redeploy to enable, after the eval harness is green.
+          QUERY_EMBEDDING_CACHE: "false", // #5: cache query embeddings
+          RAG_RETURN_PASSAGES: "false", // #1: return passages + skip reasoning LLM (eliminates double generation)
+          STRICT_IMAGE_ESCALATION: "false", // #9: only escalate to vision on explicit figure references
         },
       }
     );
@@ -663,6 +668,10 @@ export class MultimodalRagStack extends cdk.Stack {
           APPSYNC_API_URL_PARAM: `/AILA/${environment}/AppSyncApiUrl`,
           GUARDRAIL_ID_PARAM: `/AILA/${environment}/GuardrailId`,
           GUARDRAIL_VERSION_PARAM: `/AILA/${environment}/GuardrailVersion`,
+          // Optimization feature flags — default "false" (= current behavior).
+          // Flip to "true" + redeploy to enable.
+          CACHE_MODULE_METADATA: "false", // #10: cache module_name + allowed_file_ids in session state
+          GUARDRAIL_FAIL_CLOSED: "false", // #11: fail closed on guardrail service error (no ungated retry)
         },
       }
     );

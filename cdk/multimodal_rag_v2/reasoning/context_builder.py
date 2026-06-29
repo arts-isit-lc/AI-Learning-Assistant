@@ -89,13 +89,16 @@ class ContextBuilder:
             },
         )
 
-        # Step 1: Expand siblings
+        # Step 1: Expand siblings.
+        # Batch-prefetch every referenced sibling row in a single query (#6),
+        # eliminating the previous per-result N+1 against the RDS proxy.
         expand_start = time.time()
+        sibling_pool = self._prefetch_sibling_pool(results)
         expanded: list[RankedResult] = []
         seen_ids: list[str] = []
         siblings_added = 0
         for result in results:
-            siblings = self.expand_siblings(result)
+            siblings = self.expand_siblings(result, sibling_pool=sibling_pool)
             for sibling in siblings:
                 if sibling.retrieval_id not in seen_ids:
                     seen_ids.append(sibling.retrieval_id)
@@ -162,11 +165,39 @@ class ContextBuilder:
 
         return context
 
+    def _prefetch_sibling_pool(
+        self, results: list[RankedResult]
+    ) -> dict[str, RankedResult]:
+        """Fetch every sibling referenced by ``results`` in one store query (#6).
+
+        Collects the union of all ``sibling_ids`` across the ranked results and
+        issues a single ``get_by_ids`` call, returning a {retrieval_id: result}
+        map. Returns an empty dict when there is no sibling store or nothing to
+        fetch, so ``expand_siblings`` behaves exactly as the unbatched path.
+        """
+        if self._sibling_store is None:
+            return {}
+
+        unique_ids: list[str] = []
+        seen: set[str] = set()
+        for result in results:
+            for sid in result.sibling_ids:
+                if sid not in seen:
+                    seen.add(sid)
+                    unique_ids.append(sid)
+
+        if not unique_ids:
+            return {}
+
+        fetched = self._sibling_store.get_by_ids(unique_ids)
+        return {s.retrieval_id: s for s in fetched}
+
     def expand_siblings(
         self,
         result: RankedResult,
         max_expansion_tokens: int = 500,
         max_sibling_distance: int = 2,
+        sibling_pool: dict[str, RankedResult] | None = None,
     ) -> list[RankedResult]:
         """Expand a result by retrieving nearby siblings from same parent.
 
@@ -190,8 +221,18 @@ class ContextBuilder:
         if not result.sibling_ids or self._sibling_store is None:
             return [result]
 
-        # Retrieve all siblings from the store
-        siblings = self._sibling_store.get_by_ids(result.sibling_ids)
+        # Retrieve siblings — from the prefetched pool (#6 batch path) when one
+        # is provided, otherwise fall back to a per-result store query. The pool
+        # holds the same RankedResult objects get_by_ids would return, so the
+        # selection below is identical either way (it re-sorts by provenance).
+        if sibling_pool is not None:
+            siblings = [
+                sibling_pool[sid]
+                for sid in result.sibling_ids
+                if sid in sibling_pool
+            ]
+        else:
+            siblings = self._sibling_store.get_by_ids(result.sibling_ids)
         if not siblings:
             logger.debug(
                 "Sibling store returned empty for result",

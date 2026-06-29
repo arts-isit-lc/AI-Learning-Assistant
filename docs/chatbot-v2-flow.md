@@ -404,6 +404,19 @@ cdk/chatbot_v2/src/
 
 ---
 
+## Performance & Cost Notes
+
+Two chatbot optimizations are available as flags (default off, env-var toggled):
+`CACHE_MODULE_METADATA` (cache `module_name` + `allowed_file_ids` in session
+state instead of re-querying Postgres each turn) and `GUARDRAIL_FAIL_CLOSED`
+(on a guardrail service error, return a safe fallback rather than regenerating
+without guardrails). The largest win, eliminating the double generation, lives
+on the retrieval side (`RAG_RETURN_PASSAGES`): the chatbot's Sonnet pass then
+generates once from retrieved passages. See
+[Performance & Cost Optimizations](./architecture-overview.md#performance--cost-optimizations).
+
+---
+
 ## Related Documentation
 
 - [Architecture Overview](./architecture-overview.md) — system-wide architecture

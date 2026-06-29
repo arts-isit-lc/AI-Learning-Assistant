@@ -6,6 +6,9 @@ logger = Logger(service="chatbot-v2")
 
 GUARDRAIL_REDIRECT_INPUT = "I appreciate your question, but let's stay focused on the course material. What would you like to explore about the module topic?"
 GUARDRAIL_REDIRECT_OUTPUT = "Let me rephrase my response to stay focused on the course material."
+# Shown when the guardrail service itself errors and GUARDRAIL_FAIL_CLOSED is on:
+# we return this safe message instead of regenerating without guardrails (#11).
+GUARDRAIL_SERVICE_ERROR_MESSAGE = "I'm having trouble responding right now. Please try again in a moment."
 
 
 def load_guardrail_config(ssm_client, id_param: str, version_param: str) -> tuple[str, str]:

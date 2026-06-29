@@ -488,7 +488,13 @@ def _handle_query(
             "image_analyses": [],
         })
 
-    # Step 5: Cross-Encoder Reranking
+    # Step 5: Cross-Encoder Reranking.
+    # NOTE: no cross-encoder model is currently configured (_cross_encoder_reranker
+    # is constructed without one), so this stage is intentionally an RRF-score
+    # passthrough — it clamps scores, re-sorts by the existing RRF score, and
+    # truncates to top_k. It is kept (cheap, pure-Python) as the integration point
+    # for a future cross-encoder. Fallback behavior is covered by
+    # TestFallbackBehavior in test_cross_encoder_reranker.py.
     with _traced_subsegment("CrossEncoderRerank"):
         rerank_start = time.time()
         ranked_results = _cross_encoder_reranker.rerank(

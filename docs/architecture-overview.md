@@ -173,6 +173,42 @@ The active V2 path uses:
 
 ---
 
+## Performance & Cost Optimizations
+
+The RAG and chatbot paths carry a set of cost/latency optimizations. Each
+behavior-changing optimization is gated by an environment-variable feature flag
+that **defaults to `"false"` (pre-optimization behavior)**, so deploying the
+code changes nothing until an operator sets the flag to `"true"` and redeploys.
+Behavioral flags should only be enabled after the offline eval harness
+(`cdk/multimodal_rag_v2/eval_harness/`) is green for that change.
+
+### Always-on (behavior-preserving)
+- **Per-call cost/latency instrumentation** — every Bedrock call emits a
+  structured `bedrock_call` log (model, input/output tokens, `est_cost_usd`,
+  `latency_ms`); aggregate per request in CloudWatch Logs Insights via `query_id`.
+- **HNSW ANN index** on `retrieval_units.embedding` (`vector_cosine_ops`) — keeps
+  vector search sub-linear as the corpus grows; falls back to exact KNN if the
+  pgvector version predates HNSW.
+- **Batched sibling expansion** — context assembly fetches all siblings in one
+  query instead of one-per-result (same result set).
+
+### Flag-gated (default off)
+| Flag (env var) | Lambda | Optimization |
+|---|---|---|
+| `RAG_RETURN_PASSAGES` | ragRetrievalFunction | Return ranked passages and skip the reasoning LLM; the chatbot's Sonnet pass generates once from passages (eliminates double generation) |
+| `QUERY_EMBEDDING_CACHE` | ragRetrievalFunction | Serve repeat query embeddings from the DynamoDB EmbeddingCache |
+| `STRICT_IMAGE_ESCALATION` | ragRetrievalFunction | Only run vision escalation on an explicit figure reference, not bare keywords |
+| `CACHE_MODULE_METADATA` | chatbotV2Function | Cache `module_name` + `allowed_file_ids` in session state instead of re-querying Postgres each turn |
+| `GUARDRAIL_FAIL_CLOSED` | chatbotV2Function | On a guardrail **service** error, return a safe fallback instead of regenerating without guardrails |
+
+### Deferred / data-gated (not yet implemented)
+- **Async RDS projection** — needs an SQS queue + consumer Lambda (a fire-and-forget thread is unreliable under Lambda freeze).
+- **Parallelize eval ∥ retrieval** — needs a handler restructure (retrieval consumes the evaluation output).
+- **Lambda right-sizing** — pending CloudWatch max-memory metrics.
+- **Claude 3 → 3.5 migration** — pending Bedrock access + a quality eval.
+
+---
+
 ## Related Documentation
 
 - [Chatbot V2 Flow](./chatbot-v2-flow.md) — detailed walkthrough of the structured learning pipeline

@@ -35,10 +35,10 @@ def _flag(name: str, default: bool) -> bool:
 GUARDRAIL_FAIL_CLOSED = _flag("GUARDRAIL_FAIL_CLOSED", default=False)
 
 # --- Behavior-preserving optimizations (default OFF for a no-op deploy) --------
-# #8: move the post-stream RDS projection + engagement logging off the billed
-# response path (fire-and-forget / async).
-ASYNC_RDS_PROJECTION = _flag("ASYNC_RDS_PROJECTION", default=False)
-# #4: run answer evaluation and RAG retrieval concurrently (independent inputs).
-PARALLEL_EVAL_RETRIEVAL = _flag("PARALLEL_EVAL_RETRIEVAL", default=False)
 # #10: cache static-per-module values (module_name, allowed_file_ids) in state.
 CACHE_MODULE_METADATA = _flag("CACHE_MODULE_METADATA", default=False)
+
+# NOTE: flags for #8 (async RDS projection) and #4 (parallelize eval||retrieval)
+# are intentionally NOT defined here — those optimizations are deferred (they
+# need SQS infra / a handler restructure respectively). Add their flags when the
+# behavior lands, so every flag here maps to an implemented code path.
