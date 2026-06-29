@@ -21,6 +21,8 @@ Requirements: 7.1, 8.1, 9.1, 10.1, 12.1, 12.2, 12.4, 12.5
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import time
 import uuid
@@ -37,7 +39,9 @@ import boto3
 from aws_lambda_powertools import Logger
 
 from ..cache.embedding_cache import EmbeddingCache
+from ..flags import QUERY_EMBEDDING_CACHE
 from ..models.data_models import EMBEDDING_VERSION, QueryIntent, TypeCaps
+from ..pricing import estimate_cost_usd
 from ..reasoning.context_builder import ContextBuilder
 from ..reasoning.image_escalation import ImageEscalation
 from ..reasoning.reasoning_engine import ReasoningEngine
@@ -126,9 +130,14 @@ _reasoning_engine = ReasoningEngine(
 # ---------------------------------------------------------------------------
 
 def _generate_query_embedding(query: str) -> list[float] | None:
-    """Generate an embedding vector for the query.
+    """Generate an embedding vector for the query (Titan Embed v2, 1024-d).
 
-    Uses Bedrock Titan Embed v2 directly (no caching for queries).
+    When the ``QUERY_EMBEDDING_CACHE`` flag is enabled, identical/repeat queries
+    are served from the DynamoDB EmbeddingCache (keyed by sha256(query) +
+    EMBEDDING_VERSION) instead of re-calling Bedrock. Cache get/put are
+    best-effort and never raise, so behavior is identical to the uncached path
+    on any cache failure. Emits a ``bedrock_call`` log on a real embedding call
+    for cost/latency measurement (Phase 0a).
 
     Args:
         query: The user's search query.
@@ -136,18 +145,56 @@ def _generate_query_embedding(query: str) -> list[float] | None:
     Returns:
         Embedding vector as list of floats, or None on failure.
     """
-    import json
+    content_hash = (
+        hashlib.sha256(query.encode("utf-8")).hexdigest()
+        if QUERY_EMBEDDING_CACHE
+        else ""
+    )
+
+    if QUERY_EMBEDDING_CACHE:
+        cached = _embedding_cache.get(content_hash, EMBEDDING_VERSION)
+        if cached is not None:
+            logger.info(
+                "Query embedding cache hit",
+                extra={"event": "embedding_cache", "hit": True},
+            )
+            return cached
 
     try:
         request_body = json.dumps({"inputText": query, "dimensions": 1024})
+        _t0 = time.perf_counter()
         response = _bedrock_client.invoke_model(
             modelId="amazon.titan-embed-text-v2:0",
             body=request_body,
         )
+        _latency_ms = round((time.perf_counter() - _t0) * 1000, 2)
         response_body = json.loads(response["body"].read())
-        return response_body["embedding"]
+        embedding = response_body["embedding"]
+
+        _in_tok = response_body.get("inputTextTokenCount", 0)
+        logger.info(
+            "Query embedding generated",
+            extra={
+                "event": "bedrock_call",
+                "call": "query_embedding",
+                "model_id": "amazon.titan-embed-text-v2:0",
+                "input_tokens": _in_tok,
+                "output_tokens": 0,
+                "est_cost_usd": round(
+                    estimate_cost_usd("amazon.titan-embed-text-v2:0", _in_tok, 0), 6
+                ),
+                "latency_ms": _latency_ms,
+                "cache_enabled": QUERY_EMBEDDING_CACHE,
+            },
+        )
+
+        if QUERY_EMBEDDING_CACHE:
+            _embedding_cache.put(content_hash, embedding, EMBEDDING_VERSION)
+
+        return embedding
     except Exception:
         logger.exception("Failed to generate query embedding")
+        return None
         return None
 
 
@@ -1022,32 +1069,45 @@ def _get_context_builder() -> ContextBuilder:
     return _context_builder
 
 
-def _estimate_cost(query_intent: QueryIntent, result: Any) -> str:
-    """Estimate the cost of processing this query.
+# Representative token counts for the COARSE _estimate_cost summary only.
+# Real per-call costs are emitted as "bedrock_call" structured log events.
+_COARSE_QUERY_TOKENS = 30
+_COARSE_REASONING_INPUT_TOKENS = 6000
+_COARSE_REASONING_OUTPUT_TOKENS = 800
+_COARSE_VISION_INPUT_TOKENS = 1600
+_COARSE_VISION_OUTPUT_TOKENS = 400
+_HAIKU_MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0"
+_EMBED_MODEL_ID = "amazon.titan-embed-text-v2:0"
 
-    Rough estimation for logging/monitoring purposes.
+
+def _estimate_cost(query_intent: QueryIntent, result: Any) -> str:
+    """Coarse per-query cost summary for the response payload.
+
+    NOTE: This is a rough at-a-glance estimate that uses representative token
+    counts together with the shared pricing table. The AUTHORITATIVE per-request
+    cost is reconstructed from the structured ``bedrock_call`` log events (which
+    carry the real token counts for each call) via CloudWatch Logs Insights.
 
     Args:
-        query_intent: The query intent (determines if LLM calls were made).
-        result: The reasoning result.
+        query_intent: The query intent (reserved for future per-intent tuning).
+        result: The reasoning result (used to count escalation vision calls).
 
     Returns:
-        Cost estimate string (e.g., "$0.003").
+        Cost estimate string (e.g., "$0.0042").
     """
-    cost = 0.0
+    # Query embedding (Titan, input-only, short query).
+    cost = estimate_cost_usd(_EMBED_MODEL_ID, _COARSE_QUERY_TOKENS, 0)
 
-    # Query embedding: ~$0.0001
-    cost += 0.0001
+    # Reasoning answer generation (Haiku).
+    cost += estimate_cost_usd(
+        _HAIKU_MODEL_ID, _COARSE_REASONING_INPUT_TOKENS, _COARSE_REASONING_OUTPUT_TOKENS
+    )
 
-    # Query analysis: free if rules fired, ~$0.0001 if Haiku fallback
-    # (Assume rule-based for now — worst case is +$0.0001)
-
-    # Reasoning LLM: ~$0.002 for Haiku
-    cost += 0.002
-
-    # Image escalation: ~$0.001 per image
-    if hasattr(result, "escalation_used") and result.escalation_used:
-        image_count = len(result.image_analyses) if hasattr(result, "image_analyses") else 0
-        cost += 0.001 * image_count
+    # Image escalation (Haiku vision), per analyzed image.
+    if getattr(result, "escalation_used", False):
+        image_count = len(getattr(result, "image_analyses", []) or [])
+        cost += image_count * estimate_cost_usd(
+            _HAIKU_MODEL_ID, _COARSE_VISION_INPUT_TOKENS, _COARSE_VISION_OUTPUT_TOKENS
+        )
 
     return f"${cost:.4f}"

@@ -1,0 +1,12 @@
+[
+  {"query": "Summarize the key points of lecture 1", "intent": "summary", "expects_image": false},
+  {"query": "What does Figure 3 show?", "intent": "figure_reference", "expects_image": true},
+  {"query": "Explain the difference between supervised and unsupervised learning", "intent": "conceptual", "expects_image": false},
+  {"query": "Walk me through the derivation on slide 12", "intent": "procedural", "expects_image": false},
+  {"query": "What is the formula for gradient descent?", "intent": "formula", "expects_image": false},
+  {"query": "Describe the neural network architecture diagram", "intent": "figure_reference", "expects_image": true},
+  {"query": "Give me an overview of this module", "intent": "summary", "expects_image": false},
+  {"query": "How do I compute the eigenvalues of a 2x2 matrix?", "intent": "math", "expects_image": false},
+  {"query": "What are the assumptions behind linear regression?", "intent": "conceptual", "expects_image": false},
+  {"query": "Show the table comparing the two algorithms", "intent": "table_reference", "expects_image": false}
+]

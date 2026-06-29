@@ -10,6 +10,7 @@ Responsibilities:
 from __future__ import annotations
 
 import json
+import time
 from typing import Any
 
 from aws_lambda_powertools import Logger
@@ -21,6 +22,7 @@ from ..models.data_models import (
     ReasoningResult,
     StructuredContext,
 )
+from ..pricing import estimate_cost_usd
 from .context_builder import ContextBuilder
 from .image_escalation import EscalationResult, ImageEscalation
 
@@ -372,26 +374,33 @@ class ReasoningEngine:
             if system_prompt:
                 body["system"] = system_prompt
 
+            _t0 = time.perf_counter()
             response = self.bedrock_client.invoke_model(
                 modelId=self.model_id,
                 contentType="application/json",
                 accept="application/json",
                 body=json.dumps(body),
             )
+            _latency_ms = round((time.perf_counter() - _t0) * 1000, 2)
 
             response_body = json.loads(response["body"].read())
             answer = response_body["content"][0]["text"]
 
+            _usage = response_body.get("usage", {})
+            _in_tok = _usage.get("input_tokens", 0)
+            _out_tok = _usage.get("output_tokens", 0)
             logger.info(
                 "LLM answer generated",
                 extra={
+                    "event": "bedrock_call",
+                    "call": "reasoning",
                     "model_id": self.model_id,
-                    "input_tokens": response_body.get("usage", {}).get(
-                        "input_tokens", 0
+                    "input_tokens": _in_tok,
+                    "output_tokens": _out_tok,
+                    "est_cost_usd": round(
+                        estimate_cost_usd(self.model_id, _in_tok, _out_tok), 6
                     ),
-                    "output_tokens": response_body.get("usage", {}).get(
-                        "output_tokens", 0
-                    ),
+                    "latency_ms": _latency_ms,
                 },
             )
 

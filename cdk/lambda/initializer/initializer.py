@@ -299,6 +299,19 @@ def handler(event, context):
             CREATE INDEX IF NOT EXISTS idx_retrieval_units_embedding_version
             ON retrieval_units (embedding_version);
 
+            -- Approximate-nearest-neighbour index for vector search (#2).
+            -- Matches the cosine distance operator (<=>) used by the retrieval
+            -- query. Wrapped so that on an older pgvector (< 0.5.0, no HNSW) the
+            -- migration degrades gracefully to exact KNN instead of failing
+            -- schema initialization. hnsw needs no training data, so it builds
+            -- instantly on the empty table and grows incrementally on insert.
+            DO $$ BEGIN
+                EXECUTE 'CREATE INDEX IF NOT EXISTS idx_retrieval_units_embedding_hnsw '
+                        'ON retrieval_units USING hnsw (embedding vector_cosine_ops)';
+            EXCEPTION WHEN OTHERS THEN
+                RAISE NOTICE 'HNSW index skipped (pgvector may predate 0.5.0): %', SQLERRM;
+            END $$;
+
             CREATE UNIQUE INDEX IF NOT EXISTS idx_module_files_unique_file
             ON "Module_Files" (module_id, filename, filetype);
 
