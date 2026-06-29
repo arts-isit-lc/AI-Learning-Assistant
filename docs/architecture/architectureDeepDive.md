@@ -4,7 +4,7 @@
 
 ## Architecture
 
-![Archnitecture Diagram](./images/architecture.png)
+![Archnitecture Diagram](../images/architecture.png)
 
 ## Description
 
@@ -27,7 +27,7 @@
 
 ## Database Schema
 
-![Database Schema](./images/database_schema.png)
+![Database Schema](../images/database_schema.png)
 
 ### RDS Langchain Tables
 

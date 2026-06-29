@@ -56,4 +56,4 @@ Archive of planning documents for features that have been implemented.
 | `2025-infrastructure-hardening` | IAM scoping, removal policies, security hardening |
 | `2025-math-compute` | Verified math computation with SymPy |
 | `2025-observability` | CloudWatch alarms, X-Ray, structured logging, dashboard |
-| `2025-v1-architecture` | Archived V1 text_generation and data_ingestion module docs |
+| `2025-v1-architecture` | Archived V1 text_generation module docs |

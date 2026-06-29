@@ -44,20 +44,20 @@ Docker must also be running for the deployment to work.
 ### Enable Models in Bedrock
 
 First, navigate to Amazon Bedrock in the AWS Console. From the home page, click on model access under Bedrock configurations:
-![](./images/bedrockhome.png)
+![](../images/bedrockhome.png)
 
 Then click on "Modify model access":
-![](./images/modifymodels.png)
+![](../images/modifymodels.png)
 
-Finally, enable the relevant models, click next and on the next page click submit. Amazon Titan Embeddings V2 and Meta Llama 3 70B Instruct are required for this project.
-![](./images/enablemodels.png)
+Finally, enable the relevant models, click next and on the next page click submit. Amazon Titan Text Embeddings V2, Anthropic Claude 3 Haiku, Anthropic Claude 3 Sonnet, and Meta Llama 3 70B Instruct are required for this project.
+![](../images/enablemodels.png)
 
 The relevant models are now enabled in Bedrock.
 ## Deployment
 ### Step 1: Fork & Clone The Repository
 First, you need to fork the repository. To create a fork, navigate to the [main branch](https://github.com/UBC-CIC/AI-Learning-Assistant) of this repository. Then, in the top-right corner, click `Fork`.
 
-![](./images/fork.jpeg)
+![](../images/fork.jpeg)
 
 You will be directed to the page where you can customize owner, repository name, etc, but you do not have to change any option. Simply click `Create fork` in the bottom right corner.
 
@@ -264,22 +264,22 @@ In order to deploy, you will need to have access to the **aws-controltower-VPC**
 
 1. **Modify the VPC Stack:**
    - Navigate to the `vpc-stack.ts` file located at `cdk/lib/vpc-stack.ts`.
-   - Replace **line 16** with your existing VPC ID:
+   - Replace **line 23** with your existing VPC ID:
      ```typescript
      const existingVpcId: string = 'your-vpc-id'; //CHANGE IF DEPLOYING WITH EXISTING VPC
      ```
      You can find your VPC ID by navigating to the **VPC dashboard** in the AWS Management Console and locating the VPC in the `Your VPCs` section.
 
-     ![VPC ID Image](images/ExistingVPCId.png)
+     ![VPC ID Image](../images/ExistingVPCId.png)
 
 2. **Update the AWS Control Tower Stack Set:**
-   - Replace **line 19** with your AWS Control Tower Stack Set name:
+   - Replace **line 26** with your AWS Control Tower Stack Set name:
      ```typescript
      const AWSControlTowerStackSet = "your-stackset-name"; //CHANGE TO YOUR CONTROL TOWER STACK SET
      ```
      You can find this name by navigating to the **CloudFormation dashboard** in AWS, under `Stacks`. Look for a stack name that starts with `StackSet-AWSControlTowerBP-VPC-ACCOUNT-FACTORY`.
 
-     ![AWS Control Tower Stack Image](images/AWSControlTowerStack.png)
+     ![AWS Control Tower Stack Image](../images/AWSControlTowerStack.png)
 
   #### Second deployment in the Environment with an Existing VPC:
 
@@ -335,7 +335,7 @@ AWS subnets within a VPC cannot overlap in CIDR range, so you need to select an 
 By following these steps, you ensure that the new subnet does not overlap with existing ones while maintaining correct alignment with AWS best practices.
 
 
-You can proceed with the rest of the deployment instructions and the Vpc Stack will automatically use your existing VPC instead of creating a new one. For more detailed information about the deployment with an Existing VPC checkout the [Existing VPC Deployment Guide](/docs/ExistingVPCDeployment.md)
+You can proceed with the rest of the deployment instructions and the Vpc Stack will automatically use your existing VPC instead of creating a new one. For more detailed information about the deployment with an Existing VPC checkout the [Existing VPC Deployment Guide](./ExistingVPCDeployment.md)
 
 
 ### Step 3: CDK Deployment

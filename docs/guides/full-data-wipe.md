@@ -63,17 +63,13 @@ print('Done.')
 
 ## Step 3: S3 — Empty buckets
 
-From the project root (`AI-Learning-Assistant/`):
-
 ```bash
 # V2 IR bucket (course files, images, IR data)
-python3 scripts/cleanup_old_s3_data.py --bucket aila-multimodalragstack-ir-bucket
+aws s3 rm s3://aila-multimodalragstack-ir-bucket --recursive
 
-# Old v1 data ingestion bucket
-python3 scripts/cleanup_old_s3_data.py --bucket aila-apigatewaystack-ailaapigatewaystackdataingest-fdiqz53axtfn
+# Old v1 data ingestion bucket (only if it still exists from a pre-v2 deployment)
+aws s3 rm s3://aila-apigatewaystack-ailaapigatewaystackdataingest-fdiqz53axtfn --recursive
 ```
-
-Each will ask for confirmation (`y` to proceed).
 
 ## Step 4: Cognito — Delete users
 

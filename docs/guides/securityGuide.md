@@ -2,7 +2,7 @@
 
 ## Shared Responsibility Model 
 
-![Shared Responsibility Model](images/SharedResponsibilityModel.png)
+![Shared Responsibility Model](../images/SharedResponsibilityModel.png)
 
 ### Customer Responsibilities (Security in the Cloud):
 - Data Protection
@@ -18,7 +18,7 @@ This document outlines the existing network and security configurations implemen
 
 ## 1. Network Architecture
 
-![Network Architecture Diagram](images/NetworkDiagram.png)
+![Network Architecture Diagram](../images/NetworkDiagram.png)
 
 
 ### 1.1 VPC & Subnets  
@@ -69,7 +69,7 @@ VPC Configuration:
 
   #### How objects in S3 are accessed:
 
-  ![S3 Workflow Diagram](images/s3-workflow.png)
+  ![S3 Workflow Diagram](../images/s3-workflow.png)
 
   The above diagram illustrates the use of S3 pre-signed URLs in our architecture. The process works as follows:
 
@@ -136,7 +136,7 @@ VPC Configuration:
 
 ## 1.2 Security Configuration
 
-![Security Configuration](images/SecurityConfiguration.png)
+![Security Configuration](../images/SecurityConfiguration.png)
 
 
 This diagram illustrates how our architecture handles key security aspects by leveraging AWS services tailored for each security domain. Identity Services, including AWS IAM and Amazon Cognito, ensure secure authentication and access control. Data Protection is enforced through AWS Secrets Manager and AWS KMS for secure storage and encryption. Infrastructure Protection relies on AWS WAF, AWS Shield, and AWS Systems Manager to safeguard against threats. Detection Services such as Security Hub, Amazon GuardDuty, and Amazon CloudWatch provide continuous monitoring and threat detection
@@ -378,7 +378,6 @@ messagesQueue.addToResourcePolicy(
 | `adjustUserRoles`                   |  Private        | Cognito **Post-Authentication** trigger   | **Cognito internal trigger** only          |
 | `TextGenLambdaDockerFunc`           |  Private        | student | **student** group users                    |
 | `GeneratePreSignedURLFunc`          |  Private        | instructor | **instructor** group users                 |
-| `DataIngestLambdaDockerFunc`        |  Private        | S3 Event (S3 PUT/DELETE)                  | Triggered by **S3 events** only            |
 | `GetFilesFunction`                  |  Private        | instructor | **instructor** group users                 |
 | `DeleteFileFunc`                    |  Private        | instructor | **instructor** group users                 |
 | `DeleteModuleFunc`                  |  Private        | instructor | **instructor** group users                 |

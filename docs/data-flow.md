@@ -430,4 +430,3 @@ This means:
 - [Architecture Overview](./architecture-overview.md) — system-wide architecture
 - [Chatbot V2 Flow](./chatbot-v2-flow.md) — detailed structured learning pipeline
 - [Multimodal RAG Pipeline](./multimodal-rag-pipeline.md) — the 4-layer retrieval system
-- [System Flow Overview](./system-flow-overview.md) — simplified V1 explanation
