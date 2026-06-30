@@ -44,3 +44,36 @@ class TestHnswIndex:
         src = _source()
         assert "idx_retrieval_units_ts_vector" in src
         assert "idx_retrieval_units_embedding_version" in src
+
+
+class TestCrossModuleFileReferencingColumns:
+    """retrieval_units must carry file_id (UUID) + module_id as first-class,
+    indexed columns. The enrichment writer (_store_in_pgvector) INSERTs into
+    these columns and the retrieval scope filter (_COLUMN_SCOPE_KEYS) queries
+    them; a missing migration here raised psycopg2 UndefinedColumn at ingest.
+    See the cross-module-file-referencing spec §4.4 (task T3).
+    """
+
+    def test_columns_declared_in_create_table(self):
+        src = _source()
+        assert "file_id UUID" in src, "retrieval_units.file_id column is missing"
+        assert "module_id TEXT" in src, "retrieval_units.module_id column is missing"
+
+    def test_idempotent_migration_for_existing_tables(self):
+        # CREATE TABLE IF NOT EXISTS is a no-op on an already-provisioned table,
+        # so the columns must also be added via ALTER ... ADD COLUMN IF NOT EXISTS
+        # to migrate databases that predate the columns.
+        src = _source()
+        assert "ALTER TABLE retrieval_units ADD COLUMN IF NOT EXISTS file_id UUID" in src
+        assert "ALTER TABLE retrieval_units ADD COLUMN IF NOT EXISTS module_id TEXT" in src
+
+    def test_scope_indexes_present(self):
+        src = _source()
+        assert "idx_retrieval_units_file_id" in src
+        assert "idx_retrieval_units_module_id" in src
+
+    def test_scope_indexes_are_idempotent(self):
+        # Must not fail re-running on an existing database.
+        src = _source()
+        assert "CREATE INDEX IF NOT EXISTS idx_retrieval_units_file_id" in src
+        assert "CREATE INDEX IF NOT EXISTS idx_retrieval_units_module_id" in src

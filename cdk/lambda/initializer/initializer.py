@@ -201,8 +201,25 @@ def handler(event, context):
                 embedding_version TEXT NOT NULL,
                 metadata JSONB DEFAULT '{}',
                 sibling_ids JSONB DEFAULT '[]',
-                ts_vector tsvector
+                ts_vector tsvector,
+                -- Cross-module file referencing: the canonical UUID file_id and the
+                -- module_id are promoted to first-class indexed columns so retrieval
+                -- can scope by `file_id = ANY(allowed_file_ids)` (including cross-module
+                -- references) without JSON extraction. They are also kept inside
+                -- `metadata` for backward-compatible reads. The enrichment writer
+                -- (_store_in_pgvector) and the retrieval scope filter both depend on
+                -- these columns. See the cross-module-file-referencing spec §4.4.
+                file_id UUID,
+                module_id TEXT
             );
+
+            -- Idempotent migration for databases provisioned before the two columns
+            -- above existed: `CREATE TABLE IF NOT EXISTS` is a no-op on an existing
+            -- table, so the columns must be added explicitly. `ADD COLUMN IF NOT
+            -- EXISTS` is itself a no-op when they are already present (e.g. on a
+            -- freshly created table), so this is safe to run on every invocation.
+            ALTER TABLE retrieval_units ADD COLUMN IF NOT EXISTS file_id UUID;
+            ALTER TABLE retrieval_units ADD COLUMN IF NOT EXISTS module_id TEXT;
 
             -- ─── Foreign Keys ─────────────────────────────────────────────────────
 
@@ -298,6 +315,15 @@ def handler(event, context):
 
             CREATE INDEX IF NOT EXISTS idx_retrieval_units_embedding_version
             ON retrieval_units (embedding_version);
+
+            -- Cross-module file referencing: indexed scope predicates so retrieval
+            -- filters on `file_id = ANY(%s)` (a module's own + referenced files) and
+            -- the `module_id` fallback hit an index instead of scanning. See spec §4.4.
+            CREATE INDEX IF NOT EXISTS idx_retrieval_units_file_id
+            ON retrieval_units (file_id);
+
+            CREATE INDEX IF NOT EXISTS idx_retrieval_units_module_id
+            ON retrieval_units (module_id);
 
             -- Approximate-nearest-neighbour index for vector search (#2).
             -- Matches the cosine distance operator (<=>) used by the retrieval
