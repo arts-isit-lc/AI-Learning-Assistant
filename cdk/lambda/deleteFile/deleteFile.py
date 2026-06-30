@@ -50,32 +50,55 @@ def connect_to_db():
     return connection
 
 def delete_file_from_db(module_id, file_name, file_type):
-    connection = connect_to_db()
-    if connection is None:
-        logger.error("No database connection available.")
-        return {
-            "statusCode": 500,
-            "body": json.dumps("Database connection failed.")
-        }
-    
-    try:
-        cur = connection.cursor()
+    """Delete a file's Module_Files row and its retrieval_units; return its file_id.
 
-        delete_query = """
-            DELETE FROM "Module_Files" 
-            WHERE module_id = %s AND filename = %s AND filetype = %s;
-        """
-        cur.execute(delete_query, (module_id, file_name, file_type))
+    Resolves the canonical UUID file_id first (needed both to delete the correct
+    UUID-keyed S3 object and to remove the file's vector units), then deletes the
+    retrieval_units and the Module_Files row in one transaction.
+
+    Returns:
+        The UUID file_id (str) if a matching row existed, else None.
+    """
+    connection = connect_to_db()
+    cur = connection.cursor()
+    try:
+        cur.execute(
+            'SELECT file_id FROM "Module_Files" WHERE module_id = %s AND filename = %s AND filetype = %s',
+            (module_id, file_name, file_type),
+        )
+        row = cur.fetchone()
+        if row is None:
+            logger.warning(
+                "No matching Module_Files row to delete",
+                extra={"module_id": module_id, "file_name": file_name, "file_type": file_type},
+            )
+            cur.close()
+            return None
+
+        file_id = str(row[0])
+
+        # Delete the file's vector units. retrieval_units is keyed by the canonical
+        # UUID file_id (cross-module-file-referencing); without this they are
+        # orphaned in pgvector after the Module_Files row is gone.
+        cur.execute('DELETE FROM retrieval_units WHERE file_id = %s', (file_id,))
+        units_deleted = cur.rowcount
+
+        cur.execute('DELETE FROM "Module_Files" WHERE file_id = %s', (file_id,))
 
         connection.commit()
-        logger.info(f"Successfully deleted file {file_name}.{file_type} for module {module_id}.")
-
         cur.close()
-    except Exception as e:
-        if cur:
-            cur.close()
+        logger.info(
+            "Deleted file from database",
+            extra={"file_id": file_id, "retrieval_units_deleted": units_deleted},
+        )
+        return file_id
+    except Exception:
         connection.rollback()
-        logger.error(f"Error deleting file {file_name}.{file_type} from database: {e}")
+        try:
+            cur.close()
+        except Exception:
+            pass
+        logger.exception("Error deleting file from database")
         raise
 
 @logger.inject_lambda_context
@@ -106,43 +129,10 @@ def lambda_handler(event, context):
         }
 
     try:
-        # Allowed file types for documents
-        allowed_document_types = {"pdf", "docx", "pptx", "txt", "xlsx", "xps", "mobi", "cbz"}
-
-        folder = None
-        objects_to_delete = []
-
-        # Determine the folder based on the file type
-        if file_type in allowed_document_types:
-            folder = "documents"
-            objects_to_delete.append({"Key": f"{course_id}/{module_id}/{folder}/{file_name}.{file_type}"})
-        else:
-            return {
-                'statusCode': 400,
-                "headers": {
-                    "Content-Type": "application/json",
-                    "Access-Control-Allow-Headers": "*",
-                    "Access-Control-Allow-Origin": "*",
-                    "Access-Control-Allow-Methods": "*",
-                },
-                'body': json.dumps('Unsupported file type')
-            }
-
-        # Delete the file from S3
-        response = s3.delete_objects(
-            Bucket=BUCKET,
-            Delete={
-                "Objects": objects_to_delete,
-                "Quiet": True,
-            },
-        )
-        
-        logger.info(f"S3 Response: {response}")
-        logger.info(f"File {file_name}.{file_type} and any associated files deleted successfully from S3.")
-
-        # Delete the file from the database
+        # Delete the DB row + the file's vector units first. This also resolves
+        # the canonical UUID file_id, which is needed to address the S3 object.
         try:
-            delete_file_from_db(module_id, file_name, file_type)
+            file_id = delete_file_from_db(module_id, file_name, file_type)
             logger.info(f"File {file_name}.{file_type} deleted from the database.")
         except Exception as e:
             logger.error(f"Error deleting file {file_name}.{file_type} from the database: {e}")
@@ -156,6 +146,27 @@ def lambda_handler(event, context):
                 },
                 'body': json.dumps(f"Error deleting file {file_name}.{file_type} from the database")
             }
+
+        # Delete the raw uploaded object at the canonical V2 key
+        # courses/{course_id}/{module_id}/{file_id}.{file_type}. (The pre-V2 key
+        # was {course}/{module}/documents/{filename}.{ext}, which no longer exists;
+        # the object is now keyed by the UUID file_id, not the filename.)
+        if file_id:
+            object_key = f"courses/{course_id}/{module_id}/{file_id}.{file_type}"
+            response = s3.delete_objects(
+                Bucket=BUCKET,
+                Delete={"Objects": [{"Key": object_key}], "Quiet": True},
+            )
+            logger.info(
+                "Deleted file object from S3",
+                extra={"file_id": file_id, "key": object_key, "s3_response": response},
+            )
+        else:
+            # No matching DB row — nothing to address in S3. Idempotent success.
+            logger.info(
+                "No matching DB row; skipping S3 delete",
+                extra={"file_name": file_name, "file_type": file_type},
+            )
 
         return {
             'statusCode': 200,

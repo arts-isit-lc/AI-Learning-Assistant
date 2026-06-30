@@ -635,8 +635,10 @@ def _update_processing_status(file_id: str, module_id: str, chunk_count: int) ->
     Best-effort: logs errors but never raises.
 
     Args:
-        file_id: The file_id (from S3 key, i.e. filename without extension).
-        module_id: The module this file belongs to.
+        file_id: The canonical UUID file_id — equal to Module_Files.file_id (the
+            primary key). Since the cross-module-file-referencing change this is
+            the DB UUID, not the filename stem.
+        module_id: The module this file belongs to (used for log correlation).
         chunk_count: Number of retrieval units produced (stored as chunk_count).
     """
     import psycopg2
@@ -663,17 +665,32 @@ def _update_processing_status(file_id: str, module_id: str, chunk_count: int) ->
             sslmode="require",
         )
         cur = conn.cursor()
-        # Match by module_id and filename pattern (file_id is filename without extension)
+        # Match on the canonical UUID primary key. Before the cross-module-file-
+        # referencing change file_id was the filename stem and this matched on
+        # `filename`; file_id is now the Module_Files.file_id UUID.
         cur.execute(
             """UPDATE "Module_Files"
                SET processing_status = 'complete', chunk_count = %s, last_processed_at = NOW()
-               WHERE module_id = %s AND filename = %s""",
-            (chunk_count, module_id, file_id),
+               WHERE file_id = %s""",
+            (chunk_count, file_id),
         )
         conn.commit()
+        updated = cur.rowcount
         cur.close()
         conn.close()
-        logger.info("Processing status updated to complete", extra={"file_id": file_id, "module_id": module_id})
+        if updated:
+            logger.info(
+                "Processing status updated to complete",
+                extra={"file_id": file_id, "module_id": module_id, "rows_updated": updated},
+            )
+        else:
+            # A zero-row update means file_id matched no Module_Files row. Surfaced
+            # as a warning so it is not silently lost — the previous filename-based
+            # match failed exactly this way and left the UI spinner stuck.
+            logger.warning(
+                "Processing status update matched no rows; spinner will not clear",
+                extra={"file_id": file_id, "module_id": module_id},
+            )
     except Exception:
         logger.exception("Failed to update processing_status (best-effort)", extra={"file_id": file_id})
 
@@ -692,8 +709,8 @@ def _extract_and_store_topics(
 
     Args:
         enriched_elements: List of EnrichedElements from enrichment.
-        file_id: File identifier (filename without extension).
-        module_id: Module identifier.
+        file_id: The canonical UUID file_id — equal to Module_Files.file_id (PK).
+        module_id: Module identifier (used for log correlation).
     """
     import psycopg2
     from datetime import datetime, timezone
@@ -815,8 +832,9 @@ Document text:
         )
         cur = conn.cursor()
 
-        # Read existing metadata to merge
-        cur.execute('SELECT metadata FROM "Module_Files" WHERE module_id = %s AND filename = %s', (module_id, file_id))
+        # Read existing metadata to merge. Match on the canonical UUID primary key
+        # (file_id is the Module_Files.file_id UUID since the cross-module change).
+        cur.execute('SELECT metadata FROM "Module_Files" WHERE file_id = %s', (file_id,))
         row = cur.fetchone()
         existing = {}
         if row and row[0]:
@@ -825,8 +843,8 @@ Document text:
         existing["topic_extraction"] = parsed
 
         cur.execute(
-            """UPDATE "Module_Files" SET metadata = %s::jsonb WHERE module_id = %s AND filename = %s""",
-            (json_mod.dumps(existing), module_id, file_id),
+            """UPDATE "Module_Files" SET metadata = %s::jsonb WHERE file_id = %s""",
+            (json_mod.dumps(existing), file_id),
         )
         conn.commit()
         cur.close()
@@ -834,7 +852,12 @@ Document text:
 
         logger.info(
             "Topic extraction complete",
-            extra={"file_id": file_id, "topic_count": len(parsed["topics"]), "topics": parsed["topics"]},
+            extra={
+                "file_id": file_id,
+                "module_id": module_id,
+                "topic_count": len(parsed["topics"]),
+                "topics": parsed["topics"],
+            },
         )
 
     except Exception:

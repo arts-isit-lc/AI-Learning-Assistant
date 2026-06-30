@@ -105,37 +105,6 @@ def generate_presigned_url(bucket, key):
         logger.exception(f"Error generating presigned URL for {key}: {e}")
         return None
 
-def get_file_metadata_from_db(module_id, file_name, file_type):
-    connection = connect_to_db()
-    if connection is None:
-        logger.error("No database connection available.")
-        return None
-
-    try:
-        cur = connection.cursor()
-
-        query = """
-            SELECT metadata 
-            FROM "Module_Files" 
-            WHERE module_id = %s AND filename = %s AND filetype = %s;
-        """
-        cur.execute(query, (module_id, file_name, file_type))
-        result = cur.fetchone()
-        cur.close()
-
-        if result:
-            return result[0]
-        else:
-            logger.warning(f"No metadata found for {file_name}.{file_type} in module {module_id}")
-            return None
-
-    except Exception as e:
-        logger.error(f"Error retrieving metadata for {file_name}.{file_type}: {e}")
-        if cur:
-            cur.close()
-        connection.rollback()
-        return None
-
 @logger.inject_lambda_context
 def lambda_handler(event, context):
     query_params = event.get("queryStringParameters", {})
@@ -162,31 +131,50 @@ def lambda_handler(event, context):
     try:
         document_prefix = f"courses/{course_id}/{module_id}/"
 
+        # S3 objects are keyed by the canonical UUID file_id ("{file_id}.{ext}")
+        # since the cross-module-file-referencing change. IR artifacts
+        # ("{course}/{module}/{file_id}/...") and images ("images/...") live under
+        # different prefixes, so this lists only the raw uploaded files.
         document_files = list_files_in_s3_prefix(BUCKET, document_prefix)
 
-        # OPT-9: Batch query for all file metadata instead of per-file queries
+        # Batch-load file metadata keyed by the UUID file_id, so the UUID-named S3
+        # objects can be mapped back to their human filename + metadata.
         connection = connect_to_db()
         cur = connection.cursor()
         cur.execute(
-            'SELECT filename, filetype, metadata FROM "Module_Files" WHERE module_id = %s;',
+            'SELECT file_id, filename, filetype, metadata FROM "Module_Files" WHERE module_id = %s;',
             (module_id,)
         )
-        all_metadata = {f"{row[0]}.{row[1]}": row[2] for row in cur.fetchall()}
+        by_file_id = {
+            str(file_id): (filename, filetype, metadata)
+            for file_id, filename, filetype, metadata in cur.fetchall()
+        }
         cur.close()
 
-        # Generate presigned URLs and match metadata from batch query
+        # Build the response keyed by the human "{filename}.{filetype}" (the UI
+        # displays this key) with a presigned URL for the actual UUID-keyed object.
         document_files_urls = {}
-
-        for file_name in document_files:
-            presigned_url = generate_presigned_url(BUCKET, f"{document_prefix}{file_name}")
-            metadata = all_metadata.get(file_name)
-            document_files_urls[f"{file_name}"] = {
-                "url": presigned_url,
-                "metadata": metadata
-            }
+        for object_name in document_files:
+            presigned_url = generate_presigned_url(BUCKET, f"{document_prefix}{object_name}")
+            file_id = object_name.rsplit(".", 1)[0]  # strip extension -> UUID stem
+            row = by_file_id.get(file_id)
+            if row:
+                filename, filetype, metadata = row
+                # Surface the canonical file_id inside metadata — the UI reads
+                # fileData.metadata.file_id for delete + topic operations.
+                if isinstance(metadata, dict):
+                    metadata = {**metadata, "file_id": file_id}
+                document_files_urls[f"{filename}.{filetype}"] = {
+                    "url": presigned_url,
+                    "metadata": metadata,
+                }
+            else:
+                # S3 object with no matching Module_Files row (orphan): surface it
+                # by its raw key so it stays visible, but without metadata.
+                document_files_urls[object_name] = {"url": presigned_url, "metadata": None}
 
         logger.info("Presigned URLs and metadata generated successfully", extra={
-            "document_files": document_files_urls,
+            "file_count": len(document_files_urls),
         })
 
         return {

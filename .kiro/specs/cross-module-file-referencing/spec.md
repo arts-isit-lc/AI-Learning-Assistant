@@ -1,6 +1,6 @@
 # Cross-Module File Referencing — Spec
 
-**Status:** Proposed (not started)
+**Status:** Implemented — deployed, with post-rollout fixes (see §11). Core tasks T1, T3–T7 are done in code; T8 is unverified and T9 (E2E) is pending.
 **Area:** `generatePreSignedURL`, `multimodal_rag_v2` (ingestion/enrichment/retrieval), `chatbot_v2`
 **Related:** supersedes the unimplemented intent in `rag_module_system_spec`
 **Assumptions:** The database will be **wiped and all S3 files deleted before rollout** — clean slate, single deploy, no migration, no backfill, no re-ingest of legacy data. Schema changes are unconstrained.
@@ -132,15 +132,15 @@ The `module_id` fallback (R4) and the optional `chatbot_v2` env flag remain in t
 
 ## 6. Tasks
 
-- [ ] **T1.** `generatePreSignedURL`: build key from UUID `file_id`; add `update_file_record_filepath` and persist `Module_Files.filepath`. Unit test key + filepath write.
-- [ ] **T2.** Add a test asserting `_parse_s3_key` on a UUID-keyed path yields `file_id` = the UUID (no code change expected).
-- [ ] **T3.** Schema: add `file_id` (UUID) + `module_id` columns and indexes to `retrieval_units`.
-- [ ] **T4.** Enrichment `_store_in_pgvector`: write `file_id`/`module_id` as columns (retain in metadata). Update tests.
-- [ ] **T5.** Retrieval stores: list-membership (`= ANY`) filters on the new columns. Unit test SQL construction for scalar and list values.
-- [ ] **T6.** Retrieval handler: `file_id` scope when `allowed_file_ids` non-empty, else `module_id`; add scope/fallback logging. Extend `test_module_scoped_retrieval.py` (incl. High-1 preservation with a file_id list).
-- [ ] **T7.** `chatbot_v2`: union query via `_get_db_connection()`; pass `allowed_file_ids` (optional env flag as a runtime kill switch). Unit test union + empty/failure fallback to `[]`.
-- [ ] **T8.** `student/file_url`: rely on persisted `filepath`; remove the legacy key fallback. (`figure_url`: no change — confirm via a regression test.)
-- [ ] **T9.** After wipe + deploy, upload fresh course files; end-to-end verify cross-module retrieval (upload to module A, reference from B, confirm a B query retrieves the A file).
+- [x] **T1.** `generatePreSignedURL`: build key from UUID `file_id`; add `update_file_record_filepath` and persist `Module_Files.filepath`. Unit test key + filepath write. — **done** (key `courses/{course}/{module}/{file_id}.{ext}`, filepath persisted).
+- [x] **T2.** Add a test asserting `_parse_s3_key` on a UUID-keyed path yields `file_id` = the UUID (no code change expected). — **done** (no code change needed; `ingestion/test_handler.py` exercises `_parse_s3_key`).
+- [x] **T3.** Schema: add `file_id` (UUID) + `module_id` columns and indexes to `retrieval_units`. — **done** (DBFlow initializer; idempotent `CREATE TABLE` + `ALTER ... ADD COLUMN IF NOT EXISTS` + indexes). *Was missed on first rollout — see §11.*
+- [x] **T4.** Enrichment `_store_in_pgvector`: write `file_id`/`module_id` as columns (retain in metadata). Update tests. — **done**.
+- [x] **T5.** Retrieval stores: list-membership (`= ANY`) filters on the new columns. Unit test SQL construction for scalar and list values. — **done** (`_append_metadata_filter`).
+- [x] **T6.** Retrieval handler: `file_id` scope when `allowed_file_ids` non-empty, else `module_id`; add scope/fallback logging. Extend `test_module_scoped_retrieval.py` (incl. High-1 preservation with a file_id list). — **done**.
+- [x] **T7.** `chatbot_v2`: union query via `_get_db_connection()`; pass `allowed_file_ids` (optional env flag as a runtime kill switch). Unit test union + empty/failure fallback to `[]`. — **done** (`_get_allowed_file_ids`).
+- [ ] **T8.** `student/file_url`: rely on persisted `filepath`; remove the legacy key fallback. (`figure_url`: no change — confirm via a regression test.) — **unverified** (handler not confirmed this pass).
+- [ ] **T9.** After wipe + deploy, upload fresh course files; end-to-end verify cross-module retrieval (upload to module A, reference from B, confirm a B query retrieves the A file). — **pending** (manual).
 
 ---
 
@@ -172,3 +172,51 @@ Log at retrieval: scope kind (`file_id` vs `module_id` vs none), `len(allowed_fi
 ## 10. Test Strategy
 
 pytest unit tests for T1–T8 (colocated, factories, monkeypatch; no live DB — mock stores/queries). Extend `retrieval/test_module_scoped_retrieval.py` for `file_id`-list scope and AC-R6. CDK assertion test if T3 provisions columns/indexes via the DBFlow initializer. Manual E2E for AC-R4 (T9): upload to module A, reference from B, confirm a B query retrieves the A file.
+
+
+---
+
+## 11. Post-Rollout Fixes (found during deployment)
+
+The write/read/delete paths were implemented, but the original task list (§6) missed
+several downstream consumers that still assumed the pre-change identity
+(`file_id` == filename stem, filename-keyed S3 objects). Found and fixed while
+deploying:
+
+- **Schema (T3) was never applied** — `retrieval_units` had no `file_id`/`module_id`
+  columns, so the enrichment `INSERT` failed at ingest with `psycopg2.UndefinedColumn`.
+  Added the columns + scope indexes to the DBFlow initializer, idempotently
+  (`CREATE TABLE` columns **and** `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` for
+  already-deployed databases). Tests in `lambda/initializer/test_initializer_schema.py`.
+
+- **Enrichment `Module_Files` writers** — `_update_processing_status` and
+  `_extract_and_store_topics` matched `WHERE module_id = %s AND filename = %s`, bound with
+  the (now UUID) `file_id`. They matched **zero rows**: the UI spinner never cleared
+  (`processing_status` stuck on `pending`, `chunk_count`/`last_processed_at` null) and topic
+  metadata was never written. Now match on the `file_id` UUID PK; `_update_processing_status`
+  logs a warning on a zero-row update instead of a false "complete". Tests in
+  `multimodal_rag_v2/enrichment/test_module_files_writers.py`.
+
+- **`getFilesFunction`** — listed UUID-named S3 objects but matched metadata by the human
+  filename, so the instructor file list showed UUID names with null metadata. Now maps the
+  S3 object's UUID stem back to the human `{filename}.{filetype}` + metadata via `file_id`
+  (and surfaces `file_id` inside the returned metadata). Removed the dead, filename-matching
+  `get_file_metadata_from_db`. Tests in `lambda/getFilesFunction/test_get_files.py`.
+
+- **`deleteFile`** — built a stale pre-V2 S3 key (`{course}/{module}/documents/{filename}.{ext}`)
+  and never removed `retrieval_units`, orphaning the real object and its vectors. Now resolves
+  `file_id`, deletes the `courses/{course}/{module}/{file_id}.{ext}` object and the file's
+  `retrieval_units`, and drops the obsolete file-type gate (which had blocked deleting
+  html/csv/json/image files). Tests in `lambda/deleteFile/test_delete_file.py`.
+
+### Still outstanding
+
+- **`orphanCleanup` is stale** (same root cause, not yet fixed): it deletes V1
+  `langchain_pg_collection`/`langchain_pg_embedding` rows (not `retrieval_units`) and lists S3
+  under `{course}/{module}/` (missing the `courses/` prefix), so it removes neither the V2
+  vectors nor the actual V2 objects for orphaned modules.
+- **IR artifacts + images are not cleaned on `deleteFile`** — only the raw object, the
+  `retrieval_units`, and the `Module_Files` row are removed. Per-file IR
+  (`{course}/{module}/{file_id}/ir_v.../`) and images (`images/...`) remain.
+- **T8 / T9** — `student/file_url` legacy-fallback removal is unverified; the cross-module
+  A→B end-to-end check is still pending.
