@@ -31,7 +31,7 @@ Format: `ADR-NNN · date · status · context -> decision -> consequences`
 ## AWS Accounts & Environments
 - StackPrefix: `AILA`. Environments: `dev` | `prod` — selected via CDK context (`-c StackPrefix=... -c environment=dev|prod`).
 - Account + region are env-derived at deploy time (`CDK_DEFAULT_ACCOUNT` / `CDK_DEFAULT_REGION`, see `bin/cdk.ts`), not pinned in code.
-- Region: `ca-central-1`. Accounts (last-4; full IDs in `cdk.context.json`): dev = `…0264`, prod = `…4162`. Add SSO/profile aliases here when known.
+- Region: `ca-central-1`. Accounts (last-4; full IDs in `cdk.context.json`): dev = `…0264` (SSO profile `vincent.adm-dev2`), prod = `…4162` (SSO profile `vincent.adm.prod2`).
 - Bedrock access is per-account (Anthropic first-time-use approval, once per account) — track which accounts have model access enabled.
 
 ## Bedrock Configuration
@@ -48,6 +48,8 @@ Format: `ADR-NNN · date · status · context -> decision -> consequences`
 - Caches: DynamoDB (embedding + enrichment caches, `multimodal_rag_v2`).
 
 ## Operational Runbooks
+- Deploy (dev) -> from `cdk/`, after `aws sso login --profile vincent.adm-dev2` (only when the SSO session expired): `AWS_PROFILE=vincent.adm-dev2 npm run deploy`. Runs `npm test` (predeploy) then `cdk deploy --all -c environment=dev --parameters AILA-AmplifyStack:githubRepoName=AI-Learning-Assistant`; `StackPrefix=AILA` comes from `cdk.json`. The profile must have `region=ca-central-1`.
+- Deploy (prod) -> from `cdk/`, after `aws sso login --profile vincent.adm.prod2`: `AWS_PROFILE=vincent.adm.prod2 npm run deploy:prod` (gated by `npm test`; `-c environment=prod`, same `StackPrefix=AILA` + repo param). Legacy manual flow (unset + `aws configure export-credentials` + manual `CDK_DEFAULT_*`) is superseded by `AWS_PROFILE` + these npm scripts.
 - Rebuild psycopg2 layer -> from `cdk/`: `./build_layer_x86.sh`.
 - Add a Bedrock model -> follow `cdk-conventions.md` steps, then log the account/region enabled here.
 - Recover from failed predeploy -> ensure Docker is running, then re-run `npm test` in `cdk/`.

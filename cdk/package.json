@@ -10,8 +10,9 @@
     "test": "jest",
     "cdk": "cdk",
     "predeploy": "npm test",
-    "deploy": "cdk deploy --all",
-    "deploy:prod": "cdk deploy --all -c environment=prod"
+    "deploy": "cdk deploy --all -c environment=dev --parameters AILA-AmplifyStack:githubRepoName=AI-Learning-Assistant",
+    "predeploy:prod": "npm test",
+    "deploy:prod": "cdk deploy --all -c environment=prod --parameters AILA-AmplifyStack:githubRepoName=AI-Learning-Assistant"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",
