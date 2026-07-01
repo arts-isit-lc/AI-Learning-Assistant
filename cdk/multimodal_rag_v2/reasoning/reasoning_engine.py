@@ -84,6 +84,7 @@ class ReasoningEngine:
         system_prompt: str = "",
         ranked_results: list[RankedResult] | None = None,
         query_intent: QueryIntent | None = None,
+        scope_filter: dict | None = None,
     ) -> ReasoningResult:
         """Generate an answer using the assembled context.
 
@@ -97,6 +98,8 @@ class ReasoningEngine:
             system_prompt: Optional system prompt for the LLM.
             ranked_results: Optional ranked results for escalation.
             query_intent: Optional query intent for escalation decisions.
+            scope_filter: Optional file/module scope (same dict the retrieval
+                search used) so escalation DB lookups stay within scope.
 
         Returns:
             ReasoningResult with answer, sources, and escalation info.
@@ -109,6 +112,7 @@ class ReasoningEngine:
                 system_prompt=system_prompt,
                 ranked_results=ranked_results,
                 query_intent=query_intent,
+                scope_filter=scope_filter,
             )
         except Exception:
             logger.exception("Unhandled error in reasoning engine")
@@ -127,6 +131,7 @@ class ReasoningEngine:
         system_prompt: str = "",
         ranked_results: list[RankedResult] | None = None,
         query_intent: QueryIntent | None = None,
+        scope_filter: dict | None = None,
     ) -> ReasoningResult:
         """Internal implementation of answer generation.
 
@@ -138,6 +143,7 @@ class ReasoningEngine:
             query=query,
             ranked_results=ranked_results or [],
             query_intent=query_intent,
+            scope_filter=scope_filter,
         )
 
         # Store query_intent for use in formatting
@@ -243,6 +249,7 @@ class ReasoningEngine:
         query: str,
         ranked_results: list[RankedResult],
         query_intent: QueryIntent | None,
+        scope_filter: dict | None = None,
     ) -> EscalationResult:
         """Handle image escalation if required by query intent.
 
@@ -274,7 +281,8 @@ class ReasoningEngine:
         if should_escalate:
             try:
                 return self.image_escalation.escalate(
-                    ranked_results, query, query_intent=query_intent
+                    ranked_results, query, query_intent=query_intent,
+                    scope_filter=scope_filter,
                 )
             except Exception:
                 logger.exception("Image escalation failed, proceeding without")

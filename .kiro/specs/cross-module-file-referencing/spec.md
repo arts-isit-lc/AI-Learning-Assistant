@@ -83,11 +83,13 @@ for key, value in scope_filter.items():
 ### 4.4 First-class columns on `retrieval_units` (schema change)
 
 ```sql
-ALTER TABLE retrieval_units ADD COLUMN file_id UUID;
+ALTER TABLE retrieval_units ADD COLUMN file_id TEXT;
 ALTER TABLE retrieval_units ADD COLUMN module_id TEXT;
 CREATE INDEX idx_retrieval_units_file_id ON retrieval_units (file_id);
 CREATE INDEX idx_retrieval_units_module_id ON retrieval_units (module_id);
 ```
+
+> **`file_id` is `TEXT`, not `UUID`.** The scope filter in §4.3 binds `file_id = ANY(%s)` as a `text[]` (`[str(v) for v in value]`) with no cast. A `UUID` column has no `uuid = text` operator, so every scoped query fails at runtime with `operator does not exist: uuid = text`. Storing the canonical `Module_Files.file_id` UUID as text keeps the membership filter cast-free and consistent with `module_id`. Note this surfaces only at query time: INSERTs into a `UUID` column succeed via the text→uuid assignment cast, so ingestion looks healthy while retrieval returns nothing.
 
 Enrichment `_store_in_pgvector` writes `file_id` and `module_id` as columns (it already has both from the SQS message context). Keep them in `metadata` too for backward-compatible reads (e.g. `figure_url` is untouched). Filters become indexed column predicates instead of `metadata->>'...'` JSON extraction.
 

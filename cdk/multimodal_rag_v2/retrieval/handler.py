@@ -563,6 +563,7 @@ def _handle_query(
             chat_history=chat_history,
             ranked_results=final_results,
             query_intent=query_intent,
+            scope_filter=metadata_filter,
         )
         reason_latency = time.time() - reason_start
 

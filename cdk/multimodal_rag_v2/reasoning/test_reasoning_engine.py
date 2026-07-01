@@ -313,7 +313,8 @@ class TestImageEscalation:
         assert len(result.image_analyses) == 1
         assert result.image_analyses[0].image_s3_key == "img/test.png"
         mock_escalation.escalate.assert_called_once_with(
-            ranked_results, "Show me the diagram", query_intent=intent
+            ranked_results, "Show me the diagram", query_intent=intent,
+            scope_filter=None,
         )
 
     def test_no_escalation_when_intent_does_not_require(self):

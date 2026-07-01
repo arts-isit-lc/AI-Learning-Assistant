@@ -47,16 +47,20 @@ class TestHnswIndex:
 
 
 class TestCrossModuleFileReferencingColumns:
-    """retrieval_units must carry file_id (UUID) + module_id as first-class,
+    """retrieval_units must carry file_id (TEXT) + module_id as first-class,
     indexed columns. The enrichment writer (_store_in_pgvector) INSERTs into
     these columns and the retrieval scope filter (_COLUMN_SCOPE_KEYS) queries
     them; a missing migration here raised psycopg2 UndefinedColumn at ingest.
+
+    file_id is TEXT, not UUID: the scope filter binds `file_id = ANY(%s)` as a
+    text[] with no cast, and a UUID column makes that raise
+    `operator does not exist: uuid = text`.
     See the cross-module-file-referencing spec §4.4 (task T3).
     """
 
     def test_columns_declared_in_create_table(self):
         src = _source()
-        assert "file_id UUID" in src, "retrieval_units.file_id column is missing"
+        assert "file_id TEXT" in src, "retrieval_units.file_id column is missing"
         assert "module_id TEXT" in src, "retrieval_units.module_id column is missing"
 
     def test_idempotent_migration_for_existing_tables(self):
@@ -64,8 +68,17 @@ class TestCrossModuleFileReferencingColumns:
         # so the columns must also be added via ALTER ... ADD COLUMN IF NOT EXISTS
         # to migrate databases that predate the columns.
         src = _source()
-        assert "ALTER TABLE retrieval_units ADD COLUMN IF NOT EXISTS file_id UUID" in src
+        assert "ALTER TABLE retrieval_units ADD COLUMN IF NOT EXISTS file_id TEXT" in src
         assert "ALTER TABLE retrieval_units ADD COLUMN IF NOT EXISTS module_id TEXT" in src
+
+    def test_uuid_to_text_repair_migration_present(self):
+        # Databases first provisioned with file_id as UUID must be converted to
+        # TEXT, otherwise the scope filter's `file_id = ANY(%s)` text[] binding
+        # raises `operator does not exist: uuid = text`. The conversion must be
+        # guarded on the current data_type so it stays a no-op once applied.
+        src = _source()
+        assert "ALTER COLUMN file_id TYPE text USING file_id::text" in src
+        assert "data_type = 'uuid'" in src
 
     def test_scope_indexes_present(self):
         src = _source()

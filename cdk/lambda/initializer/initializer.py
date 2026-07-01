@@ -202,14 +202,20 @@ def handler(event, context):
                 metadata JSONB DEFAULT '{}',
                 sibling_ids JSONB DEFAULT '[]',
                 ts_vector tsvector,
-                -- Cross-module file referencing: the canonical UUID file_id and the
+                -- Cross-module file referencing: the canonical file_id and the
                 -- module_id are promoted to first-class indexed columns so retrieval
                 -- can scope by `file_id = ANY(allowed_file_ids)` (including cross-module
                 -- references) without JSON extraction. They are also kept inside
                 -- `metadata` for backward-compatible reads. The enrichment writer
                 -- (_store_in_pgvector) and the retrieval scope filter both depend on
-                -- these columns. See the cross-module-file-referencing spec §4.4.
-                file_id UUID,
+                -- these columns.
+                --
+                -- file_id is TEXT, not UUID: it stores the canonical Module_Files.file_id
+                -- (a UUID) as text so the scope filter's `= ANY(%s)` text[] binding
+                -- compares directly, with no per-query ::uuid[] cast. A UUID column
+                -- makes the scoped query raise `operator does not exist: uuid = text`.
+                -- See the cross-module-file-referencing spec §4.4.
+                file_id TEXT,
                 module_id TEXT
             );
 
@@ -218,8 +224,28 @@ def handler(event, context):
             -- table, so the columns must be added explicitly. `ADD COLUMN IF NOT
             -- EXISTS` is itself a no-op when they are already present (e.g. on a
             -- freshly created table), so this is safe to run on every invocation.
-            ALTER TABLE retrieval_units ADD COLUMN IF NOT EXISTS file_id UUID;
+            ALTER TABLE retrieval_units ADD COLUMN IF NOT EXISTS file_id TEXT;
             ALTER TABLE retrieval_units ADD COLUMN IF NOT EXISTS module_id TEXT;
+
+            -- Repair databases provisioned when file_id was created as UUID. The
+            -- retrieval scope filter binds `file_id = ANY(%s)` as a text[] with no
+            -- cast, and Postgres has no `uuid = text` operator, so every scoped
+            -- vector/BM25 query raised UndefinedFunction and retrieval returned
+            -- nothing. Convert to TEXT (lossless: a UUID renders as its canonical
+            -- text form). Guarded on the current data_type so it is a cheap no-op on
+            -- freshly created or already-migrated tables; the ALTER also rebuilds the
+            -- dependent idx_retrieval_units_file_id index automatically.
+            DO $$ BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'retrieval_units'
+                      AND column_name = 'file_id'
+                      AND data_type = 'uuid'
+                ) THEN
+                    ALTER TABLE retrieval_units
+                        ALTER COLUMN file_id TYPE text USING file_id::text;
+                END IF;
+            END $$;
 
             -- ─── Foreign Keys ─────────────────────────────────────────────────────
 

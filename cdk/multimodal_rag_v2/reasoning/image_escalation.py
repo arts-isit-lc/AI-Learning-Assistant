@@ -62,7 +62,11 @@ class ImageEscalation:
         self._db_connection_factory = db_connection_factory
 
     def escalate(
-        self, results: list[RankedResult], query: str, query_intent=None
+        self,
+        results: list[RankedResult],
+        query: str,
+        query_intent=None,
+        scope_filter: dict | None = None,
     ) -> EscalationResult:
         """Perform image escalation on ranked results.
 
@@ -74,6 +78,10 @@ class ImageEscalation:
             results: Ranked results from the retrieval layer.
             query: The user's original query for vision analysis context.
             query_intent: Optional QueryIntent with figure_reference for targeted lookup.
+            scope_filter: Optional file/module scope (e.g. {"file_id": [...]} or
+                {"module_id": "..."}) applied to the direct DB figure lookup so it
+                cannot match figures from other files/modules. Strategies that read
+                from `results` are already scoped by the upstream search.
 
         Returns:
             EscalationResult with escalation_used flag and image analyses.
@@ -129,6 +137,7 @@ class ImageEscalation:
                 db_image = self._find_image_by_figure_ref_in_db(
                     query_intent.figure_reference.ref_type,
                     query_intent.figure_reference.number,
+                    scope_filter=scope_filter,
                 )
                 if db_image is not None:
                     analysis = self._analyze_image(db_image, query)
@@ -291,8 +300,38 @@ class ImageEscalation:
 
         return sibling_images
 
+    @staticmethod
+    def _scope_predicate(scope_filter: dict | None) -> tuple[str, list]:
+        """Render a file/module scope filter into an AND SQL fragment + params.
+
+        Mirrors the retrieval handler's scope selection for the two promoted
+        scope columns so direct DB figure lookups are restricted to the same
+        files/modules as the main search (preventing a "Figure 4.1" match from
+        another course/file). file_id and module_id are TEXT columns, so a list
+        value binds as text[] via `= ANY(%s)` and a scalar as `= %s`.
+
+        Returns ("", []) when no scope is supplied.
+        """
+        if not scope_filter:
+            return "", []
+        clauses: list[str] = []
+        params: list = []
+        for key in ("file_id", "module_id"):
+            if key not in scope_filter:
+                continue
+            value = scope_filter[key]
+            if isinstance(value, (list, tuple)):
+                clauses.append(f"{key} = ANY(%s)")
+                params.append([str(v) for v in value])
+            else:
+                clauses.append(f"{key} = %s")
+                params.append(str(value))
+        if not clauses:
+            return "", []
+        return " AND " + " AND ".join(clauses), params
+
     def _find_image_by_figure_ref_in_db(
-        self, ref_type: str, number: str
+        self, ref_type: str, number: str, scope_filter: dict | None = None
     ) -> RankedResult | None:
         """Query the database directly for an image linked to a figure reference.
 
@@ -304,6 +343,8 @@ class ImageEscalation:
         Args:
             ref_type: Type of reference ("figure", "table", "algorithm").
             number: The number (e.g., "1.1").
+            scope_filter: Optional file/module scope restricting the lookup to
+                the caller's allowed files (same dict the main search used).
 
         Returns:
             RankedResult for the image if found, None otherwise.
@@ -318,16 +359,17 @@ class ImageEscalation:
                 return None
 
             cur = conn.cursor()
+            scope_sql, scope_params = self._scope_predicate(scope_filter)
 
             # Strategy A: Find image directly by matching embedding_text
             figure_pattern = f"%{ref_type} {number}%"
-            cur.execute("""
+            cur.execute(f"""
                 SELECT retrieval_id, embedding_text, metadata
                 FROM retrieval_units
                 WHERE element_type = 'image'
-                AND LOWER(embedding_text) LIKE LOWER(%s)
+                AND LOWER(embedding_text) LIKE LOWER(%s){scope_sql}
                 LIMIT 1;
-            """, (figure_pattern,))
+            """, (figure_pattern, *scope_params))
 
             row = cur.fetchone()
             if row:
@@ -353,12 +395,12 @@ class ImageEscalation:
 
             # Strategy B: Find text caption with figure_ref, then get sibling image
             figure_ref_value = f"{ref_type} {number}"
-            cur.execute("""
+            cur.execute(f"""
                 SELECT sibling_ids
                 FROM retrieval_units
-                WHERE metadata->>'figure_ref' ILIKE %s
+                WHERE metadata->>'figure_ref' ILIKE %s{scope_sql}
                 LIMIT 1;
-            """, (figure_ref_value,))
+            """, (figure_ref_value, *scope_params))
 
             row = cur.fetchone()
             if row:
@@ -397,28 +439,28 @@ class ImageEscalation:
 
             # Strategy C: For tables — find the table's page and look for a page-render image
             if ref_type == "table":
-                cur.execute("""
+                cur.execute(f"""
                     SELECT metadata->>'provenance_page_num' as page_num
                     FROM retrieval_units
                     WHERE element_type = 'table'
-                    AND LOWER(embedding_text) LIKE LOWER(%s)
+                    AND LOWER(embedding_text) LIKE LOWER(%s){scope_sql}
                     LIMIT 1;
-                """, (f"%{ref_type} {number}%",))
+                """, (f"%{ref_type} {number}%", *scope_params))
 
                 row = cur.fetchone()
                 if row and row[0]:
                     page_num = row[0]
                     # Look for a page-render image on the same page
-                    cur.execute("""
+                    cur.execute(f"""
                         SELECT retrieval_id, embedding_text, metadata
                         FROM retrieval_units
                         WHERE element_type = 'image'
                         AND metadata->>'provenance_page_num' = %s
-                        AND metadata->>'image_s3_key' IS NOT NULL
+                        AND metadata->>'image_s3_key' IS NOT NULL{scope_sql}
                         ORDER BY
                             CASE WHEN metadata->>'render_reason' = 'vector_graphics_detected' THEN 0 ELSE 1 END
                         LIMIT 1;
-                    """, (page_num,))
+                    """, (page_num, *scope_params))
 
                     img_row = cur.fetchone()
                     if img_row:
