@@ -10,37 +10,18 @@ Applies when using the Figma MCP to read designs. Never go directly from Figma n
 Figma nodes -> token extraction -> component mapping -> structured spec -> code
 ```
 
+> The generic figma-to-code workflow (fetch context, screenshot, download assets, translate, validate) is provided by the **figma Power** steering `implement-design.md` — load that for the full pipeline. This file is the *project-specific overlay*: our token source of truth, component-registry mapping, and ambiguity rules.
+
 ---
 
-## Step 1 — Extract Design Tokens First
+## Step 1 — Reconcile Against Existing Tokens First
 
-Before writing any code, extract and normalize tokens from the Figma frame:
+The source of truth for token **values** is code, never this file:
+- Semantic colours / tokens: `frontend/src/index.css` + `frontend/tailwind.config.js`
+- MUI theme (existing pages): `frontend/src/Theme.jsx` (primary `#5536DA`, bg `#F8F9FD`)
+- Allowed classes + spacing/typography scales: `ui-design-system.md`
 
-```json
-{
-  "tokens": {
-    "colors": {
-      "primary": "#2563eb",
-      "primary-hover": "#1d4ed8",
-      "background": "#ffffff",
-      "surface": "#f8fafc",
-      "muted": "#94a3b8",
-      "destructive": "#dc2626",
-      "border": "#e2e8f0",
-      "foreground": "#0f172a"
-    },
-    "spacing": "4pt-grid",
-    "radius": "0.5rem",
-    "typography": {
-      "xs": "12px", "sm": "14px", "base": "16px",
-      "lg": "18px", "xl": "20px", "2xl": "24px", "3xl": "30px"
-    },
-    "theme": "light"
-  }
-}
-```
-
-Map extracted colours to CSS variable names in `src/index.css` (`--primary`, `--background`, etc.). If a Figma colour has no matching token, flag it — do not invent a token without updating `tailwind.config.js` and `index.css` first.
+Extract tokens from the Figma frame, then map each to an existing semantic token. If a Figma value has no match, flag it — never invent a token without first updating `index.css` / `tailwind.config.js`. Never hardcode raw hex in components.
 
 ---
 
@@ -116,4 +97,4 @@ Unchanged:
 
 ## Chat UI Patterns
 
-See `chat-ux-patterns.md` for the canonical chat interface specification (loaded automatically when editing student/chat components).
+See `chat-ux-patterns.md` for the canonical chat interface spec — auto-loaded when editing student pages (`frontend/src/pages/student/**`); `#`-reference it when working on shared chat components under `src/components/`.

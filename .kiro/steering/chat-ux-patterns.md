@@ -1,5 +1,10 @@
 ---
-inclusion: manual
+inclusion: fileMatch
+fileMatchPattern:
+  - "frontend/src/pages/student/**"
+  - "frontend/src/components/AIMessage.jsx"
+  - "frontend/src/components/StudentMessage.jsx"
+  - "frontend/src/components/Session.jsx"
 ---
 
 # Chat UX Patterns

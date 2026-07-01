@@ -1,6 +1,6 @@
 ---
 inclusion: fileMatch
-fileMatchPattern: "cdk/**"
+fileMatchPattern: "cdk/**/*.ts"
 ---
 
 # CDK Conventions
@@ -43,10 +43,7 @@ Always `aws-cdk-lib/aws-*` — never deprecated `@aws-cdk/` packages.
 `public readonly` properties + constructor args. Never SSM.
 
 ## Stack Dependency Order
-```
-VpcStack -> DatabaseStack -> MultimodalRagStack -> ApiGatewayStack -+-> ObservabilityStack
-                                                                    +-> DBFlowStack -> AmplifyStack
-```
+See `project-overview.md` (always loaded) for the canonical stack dependency graph — not duplicated here.
 
 ## Testing
 Jest 29 + ts-jest · `Template.fromStack()` assertions · Docker required · `createTestStacks()` for most stacks · `createObservabilityTemplate()` for ObservabilityStack (separate app)

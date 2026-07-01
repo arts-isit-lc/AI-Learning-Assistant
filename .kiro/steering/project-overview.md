@@ -47,3 +47,6 @@ npm run lint         # ESLint
 - Docker required for CDK tests/synth (5 container images -> 7 Lambda functions)
 - No frontend test framework — ESLint only
 - `predeploy` hook runs `npm test` before every deploy; never bypass
+
+## Engineering Log
+Operational memory (decisions, deploy gotchas, workarounds, env/Bedrock/DB notes): `engineering-log.md` (manual — load it before deploys, incident triage, or architecture/Bedrock/schema changes). Knowledge ownership: steering = rules · engineering-log = decisions/scars · specs = current work. Don't duplicate across them.

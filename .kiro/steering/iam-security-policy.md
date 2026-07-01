@@ -1,6 +1,6 @@
 ---
 inclusion: fileMatch
-fileMatchPattern: "cdk/**"
+fileMatchPattern: "cdk/**/*.ts"
 ---
 
 # IAM Security Policy
@@ -14,9 +14,11 @@ Enforced by `cdk/test/iam-policies.test.ts`. All rules mandatory.
 
 ## Forbidden
 - Action wildcards: `s3:*`, `dynamodb:*`, `logs:*`, `iam:*`
+- Privilege-escalation IAM actions: `iam:AddUserToGroup`
 - Managed policies: `*FullAccess`, `AmazonSSMReadOnlyAccess`
 - CDK grant helpers: `grantReadWrite()`, `grantFullAccess()`, `addManagedPolicy()`
 - Shared roles (never recreate `lambdaRole`/`coglambdaRole`)
+- Wildcard `resources: ['*']` for Secrets Manager, CloudWatch Logs, or RDS Proxy connect — use the scoped ARNs in Scoping Rules below
 
 ## Scoping Rules
 | Service | Scope to |
