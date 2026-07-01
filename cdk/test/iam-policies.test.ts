@@ -13,12 +13,14 @@ import { Template } from 'aws-cdk-lib/assertions';
 let apiTemplate: Template;
 let dbTemplate: Template;
 let dbFlowTemplate: Template;
+let ragTemplate: Template;
 
 beforeAll(() => {
   const stacks = createTestStacks();
   apiTemplate = stacks.apiTemplate;
   dbTemplate = stacks.dbTemplate;
   dbFlowTemplate = stacks.dbFlowTemplate;
+  ragTemplate = stacks.ragTemplate;
 });
 
 /**
@@ -41,6 +43,39 @@ function collectPolicyStatements(template: Template): Array<{ logicalId: string;
     if (!Array.isArray(statements)) continue;
     for (const stmt of statements) {
       results.push({ logicalId, statement: stmt });
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Helper: collect inline policy statements embedded on AWS::IAM::Role resources.
+ * Roles created with `inlinePolicies` render their statements under
+ * Properties.Policies[].PolicyDocument (not as separate AWS::IAM::Policy
+ * resources), so collectPolicyStatements does not see them.
+ */
+function collectInlineRoleStatements(
+  template: Template
+): Array<{ logicalId: string; roleName: unknown; statement: Record<string, unknown> }> {
+  const json = template.toJSON();
+  const resources = json.Resources ?? {};
+  const results: Array<{ logicalId: string; roleName: unknown; statement: Record<string, unknown> }> = [];
+
+  for (const [logicalId, resource] of Object.entries(resources)) {
+    const res = resource as Record<string, unknown>;
+    if (res.Type !== 'AWS::IAM::Role') continue;
+    const props = res.Properties as Record<string, unknown> | undefined;
+    if (!props) continue;
+    const policies = props.Policies as Array<Record<string, unknown>> | undefined;
+    if (!Array.isArray(policies)) continue;
+    for (const policy of policies) {
+      const doc = policy.PolicyDocument as Record<string, unknown> | undefined;
+      const statements = doc?.Statement as Array<Record<string, unknown>> | undefined;
+      if (!Array.isArray(statements)) continue;
+      for (const stmt of statements) {
+        results.push({ logicalId, roleName: props.RoleName, statement: stmt });
+      }
     }
   }
 
@@ -345,6 +380,32 @@ describe('IAM Policy Guardrails', () => {
           }
         }
       }
+    }
+  });
+
+  /**
+   * Validates: chatbotV2 can invoke models WITH a guardrail.
+   * chatbotV2Role (MultimodalRagStack, inline policy) must grant
+   * bedrock:ApplyGuardrail on a guardrail-scoped ARN, never '*'. The guardrail's
+   * concrete id is created in ApiGatewayStack and resolved via SSM at runtime,
+   * so the ARN is region/account-scoped with a wildcard on the id only.
+   */
+  test('chatbotV2Role grants bedrock:ApplyGuardrail on a guardrail-scoped ARN', () => {
+    const statements = collectInlineRoleStatements(ragTemplate);
+    const guardrailStatements = statements.filter(
+      ({ statement }) => statementHasAction(statement, 'bedrock:ApplyGuardrail')
+    );
+
+    // chatbotV2Role must carry the permission (else the streamed call 403s).
+    expect(guardrailStatements.length).toBeGreaterThanOrEqual(1);
+
+    for (const { statement } of guardrailStatements) {
+      const resource = statement.Resource;
+      expect(resource).not.toBe('*');
+      // region/account tokens render as Fn::Join, so assert on the serialized form.
+      const serialized = JSON.stringify(resource);
+      expect(serialized).toContain('guardrail/');
+      expect(serialized).not.toBe('"*"');
     }
   });
 

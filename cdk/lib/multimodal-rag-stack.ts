@@ -531,6 +531,22 @@ export class MultimodalRagStack extends cdk.Stack {
                 `arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-3-haiku-20240307-v1:0`,
               ],
             }),
+            // Bedrock ApplyGuardrail — required when invoking the model WITH a
+            // guardrail (guardrailIdentifier/Version passed to
+            // InvokeModelWithResponseStream). Without this, the streamed call
+            // fails with AccessDeniedException on bedrock:ApplyGuardrail.
+            // The guardrail is created in ApiGatewayStack (which depends on this
+            // stack) and its id is resolved at runtime via SSM, so the concrete
+            // guardrail ARN is not available at synth here — and a cross-stack
+            // grant would create a circular stack dependency. Scope to this
+            // account+region's guardrails (documented wildcard on the id only).
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ["bedrock:ApplyGuardrail"],
+              resources: [
+                `arn:aws:bedrock:${this.region}:${this.account}:guardrail/*`,
+              ],
+            }),
             // Lambda InvokeFunction — ragRetrievalFunction only
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
