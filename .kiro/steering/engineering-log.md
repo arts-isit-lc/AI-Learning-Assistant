@@ -50,6 +50,12 @@ Format: `ADR-NNN · date · status · context -> decision -> consequences`
 ## Operational Runbooks
 - Deploy (dev) -> from `cdk/`, after `aws sso login --profile vincent.adm-dev2` (only when the SSO session expired): `AWS_PROFILE=vincent.adm-dev2 npm run deploy`. Runs `npm test` (predeploy) then `cdk deploy --all -c environment=dev --parameters AILA-AmplifyStack:githubRepoName=AI-Learning-Assistant`; `StackPrefix=AILA` comes from `cdk.json`. The profile must have `region=ca-central-1`.
 - Deploy (prod) -> from `cdk/`, after `aws sso login --profile vincent.adm.prod2`: `AWS_PROFILE=vincent.adm.prod2 npm run deploy:prod` (gated by `npm test`; `-c environment=prod`, same `StackPrefix=AILA` + repo param). Legacy manual flow (unset + `aws configure export-credentials` + manual `CDK_DEFAULT_*`) is superseded by `AWS_PROFILE` + these npm scripts.
+- Tail / query CloudWatch logs (debug) -> ensure a live session first (`aws sso login --profile <profile>`); always pass `--profile` + `--region ca-central-1` (a non-interactive shell won't inherit an exported `AWS_PROFILE`). Profiles: dev `vincent.adm-dev2`, prod `vincent.adm.prod2`. PowerUserAccess covers logs read.
+  - List groups: `aws --profile vincent.adm-dev2 --region ca-central-1 logs describe-log-groups --query 'logGroups[].logGroupName' --output text`
+  - Live tail: `aws --profile vincent.adm-dev2 --region ca-central-1 logs tail /aws/lambda/AILA-ApiGatewayStack-studentFunction --follow`
+  - Recent + filter: `... logs tail <group> --since 2h --filter-pattern '{ $.level = "ERROR" }'` (Powertools logs are JSON; plain `--filter-pattern ERROR` also works). For aggregations use Logs Insights (`logs start-query` / `get-query-results`).
+  - Prod: identical commands with `--profile vincent.adm.prod2`.
+  - Access is contingent on a live SSO session (can't self-re-auth). Pull scoped windows/filters; never bulk-dump — log contents may hold PII/secrets.
 - Rebuild psycopg2 layer -> from `cdk/`: `./build_layer_x86.sh`.
 - Add a Bedrock model -> follow `cdk-conventions.md` steps, then log the account/region enabled here.
 - Recover from failed predeploy -> ensure Docker is running, then re-run `npm test` in `cdk/`.
