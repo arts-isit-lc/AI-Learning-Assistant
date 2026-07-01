@@ -15,7 +15,8 @@ import figure_selection as fs  # noqa: E402
 
 def _rr(**kw):
     base = dict(
-        escalation_used=False, image_results=[], table_results=[], formula_results=[]
+        escalation_used=False, image_analyses=[], image_results=[],
+        table_results=[], formula_results=[],
     )
     base.update(kw)
     return SimpleNamespace(**base)
@@ -106,6 +107,57 @@ class TestSelectFigures:
 
     def test_none_result(self):
         assert fs.select_figures(None, "figure") == []
+
+    def test_specific_figure_ref_shows_only_escalated_image(self):
+        # Reported bug: "explain figure 4.1" returned 4.1 plus sibling figures
+        # 2.1/3.1 that scored higher. Only the escalated (analysed) image shows.
+        rr = _rr(
+            escalation_used=True,
+            image_analyses=[
+                {"image_s3_key": "s3://b/fig41.png", "analysis": "binary search", "confidence": 0.9}
+            ],
+            image_results=[
+                {"retrieval_id": "fig21", "score": 0.72, "image_s3_key": "s3://b/fig21.png"},
+                {"retrieval_id": "fig31", "score": 0.70, "image_s3_key": "s3://b/fig31.png"},
+                {"retrieval_id": "fig41", "score": 0.68, "image_s3_key": "s3://b/fig41.png"},
+            ],
+        )
+        assert fs.select_figures(rr, "can you explain figure 4.1 to me?") == ["fig41"]
+
+    def test_specific_ref_escalated_match_beats_higher_scoring_siblings(self):
+        # The escalated image wins even when it is the lowest-scoring candidate.
+        rr = _rr(
+            escalation_used=True,
+            image_analyses=[{"image_s3_key": "s3://b/target.png", "analysis": "x", "confidence": 0.8}],
+            image_results=[
+                {"retrieval_id": "other", "score": 0.95, "image_s3_key": "s3://b/other.png"},
+                {"retrieval_id": "target", "score": 0.40, "image_s3_key": "s3://b/target.png"},
+            ],
+        )
+        assert fs.select_figures(rr, "what is in figure 7.2?") == ["target"]
+
+    def test_specific_ref_without_escalation_falls_back_to_single_top_image(self):
+        rr = _rr(image_results=[
+            {"retrieval_id": "a", "score": 0.55, "image_s3_key": "s3://b/a.png"},
+            {"retrieval_id": "b", "score": 0.80, "image_s3_key": "s3://b/b.png"},
+        ])
+        # Specific reference, nothing escalated -> a single best-scoring image, not both.
+        assert fs.select_figures(rr, "explain figure 4.1") == ["b"]
+
+    def test_specific_ref_all_below_floor_shows_nothing(self):
+        rr = _rr(image_results=[{"retrieval_id": "a", "score": 0.2, "image_s3_key": "s3://b/a.png"}])
+        assert fs.select_figures(rr, "explain figure 4.1") == []
+
+    def test_generic_diagram_query_still_allows_multiple_figures(self):
+        rr = _rr(
+            escalation_used=True,
+            image_results=[
+                {"retrieval_id": f"i{i}", "score": 0.9, "image_s3_key": f"s3://b/{i}.png"}
+                for i in range(3)
+            ],
+        )
+        # No specific number -> generic path may surface several figures.
+        assert fs.select_figures(rr, "show me some diagrams") == ["i0", "i1", "i2"]
 
 
 class TestHarmonizedAndConfigurable:

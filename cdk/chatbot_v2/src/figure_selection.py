@@ -74,6 +74,24 @@ def _log_candidate_scores(block_type: str, candidates: list | None) -> None:
     )
 
 
+def _log_selected(
+    selected: list[str], has_figure_ref: bool, specific_ref: bool, escalation_used: bool
+) -> None:
+    """Emit the final figure-selection decision for observability."""
+    if not selected:
+        return
+    logger.info(
+        "Figures selected for display",
+        extra={
+            "count": len(selected),
+            "has_figure_ref": has_figure_ref,
+            "specific_figure_ref": specific_ref,
+            "escalation_used": escalation_used,
+            "retrieval_ids": selected,
+        },
+    )
+
+
 def select_figures(
     retrieval_result,
     query: str,
@@ -101,54 +119,77 @@ def select_figures(
 
     _log_candidate_scores("figure", retrieval_result.image_results)
 
-    selected = []
+    image_results = retrieval_result.image_results or []
+    # S3 keys of the image(s) the vision model actually escalated/analysed. The
+    # same key appears on the matching image_results entry, letting us map an
+    # escalated analysis back to a displayable retrieval_id.
+    escalated_keys = {
+        ia.get("image_s3_key")
+        for ia in (getattr(retrieval_result, "image_analyses", None) or [])
+        if ia.get("image_s3_key")
+    }
+
+    fig_match = _FIGURE_REF_PATTERN.search(query)
+    has_figure_ref = fig_match is not None
+    # group(2) is the number (e.g. "4.1"); present only for a specific reference.
+    specific_ref = bool(fig_match and fig_match.group(2))
+
+    selected: list[str] = []
     seen: set[str] = set()
 
-    has_figure_ref = _FIGURE_REF_PATTERN.search(query) is not None
+    def _take(rid: str | None) -> None:
+        if rid and rid not in seen:
+            selected.append(rid)
+            seen.add(rid)
 
-    # Priority 1: Escalated figure — use retrieval_id from image_results that matches
-    if retrieval_result.escalation_used and retrieval_result.image_results:
-        for img in retrieval_result.image_results:
-            rid = img.get("retrieval_id")
-            if rid and rid not in seen:
-                selected.append(rid)
-                seen.add(rid)
+    # A query that names a specific figure ("figure 4.1") must show ONLY that
+    # figure. Retrieval also returns sibling diagrams from the same file (2.1,
+    # 3.1, ...) that score highly for being visually similar — not what the
+    # student asked for. Prefer the exact image escalation analysed (matched by
+    # S3 key); if it can't be mapped, fall back to a single best-scoring image.
+    if specific_ref:
+        if retrieval_result.escalation_used and escalated_keys:
+            for img in image_results:
                 if len(selected) >= max_figures:
                     break
+                if img.get("image_s3_key") in escalated_keys:
+                    _take(img.get("retrieval_id"))
+        if not selected:
+            best_rid, best_score = None, None
+            for img in image_results:
+                score = img.get("score", 0) or 0
+                rid = img.get("retrieval_id")
+                if rid and score >= score_threshold and (best_score is None or score > best_score):
+                    best_rid, best_score = rid, score
+            _take(best_rid)
+        _log_selected(selected, has_figure_ref, specific_ref, retrieval_result.escalation_used)
+        return selected[:max_figures]
 
-    # Priority 2: Image results from retrieval (if query references figures)
+    # Generic figure/diagram query (no specific number) — may surface several.
+    # Priority 1: escalated figures attach regardless of score.
+    if retrieval_result.escalation_used:
+        for img in image_results:
+            if len(selected) >= max_figures:
+                break
+            _take(img.get("retrieval_id"))
+
+    # Priority 2: relevant images when the query references figures at all.
     if has_figure_ref or retrieval_result.escalation_used:
-        for img in retrieval_result.image_results:
+        for img in image_results:
             if len(selected) >= max_figures:
                 break
-            rid = img.get("retrieval_id")
-            score = img.get("score", 0) or 0
-            if rid and rid not in seen and score >= score_threshold:
-                selected.append(rid)
-                seen.add(rid)
+            if (img.get("score", 0) or 0) >= score_threshold:
+                _take(img.get("retrieval_id"))
 
-    # Priority 3: High-confidence fallback (even without figure reference)
+    # Priority 3: high-confidence fallback (no figure reference at all).
     if not selected:
-        for img in retrieval_result.image_results:
+        for img in image_results:
             if len(selected) >= max_figures:
                 break
-            rid = img.get("retrieval_id")
-            score = img.get("score", 0) or 0
-            if rid and rid not in seen and score >= high_confidence_threshold:
-                selected.append(rid)
-                seen.add(rid)
+            if (img.get("score", 0) or 0) >= high_confidence_threshold:
+                _take(img.get("retrieval_id"))
 
-    if selected:
-        logger.info(
-            "Figures selected for display",
-            extra={
-                "count": len(selected),
-                "has_figure_ref": has_figure_ref,
-                "escalation_used": retrieval_result.escalation_used,
-                "retrieval_ids": selected,
-            },
-        )
-
+    _log_selected(selected, has_figure_ref, specific_ref, retrieval_result.escalation_used)
     return selected
 
 
