@@ -79,19 +79,23 @@ def stream_response(
             "messages": messages,
         }
 
-        # Add guardrail config if present
-        if model_kwargs and "guardrail_id" in model_kwargs and model_kwargs["guardrail_id"]:
-            body["amazon-bedrock-guardrailConfig"] = {
-                "guardrailIdentifier": model_kwargs["guardrail_id"],
-                "guardrailVersion": model_kwargs.get("guardrail_version", "DRAFT"),
-            }
+        invoke_kwargs = {
+            "modelId": model_id,
+            "contentType": "application/json",
+            "accept": "application/json",
+            "body": json.dumps(body),
+        }
 
-        response = bedrock_client.invoke_model_with_response_stream(
-            modelId=model_id,
-            contentType="application/json",
-            accept="application/json",
-            body=json.dumps(body),
-        )
+        # Guardrails are top-level InvokeModelWithResponseStream parameters (sent
+        # as X-Amzn-Bedrock-Guardrail* headers), NOT fields inside the model body.
+        # Putting them in the body trips the model's own request schema, e.g.
+        # Claude's Messages API rejects unknown keys with a ValidationException
+        # ("extraneous key [amazon-bedrock-guardrailConfig] is not permitted").
+        if model_kwargs and model_kwargs.get("guardrail_id"):
+            invoke_kwargs["guardrailIdentifier"] = model_kwargs["guardrail_id"]
+            invoke_kwargs["guardrailVersion"] = model_kwargs.get("guardrail_version", "DRAFT")
+
+        response = bedrock_client.invoke_model_with_response_stream(**invoke_kwargs)
 
         full_response = ""
         chunk_buffer = ""
