@@ -93,3 +93,27 @@ class TestGuardrailRequestShape:
 
         assert "guardrailIdentifier" not in captured
         assert result  # FALLBACK_MESSAGE on an empty stream
+
+    def test_disabled_flag_omits_guardrail_even_with_id(self, monkeypatch):
+        # STREAM_GUARDRAIL_DISABLED (dev diagnostic) must drop the guardrail from
+        # the streaming call even when a guardrail_id is supplied, so we can
+        # measure TTFT without it. Default (False) behavior is covered above.
+        import streaming
+        monkeypatch.setattr(streaming, "STREAM_GUARDRAIL_DISABLED", True)
+
+        captured: dict = {}
+        client = _fake_bedrock_client(captured)
+
+        stream_response(
+            bedrock_client=client,
+            model_id="anthropic.claude-3-sonnet-20240229-v1:0",
+            system_prompt="s",
+            user_message="hello",
+            chat_history=[],
+            appsync_url="",
+            session_id="sess-1",
+            model_kwargs={"max_tokens": 100, "guardrail_id": "gr-1", "guardrail_version": "2"},
+        )
+
+        assert "guardrailIdentifier" not in captured
+        assert "guardrailVersion" not in captured

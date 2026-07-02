@@ -44,3 +44,12 @@ PARALLEL_EVAL_RETRIEVAL = _flag("PARALLEL_EVAL_RETRIEVAL", default=False)
 # queue (consumed by a dedicated Lambda) instead of writing synchronously on the
 # response path. DynamoDB stays the synchronous source of truth.
 ASYNC_RDS_PROJECTION = _flag("ASYNC_RDS_PROJECTION", default=False)
+
+# --- Diagnostic (default OFF; DEV-ONLY) ---------------------------------------
+# Drop the Bedrock guardrail from the STREAMING generation call to isolate its
+# time-to-first-token cost. Bedrock guardrails on a streaming response default to
+# synchronous stream processing, which buffers output before releasing the first
+# token — the leading suspect for the multi-second TTFT. Enabling this removes
+# output filtering on the streamed response, so it is a measurement aid ONLY and
+# must never be enabled in prod.
+STREAM_GUARDRAIL_DISABLED = _flag("STREAM_GUARDRAIL_DISABLED", default=False)

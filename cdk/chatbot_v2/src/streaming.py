@@ -4,6 +4,8 @@ from typing import Iterator
 import httpx
 from aws_lambda_powertools import Logger
 
+from flags import STREAM_GUARDRAIL_DISABLED
+
 logger = Logger(service="chatbot-v2")
 
 CHUNK_SIZE = 80
@@ -92,9 +94,20 @@ def stream_response(
         # Putting them in the body trips the model's own request schema, e.g.
         # Claude's Messages API rejects unknown keys with a ValidationException
         # ("extraneous key [amazon-bedrock-guardrailConfig] is not permitted").
-        if model_kwargs and model_kwargs.get("guardrail_id"):
+        #
+        # STREAM_GUARDRAIL_DISABLED (default OFF, DEV-ONLY): when enabled, the
+        # guardrail is NOT attached to this streaming call — a measurement aid to
+        # isolate the guardrail's contribution to TTFT (synchronous streaming
+        # guardrails buffer output before the first token). Output is UNFILTERED
+        # while enabled; never enable in prod.
+        if model_kwargs and model_kwargs.get("guardrail_id") and not STREAM_GUARDRAIL_DISABLED:
             invoke_kwargs["guardrailIdentifier"] = model_kwargs["guardrail_id"]
             invoke_kwargs["guardrailVersion"] = model_kwargs.get("guardrail_version", "DRAFT")
+        elif STREAM_GUARDRAIL_DISABLED and model_kwargs and model_kwargs.get("guardrail_id"):
+            logger.warning(
+                "STREAM_GUARDRAIL_DISABLED active: guardrail NOT attached to the "
+                "streaming call (dev TTFT diagnostic — streamed output is unfiltered)"
+            )
 
         _stream_start = time.perf_counter()
         response = bedrock_client.invoke_model_with_response_stream(**invoke_kwargs)
