@@ -217,3 +217,27 @@ def test_tutor_turn_persists_text_blocks_and_matches_schema(wire, monkeypatch):
     # Schema parity + tutor_active reflected.
     assert set(body["session_state"]) == _SESSION_STATE_KEYS
     assert body["session_state"]["tutor_active"] is True
+
+
+# ---------------------------------------------------------------------------
+# Latency instrumentation is wired (diagnostic breakdown log)
+# ---------------------------------------------------------------------------
+
+
+def test_latency_breakdown_is_emitted_with_phase_keys(wire, monkeypatch):
+    wire.state.interactions = 1  # so eval runs and eval_ms is present too
+    calls = []
+    monkeypatch.setattr(main.logger, "info", lambda msg, **kw: calls.append(kw.get("extra", {})))
+
+    main.handler(_event(), _Ctx())
+
+    breakdowns = [e for e in calls if e.get("event") == "latency_breakdown"]
+    assert len(breakdowns) == 1
+    b = breakdowns[0]
+    for key in (
+        "total_ms", "time_to_generation_ms", "generation_ms",
+        "retrieval_ms", "eval_ms", "persist_ms",
+        "state_load_ms", "history_load_ms",
+    ):
+        assert key in b, f"latency breakdown missing {key}"
+        assert isinstance(b[key], (int, float))

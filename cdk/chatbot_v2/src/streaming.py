@@ -1,4 +1,5 @@
 import json
+import time
 from typing import Iterator
 import httpx
 from aws_lambda_powertools import Logger
@@ -95,16 +96,20 @@ def stream_response(
             invoke_kwargs["guardrailIdentifier"] = model_kwargs["guardrail_id"]
             invoke_kwargs["guardrailVersion"] = model_kwargs.get("guardrail_version", "DRAFT")
 
+        _stream_start = time.perf_counter()
         response = bedrock_client.invoke_model_with_response_stream(**invoke_kwargs)
 
         full_response = ""
         chunk_buffer = ""
+        ttft_ms = None  # time to first token — the key perceived-latency metric
 
         for event in response.get("body", []):
             chunk_data = json.loads(event["chunk"]["bytes"])
             if chunk_data.get("type") == "content_block_delta":
                 text = chunk_data.get("delta", {}).get("text", "")
                 if text:
+                    if ttft_ms is None:
+                        ttft_ms = round((time.perf_counter() - _stream_start) * 1000, 2)
                     full_response += text
                     chunk_buffer += text
                     while len(chunk_buffer) >= CHUNK_SIZE:
@@ -117,6 +122,21 @@ def stream_response(
 
         # Signal done
         send_chunk(appsync_url, session_id, "", done=True)
+
+        # Stream latency (diagnostic): ttft_ms isolates model start-up (prefill —
+        # driven by input/context size) from stream_total_ms (driven by output
+        # length). A large gap between them points at generation length; a large
+        # ttft_ms points upstream (prompt size / cold start).
+        logger.info(
+            "Stream latency",
+            extra={
+                "event": "stream_latency",
+                "ttft_ms": ttft_ms,
+                "stream_total_ms": round((time.perf_counter() - _stream_start) * 1000, 2),
+                "output_chars": len(full_response),
+                "model_id": model_id,
+            },
+        )
 
         if not full_response:
             return FALLBACK_MESSAGE

@@ -2,6 +2,7 @@
 
 import os
 import json
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 import boto3
@@ -407,11 +408,21 @@ def handler(event, context):
         logger.append_keys(session_id=session_id, course_id=course_id)
         logger.info("Processing chatbot V2 request")
 
+        # Latency instrumentation (diagnostic): time each major phase and emit a
+        # single structured "latency_breakdown" log before returning, so
+        # CloudWatch shows where a turn's wall time goes (retrieval round-trip vs
+        # pre-generation prep vs the streamed generation). Paired with
+        # streaming.py's per-stream ttft_ms (time to first token).
+        _t0 = time.perf_counter()
+        _timings: dict = {}
+
         guardrail_id, guardrail_version = _get_guardrail_config()
 
         # Step 1: Load session state — DynamoDB failure → 503
         try:
+            _t = time.perf_counter()
             state = _load_session_state(session_id)
+            _timings["state_load_ms"] = round((time.perf_counter() - _t) * 1000, 2)
         except (botocore.exceptions.ClientError, botocore.exceptions.EndpointConnectionError) as e:
             logger.exception("Session_State_Table read failure")
             return {"statusCode": 503, "headers": CORS_HEADERS, "body": json.dumps("Service temporarily unavailable")}
@@ -446,7 +457,9 @@ def handler(event, context):
         topic = module_name or session_name
 
         # Load chat history
+        _t = time.perf_counter()
         chat_history = load_chat_history(CHAT_HISTORY_TABLE, session_id, _dynamodb_resource)
+        _timings["history_load_ms"] = round((time.perf_counter() - _t) * 1000, 2)
 
         # ─── V2 Math Tutoring: if tutor is active, route through tutor runtime ───
         if message_content and is_tutor_active(state):
@@ -535,13 +548,16 @@ def handler(event, context):
         def _run_evaluation():
             if not eval_should_run:
                 return None
+            _et = time.perf_counter()
             last_ai_question = _get_last_ai_question(chat_history)
             concepts_str = ", ".join(state.concepts_exposed[-10:]) if state.concepts_exposed else ""
-            return evaluate_answer(
+            result = evaluate_answer(
                 _bedrock_client, topic=topic, stage=state.stage,
                 last_ai_question=last_ai_question, student_answer=message_content,
                 concepts=concepts_str, module_concepts=state.module_concepts,
             )
+            _timings["eval_ms"] = round((time.perf_counter() - _et) * 1000, 2)
+            return result
 
         def _run_retrieval(concepts_misunderstood):
             learning_context = {
@@ -549,7 +565,8 @@ def handler(event, context):
                 "concepts_demonstrated": state.concepts_demonstrated,
                 "concepts_misunderstood": concepts_misunderstood,
             }
-            return invoke_retrieval(
+            _rt = time.perf_counter()
+            result = invoke_retrieval(
                 _lambda_client, function_arn=RAG_RETRIEVAL_FUNCTION_ARN,
                 query=retrieval_query,
                 session_id=session_id, course_id=course_id,
@@ -558,6 +575,8 @@ def handler(event, context):
                 learning_context=learning_context,
                 module_id=module_id,
             )
+            _timings["retrieval_ms"] = round((time.perf_counter() - _rt) * 1000, 2)
+            return result
 
         # Run evaluation and retrieval — concurrently when PARALLEL_EVAL_RETRIEVAL
         # is on AND an evaluation will happen this turn (#7). In parallel mode
@@ -720,6 +739,8 @@ def handler(event, context):
         model_kwargs = {"max_tokens": RESPONSE_MAX_TOKENS, "guardrail_id": guardrail_id, "guardrail_version": guardrail_version}
         user_msg = message_content or f"Start the conversation about {topic}"
 
+        _timings["time_to_generation_ms"] = round((time.perf_counter() - _t0) * 1000, 2)
+        _gen_t = time.perf_counter()
         llm_output = _stream_with_guardrail_retry(
             system_prompt=system_prompt,
             user_message=user_msg,
@@ -728,6 +749,7 @@ def handler(event, context):
             model_kwargs=model_kwargs,
             guardrail_id=guardrail_id,
         )
+        _timings["generation_ms"] = round((time.perf_counter() - _gen_t) * 1000, 2)
         # If guardrail retry produced a blocked redirect, return it directly
         if isinstance(llm_output, dict) and llm_output.get("blocked"):
             # M16: a blocked turn is persisted to the RDS projection (so the UI
@@ -773,6 +795,7 @@ def handler(event, context):
         # Step 13: Persist state + history (best-effort) via the shared helper
         # so the normal and tutor paths behave identically (canonical-first,
         # block-aware, engagement-logged, ASYNC_RDS_PROJECTION-aware).
+        _persist_t = time.perf_counter()
         _persist_turn(session_id, message_content, llm_output, blocks, user_email, course_id, module_id)
 
         # Count this as one processed turn (H1). `interactions` is the per-turn
@@ -783,6 +806,14 @@ def handler(event, context):
             _persist_session_state(state)
         except Exception:
             logger.exception("Session state persistence failed (best-effort)")
+        _timings["persist_ms"] = round((time.perf_counter() - _persist_t) * 1000, 2)
+
+        # Latency breakdown for this turn (diagnostic). time_to_generation_ms is
+        # everything before the model call (state/history loads + eval||retrieval
+        # + prompt build); pair it with streaming.py's ttft_ms for the true
+        # time-to-first-visible-token, and generation_ms for output-length cost.
+        _timings["total_ms"] = round((time.perf_counter() - _t0) * 1000, 2)
+        logger.info("Chatbot latency breakdown", extra={"event": "latency_breakdown", **_timings})
 
         # Step 14: Analytics (post-response)
         logger.info("Analytics", extra={"coverage": calculate_coverage(state), "mastery_concepts": len(calculate_mastery_profile(state))})
