@@ -1,9 +1,10 @@
-"""Tests for stream_response latency instrumentation (TTFT).
+"""Tests for stream_response latency + usage instrumentation.
 
 Feeds a fake Bedrock event stream and asserts (a) the assembled text is
 unchanged (behavior preserved) and (b) a `stream_latency` log is emitted with
-ttft_ms / stream_total_ms / output_chars. Deterministic: no network
-(appsync_url="" makes send_chunk a no-op), no real Bedrock.
+ttft_ms / stream_total_ms / output_chars / input_tokens / output_tokens /
+stop_reason. Deterministic: no network (appsync_url="" makes send_chunk a
+no-op), no real Bedrock.
 """
 from __future__ import annotations
 
@@ -21,44 +22,71 @@ def _delta(text: str) -> dict:
     return {"chunk": {"bytes": json.dumps({"type": "content_block_delta", "delta": {"text": text}}).encode()}}
 
 
+def _message_start(input_tokens: int) -> dict:
+    return {"chunk": {"bytes": json.dumps(
+        {"type": "message_start", "message": {"usage": {"input_tokens": input_tokens}}}
+    ).encode()}}
+
+
+def _message_delta(output_tokens: int, stop_reason: str) -> dict:
+    return {"chunk": {"bytes": json.dumps(
+        {"type": "message_delta", "usage": {"output_tokens": output_tokens}, "delta": {"stop_reason": stop_reason}}
+    ).encode()}}
+
+
 def _client_with(events):
     client = MagicMock()
     client.invoke_model_with_response_stream.return_value = {"body": events}
     return client
 
 
-def test_assembles_text_and_logs_ttft(monkeypatch):
+def _run(monkeypatch, events):
     calls = []
     monkeypatch.setattr(streaming.logger, "info", lambda msg, **kw: calls.append(kw.get("extra", {})))
-    client = _client_with([_delta("Hello "), _delta("world"), _delta("!")])
-
     out = streaming.stream_response(
-        client, model_id="anthropic.claude-3-sonnet-20240229-v1:0",
+        _client_with(events), model_id="anthropic.claude-3-sonnet-20240229-v1:0",
         system_prompt="sys", user_message="hi", chat_history=[], appsync_url="", session_id="s1",
     )
+    latency = [e for e in calls if e.get("event") == "stream_latency"]
+    assert len(latency) == 1
+    return out, latency[0]
+
+
+def test_assembles_text_and_logs_ttft_and_usage(monkeypatch):
+    events = [
+        _message_start(1234),
+        _delta("Hello "), _delta("world"), _delta("!"),
+        _message_delta(50, "end_turn"),
+    ]
+    out, lat = _run(monkeypatch, events)
 
     assert out == "Hello world!"  # behavior preserved
-    latency = [e for e in calls if e.get("event") == "stream_latency"]
-    assert len(latency) == 1
-    assert latency[0]["ttft_ms"] is not None
-    assert isinstance(latency[0]["stream_total_ms"], (int, float))
-    assert latency[0]["output_chars"] == len("Hello world!")
+    assert lat["ttft_ms"] is not None
+    assert isinstance(lat["stream_total_ms"], (int, float))
+    assert lat["output_chars"] == len("Hello world!")
+    assert lat["input_tokens"] == 1234
+    assert lat["output_tokens"] == 50
+    assert lat["stop_reason"] == "end_turn"
 
 
-def test_ttft_is_none_when_no_content(monkeypatch):
-    # An empty stream (no content deltas) -> no first token -> ttft_ms None,
-    # fallback returned. Guards against the timing crashing on empty output.
-    calls = []
-    monkeypatch.setattr(streaming.logger, "info", lambda msg, **kw: calls.append(kw.get("extra", {})))
-    client = _client_with([])
+def test_guardrail_stop_reason_is_captured(monkeypatch):
+    # A guardrail that halts generation surfaces via stop_reason — the signal
+    # we use to tell guardrail stops apart from normal completion.
+    events = [
+        _message_start(900),
+        _delta("partial"),
+        _message_delta(3, "guardrail_intervened"),
+    ]
+    _out, lat = _run(monkeypatch, events)
+    assert lat["stop_reason"] == "guardrail_intervened"
+    assert lat["input_tokens"] == 900
 
-    out = streaming.stream_response(
-        client, model_id="anthropic.claude-3-sonnet-20240229-v1:0",
-        system_prompt="sys", user_message="hi", chat_history=[], appsync_url="", session_id="s1",
-    )
 
+def test_no_content_yields_none_ttft_and_usage(monkeypatch):
+    out, lat = _run(monkeypatch, [])
     assert out == streaming.FALLBACK_MESSAGE
-    latency = [e for e in calls if e.get("event") == "stream_latency"]
-    assert len(latency) == 1
-    assert latency[0]["ttft_ms"] is None
-    assert latency[0]["output_chars"] == 0
+    assert lat["ttft_ms"] is None
+    assert lat["output_chars"] == 0
+    assert lat["input_tokens"] is None
+    assert lat["output_tokens"] is None
+    assert lat["stop_reason"] is None

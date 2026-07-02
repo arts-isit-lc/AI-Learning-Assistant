@@ -102,10 +102,19 @@ def stream_response(
         full_response = ""
         chunk_buffer = ""
         ttft_ms = None  # time to first token — the key perceived-latency metric
+        input_tokens = None
+        output_tokens = None
+        stop_reason = None
 
         for event in response.get("body", []):
             chunk_data = json.loads(event["chunk"]["bytes"])
-            if chunk_data.get("type") == "content_block_delta":
+            ctype = chunk_data.get("type")
+            if ctype == "message_start":
+                # Prompt size, reported once at the start. Confirms whether a
+                # high TTFT is prefill-bound (large input) or overhead
+                # (guardrail/service latency) when the input is actually small.
+                input_tokens = chunk_data.get("message", {}).get("usage", {}).get("input_tokens")
+            elif ctype == "content_block_delta":
                 text = chunk_data.get("delta", {}).get("text", "")
                 if text:
                     if ttft_ms is None:
@@ -115,6 +124,11 @@ def stream_response(
                     while len(chunk_buffer) >= CHUNK_SIZE:
                         send_chunk(appsync_url, session_id, chunk_buffer[:CHUNK_SIZE])
                         chunk_buffer = chunk_buffer[CHUNK_SIZE:]
+            elif ctype == "message_delta":
+                # Cumulative output tokens + terminal stop_reason (e.g.
+                # "guardrail_intervened" when the guardrail halts generation).
+                output_tokens = chunk_data.get("usage", {}).get("output_tokens", output_tokens)
+                stop_reason = chunk_data.get("delta", {}).get("stop_reason", stop_reason)
 
         # Send remaining buffer
         if chunk_buffer:
@@ -126,7 +140,8 @@ def stream_response(
         # Stream latency (diagnostic): ttft_ms isolates model start-up (prefill —
         # driven by input/context size) from stream_total_ms (driven by output
         # length). A large gap between them points at generation length; a large
-        # ttft_ms points upstream (prompt size / cold start).
+        # ttft_ms with a small input_tokens points at overhead (guardrail /
+        # service), not prefill.
         logger.info(
             "Stream latency",
             extra={
@@ -134,6 +149,9 @@ def stream_response(
                 "ttft_ms": ttft_ms,
                 "stream_total_ms": round((time.perf_counter() - _stream_start) * 1000, 2),
                 "output_chars": len(full_response),
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "stop_reason": stop_reason,
                 "model_id": model_id,
             },
         )

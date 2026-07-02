@@ -7,7 +7,9 @@ This module only handles execution: S3 fetch + vision LLM call.
 from __future__ import annotations
 
 import base64
+import os
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -19,6 +21,12 @@ logger = Logger(service="multimodal-rag-reasoning")
 
 # Claude 3 Haiku model ID for vision analysis
 VISION_MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0"
+
+# Max images to vision-analyze per escalation. Kept at 2 so a generic two-image
+# request ("compare the two diagrams") still works; the calls run in PARALLEL
+# (see _analyze_images), so 2 images cost ~the wall time of 1 rather than double.
+# Env-tunable: set to 1 to disable the second call.
+_MAX_ESCALATION_IMAGES = int(os.environ.get("ESCALATION_MAX_IMAGES", "2"))
 
 
 @dataclass
@@ -113,11 +121,9 @@ class ImageEscalation:
                     results, query_intent.figure_reference.number
                 )
                 if sibling_images:
-                    analyses: list[ImageAnalysis] = []
-                    for img_result in sibling_images[:2]:  # max 2
-                        analysis = self._analyze_image(img_result, query)
-                        if analysis is not None:
-                            analyses.append(analysis)
+                    analyses = self._analyze_images(
+                        sibling_images[:_MAX_ESCALATION_IMAGES], query
+                    )
                     if analyses:
                         escalation_latency = time.time() - escalation_start
                         logger.info(
@@ -164,11 +170,11 @@ class ImageEscalation:
                 )
                 return EscalationResult(escalation_used=False, image_analyses=[])
 
-            # Select top 2 by score (descending)
+            # Select top N by score (descending)
             sorted_results = sorted(
                 image_results, key=lambda r: r.score, reverse=True
             )
-            top_results = sorted_results[:2]
+            top_results = sorted_results[:_MAX_ESCALATION_IMAGES]
 
             logger.info(
                 "Using score-based image selection",
@@ -178,12 +184,7 @@ class ImageEscalation:
                 },
             )
 
-            analyses = []
-
-            for result in top_results:
-                analysis = self._analyze_image(result, query)
-                if analysis is not None:
-                    analyses.append(analysis)
+            analyses = self._analyze_images(top_results, query)
 
             escalation_latency = time.time() - escalation_start
 
@@ -509,6 +510,45 @@ class ImageEscalation:
         except Exception:
             logger.exception("Error during direct DB lookup for figure reference")
             return None
+
+    def _analyze_images(
+        self, image_results: list[RankedResult], query: str
+    ) -> list[ImageAnalysis]:
+        """Vision-analyze up to N images CONCURRENTLY, preserving input order.
+
+        The selected images are analyzed in parallel (bounded ThreadPoolExecutor)
+        so two vision calls cost ~the wall time of one instead of their sum — the
+        main escalation latency win. Results keep the caller's order (so the
+        primary/top image stays first for grounding); failed analyses (None) are
+        dropped. boto3 S3/Bedrock clients are thread-safe and _analyze_image
+        shares no mutable state, so this is safe to run concurrently.
+        """
+        if not image_results:
+            return []
+
+        # Single image: no thread overhead.
+        if len(image_results) == 1:
+            analysis = self._analyze_image(image_results[0], query)
+            return [analysis] if analysis is not None else []
+
+        ordered: list[ImageAnalysis | None] = [None] * len(image_results)
+        with ThreadPoolExecutor(max_workers=len(image_results)) as executor:
+            future_to_index = {
+                executor.submit(self._analyze_image, img, query): i
+                for i, img in enumerate(image_results)
+            }
+            for future in future_to_index:
+                index = future_to_index[future]
+                try:
+                    ordered[index] = future.result()
+                except Exception:
+                    logger.exception(
+                        "Parallel image analysis failed for one image, skipping",
+                        extra={"image_index": index},
+                    )
+                    ordered[index] = None
+
+        return [a for a in ordered if a is not None]
 
     def _analyze_image(
         self, result: RankedResult, query: str

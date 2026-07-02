@@ -514,3 +514,91 @@ class TestReferenceRegex:
 
     def test_no_match_when_reference_absent(self) -> None:
         assert not self._matches("figure", "4.1", "there is no such reference here")
+
+
+# ---------------------------------------------------------------------------
+# Parallel image analysis (latency fix): _analyze_images + ESCALATION_MAX_IMAGES
+# ---------------------------------------------------------------------------
+
+
+def _fake_analyze_factory(fail_ids=()):
+    """Return an _analyze_image stand-in that echoes retrieval_id as the analysis
+    (so order is assertable) and returns None for `fail_ids`."""
+    def _fake(result, query):
+        if result.retrieval_id in fail_ids:
+            return None
+        return ImageAnalysis(
+            image_s3_key=result.image_s3_key or "",
+            analysis=result.retrieval_id,
+            confidence=0.9,
+        )
+    return _fake
+
+
+def _imgs(*ids):
+    return [
+        _make_ranked_result(i, ElementType.IMAGE, image_s3_key=f"s3://b/{i}.png")
+        for i in ids
+    ]
+
+
+class TestParallelAnalyzeImages:
+    """The <=2 vision calls run concurrently, keep input order, drop failures."""
+
+    def test_preserves_order_and_drops_failures(self) -> None:
+        esc = _make_escalation()
+        esc._analyze_image = _fake_analyze_factory(fail_ids={"b"})
+        out = esc._analyze_images(_imgs("a", "b", "c"), "q")
+        # b failed and is dropped; a and c keep their input order.
+        assert [a.analysis for a in out] == ["a", "c"]
+
+    def test_empty_returns_empty(self) -> None:
+        esc = _make_escalation()
+        assert esc._analyze_images([], "q") == []
+
+    def test_single_image_no_executor_path(self) -> None:
+        esc = _make_escalation()
+        esc._analyze_image = _fake_analyze_factory()
+        out = esc._analyze_images(_imgs("only"), "q")
+        assert [a.analysis for a in out] == ["only"]
+
+    def test_all_failures_returns_empty(self) -> None:
+        esc = _make_escalation()
+        esc._analyze_image = _fake_analyze_factory(fail_ids={"a", "b"})
+        assert esc._analyze_images(_imgs("a", "b"), "q") == []
+
+    def test_order_is_deterministic_across_runs(self) -> None:
+        esc = _make_escalation()
+        esc._analyze_image = _fake_analyze_factory()
+        imgs = _imgs("a", "b", "c")
+        first = [a.analysis for a in esc._analyze_images(imgs, "q")]
+        assert first == ["a", "b", "c"]
+        for _ in range(5):
+            assert [a.analysis for a in esc._analyze_images(imgs, "q")] == first
+
+    def test_max_images_cap_is_respected(self, monkeypatch) -> None:
+        # With the cap at 1, a generic (no figure_reference) escalation analyzes
+        # only the top-scoring image.
+        from . import image_escalation as ie
+        monkeypatch.setattr(ie, "_MAX_ESCALATION_IMAGES", 1)
+        esc = _make_escalation()
+        imgs = [
+            _make_ranked_result(f"i{i}", ElementType.IMAGE, score=0.9 - i * 0.1,
+                                 image_s3_key=f"s3://b/{i}.png")
+            for i in range(3)
+        ]
+        result = esc.escalate(imgs, "describe the images")
+        assert result.escalation_used is True
+        assert len(result.image_analyses) == 1
+
+    def test_default_cap_allows_two_images(self) -> None:
+        # Default cap (2): a generic escalation analyzes the top 2 images.
+        esc = _make_escalation()
+        esc._analyze_image = _fake_analyze_factory()
+        imgs = [
+            _make_ranked_result(f"i{i}", ElementType.IMAGE, score=0.9 - i * 0.1,
+                                 image_s3_key=f"s3://b/{i}.png")
+            for i in range(3)
+        ]
+        result = esc.escalate(imgs, "describe the images")
+        assert len(result.image_analyses) == 2
