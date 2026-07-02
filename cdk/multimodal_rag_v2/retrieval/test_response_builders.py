@@ -21,7 +21,7 @@ from ..models.data_models import ElementType  # noqa: E402
 from . import handler  # noqa: E402
 
 
-def _result(element_type, retrieval_id, parent, score=0.9, metadata=None, content=""):
+def _result(element_type, retrieval_id, parent, score=0.9, metadata=None, content="", image_s3_key=None):
     return SimpleNamespace(
         element_type=element_type,
         retrieval_id=retrieval_id,
@@ -29,7 +29,7 @@ def _result(element_type, retrieval_id, parent, score=0.9, metadata=None, conten
         score=score,
         metadata=metadata or {},
         content=content,
-        image_s3_key=None,
+        image_s3_key=image_s3_key,
     )
 
 
@@ -87,3 +87,27 @@ class TestBuildFormulaResults:
 
     def test_empty_when_no_formulas(self):
         assert handler._build_formula_results([_result(ElementType.IMAGE, "i", "p", 0.9)]) == []
+
+
+class TestBuildImageResults:
+    def test_includes_description_and_page(self):
+        results = [
+            _result(
+                ElementType.IMAGE, "img-1", "img-p", 0.95,
+                {"provenance_page_num": 5, "module_id": "m1"},
+                content="Figure 4.1: bar chart of exam scores",
+                image_s3_key="s3://bucket/fig41.png",
+            ),
+            _result(ElementType.TEXT, "x", "t", 0.7, {}, "some text"),
+        ]
+        out = handler._build_image_results(results)
+        assert len(out) == 1
+        assert out[0]["retrieval_id"] == "img-1"
+        assert out[0]["image_s3_key"] == "s3://bucket/fig41.png"
+        assert out[0]["page_num"] == 5
+        # caption-injected description is surfaced for response-text grounding
+        assert out[0]["description"] == "Figure 4.1: bar chart of exam scores"
+
+    def test_excludes_images_without_s3_key(self):
+        results = [_result(ElementType.IMAGE, "img-2", "p", 0.9, {}, "desc", image_s3_key=None)]
+        assert handler._build_image_results(results) == []

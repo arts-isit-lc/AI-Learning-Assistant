@@ -245,6 +245,29 @@ def _element_type_value(result: Any) -> str:
     return et.value if hasattr(et, "value") else et
 
 
+def _build_image_results(final_results: list) -> list[dict[str, Any]]:
+    """Structured IMAGE blocks for the client.
+
+    Includes each image's caption-injected description (``content``) so the
+    chatbot can ground the response text on the figure it will display. Without
+    it, the response LLM sees no textual evidence of the figure and disclaims a
+    figure that is simultaneously shown.
+    """
+    return [
+        {
+            "retrieval_id": r.retrieval_id,
+            "score": r.score,
+            "image_s3_key": r.image_s3_key,
+            "page_num": r.metadata.get("provenance_page_num"),
+            "module_id": r.metadata.get("module_id"),
+            "element_type": r.element_type.value if hasattr(r.element_type, "value") else r.element_type,
+            "description": r.content,
+        }
+        for r in final_results
+        if r.image_s3_key
+    ]
+
+
 def _build_table_results(final_results: list) -> list[dict[str, Any]]:
     """Structured TABLE blocks for the client, deduped by parent element.
 
@@ -600,18 +623,7 @@ def _handle_query(
             }
             for ia in reasoning_result.image_analyses
         ],
-        "image_results": [
-            {
-                "retrieval_id": r.retrieval_id,
-                "score": r.score,
-                "image_s3_key": r.image_s3_key,
-                "page_num": r.metadata.get("provenance_page_num"),
-                "module_id": r.metadata.get("module_id"),
-                "element_type": r.element_type.value if hasattr(r.element_type, "value") else r.element_type,
-            }
-            for r in final_results
-            if r.image_s3_key
-        ],
+        "image_results": _build_image_results(final_results),
         "table_results": _build_table_results(final_results),
         "formula_results": _build_formula_results(final_results),
     })

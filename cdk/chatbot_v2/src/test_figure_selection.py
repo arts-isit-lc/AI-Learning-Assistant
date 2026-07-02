@@ -182,3 +182,30 @@ class TestHarmonizedAndConfigurable:
     def test_log_candidate_scores_handles_empty(self):
         fs._log_candidate_scores("table", [])
         fs._log_candidate_scores("table", None)
+
+
+class TestBuildFigureGrounding:
+    def test_formats_selected_figures_with_description(self):
+        rr = _rr(image_results=[
+            {"retrieval_id": "img-1", "score": 0.9, "image_s3_key": "s3://b/f41.png",
+             "page_num": 41, "description": "Figure 4.1: bar chart of exam scores"},
+            {"retrieval_id": "img-2", "score": 0.5, "image_s3_key": "s3://b/f99.png",
+             "page_num": 99, "description": "Figure 9.9: unrelated"},
+        ])
+        out = fs.build_figure_grounding(rr, ["img-1"])
+        assert "Figures shown to the student" in out
+        assert "Figure 4.1: bar chart of exam scores" in out
+        assert "page 41" in out
+        # only the selected figure is grounded
+        assert "9.9" not in out
+
+    def test_empty_when_no_selected_ids(self):
+        rr = _rr(image_results=[{"retrieval_id": "img-1", "description": "d", "page_num": 1}])
+        assert fs.build_figure_grounding(rr, []) == ""
+
+    def test_empty_when_selected_figure_has_no_description(self):
+        rr = _rr(image_results=[{"retrieval_id": "img-1", "description": "", "page_num": 1}])
+        assert fs.build_figure_grounding(rr, ["img-1"]) == ""
+
+    def test_none_result(self):
+        assert fs.build_figure_grounding(None, ["img-1"]) == ""

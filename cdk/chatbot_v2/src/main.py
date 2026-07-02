@@ -545,6 +545,20 @@ def handler(event, context):
             if mentioned:
                 state = introduce_concepts(state, mentioned)
 
+        # Select figures up front so the displayed figures' descriptions can
+        # ground the response text. Without this the response LLM only sees the
+        # retrieval answer and disclaims ("couldn't find that in the retrieved
+        # materials") a figure the display path is simultaneously showing.
+        try:
+            from figure_selection import select_figures as select_figs, build_figure_grounding
+            selected_figures = select_figs(retrieval_result, retrieval_query)
+            figure_grounding = build_figure_grounding(retrieval_result, selected_figures)
+        except Exception:
+            logger.exception("Figure selection/grounding failed (pre-generation)")
+            selected_figures, figure_grounding = [], ""
+        if figure_grounding:
+            rag_context = f"{rag_context}\n\n{figure_grounding}" if rag_context else figure_grounding
+
         # Step 10.5: Math compute (if query contains explicit math)
         math_compute_context = ""
         if message_content:
@@ -659,10 +673,10 @@ def handler(event, context):
 
         # Assemble render blocks (text + figures/tables/formulas) BEFORE persistence
         # so the AI message's blocks are saved with it and can be reconstructed on
-        # history reload (fixes figures disappearing when revisiting a past session).
+        # history reload. Figures were already selected before generation (so their
+        # descriptions could ground the response text); reuse that selection here.
         try:
-            from figure_selection import select_figures as select_figs, select_tables, select_formulas, assemble_blocks
-            selected_figures = select_figs(retrieval_result, retrieval_query)
+            from figure_selection import select_tables, select_formulas, assemble_blocks
             table_blocks = select_tables(retrieval_result, retrieval_query)
             formula_blocks = select_formulas(retrieval_result, retrieval_query)
             blocks = assemble_blocks(llm_output, selected_figures, table_blocks, formula_blocks)

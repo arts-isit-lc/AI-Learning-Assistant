@@ -360,3 +360,48 @@ def assemble_blocks(
         blocks.append({"type": "figure", "id": retrieval_id})
 
     return blocks
+
+
+def build_figure_grounding(retrieval_result, selected_ids: list[str]) -> str:
+    """Format the selected figures' descriptions for the response LLM's context.
+
+    The response LLM only sees the retrieval `answer` text; without this it can
+    disclaim ("I couldn't find that in the retrieved materials") a figure the
+    display path is simultaneously showing. Injecting each selected figure's page
+    and caption/description gives the model textual grounding for what it will
+    display.
+
+    Args:
+        retrieval_result: RetrievalResult from invoke_retrieval().
+        selected_ids: retrieval_ids chosen by select_figures() for display.
+
+    Returns:
+        A markdown section, or "" when no selected figure has a description.
+    """
+    if retrieval_result is None or not selected_ids:
+        return ""
+
+    image_results = getattr(retrieval_result, "image_results", None) or []
+    by_id = {img.get("retrieval_id"): img for img in image_results}
+
+    lines: list[str] = []
+    for rid in selected_ids:
+        img = by_id.get(rid)
+        if not img:
+            continue
+        description = (img.get("description") or "").strip()
+        if not description:
+            continue
+        page = img.get("page_num")
+        label = f"Figure (page {page})" if page is not None else "Figure"
+        lines.append(f"- {label}: {description}")
+
+    if not lines:
+        return ""
+
+    return (
+        "## Figures shown to the student\n"
+        "These figures from the course materials are displayed alongside your reply. "
+        "Reference and explain them directly; do NOT say a figure cannot be found.\n"
+        + "\n".join(lines)
+    )
