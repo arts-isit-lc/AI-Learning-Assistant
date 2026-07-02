@@ -56,6 +56,7 @@ def _project(payload: dict) -> None:
     session_id = payload.get("session_id", "")
     message_content = payload.get("message_content") or ""
     llm_output = payload.get("llm_output") or ""
+    blocks = payload.get("blocks")
     user_email = payload.get("user_email", "")
     course_id = payload.get("course_id", "")
     module_id = payload.get("module_id", "")
@@ -65,7 +66,7 @@ def _project(payload: dict) -> None:
     if message_content:
         persist_message_to_rds(conn, session_id, message_content, student_sent=True)
         log_engagement(conn, user_email, course_id, module_id, "message creation")
-    persist_message_to_rds(conn, session_id, llm_output, student_sent=False)
+    persist_message_to_rds(conn, session_id, llm_output, student_sent=False, blocks=blocks)
     log_engagement(conn, user_email, course_id, module_id, "AI message creation")
 
 

@@ -112,6 +112,39 @@ class TestPersistMessageToRds:
 
         conn.cursor.return_value.close.assert_called_once()
 
+    def test_persists_blocks_as_json_for_ai_message(self) -> None:
+        # Reproduces the history-reload bug: before the fix, blocks were never
+        # written, so figures vanished when a past session was reloaded.
+        conn = _make_connection()
+        blocks = [
+            {"type": "text", "content": "See figure 1"},
+            {"type": "figure", "id": "fig-1"},
+        ]
+
+        persist_message_to_rds(
+            conn, "session-blocks", "answer", student_sent=False, blocks=blocks
+        )
+
+        cursor = conn.cursor.return_value
+        insert_call = cursor.execute.call_args_list[0]
+        sql = insert_call[0][0]
+        params = insert_call[0][1]
+        assert "message_blocks" in sql
+        assert "::jsonb" in sql
+        # blocks serialized to JSON as the 4th positional param
+        assert params[3] is not None
+        assert '"type": "figure"' in params[3]
+        assert "fig-1" in params[3]
+
+    def test_persists_null_blocks_when_absent(self) -> None:
+        conn = _make_connection()
+
+        persist_message_to_rds(conn, "s-noblocks", "answer", student_sent=False)
+
+        params = conn.cursor.return_value.execute.call_args_list[0][0][1]
+        # No blocks -> SQL NULL, not the literal JSON string "null"
+        assert params[3] is None
+
 
 # ---------------------------------------------------------------------------
 # Tests: log_engagement

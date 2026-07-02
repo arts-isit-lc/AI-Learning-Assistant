@@ -164,19 +164,14 @@ export default function useChatSession(course, module) {
       const data = await apiClient.get("student/get_messages", {
         session_id: session.session_id,
       });
-      setMessages((prevMessages) => {
-        const blocksMap = new Map();
-        prevMessages.forEach((msg) => {
-          if (msg.blocks && msg.message_content) {
-            blocksMap.set(msg.message_content, msg.blocks);
-          }
-        });
-        if (blocksMap.size === 0) return data;
-        return data.map((msg) => ({
+      // message_blocks (JSONB) is persisted with each AI message, so figures/
+      // tables/formulas reconstruct directly from the DB on history reload.
+      setMessages(
+        data.map((msg) => ({
           ...msg,
-          blocks: msg.blocks || blocksMap.get(msg.message_content) || undefined,
-        }));
-      });
+          blocks: msg.message_blocks || undefined,
+        }))
+      );
     } catch (error) {
       console.error("Error fetching session:", error.message);
       setMessages([]);

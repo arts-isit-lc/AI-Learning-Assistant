@@ -160,6 +160,7 @@ def handler(event, context):
                 "session_id" uuid,
                 "student_sent" bool,
                 "message_content" varchar,
+                "message_blocks" jsonb,
                 "time_sent" timestamp
             );
 
@@ -226,6 +227,10 @@ def handler(event, context):
             -- freshly created table), so this is safe to run on every invocation.
             ALTER TABLE retrieval_units ADD COLUMN IF NOT EXISTS file_id TEXT;
             ALTER TABLE retrieval_units ADD COLUMN IF NOT EXISTS module_id TEXT;
+
+            -- Idempotent migration: persist AI message render blocks (figures/
+            -- tables/formulas) so chat-history reload can reconstruct them.
+            ALTER TABLE "Messages" ADD COLUMN IF NOT EXISTS message_blocks jsonb;
 
             -- Repair databases provisioned when file_id was created as UUID. The
             -- retrieval scope filter binds `file_id = ANY(%s)` as a text[] with no

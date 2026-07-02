@@ -12,6 +12,8 @@ Phase 2 will replace this synchronous write with a DynamoDB Stream → Lambda
 projection, at which point this module is removed.
 """
 
+import json
+
 from aws_lambda_powertools import Logger
 
 logger = Logger(service="chatbot-v2")
@@ -22,6 +24,7 @@ def persist_message_to_rds(
     session_id: str,
     message_content: str,
     student_sent: bool,
+    blocks: list | None = None,
 ) -> None:
     """Insert a message into the RDS Messages table and update session timestamp.
 
@@ -33,15 +36,21 @@ def persist_message_to_rds(
         session_id: The session this message belongs to.
         message_content: The message text.
         student_sent: True if the student wrote it, False if AI generated it.
+        blocks: Optional structured render blocks (text/figure/table/formula) for
+            an AI message. Persisted as JSONB so chat-history reload can rebuild
+            figures; None (student messages, text-only replies) stores SQL NULL.
     """
     try:
         cur = connection.cursor()
 
+        # Serialize render blocks to JSON for the jsonb column; None -> SQL NULL.
+        blocks_json = json.dumps(blocks) if blocks else None
+
         # Insert message with a server-generated UUID
         cur.execute(
-            """INSERT INTO "Messages" (message_id, session_id, student_sent, message_content, time_sent)
-               VALUES (uuid_generate_v4(), %s, %s, %s, CURRENT_TIMESTAMP)""",
-            (session_id, student_sent, message_content),
+            """INSERT INTO "Messages" (message_id, session_id, student_sent, message_content, message_blocks, time_sent)
+               VALUES (uuid_generate_v4(), %s, %s, %s, %s::jsonb, CURRENT_TIMESTAMP)""",
+            (session_id, student_sent, message_content, blocks_json),
         )
 
         # Update session last_accessed

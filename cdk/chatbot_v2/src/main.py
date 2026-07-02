@@ -657,6 +657,19 @@ def handler(event, context):
             if student_concepts:
                 state = discuss_concepts(state, student_concepts)
 
+        # Assemble render blocks (text + figures/tables/formulas) BEFORE persistence
+        # so the AI message's blocks are saved with it and can be reconstructed on
+        # history reload (fixes figures disappearing when revisiting a past session).
+        try:
+            from figure_selection import select_figures as select_figs, select_tables, select_formulas, assemble_blocks
+            selected_figures = select_figs(retrieval_result, retrieval_query)
+            table_blocks = select_tables(retrieval_result, retrieval_query)
+            formula_blocks = select_formulas(retrieval_result, retrieval_query)
+            blocks = assemble_blocks(llm_output, selected_figures, table_blocks, formula_blocks)
+        except Exception:
+            logger.exception("Figure selection failed, returning text-only blocks")
+            blocks = [{"type": "text", "content": llm_output}]
+
         # Step 13: Persist state + history (best-effort)
         # DynamoDB = canonical message store
         try:
@@ -677,6 +690,7 @@ def handler(event, context):
                         "session_id": session_id,
                         "message_content": message_content,
                         "llm_output": llm_output,
+                        "blocks": blocks,
                         "user_email": user_email,
                         "course_id": course_id,
                         "module_id": module_id,
@@ -690,7 +704,7 @@ def handler(event, context):
                 if message_content:
                     persist_message_to_rds(conn, session_id, message_content, student_sent=True)
                     log_engagement(conn, user_email, course_id, module_id, "message creation")
-                persist_message_to_rds(conn, session_id, llm_output, student_sent=False)
+                persist_message_to_rds(conn, session_id, llm_output, student_sent=False, blocks=blocks)
                 log_engagement(conn, user_email, course_id, module_id, "AI message creation")
             except Exception:
                 logger.exception("RDS projection failed (best-effort)")
@@ -703,18 +717,8 @@ def handler(event, context):
         # Step 14: Analytics (post-response)
         logger.info("Analytics", extra={"coverage": calculate_coverage(state), "mastery_concepts": len(calculate_mastery_profile(state))})
 
-        # Return structured response
-        # Figure selection: deterministic, based on retrieval results
-        try:
-            from figure_selection import select_figures as select_figs, select_tables, select_formulas, assemble_blocks
-            selected_figures = select_figs(retrieval_result, retrieval_query)
-            table_blocks = select_tables(retrieval_result, retrieval_query)
-            formula_blocks = select_formulas(retrieval_result, retrieval_query)
-            blocks = assemble_blocks(llm_output, selected_figures, table_blocks, formula_blocks)
-        except Exception:
-            logger.exception("Figure selection failed, returning text-only blocks")
-            blocks = [{"type": "text", "content": llm_output}]
-
+        # Return structured response (blocks were assembled before persistence
+        # above, so they are saved with the AI message and reused here).
         return {
             "statusCode": 200,
             "headers": CORS_HEADERS,
