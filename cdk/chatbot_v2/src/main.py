@@ -362,6 +362,22 @@ def _persist_turn(session_id, message_content, llm_output, blocks, user_email, c
             logger.exception("RDS projection failed (best-effort)")
 
 
+def _session_state_view(state) -> dict:
+    """Canonical session_state view returned to the client on EVERY exit (M6).
+
+    One shared shape guarantees the normal, guardrail-block, tutor, and
+    tutor-block responses all expose the same keys, so the frontend can rely on
+    a stable schema regardless of which path produced the turn.
+    """
+    return {
+        "stage": state.stage,
+        "module_complete": state.module_complete,
+        "engagement_score": state.engagement_score,
+        "concepts_demonstrated": state.concepts_demonstrated,
+        "tutor_active": is_tutor_active(state),
+    }
+
+
 @logger.inject_lambda_context(clear_state=True)
 def handler(event, context):
     """Chatbot V2 Lambda handler — full learning pipeline orchestration."""
@@ -467,13 +483,7 @@ def handler(event, context):
                         "llm_output": llm_output["message"],
                         "blocks": [{"type": "text", "content": llm_output["message"]}],
                         "llm_verdict": state.module_complete,
-                        "session_state": {
-                            "stage": state.stage,
-                            "module_complete": state.module_complete,
-                            "engagement_score": state.engagement_score,
-                            "concepts_demonstrated": state.concepts_demonstrated,
-                            "tutor_active": is_tutor_active(state),
-                        },
+                        "session_state": _session_state_view(state),
                     })}
 
                 # Persist one completed tutor turn via the shared helper
@@ -493,13 +503,7 @@ def handler(event, context):
                         "llm_output": llm_output,
                         "blocks": tutor_blocks,
                         "llm_verdict": state.module_complete,
-                        "session_state": {
-                            "stage": state.stage,
-                            "module_complete": state.module_complete,
-                            "engagement_score": state.engagement_score,
-                            "concepts_demonstrated": state.concepts_demonstrated,
-                            "tutor_active": is_tutor_active(state),
-                        },
+                        "session_state": _session_state_view(state),
                     }),
                 }
 
@@ -745,12 +749,7 @@ def handler(event, context):
                     "llm_output": llm_output["message"],
                     "blocks": [{"type": "text", "content": llm_output["message"]}],
                     "llm_verdict": state.module_complete,
-                    "session_state": {
-                        "stage": state.stage,
-                        "module_complete": state.module_complete,
-                        "engagement_score": state.engagement_score,
-                        "concepts_demonstrated": state.concepts_demonstrated,
-                    },
+                    "session_state": _session_state_view(state),
                 }),
             }
 
@@ -798,12 +797,7 @@ def handler(event, context):
                 "llm_output": llm_output,
                 "blocks": blocks,
                 "llm_verdict": state.module_complete,
-                "session_state": {
-                    "stage": state.stage,
-                    "module_complete": state.module_complete,
-                    "engagement_score": state.engagement_score,
-                    "concepts_demonstrated": state.concepts_demonstrated,
-                },
+                "session_state": _session_state_view(state),
             }),
         }
 

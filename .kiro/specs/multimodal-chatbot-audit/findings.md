@@ -66,3 +66,52 @@ Add the integration-test layer alongside #1–#3.
 
 ## Tooling note
 `grep_search` is unreliable in this workspace — it returned "no matches" for `interactions`, `CREATE TABLE`, and `githubRepoName` that demonstrably exist. Verify with read_code / read_file, not grep.
+
+
+---
+
+# Resolution Status (2026-07-01)
+
+All findings worked in 7 phases, fixed **at the seam** with tests, verified:
+`multimodal_rag_v2 + chatbot_v2` 885 pass · `lambda/deleteLastMessage` 3 · `cdk test/access-control.test.ts` 6 · frontend ESLint clean · py_compile + node --check clean. (Full CDK `Template.fromStack` suite needs Docker — not run here; no stack `.ts` changed.)
+
+**Systemic root cause addressed:** added the missing handler-level / seam test layer — `chatbot_v2/src/test_handler_integration.py` (calls the real `main.handler()` with only AWS/Bedrock IO stubbed) + `test_persist_turn.py`. This is what the "two paths that disagree" bugs kept slipping through.
+
+## HIGH — all resolved
+- **H1** RESOLVED — `interactions` is now a per-turn counter incremented once per processed turn before the eval gate (main.py). Seam test: `test_eval_runs_once_interactions_bootstrapped`, `test_interactions_increments_and_is_persisted_each_turn`.
+- **H2** RESOLVED — ownership check (`verifyStudentOwnsSession`, chain Sessions→Student_Modules→Enrolments→Users) on `get_messages`, `/session/messages`, `update_session_name`; `deleteLastMessage.py` gets its own `verify_session_ownership`. Tests: `access-control.test.ts`, `test_deleteLastMessage.py`.
+- **H3** RESOLVED — `figure_url` drops the Strategy-3 arbitrary-key passthrough (→404) and makes the enrollment check mandatory/fail-closed before signing.
+- **H4** RESOLVED — TEXT is never cached (chunker makes no LLM calls; version-only sort key collapsed multi-chunk TEXT). Test: `test_enrich_with_cache.py`.
+- **H5** RESOLVED — embedding backoff + success-rate gate (raise → SQS retry), and `_store_in_pgvector` refuses to DELETE+commit with zero inserts. Tests: `test_generate_embeddings.py`, `test_store_in_pgvector.py`.
+- **H6** RESOLVED — `build_table_grounding`/`build_formula_grounding` added; tables/formulas/figures selected pre-generation and grounded into `rag_context`. Seam test: `test_figure_is_both_grounded_and_displayed`.
+
+## MEDIUM
+- **M1** RESOLVED — block selection is reference-and-rank-based (no absolute score gate; RRF-scale scores made the old gates unreachable).
+- **M2** RESOLVED — `metadata_boost` applied multiplicatively (`score * (1+boost)`), so it can't outrank relevance in the RRF regime.
+- **M3** RESOLVED — `_persist_session_state` conditional-put retry no longer clobbers with stale state.
+- **M4** RESOLVED — streaming emits a terminal `done=True` before re-raising a guardrail error (no client hang).
+- **M5** RESOLVED — one shared `_persist_turn` (DynamoDB-first, block-aware, engagement-logged, async-aware) for normal + tutor. Tests: `test_persist_turn.py`.
+- **M6** RESOLVED — one `_session_state_view(state)` used by all 4 return sites; schema now identical (adds `tutor_active` to the normal/guardrail exits). Seam test: `test_guardrail_block_shape_matches_normal`.
+- **M7** RESOLVED (was [G]/grep, verified) — `hint_level`/`hint_count` increment on hint-mode selection.
+- **M8** RESOLVED — metadata boolean filter serializes to JSON `'true'/'false'`. Test in `test_module_scoped_retrieval.py`.
+- **M9** RESOLVED — re-ingestion DELETE uses the indexed `file_id` column. Test in `test_store_in_pgvector.py`.
+- **M10** RESOLVED — caption injection/linking anchors with `.match`; multi-caption pages are skipped as ambiguous. Tests in `test_caption_injection.py`.
+- **M11** RESOLVED — exact figure-reference regex (`_build_reference_regex`); "figure 4" no longer matches "figure 4.1". Tests in `test_image_escalation.py`.
+- **M12** RESOLVED — `AIMessage.TableBlock` fixed (`[]`-truthy bug; reads `summary`/`content` the backend actually emits).
+- **M13** RESOLVED BY DECISION — RDS is the authoritative store for `message_blocks` (DynamoDB stays text-only canonical log). See engineering-log ADR-003. Not a bug today.
+- **M14** RESOLVED — tutoring requires `status == 'verified'`; partial math results no longer framed as authoritative.
+- **M15** DEFERRED — deterministic `retrieval_id`. Risky multi-site change; impact mitigated by the wipe-and-restart workflow. Revisit if incremental re-ingestion becomes routine.
+- **M16** RESOLVED BY DOC — guardrail-blocked turns persist to RDS but not DynamoDB, intentionally (blocked content must not re-enter model history). Documented in main.py.
+
+## LOW
+- **L1** RESOLVED — `FigureImage` module-level TTL cache (dedupes N+1, avoids re-sign, refreshes before the 1h URL expiry).
+- **L2** RESOLVED — enrichment only re-enriches the uncached subset (no more re-running vision on cached images).
+- **L3** DEFERRED — share DB conn/secret. Module-global secret cache adds cross-invocation/test state on a per-upload cold path; low value vs risk.
+- **L4** DEFERRED — parallel embeddings. Pure perf; adds concurrency risk on top of the new backoff/success-gate.
+- **L5** DEFERRED — dedup Haiku topic extraction. `document_summary` and `_extract_and_store_topics` have different prompts/inputs/consumers (pgvector summary unit vs `Module_Files.metadata` topic-aggregation); merging risks changing the `generate_topics` pipeline. ~1 call per upload.
+- **L6** RESOLVED — fallback/degraded enrichments are no longer cached (`EnrichedElement.is_fallback`).
+- **L7** RESOLVED — `get_messages` returns `200 []` on an empty owned session (was 404).
+- **L8** NOT A BUG — the query-analyzer keyword lists are intentionally curated (broad words removed on purpose; see `test_query_analyzer_v2.py::TestRemovedBroadKeywords`). The proposed keyword additions were reverted.
+- **L9** DEFERRED — IR dedup by `element_id` vs `content_hash`. Content-only dedup is intentional (docstring + 4 tests); switching would keep repeated headers/footers as retrieval noise. Not a verified bug.
+- **L10** DEFERRED — version-scoped GC. Destructive row deletion; needs a migration/backfill design, out of scope for a bug-fix pass.
+- **L11** RESOLVED — dead code removed (unreachable `return None`; `state.to_dict`; `_raw_response`).
