@@ -68,7 +68,11 @@ def should_enter_tutoring(classification: MathClassification, compute_result: Ma
     """
     if compute_result is None:
         return False
-    if not compute_result.success:
+    # Only enter step-by-step tutoring on a VERIFIED result (M14). A "partial"
+    # result is inconclusive, and the tutoring/direct-answer prompts assert the
+    # values are verified — so partials must stay on the V1 injection path (which
+    # labels them as needing a double-check) rather than being framed as verified.
+    if compute_result.status != "verified":
         return False
     if not compute_result.answer.get("_steps"):
         return False

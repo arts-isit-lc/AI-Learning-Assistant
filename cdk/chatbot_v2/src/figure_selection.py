@@ -97,19 +97,25 @@ def select_figures(
     query: str,
     max_figures: int = _MAX_FIGURES,
     score_threshold: float = _INTENT_SCORE_FLOOR,
-    high_confidence_threshold: float = _HIGH_CONFIDENCE_THRESHOLD,
 ) -> list[str]:
     """Select figure retrieval_ids to attach to the response.
 
     Uses retrieval_id as content identity — never S3 keys or URIs.
     The figure_url endpoint resolves retrieval_id → presigned URL.
 
+    Selection is reference-and-rank-based (M1). Because no cross-encoder is
+    configured, the ranker score is RRF-scale (~0.03) and cannot be used as an
+    absolute gate. So:
+      - specific reference ("figure 4.1")  -> the escalated (analysed) image, or
+        a single best image at/above score_threshold when nothing escalated;
+      - generic reference ("the diagram") or escalation -> top images by rank;
+      - no reference and no escalation      -> nothing (never guess a figure).
+
     Args:
         retrieval_result: RetrievalResult from invoke_retrieval().
         query: Student's question.
         max_figures: Maximum figures to attach.
-        score_threshold: Minimum score for intent-gated selection.
-        high_confidence_threshold: Score above which figures attach regardless.
+        score_threshold: Floor for the specific-reference fallback image only.
 
     Returns:
         Ordered list of retrieval_ids for figure blocks.
@@ -173,21 +179,20 @@ def select_figures(
                 break
             _take(img.get("retrieval_id"))
 
-    # Priority 2: relevant images when the query references figures at all.
+    # Priority 2: when the query references figures at all (or escalation ran),
+    # show the top images. Reference-and-rank-based (M1): no cross-encoder is
+    # configured, so the ranker score is RRF-scale (~0.03) and absolute
+    # thresholds never fire — rely on the figure reference + retrieval rank
+    # (image_results is already score-ordered) instead of an absolute gate.
     if has_figure_ref or retrieval_result.escalation_used:
         for img in image_results:
             if len(selected) >= max_figures:
                 break
-            if (img.get("score", 0) or 0) >= score_threshold:
-                _take(img.get("retrieval_id"))
+            _take(img.get("retrieval_id"))
 
-    # Priority 3: high-confidence fallback (no figure reference at all).
-    if not selected:
-        for img in image_results:
-            if len(selected) >= max_figures:
-                break
-            if (img.get("score", 0) or 0) >= high_confidence_threshold:
-                _take(img.get("retrieval_id"))
+    # No figure reference and no escalation → do NOT auto-attach an image.
+    # The RRF score is not a reliable absolute gate, so surfacing an unreferenced
+    # figure risks showing something irrelevant. Show figures only when asked.
 
     _log_selected(selected, has_figure_ref, specific_ref, retrieval_result.escalation_used)
     return selected
@@ -197,18 +202,20 @@ def select_tables(
     retrieval_result,
     query: str,
     max_tables: int = _MAX_TABLES,
-    score_threshold: float = _INTENT_SCORE_FLOOR,
 ) -> list[dict]:
     """Select table blocks from retrieval results.
 
     Returns table content as markdown (for now). When ingestion stores
     structured headers/rows, this will return structured data instead.
 
+    Reference-and-rank-based (M1): attach the top tables (already rank-ordered
+    by retrieval) only when the query references a table; the RRF-scale score is
+    not a reliable absolute gate, so it is not used to filter.
+
     Args:
         retrieval_result: RetrievalResult from invoke_retrieval().
         query: Student's question.
         max_tables: Maximum table blocks to attach.
-        score_threshold: Minimum score for selection.
 
     Returns:
         List of table block dicts with type and markdown content.
@@ -224,6 +231,13 @@ def select_tables(
 
     has_table_ref = _TABLE_REF_PATTERN.search(query) is not None
 
+    # Reference-and-rank-based (M1): no cross-encoder is configured, so the
+    # ranker score is RRF-scale (~0.03) and absolute thresholds never fire.
+    # Show the top tables (already rank-ordered by retrieval) only when the
+    # query references a table; never auto-attach on an unreliable score.
+    if not has_table_ref:
+        return []
+
     selected: list[dict] = []
     seen: set[str] = set()
     for t in tables:
@@ -231,13 +245,6 @@ def select_tables(
             break
         rid = t.get("retrieval_id")
         if rid in seen:
-            continue
-        score = t.get("score", 0) or 0
-        # Attach when the query is table-related, or the table scored very high
-        # on its own (mirrors the figure high-confidence fallback).
-        if not (has_table_ref or score >= _HIGH_CONFIDENCE_THRESHOLD):
-            continue
-        if score < score_threshold:
             continue
         block = {
             "type": "table",
@@ -291,6 +298,12 @@ def select_formulas(
 
     has_formula_ref = _FORMULA_REF_PATTERN.search(query) is not None
 
+    # Reference-and-rank-based (M1): RRF-scale scores make absolute thresholds
+    # meaningless without a cross-encoder. Show the top formulas (rank-ordered)
+    # only when the query references a formula/equation.
+    if not has_formula_ref:
+        return []
+
     selected: list[dict] = []
     seen: set[str] = set()
     for f in formulas:
@@ -298,11 +311,6 @@ def select_formulas(
             break
         rid = f.get("retrieval_id")
         if rid in seen:
-            continue
-        score = f.get("score", 0) or 0
-        if not (has_formula_ref or score >= _HIGH_CONFIDENCE_THRESHOLD):
-            continue
-        if score < _INTENT_SCORE_FLOOR:
             continue
         selected.append({
             "type": "formula",
@@ -403,5 +411,57 @@ def build_figure_grounding(retrieval_result, selected_ids: list[str]) -> str:
         "## Figures shown to the student\n"
         "These figures from the course materials are displayed alongside your reply. "
         "Reference and explain them directly; do NOT say a figure cannot be found.\n"
+        + "\n".join(lines)
+    )
+
+
+def build_table_grounding(table_blocks: list[dict] | None) -> str:
+    """Ground displayed TABLE blocks in the response text (H6).
+
+    Same fix as figures: without this the response LLM only sees the retrieval
+    answer and can disclaim a table it is simultaneously displaying. Returns a
+    markdown section, or "" when there are no describable tables.
+    """
+    if not table_blocks:
+        return ""
+    lines: list[str] = []
+    for t in table_blocks:
+        summary = (t.get("summary") or t.get("content") or "").strip()
+        if not summary:
+            headers = t.get("headers") or []
+            summary = ("columns: " + ", ".join(headers)) if headers else ""
+        if not summary:
+            continue
+        page = t.get("page")
+        label = f"Table (page {page})" if page is not None else "Table"
+        lines.append(f"- {label}: {summary}")
+    if not lines:
+        return ""
+    return (
+        "## Tables shown to the student\n"
+        "These tables from the course materials are displayed alongside your reply. "
+        "Reference and explain them directly; do NOT say a table cannot be found.\n"
+        + "\n".join(lines)
+    )
+
+
+def build_formula_grounding(formula_blocks: list[dict] | None) -> str:
+    """Ground displayed FORMULA blocks in the response text (H6)."""
+    if not formula_blocks:
+        return ""
+    lines: list[str] = []
+    for f in formula_blocks:
+        latex = (f.get("latex") or f.get("description") or "").strip()
+        if not latex:
+            continue
+        page = f.get("page")
+        label = f"Formula (page {page})" if page is not None else "Formula"
+        lines.append(f"- {label}: {latex}")
+    if not lines:
+        return ""
+    return (
+        "## Formulas shown to the student\n"
+        "These formulas from the course materials are displayed alongside your reply. "
+        "Reference and explain them directly; do NOT say a formula cannot be found.\n"
         + "\n".join(lines)
     )

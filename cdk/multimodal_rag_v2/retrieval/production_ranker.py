@@ -102,8 +102,13 @@ class ProductionRanker:
             # Ensure boost is non-negative
             boost = max(boost, 0.0)
 
-            # Compute final_score, clamped to never be negative
-            final_score = result.cross_encoder_score + boost
+            # Compute final_score. The boost is applied MULTIPLICATIVELY (M2):
+            # cross_encoder_score is the relevance signal, and with no
+            # cross-encoder configured it equals the RRF score (~0.02-0.03), so
+            # an ADDITIVE boost (<=0.1) would swamp relevance and let a
+            # summary/page-1 result outrank the best match. (1 + boost) keeps
+            # relevance ordering while giving metadata a gentle uplift.
+            final_score = result.cross_encoder_score * (1.0 + boost)
             final_score = max(final_score, 0.0)
 
             # Store computed values

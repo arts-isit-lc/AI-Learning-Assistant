@@ -20,6 +20,7 @@ import hashlib
 import json
 import os
 import time
+from dataclasses import replace
 from typing import Any
 
 try:
@@ -330,6 +331,16 @@ def _enrich_with_cache(
 
     # Check enrichment cache for each element
     for element in document_ir.elements:
+        # H4: never cache TEXT. TextChunker makes NO LLM calls (zero cost
+        # benefit to caching), and a multi-chunk TEXT element yields N
+        # EnrichedElements that all share ONE content_hash and a version-only
+        # sort key — so N cache puts overwrite each other and a later hit
+        # returns a single chunk, silently dropping the rest (recall loss).
+        # Always re-chunk TEXT instead.
+        if element.element_type == ElementType.TEXT:
+            elements_to_enrich.append((element, ""))
+            continue
+
         context_hash = ""
         if element.element_type in (ElementType.IMAGE, ElementType.TABLE):
             context_hash = compute_context_hash(course_id, module_id)
@@ -355,9 +366,16 @@ def _enrich_with_cache(
 
     # Enrich uncached elements via ElementRouter
     if elements_to_enrich:
-        # Build a minimal DocumentIR-like structure for the router
-        # The router expects a full DocumentIR, so we use the original
-        enriched_from_router = element_router.enrich_document(document_ir)
+        # L2: enrich ONLY the uncached subset. Previously the whole DocumentIR
+        # was passed to the router, so every cache miss re-ran vision on
+        # already-cached images/tables (expensive + non-deterministic). A
+        # filtered DocumentIR (same file_metadata, subset of elements) enriches
+        # just what's missing; enrich_document treats each element independently.
+        subset_ir = replace(
+            document_ir,
+            elements=[el for el, _ in elements_to_enrich],
+        )
+        enriched_from_router = element_router.enrich_document(subset_ir)
 
         # Map enriched results back and store in cache
         enriched_by_id: dict[str, list[EnrichedElement]] = {}
@@ -368,6 +386,19 @@ def _enrich_with_cache(
             element_enriched = enriched_by_id.get(element.element_id, [])
             for enriched in element_enriched:
                 all_enriched.append(enriched)
+                # H4: never write TEXT to the cache (see above).
+                if element.element_type == ElementType.TEXT:
+                    continue
+                # L6: never cache a degraded/fallback result — otherwise a
+                # transient vision/throttle failure (or a visual-cap skip) gets
+                # cached and stays degraded on every future re-ingestion.
+                if getattr(enriched, "is_fallback", False):
+                    logger.info(
+                        "Skipping cache store for fallback enrichment",
+                        extra={"element_id": element.element_id,
+                               "element_type": element.element_type.value},
+                    )
+                    continue
                 # Store in enrichment cache
                 enrichment_cache.put(
                     content_hash=element.content_hash,
@@ -380,41 +411,87 @@ def _enrich_with_cache(
     return all_enriched
 
 
-def _generate_embeddings(retrieval_units: list[RetrievalUnit]) -> None:
-    """Generate embeddings for all RetrievalUnits.
+_EMBED_MAX_RETRIES = int(os.environ.get("EMBED_MAX_RETRIES", "3"))
+_EMBED_BACKOFF_INITIAL = float(os.environ.get("EMBED_BACKOFF_INITIAL_SECONDS", "0.5"))
+# Fail the whole record (SQS retry) when fewer than this fraction of embeddings
+# succeed. Protects an existing index from being DELETE+committed away under a
+# throttling burst. Set to 0 to disable (not recommended).
+_MIN_EMBED_SUCCESS_RATE = float(os.environ.get("MIN_EMBED_SUCCESS_RATE", "0.5"))
 
-    Uses EmbeddingGenerator which internally handles caching.
-    Skips units with empty embedding_text.
+
+def _embed_with_backoff(text: str, content_hash: str) -> list[float] | None:
+    """Generate one embedding with exponential backoff on transient errors.
+
+    EmbeddingGenerator does not retry, so under Titan throttling during bulk
+    ingestion embeddings used to fail-and-skip on the first error (H5). Returns
+    None only after exhausting retries.
+    """
+    delay = _EMBED_BACKOFF_INITIAL
+    for attempt in range(_EMBED_MAX_RETRIES + 1):
+        try:
+            return embedding_generator.generate(text=text, content_hash=content_hash)
+        except Exception:
+            if attempt >= _EMBED_MAX_RETRIES:
+                logger.exception(
+                    "Embedding failed after retries",
+                    extra={"content_hash": content_hash[:16], "attempts": attempt + 1},
+                )
+                return None
+            time.sleep(delay)
+            delay *= 2
+    return None  # pragma: no cover
+
+
+def _generate_embeddings(retrieval_units: list[RetrievalUnit]) -> None:
+    """Generate embeddings for all RetrievalUnits (backoff + success gate).
+
+    H5: embedding failures used to be swallowed per-unit with no backoff, so a
+    burst of Titan throttling silently dropped most/all embeddings; the store
+    step then DELETEd the file's existing vectors and inserted only what
+    embedded, marking the file "complete" but unsearchable. We now retry with
+    backoff and RAISE if too few embeddings succeed, so the SQS message is
+    retried and the existing index is left intact (the DELETE never runs).
 
     Args:
         retrieval_units: List of RetrievalUnits to embed.
     """
-    for unit in retrieval_units:
-        if not unit.embedding_text or not unit.embedding_text.strip():
+    embeddable = [
+        u for u in retrieval_units if u.embedding_text and u.embedding_text.strip()
+    ]
+    if not embeddable:
+        logger.info("No embeddable retrieval units (all empty embedding_text)")
+        return
+
+    succeeded = 0
+    for unit in embeddable:
+        content_hash = hashlib.sha256(unit.embedding_text.encode("utf-8")).hexdigest()
+        embedding = _embed_with_backoff(unit.embedding_text, content_hash)
+        if embedding is None:
             continue
+        # Attach embedding to unit metadata for downstream storage
+        unit.metadata["embedding"] = embedding
+        unit.metadata["embedding_version"] = EMBEDDING_VERSION
+        succeeded += 1
 
-        try:
-            content_hash = hashlib.sha256(
-                unit.embedding_text.encode("utf-8")
-            ).hexdigest()
+    success_rate = succeeded / len(embeddable)
+    logger.info(
+        "Embedding generation complete",
+        extra={
+            "embeddable_units": len(embeddable),
+            "succeeded": succeeded,
+            "success_rate": round(success_rate, 3),
+        },
+    )
 
-            embedding = embedding_generator.generate(
-                text=unit.embedding_text,
-                content_hash=content_hash,
-            )
-
-            # Attach embedding to unit metadata for downstream storage
-            unit.metadata["embedding"] = embedding
-            unit.metadata["embedding_version"] = EMBEDDING_VERSION
-
-        except Exception:
-            logger.exception(
-                "Failed to generate embedding for retrieval unit",
-                extra={
-                    "retrieval_id": unit.retrieval_id,
-                    "parent_element_id": unit.parent_element_id,
-                },
-            )
+    # H5: refuse to proceed to the destructive store step when embeddings mostly
+    # failed. Raising fails the SQS record (retried, then DLQ'd), so the file is
+    # NOT marked complete and its existing vectors are preserved.
+    if success_rate < _MIN_EMBED_SUCCESS_RATE:
+        raise RuntimeError(
+            f"Only {succeeded}/{len(embeddable)} embeddings succeeded "
+            f"(< {_MIN_EMBED_SUCCESS_RATE:.0%} threshold); failing record so SQS "
+            f"retries and the existing index is preserved"
+        )
 
 
 def _module_is_deleting_or_missing(module_id: str) -> bool:
@@ -524,6 +601,16 @@ def _store_in_pgvector(
         u for u in retrieval_units if "embedding" in u.metadata
     ]
 
+    # H5: never DELETE the file's existing vectors when there is nothing to
+    # insert — that leaves the file unsearchable but marked "complete". Raise so
+    # the SQS record is retried and the current index is preserved. (Defense in
+    # depth: _generate_embeddings already raises on a low success rate.)
+    if not units_with_embeddings:
+        raise RuntimeError(
+            f"No embeddable units to store for file {file_id}; refusing to "
+            f"DELETE+commit an empty index (would wipe existing vectors)"
+        )
+
     logger.info(
         "Storing RetrievalUnits in pgvector",
         extra={
@@ -554,9 +641,13 @@ def _store_in_pgvector(
         )
         cur = conn.cursor()
 
-        # Delete existing units for this file (incremental re-ingestion)
+        # Delete existing units for this file (incremental re-ingestion).
+        # Use the first-class indexed file_id column (M9) so this matches
+        # deleteFile, retrieval scoping, and idx_retrieval_units_file_id — the
+        # metadata->>'file_id' JSON path was unindexed and diverged from the
+        # rest of the system.
         cur.execute(
-            "DELETE FROM retrieval_units WHERE metadata->>'file_id' = %s",
+            "DELETE FROM retrieval_units WHERE file_id = %s",
             (file_id,),
         )
 

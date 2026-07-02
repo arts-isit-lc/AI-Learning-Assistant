@@ -501,10 +501,14 @@ class RetrievalUnitBuilder:
 
         Modifies units in place.
         """
-        # Collect captions from enriched TEXT elements indexed by page_num
+        # Collect captions from enriched TEXT elements indexed by page_num.
+        # M10: anchor with .match (the pattern begins with \s*) so only chunks
+        # that BEGIN with a caption count — a mid-text reference like "as shown
+        # in Figure 2.1" is no longer treated as a caption. Collect ALL captions
+        # per page so ambiguous (multi-figure) pages can be detected.
         # Note: build() processes one file at a time, so cross-file collisions are impossible
-        table_captions: dict[int, str] = {}
-        figure_captions: dict[int, str] = {}
+        table_captions: dict[int, list[str]] = defaultdict(list)
+        figure_captions: dict[int, list[str]] = defaultdict(list)
 
         for elem in enriched_elements:
             if elem.element_type != ElementType.TEXT:
@@ -512,8 +516,7 @@ class RetrievalUnitBuilder:
             if not elem.embedding_text:
                 continue
 
-            text_head = elem.embedding_text[:150]
-            match = self._CAPTION_PATTERN.search(text_head)
+            match = self._CAPTION_PATTERN.match(elem.embedding_text[:150])
             if not match:
                 continue
 
@@ -524,33 +527,54 @@ class RetrievalUnitBuilder:
             caption_text = elem.embedding_text.split("\n")[0][:200]  # First line, max 200 chars
 
             if self._TABLE_SUBPATTERN.search(match.group(0)):
-                table_captions[page_num] = caption_text
+                table_captions[page_num].append(caption_text)
             elif self._FIGURE_SUBPATTERN.search(match.group(0)):
-                figure_captions[page_num] = caption_text
+                figure_captions[page_num].append(caption_text)
 
         if not table_captions and not figure_captions:
             return
 
-        # Inject captions into TABLE/IMAGE units on matching pages
+        def _sole_caption(by_page: dict[int, list[str]], page: int) -> str | None:
+            # M10: only inject when there is exactly ONE caption of this type on
+            # the page. Multiple captions (a multi-figure page) are ambiguous —
+            # injecting a single page-level caption into every element mislabels
+            # them, so skip rather than guess.
+            caps = by_page.get(page)
+            return caps[0] if caps and len(caps) == 1 else None
+
+        # Inject captions into TABLE/IMAGE units on unambiguous pages
         injected = 0
+        skipped_ambiguous = 0
         for unit in units:
             page_num = unit.provenance.page_num
             if page_num is None:
                 continue
 
-            if unit.element_type == ElementType.TABLE and page_num in table_captions:
-                caption = table_captions[page_num]
-                if caption.lower() not in unit.embedding_text.lower():
-                    unit.embedding_text = f"{caption}\n{unit.embedding_text}"
-                    injected += 1
-            elif unit.element_type == ElementType.IMAGE and page_num in figure_captions:
-                caption = figure_captions[page_num]
-                if caption.lower() not in unit.embedding_text.lower():
-                    unit.embedding_text = f"{caption}\n{unit.embedding_text}"
-                    injected += 1
+            if unit.element_type == ElementType.TABLE:
+                by_page = table_captions
+            elif unit.element_type == ElementType.IMAGE:
+                by_page = figure_captions
+            else:
+                continue
 
-        if injected > 0:
-            logger.info("Captions injected into element units", extra={"injected_count": injected})
+            caption = _sole_caption(by_page, page_num)
+            if caption is None:
+                if len(by_page.get(page_num, [])) > 1:
+                    skipped_ambiguous += 1
+                continue
+
+            if caption.lower() not in unit.embedding_text.lower():
+                unit.embedding_text = f"{caption}\n{unit.embedding_text}"
+                injected += 1
+
+        if injected or skipped_ambiguous:
+            logger.info(
+                "Captions injected into element units",
+                extra={
+                    "injected_count": injected,
+                    "skipped_ambiguous_pages": skipped_ambiguous,
+                },
+            )
 
     # -----------------------------------------------------------------------
     # Caption-Element Sibling Linking
@@ -615,9 +639,11 @@ class RetrievalUnitBuilder:
             if unit.element_type != ElementType.TEXT:
                 continue
 
-            # Match captions within the first 150 chars of the chunk.
-            text_head = unit.embedding_text[:150]
-            match = self._CAPTION_PATTERN.search(text_head)
+            # M10: anchor to the chunk start (.match; the pattern begins with
+            # \s*) so only chunks that BEGIN with a caption create sibling links
+            # / set figure_ref — a mid-text reference like "as shown in Figure
+            # 2.1" no longer over-links.
+            match = self._CAPTION_PATTERN.match(unit.embedding_text[:150])
             if not match:
                 continue
 

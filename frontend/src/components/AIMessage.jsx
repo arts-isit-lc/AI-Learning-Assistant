@@ -47,8 +47,15 @@ const MarkdownRender = ({ content }) => {
  * - Markdown fallback: { markdown: "| A | B |\n|---|---|\n..." }
  */
 const TableBlock = ({ block }) => {
-  // Structured table rendering
-  if (block.headers && block.rows) {
+  // Backend (figure_selection.select_tables) emits `summary` for the caption and
+  // `content` (raw table text) when it has no structured headers/rows.
+  const caption = block.caption || block.summary;
+
+  // Structured table rendering. Require NON-EMPTY arrays: an empty array is
+  // truthy in JS, so `block.headers && block.rows` previously passed for a
+  // text-only table ({headers:[], rows:[]}) and rendered an empty <table> shell
+  // while making the content fallback unreachable (M12).
+  if (block.headers?.length && block.rows?.length) {
     return (
       <div className="my-4 overflow-auto border border-border rounded">
         <table className="w-full text-sm">
@@ -79,21 +86,33 @@ const TableBlock = ({ block }) => {
             ))}
           </tbody>
         </table>
-        {block.caption && (
-          <p className="text-xs text-muted-foreground px-3 py-2">{block.caption}</p>
+        {caption && (
+          <p className="text-xs text-muted-foreground px-3 py-2">{caption}</p>
         )}
       </div>
     );
   }
 
-  // Markdown fallback
-  if (block.markdown) {
+  // Unstructured fallback: backend emits `content` for text-only tables; older
+  // payloads may carry `markdown`. Render whichever is present.
+  const fallbackText = block.content || block.markdown;
+  if (fallbackText) {
     return (
       <div className="my-4">
-        <MarkdownRender content={block.markdown} />
-        {block.caption && (
-          <p className="text-xs text-muted-foreground mt-1">{block.caption}</p>
+        <MarkdownRender content={fallbackText} />
+        {caption && (
+          <p className="text-xs text-muted-foreground mt-1">{caption}</p>
         )}
+      </div>
+    );
+  }
+
+  // Last resort: a table with only a summary still shows something rather than
+  // rendering nothing.
+  if (caption) {
+    return (
+      <div className="my-4">
+        <p className="text-sm text-foreground">{caption}</p>
       </div>
     );
   }

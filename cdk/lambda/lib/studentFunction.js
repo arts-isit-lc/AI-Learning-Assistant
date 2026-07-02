@@ -18,6 +18,7 @@
  *   GET    /student/figure_url
  */
 const { initializeConnection } = require("./lib.js");
+const { verifyStudentAccess, verifyStudentOwnsSession } = require("./accessControl.js");
 const { S3Client, GetObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
@@ -27,28 +28,6 @@ const s3Client = new S3Client({ region: REGION });
 
 // SQL conneciton from global variable at lib.js
 let sqlConnection = global.sqlConnection;
-
-/**
- * Verifies the student is enrolled in the course that owns the given module.
- * The join chain (Enrolments → Course_Concepts → Course_Modules) prevents
- * mixed-parameter attacks where course_id and module_id belong to different courses.
- * Returns the enrolment_id if valid, or null if not enrolled.
- */
-async function verifyStudentAccess(sqlConn, email, courseId, moduleId) {
-  const result = await sqlConn`
-    SELECT e.enrolment_id
-    FROM "Enrolments" e
-    JOIN "Users" u ON u.user_id = e.user_id
-    JOIN "Course_Concepts" cc ON cc.course_id = e.course_id
-    JOIN "Course_Modules" cm ON cm.concept_id = cc.concept_id
-    WHERE u.user_email = ${email}
-      AND cm.module_id = ${moduleId}
-      AND e.course_id = ${courseId}
-      AND cm.status = 'active'
-    LIMIT 1;
-  `;
-  return result.length > 0 ? result[0].enrolment_id : null;
-}
 
 exports.handler = async (event) => {
   // OPT-1: Read email from authorizer context instead of calling Cognito AdminGetUser
@@ -639,6 +618,21 @@ exports.handler = async (event) => {
           try {
             const sessionId = event.queryStringParameters.session_id;
 
+            // H2: verify the caller owns this session before returning its
+            // messages. The student authorizer only proves "is a student", not
+            // "owns this session" — without this any student could read any
+            // session's full history by session_id (IDOR).
+            const ownsSession = await verifyStudentOwnsSession(
+              sqlConnection,
+              userEmailAttribute,
+              sessionId
+            );
+            if (!ownsSession) {
+              response.statusCode = 403;
+              response.body = JSON.stringify({ error: "Access denied." });
+              break;
+            }
+
             // Query to get all messages in the given session, sorted by time_sent in ascending order (oldest to newest)
             const data = await sqlConnection`
                       SELECT *
@@ -647,15 +641,11 @@ exports.handler = async (event) => {
                       ORDER BY time_sent ASC;
                   `;
 
-            if (data.length > 0) {
-              response.body = JSON.stringify(data);
-              response.statusCode = 200;
-            } else {
-              response.body = JSON.stringify({
-                message: "No messages found for this session.",
-              });
-              response.statusCode = 404;
-            }
+            // L7: an owned session with no messages is a valid empty result, not
+            // an error. Return 200 [] so the client renders an empty chat rather
+            // than treating a 404 as a failure and clearing state.
+            response.statusCode = 200;
+            response.body = JSON.stringify(data);
           } catch (err) {
             response.statusCode = 500;
             console.log(err);
@@ -775,6 +765,18 @@ exports.handler = async (event) => {
           try {
             const sessionId = event.queryStringParameters.session_id;
 
+            // H2: verify the caller owns this session before returning messages (IDOR guard).
+            const ownsSession = await verifyStudentOwnsSession(
+              sqlConnection,
+              userEmailAttribute,
+              sessionId
+            );
+            if (!ownsSession) {
+              response.statusCode = 403;
+              response.body = JSON.stringify({ error: "Access denied." });
+              break;
+            }
+
             // Fetch all messages in the specified session
             const messages = await sqlConnection`
                       SELECT *
@@ -805,6 +807,18 @@ exports.handler = async (event) => {
           try {
             const { session_id } = event.queryStringParameters;
             const { session_name } = JSON.parse(event.body);
+
+            // H2: verify the caller owns this session before renaming it (IDOR guard).
+            const ownsSession = await verifyStudentOwnsSession(
+              sqlConnection,
+              userEmailAttribute,
+              session_id
+            );
+            if (!ownsSession) {
+              response.statusCode = 403;
+              response.body = JSON.stringify({ error: "Access denied." });
+              break;
+            }
 
             // Update the session name
             const updateResult = await sqlConnection`
@@ -1114,31 +1128,12 @@ exports.handler = async (event) => {
             }
 
             if (!figureRecord) {
-              // Strategy 3: If figure_id looks like an S3 key, generate URL directly
-              let directKey = figureId;
-              if (figureId.startsWith("s3://")) {
-                const withoutProtocol = figureId.slice(5);
-                const slashIndex = withoutProtocol.indexOf("/");
-                directKey = slashIndex >= 0 ? withoutProtocol.slice(slashIndex + 1) : withoutProtocol;
-              }
-
-              if (directKey.startsWith("courses/") || directKey.startsWith("images/")) {
-                const command = new GetObjectCommand({
-                  Bucket: BUCKET,
-                  Key: directKey,
-                });
-                const url = await getSignedUrl(s3Client, command, {
-                  expiresIn: 3600,
-                });
-                response.body = JSON.stringify({
-                  url,
-                  figure_id: figureId,
-                  caption: null,
-                  page: null,
-                });
-                break;
-              }
-
+              // H3: no unauthenticated passthrough. Previously an unresolved
+              // figure_id that merely looked like an S3 key (courses/… or
+              // images/…) was signed DIRECTLY with no enrollment check, letting
+              // any student presign another course's figures (IDOR). A figure_id
+              // that does not resolve to a retrieval_units row cannot be
+              // authorized, so return 404 instead of signing an arbitrary key.
               response.statusCode = 404;
               response.body = JSON.stringify({ error: "Figure not found" });
               break;
@@ -1159,34 +1154,49 @@ exports.handler = async (event) => {
               resolvedKey = slashIndex >= 0 ? withoutProtocol.slice(slashIndex + 1) : withoutProtocol;
             }
 
-            // Verify student access via the module that owns this figure
+            // H3: access verification is MANDATORY and fail-closed. Previously
+            // the check was skipped when metadata.module_id was absent (or when
+            // the course could not be resolved), and the URL was signed anyway.
+            // A figure whose owning module/course cannot be verified — and a
+            // caller not enrolled in that course — must never be signed.
             const figureModuleId = metadata.module_id;
-            if (figureModuleId) {
-              const courseResult = await sqlConnection`
-                SELECT cc.course_id
-                FROM "Course_Modules" cm
-                JOIN "Course_Concepts" cc ON cc.concept_id = cm.concept_id
-                WHERE cm.module_id = ${figureModuleId}
-                LIMIT 1;
-              `;
+            if (!figureModuleId) {
+              response.statusCode = 403;
+              response.body = JSON.stringify({
+                error: "Access denied. Figure has no owning module to verify.",
+              });
+              break;
+            }
 
-              if (courseResult.length > 0) {
-                const courseId = courseResult[0].course_id;
-                const enrolmentId = await verifyStudentAccess(
-                  sqlConnection,
-                  userEmailAttribute,
-                  courseId,
-                  figureModuleId
-                );
+            const courseResult = await sqlConnection`
+              SELECT cc.course_id
+              FROM "Course_Modules" cm
+              JOIN "Course_Concepts" cc ON cc.concept_id = cm.concept_id
+              WHERE cm.module_id = ${figureModuleId}
+              LIMIT 1;
+            `;
 
-                if (!enrolmentId) {
-                  response.statusCode = 403;
-                  response.body = JSON.stringify({
-                    error: "Access denied. Student is not enrolled in this course.",
-                  });
-                  break;
-                }
-              }
+            if (courseResult.length === 0) {
+              response.statusCode = 403;
+              response.body = JSON.stringify({
+                error: "Access denied. Could not resolve the figure's course.",
+              });
+              break;
+            }
+
+            const enrolmentId = await verifyStudentAccess(
+              sqlConnection,
+              userEmailAttribute,
+              courseResult[0].course_id,
+              figureModuleId
+            );
+
+            if (!enrolmentId) {
+              response.statusCode = 403;
+              response.body = JSON.stringify({
+                error: "Access denied. Student is not enrolled in this course.",
+              });
+              break;
             }
 
             // Generate presigned GET URL (1 hour TTL)

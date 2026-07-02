@@ -46,7 +46,7 @@ class TestProductionRankerScoring:
         assert ranked[0].score == 0.7
 
     def test_document_summary_boost(self) -> None:
-        """is_document_summary=True gives 0.05 boost."""
+        """is_document_summary=True gives 0.05 boost (applied multiplicatively)."""
         results = [
             _make_result(
                 cross_encoder_score=0.5,
@@ -55,10 +55,11 @@ class TestProductionRankerScoring:
         ]
         ranked = self.ranker.rank(results)
         assert ranked[0].metadata_boost == 0.05
-        assert ranked[0].score == pytest.approx(0.55)
+        # Multiplicative (M2): 0.5 * (1 + 0.05) = 0.525
+        assert ranked[0].score == pytest.approx(0.525)
 
     def test_lecture_number_boost(self) -> None:
-        """lecture_number presence gives 0.03 boost."""
+        """lecture_number presence gives 0.03 boost (applied multiplicatively)."""
         results = [
             _make_result(
                 cross_encoder_score=0.5,
@@ -67,10 +68,11 @@ class TestProductionRankerScoring:
         ]
         ranked = self.ranker.rank(results)
         assert ranked[0].metadata_boost == 0.03
-        assert ranked[0].score == pytest.approx(0.53)
+        # Multiplicative (M2): 0.5 * (1 + 0.03) = 0.515
+        assert ranked[0].score == pytest.approx(0.515)
 
     def test_page_num_1_boost(self) -> None:
-        """page_num=1 gives 0.02 boost."""
+        """page_num=1 gives 0.02 boost (applied multiplicatively)."""
         results = [
             _make_result(
                 cross_encoder_score=0.5,
@@ -79,7 +81,8 @@ class TestProductionRankerScoring:
         ]
         ranked = self.ranker.rank(results)
         assert ranked[0].metadata_boost == 0.02
-        assert ranked[0].score == pytest.approx(0.52)
+        # Multiplicative (M2): 0.5 * (1 + 0.02) = 0.51
+        assert ranked[0].score == pytest.approx(0.51)
 
     def test_combined_boosts_capped_at_0_1(self) -> None:
         """All boosts combined (0.05 + 0.03 + 0.02 = 0.1) should cap at 0.1."""
@@ -95,7 +98,8 @@ class TestProductionRankerScoring:
         ]
         ranked = self.ranker.rank(results)
         assert ranked[0].metadata_boost == 0.1
-        assert ranked[0].score == pytest.approx(0.6)
+        # Multiplicative (M2): 0.5 * (1 + 0.1) = 0.55
+        assert ranked[0].score == pytest.approx(0.55)
 
     def test_final_score_never_negative(self) -> None:
         """Even with negative cross_encoder_score, final_score is clamped to 0."""
@@ -112,7 +116,7 @@ class TestProductionRankerScoring:
             )
         ]
         ranked = self.ranker.rank(results)
-        # -0.2 + 0.02 = -0.18, clamped to 0
+        # -0.2 * (1 + 0.02) = -0.204, clamped to 0
         assert ranked[0].score == 0.0
 
     def test_sorting_descending_by_score(self) -> None:

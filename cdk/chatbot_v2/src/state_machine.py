@@ -183,9 +183,10 @@ from evaluation import EvaluationResult
 def update_state(state: SessionState, evaluation: EvaluationResult) -> SessionState:
     """Update session state based on an evaluation result.
 
-    Increments interactions by 1, updates exactly one of the correctness
-    counters, manages consecutive streaks, and adjusts engagement_score.
-    Never modifies module_complete.
+    Updates exactly one of the correctness counters, manages consecutive
+    streaks, and adjusts engagement_score. Never modifies module_complete or
+    interactions (interactions is a per-turn counter incremented once per turn
+    by the handler, independent of whether evaluation runs — H1).
 
     Args:
         state: The current session state to update in-place.
@@ -194,8 +195,6 @@ def update_state(state: SessionState, evaluation: EvaluationResult) -> SessionSt
     Returns:
         The modified SessionState (same object, mutated).
     """
-    state.interactions += 1
-
     if evaluation.correct:
         state.correct_count += 1
         state.consecutive_failures = 0

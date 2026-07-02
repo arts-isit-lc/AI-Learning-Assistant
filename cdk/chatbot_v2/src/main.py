@@ -217,13 +217,24 @@ def _persist_session_state(state) -> None:
     except _dynamodb_resource.meta.client.exceptions.ConditionalCheckFailedException:
         logger.warning("State write conflict, retrying once", extra={"session_id": state.session_id})
         reloaded = _load_session_state(state.session_id)
-        if reloaded:
-            state.state_version = reloaded.state_version + 1
+        if reloaded is None:
+            logger.exception("State write conflict and reload failed (best-effort)")
+            return
+        # Retry with a CONDITION against the reloaded version so a concurrent
+        # writer is never blindly clobbered (M3). If it still conflicts, give up
+        # rather than overwrite — losing this turn's state update is safer than
+        # corrupting a newer one. (Full delta-merge intentionally deferred.)
+        expected_version = reloaded.state_version
+        state.state_version = expected_version + 1
         item = serialize_state(state)
         try:
-            table.put_item(Item=item)
+            table.put_item(
+                Item=item,
+                ConditionExpression="attribute_not_exists(state_version) OR state_version = :v",
+                ExpressionAttributeValues={":v": expected_version},
+            )
         except Exception:
-            logger.exception("State write retry also failed (best-effort)")
+            logger.exception("State write retry also conflicted; skipping (best-effort)")
 
 
 def _get_last_ai_question(chat_history: list[dict]) -> str:
@@ -306,6 +317,49 @@ def _stream_with_guardrail_retry(
         except Exception:
             logger.exception("Retry without guardrails also failed")
             raise
+
+
+def _persist_turn(session_id, message_content, llm_output, blocks, user_email, course_id, module_id) -> None:
+    """Persist one completed turn consistently for every path (M5).
+
+    DynamoDB (canonical text log) is written FIRST so a delayed/failed RDS
+    projection never loses a message; the RDS projection (blocks-aware, for UI
+    history) is written async via SQS when ASYNC_RDS_PROJECTION is on, else
+    synchronously with engagement logging. Best-effort throughout.
+    """
+    # DynamoDB = canonical source of truth (text log)
+    try:
+        persist_message_pair(CHAT_HISTORY_TABLE, session_id, message_content or "[Initial greeting]", llm_output, _dynamodb_resource)
+    except Exception:
+        logger.exception("Chat history persistence failed (best-effort)")
+
+    # RDS = projection for UI session history (carries render blocks)
+    if ASYNC_RDS_PROJECTION and RDS_PROJECTION_QUEUE_URL:
+        try:
+            _sqs_client.send_message(
+                QueueUrl=RDS_PROJECTION_QUEUE_URL,
+                MessageBody=json.dumps({
+                    "session_id": session_id,
+                    "message_content": message_content,
+                    "llm_output": llm_output,
+                    "blocks": blocks,
+                    "user_email": user_email,
+                    "course_id": course_id,
+                    "module_id": module_id,
+                }),
+            )
+        except Exception:
+            logger.exception("RDS projection enqueue failed (best-effort)")
+    else:
+        try:
+            conn = _get_db_connection()
+            if message_content:
+                persist_message_to_rds(conn, session_id, message_content, student_sent=True)
+                log_engagement(conn, user_email, course_id, module_id, "message creation")
+            persist_message_to_rds(conn, session_id, llm_output, student_sent=False, blocks=blocks)
+            log_engagement(conn, user_email, course_id, module_id, "AI message creation")
+        except Exception:
+            logger.exception("RDS projection failed (best-effort)")
 
 
 @logger.inject_lambda_context(clear_state=True)
@@ -408,17 +462,26 @@ def handler(event, context):
                         persist_message_to_rds(conn, session_id, llm_output["message"], student_sent=False)
                     except Exception:
                         logger.exception("RDS projection failed on guardrail block (best-effort)")
-                    return {"statusCode": 200, "headers": CORS_HEADERS, "body": json.dumps({"llm_output": llm_output["message"], "session_state": state.to_dict() if hasattr(state, 'to_dict') else {}})}
+                    return {"statusCode": 200, "headers": CORS_HEADERS, "body": json.dumps({
+                        "session_name": session_name,
+                        "llm_output": llm_output["message"],
+                        "blocks": [{"type": "text", "content": llm_output["message"]}],
+                        "llm_verdict": state.module_complete,
+                        "session_state": {
+                            "stage": state.stage,
+                            "module_complete": state.module_complete,
+                            "engagement_score": state.engagement_score,
+                            "concepts_demonstrated": state.concepts_demonstrated,
+                            "tutor_active": is_tutor_active(state),
+                        },
+                    })}
 
-                # Persist messages
-                try:
-                    conn = _get_db_connection()
-                    persist_message_to_rds(conn, session_id, message_content, student_sent=True)
-                    persist_message_to_rds(conn, session_id, llm_output, student_sent=False)
-                except Exception:
-                    logger.exception("RDS projection failed (best-effort)")
-
-                persist_message_pair(CHAT_HISTORY_TABLE, session_id, message_content, llm_output, _dynamodb_resource)
+                # Persist one completed tutor turn via the shared helper
+                # (canonical-first, engagement-logged, block-aware). Tutor
+                # replies are text-only, so blocks is a single text block —
+                # this makes tutor turns reconstruct correctly on history reload.
+                tutor_blocks = [{"type": "text", "content": llm_output}]
+                _persist_turn(session_id, message_content, llm_output, tutor_blocks, user_email, course_id, module_id)
                 state.interactions += 1
                 _persist_session_state(state)
 
@@ -426,8 +489,17 @@ def handler(event, context):
                     "statusCode": 200,
                     "headers": CORS_HEADERS,
                     "body": json.dumps({
+                        "session_name": session_name,
                         "llm_output": llm_output,
-                        "session_state": {"tutor_active": is_tutor_active(state)},
+                        "blocks": tutor_blocks,
+                        "llm_verdict": state.module_complete,
+                        "session_state": {
+                            "stage": state.stage,
+                            "module_complete": state.module_complete,
+                            "engagement_score": state.engagement_score,
+                            "concepts_demonstrated": state.concepts_demonstrated,
+                            "tutor_active": is_tutor_active(state),
+                        },
                     }),
                 }
 
@@ -523,6 +595,13 @@ def handler(event, context):
         mode = select_mode(state, evaluation, advanced)
         logger.info("Mode selected", extra={"mode": mode, "stage": state.stage})
 
+        # Advance hint escalation when a hint mode is chosen (M7). Without this,
+        # hint_level never rises, so `hint_scaffold` is unreachable and escalation
+        # is dead. check_stage_advancement resets hint_level on stage advancement.
+        if mode in ("hint_nudge", "hint_scaffold"):
+            state.hint_level += 1
+            state.hint_count += 1
+
         # Step 9: Handle completion mode
         other_modules: list[str] = []
         if mode == "complete":
@@ -545,19 +624,28 @@ def handler(event, context):
             if mentioned:
                 state = introduce_concepts(state, mentioned)
 
-        # Select figures up front so the displayed figures' descriptions can
-        # ground the response text. Without this the response LLM only sees the
-        # retrieval answer and disclaims ("couldn't find that in the retrieved
-        # materials") a figure the display path is simultaneously showing.
+        # Select figures/tables/formulas up front so their descriptions can
+        # ground the response text (H6/M1). Without this the response LLM only
+        # sees the retrieval answer and disclaims ("couldn't find that in the
+        # retrieved materials") a block the display path simultaneously shows.
         try:
-            from figure_selection import select_figures as select_figs, build_figure_grounding
+            from figure_selection import (
+                select_figures as select_figs, select_tables, select_formulas,
+                build_figure_grounding, build_table_grounding, build_formula_grounding,
+            )
             selected_figures = select_figs(retrieval_result, retrieval_query)
-            figure_grounding = build_figure_grounding(retrieval_result, selected_figures)
+            table_blocks = select_tables(retrieval_result, retrieval_query)
+            formula_blocks = select_formulas(retrieval_result, retrieval_query)
+            grounding = "\n\n".join(g for g in (
+                build_figure_grounding(retrieval_result, selected_figures),
+                build_table_grounding(table_blocks),
+                build_formula_grounding(formula_blocks),
+            ) if g)
         except Exception:
-            logger.exception("Figure selection/grounding failed (pre-generation)")
-            selected_figures, figure_grounding = [], ""
-        if figure_grounding:
-            rag_context = f"{rag_context}\n\n{figure_grounding}" if rag_context else figure_grounding
+            logger.exception("Block selection/grounding failed (pre-generation)")
+            selected_figures, table_blocks, formula_blocks, grounding = [], [], [], ""
+        if grounding:
+            rag_context = f"{rag_context}\n\n{grounding}" if rag_context else grounding
 
         # Step 10.5: Math compute (if query contains explicit math)
         math_compute_context = ""
@@ -572,11 +660,8 @@ def handler(event, context):
                 if compute_result is not None:
                     # Check if we should enter tutoring mode (V2)
                     if should_enter_tutoring(math_class, compute_result):
-                        # Store steps in answer for tutor state creation
-                        compute_result.answer["_steps"] = compute_result.answer.get("_steps", [])
-                        # If steps came from Lambda response, use them
-                        if hasattr(compute_result, '_raw_response'):
-                            compute_result.answer["_steps"] = compute_result._raw_response.get("steps", [])
+                        # steps were already attached to answer["_steps"] by the
+                        # math_compute_client; just record the operation for the tutor.
                         compute_result.answer["_operation"] = math_class.operation_hint
 
                         state.tutor_state = create_tutor_state(compute_result)
@@ -641,7 +726,10 @@ def handler(event, context):
         )
         # If guardrail retry produced a blocked redirect, return it directly
         if isinstance(llm_output, dict) and llm_output.get("blocked"):
-            # Still persist the student message to RDS (best-effort)
+            # M16: a blocked turn is persisted to the RDS projection (so the UI
+            # history still shows the exchange) but intentionally NOT to the
+            # DynamoDB canonical log — blocked content must never be replayed to
+            # the model as chat history on a later turn.
             try:
                 conn = _get_db_connection()
                 if message_content:
@@ -655,6 +743,7 @@ def handler(event, context):
                 "body": json.dumps({
                     "session_name": session_name,
                     "llm_output": llm_output["message"],
+                    "blocks": [{"type": "text", "content": llm_output["message"]}],
                     "llm_verdict": state.module_complete,
                     "session_state": {
                         "stage": state.stage,
@@ -671,58 +760,26 @@ def handler(event, context):
             if student_concepts:
                 state = discuss_concepts(state, student_concepts)
 
-        # Assemble render blocks (text + figures/tables/formulas) BEFORE persistence
-        # so the AI message's blocks are saved with it and can be reconstructed on
-        # history reload. Figures were already selected before generation (so their
-        # descriptions could ground the response text); reuse that selection here.
+        # Assemble render blocks BEFORE persistence so they're saved with the AI
+        # message (history reload). Figures/tables/formulas were already selected
+        # before generation (so their descriptions could ground the text); reuse
+        # that selection here to keep display and grounding perfectly aligned.
         try:
-            from figure_selection import select_tables, select_formulas, assemble_blocks
-            table_blocks = select_tables(retrieval_result, retrieval_query)
-            formula_blocks = select_formulas(retrieval_result, retrieval_query)
+            from figure_selection import assemble_blocks
             blocks = assemble_blocks(llm_output, selected_figures, table_blocks, formula_blocks)
         except Exception:
-            logger.exception("Figure selection failed, returning text-only blocks")
+            logger.exception("Block assembly failed, returning text-only blocks")
             blocks = [{"type": "text", "content": llm_output}]
 
-        # Step 13: Persist state + history (best-effort)
-        # DynamoDB = canonical message store
-        try:
-            persist_message_pair(CHAT_HISTORY_TABLE, session_id, message_content or f"[Initial greeting]", llm_output, _dynamodb_resource)
-        except Exception:
-            logger.exception("Chat history persistence failed (best-effort)")
+        # Step 13: Persist state + history (best-effort) via the shared helper
+        # so the normal and tutor paths behave identically (canonical-first,
+        # block-aware, engagement-logged, ASYNC_RDS_PROJECTION-aware).
+        _persist_turn(session_id, message_content, llm_output, blocks, user_email, course_id, module_id)
 
-        # RDS = projection for UI session history. Synchronous by default; when
-        # ASYNC_RDS_PROJECTION is on (#8) it is enqueued to SQS and written by a
-        # dedicated consumer Lambda, taking ~4 RDS round-trips off the billed
-        # response path. DynamoDB above remains the synchronous source of truth,
-        # so a delayed/failed projection never loses a message.
-        if ASYNC_RDS_PROJECTION and RDS_PROJECTION_QUEUE_URL:
-            try:
-                _sqs_client.send_message(
-                    QueueUrl=RDS_PROJECTION_QUEUE_URL,
-                    MessageBody=json.dumps({
-                        "session_id": session_id,
-                        "message_content": message_content,
-                        "llm_output": llm_output,
-                        "blocks": blocks,
-                        "user_email": user_email,
-                        "course_id": course_id,
-                        "module_id": module_id,
-                    }),
-                )
-            except Exception:
-                logger.exception("RDS projection enqueue failed (best-effort)")
-        else:
-            try:
-                conn = _get_db_connection()
-                if message_content:
-                    persist_message_to_rds(conn, session_id, message_content, student_sent=True)
-                    log_engagement(conn, user_email, course_id, module_id, "message creation")
-                persist_message_to_rds(conn, session_id, llm_output, student_sent=False, blocks=blocks)
-                log_engagement(conn, user_email, course_id, module_id, "AI message creation")
-            except Exception:
-                logger.exception("RDS projection failed (best-effort)")
-
+        # Count this as one processed turn (H1). `interactions` is the per-turn
+        # counter the eval gate reads on the NEXT turn; it must increment whether
+        # or not evaluation ran this turn, otherwise the gate never bootstraps.
+        state.interactions += 1
         try:
             _persist_session_state(state)
         except Exception:

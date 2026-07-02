@@ -39,9 +39,11 @@ class TestSelectTables:
         rr = _rr(table_results=[{"retrieval_id": "t1", "score": 0.6, "headers": ["A"], "rows": [["1"]]}])
         assert fs.select_tables(rr, "what is recursion?") == []
 
-    def test_high_score_attaches_without_table_ref(self):
+    def test_no_table_ref_high_score_still_empty(self):
+        # Reference-and-rank-based (M1): without a table reference nothing
+        # attaches, regardless of score — an RRF-scale score is not a gate.
         rr = _rr(table_results=[{"retrieval_id": "t1", "score": 0.85, "headers": ["A"], "rows": [["1"]]}])
-        assert len(fs.select_tables(rr, "what is recursion?")) == 1
+        assert fs.select_tables(rr, "what is recursion?") == []
 
     def test_falls_back_to_raw_content_when_no_structure(self):
         rr = _rr(table_results=[{"retrieval_id": "t1", "score": 0.9, "headers": [], "rows": [], "content": "a | b"}])
@@ -75,9 +77,11 @@ class TestSelectFormulas:
         rr = _rr(formula_results=[{"retrieval_id": "f1", "score": 0.6, "latex": "x", "content": "x"}])
         assert fs.select_formulas(rr, "what is a tree?") == []
 
-    def test_high_score_attaches(self):
+    def test_no_formula_ref_high_score_still_empty(self):
+        # Reference-and-rank-based (M1): without a formula reference nothing
+        # attaches, regardless of score.
         rr = _rr(formula_results=[{"retrieval_id": "f1", "score": 0.85, "latex": "x", "content": "x"}])
-        assert len(fs.select_formulas(rr, "what is a tree?")) == 1
+        assert fs.select_formulas(rr, "what is a tree?") == []
 
     def test_latex_falls_back_to_content(self):
         rr = _rr(formula_results=[{"retrieval_id": "f1", "score": 0.9, "latex": "", "content": "a^2+b^2"}])
@@ -97,13 +101,19 @@ class TestSelectFigures:
         rr = _rr(image_results=[{"retrieval_id": "i1", "score": 0.55}])
         assert fs.select_figures(rr, "show me figure 2") == ["i1"]
 
-    def test_figure_ref_below_floor_excluded(self):
+    def test_generic_ref_surfaces_top_image_regardless_of_score(self):
+        # "the diagram" is a generic figure reference (no number). Reference-and
+        # -rank-based (M1): the top image is surfaced by rank; the RRF-scale
+        # score (0.3 here) is NOT an absolute gate. This is the fix for the
+        # "figure never shows because scores are ~0.03" class of bug.
         rr = _rr(image_results=[{"retrieval_id": "i1", "score": 0.3}])
-        assert fs.select_figures(rr, "show me the diagram") == []
+        assert fs.select_figures(rr, "show me the diagram") == ["i1"]
 
-    def test_no_ref_requires_high_confidence(self):
+    def test_no_ref_no_escalation_attaches_nothing(self):
+        # No figure reference and no escalation -> never guess a figure, even at
+        # a high nominal score (scores are not a reliable signal here).
         assert fs.select_figures(_rr(image_results=[{"retrieval_id": "i1", "score": 0.6}]), "what is recursion?") == []
-        assert fs.select_figures(_rr(image_results=[{"retrieval_id": "i2", "score": 0.85}]), "what is recursion?") == ["i2"]
+        assert fs.select_figures(_rr(image_results=[{"retrieval_id": "i2", "score": 0.85}]), "what is recursion?") == []
 
     def test_none_result(self):
         assert fs.select_figures(None, "figure") == []
@@ -161,23 +171,44 @@ class TestSelectFigures:
 
 
 class TestHarmonizedAndConfigurable:
-    def test_formula_with_intent_below_floor_excluded(self):
-        # Harmonized: even with formula intent, below the intent floor is excluded.
+    """The harmonized contract (M1): once a block type is referenced in the
+    query, the top rank-ordered candidates attach regardless of the RRF-scale
+    score. Absolute score gating was removed because, with no cross-encoder
+    configured, scores (~0.03) never reach a meaningful threshold — which is
+    what made figures/tables/formulas silently never attach."""
+
+    def test_formula_ref_attaches_regardless_of_score(self):
+        # Formula referenced -> attaches even at a low score.
         rr = _rr(formula_results=[{"retrieval_id": "f1", "score": 0.3, "latex": "x", "content": "x"}])
-        assert fs.select_formulas(rr, "show the equation") == []
+        assert len(fs.select_formulas(rr, "show the equation")) == 1
 
-    def test_high_confidence_threshold_is_configurable(self, monkeypatch):
-        # Raising the bar means a 0.85 table without intent no longer attaches.
-        monkeypatch.setattr(fs, "_HIGH_CONFIDENCE_THRESHOLD", 0.95)
-        rr = _rr(table_results=[{"retrieval_id": "t1", "score": 0.85, "headers": ["A"], "rows": [["1"]]}])
-        assert fs.select_tables(rr, "what is recursion?") == []
+    def test_table_ref_attaches_regardless_of_score(self):
+        # Table referenced -> attaches even at a low score.
+        rr = _rr(table_results=[{"retrieval_id": "t1", "score": 0.3, "headers": ["A"], "rows": [["1"]]}])
+        assert len(fs.select_tables(rr, "show me the table")) == 1
 
-    def test_intent_floor_is_configurable(self, monkeypatch):
-        # select_formulas reads the intent floor at call time, so the env-backed
-        # module value drives it. Raising it excludes a mid-scoring formula.
-        monkeypatch.setattr(fs, "_INTENT_SCORE_FLOOR", 0.7)
-        rr = _rr(formula_results=[{"retrieval_id": "f1", "score": 0.6, "latex": "x", "content": "x"}])
-        assert fs.select_formulas(rr, "show the equation") == []
+    def test_specific_figure_ref_floor_is_configurable(self):
+        # The one score knob that remains: the specific-figure-reference
+        # fallback (no escalation) attaches a single best image at/above
+        # score_threshold. Raising it above the score excludes the image.
+        rr = _rr(image_results=[{"retrieval_id": "i1", "score": 0.6, "image_s3_key": "s3://b/a.png"}])
+        assert fs.select_figures(rr, "explain figure 4.1") == ["i1"]  # default floor 0.5
+        assert fs.select_figures(rr, "explain figure 4.1", score_threshold=0.7) == []
+
+    def test_max_caps_are_respected(self):
+        # Per-type caps still limit output deterministically.
+        figs = _rr(escalation_used=True, image_results=[
+            {"retrieval_id": f"i{i}", "score": 0.9, "image_s3_key": f"s3://b/{i}.png"} for i in range(5)
+        ])
+        assert len(fs.select_figures(figs, "show me diagrams", max_figures=2)) == 2
+        tbls = _rr(table_results=[
+            {"retrieval_id": f"t{i}", "score": 0.9, "headers": ["A"], "rows": [["1"]]} for i in range(5)
+        ])
+        assert len(fs.select_tables(tbls, "table", max_tables=2)) == 2
+        forms = _rr(formula_results=[
+            {"retrieval_id": f"f{i}", "score": 0.9, "latex": "x", "content": "x"} for i in range(5)
+        ])
+        assert len(fs.select_formulas(forms, "equation", max_formulas=2)) == 2
 
     def test_log_candidate_scores_handles_empty(self):
         fs._log_candidate_scores("table", [])

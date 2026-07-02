@@ -115,3 +115,54 @@ def test_metadata_still_carries_file_id_for_backward_compat(captured_sql) -> Non
     assert meta["file_id"] == "uuid-abc"
     assert meta["module_id"] == "module-9"
     assert meta["course_id"] == "course-1"
+
+
+def test_delete_targets_first_class_file_id_column(captured_sql) -> None:
+    # M9: incremental re-ingestion must DELETE by the indexed file_id column,
+    # not the unindexed metadata->>'file_id' JSON path (which diverged from
+    # deleteFile + retrieval scoping and idx_retrieval_units_file_id).
+    handler_module._store_in_pgvector(
+        [_unit_with_embedding()],
+        course_id="course-1",
+        module_id="module-9",
+        file_id="uuid-del",
+    )
+
+    deletes = [
+        (sql, params) for sql, params in captured_sql
+        if sql.strip().upper().startswith("DELETE")
+    ]
+    assert len(deletes) == 1, "expected exactly one DELETE"
+    sql, params = deletes[0]
+    assert "file_id = %s" in sql
+    assert "metadata->>'file_id'" not in sql
+    assert params == ("uuid-del",)
+
+
+def _unit_without_embedding() -> RetrievalUnit:
+    return RetrievalUnit(
+        retrieval_id="ret-no-embed",
+        parent_element_id="el-1",
+        embedding_text="Big-O complexity of mergesort",
+        element_type=ElementType.TEXT,
+        provenance=Provenance(page_num=1, position_index=0),
+        metadata={"content_type": "text"},  # NO 'embedding' key
+        sibling_ids=[],
+        embedding_version="titan-v2-1024",
+    )
+
+
+def test_zero_embeddable_units_raises_before_any_delete(captured_sql) -> None:
+    # H5: a store call with no embeddable units must NOT DELETE+commit an empty
+    # index (which would wipe the file's existing vectors). It must raise before
+    # issuing any SQL so the SQS record is retried.
+    with pytest.raises(RuntimeError):
+        handler_module._store_in_pgvector(
+            [_unit_without_embedding()],
+            course_id="course-1",
+            module_id="module-9",
+            file_id="uuid-empty",
+        )
+
+    # No SQL at all — the guard fires before the DB connection is opened.
+    assert captured_sql == []

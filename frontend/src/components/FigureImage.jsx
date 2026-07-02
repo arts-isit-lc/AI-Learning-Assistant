@@ -3,10 +3,39 @@ import apiClient from "../services/api";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /**
+ * L1: module-level cache of resolved figure_url responses, keyed by figureId.
+ *
+ * A single AI message can render several figures, and figures re-mount whenever
+ * the thread re-renders — without a cache each mount fires its own
+ * figure_url call (1–3 DB round-trips + a fresh presign). Caching the in-flight
+ * promise dedupes concurrent mounts of the same figure to one request and
+ * reuses the result across re-mounts. Entries carry a timestamp and are treated
+ * as stale before the 1-hour presigned URL expires, so a long-lived session
+ * never renders a dead URL. Failures are not cached (a later mount can retry).
+ */
+const figureCache = new Map(); // figureId -> { promise, ts }
+const FIGURE_TTL_MS = 50 * 60 * 1000; // refresh before the 1h presigned URL expires
+
+function fetchFigure(figureId) {
+  const cached = figureCache.get(figureId);
+  if (cached && Date.now() - cached.ts < FIGURE_TTL_MS) {
+    return cached.promise;
+  }
+  const promise = apiClient
+    .get("student/figure_url", { figure_id: figureId })
+    .catch((err) => {
+      figureCache.delete(figureId); // don't cache failures — allow a retry
+      throw err;
+    });
+  figureCache.set(figureId, { promise, ts: Date.now() });
+  return promise;
+}
+
+/**
  * FigureImage fetches and displays a figure image from the figure_url endpoint.
  *
- * Loads the presigned URL on mount, displays a skeleton while loading,
- * and gracefully degrades (renders nothing) on error.
+ * Loads the presigned URL on mount (via the shared cache), shows a skeleton
+ * while loading, and gracefully degrades (renders nothing) on error.
  *
  * Props:
  *   figureId - The retrieval_id or figure_id to resolve
@@ -18,27 +47,24 @@ const FigureImage = ({ figureId }) => {
 
   useEffect(() => {
     if (!figureId) {
-      console.warn("[FigureImage] no figureId provided");
       setLoading(false);
       setError(true);
       return;
     }
 
-    console.log("[FigureImage] fetching figure_url for:", figureId);
     let cancelled = false;
+    setLoading(true);
+    setError(false);
 
-    apiClient
-      .get("student/figure_url", { figure_id: figureId })
+    fetchFigure(figureId)
       .then((result) => {
         if (!cancelled) {
-          console.log("[FigureImage] got result:", result);
           setData(result);
           setLoading(false);
         }
       })
-      .catch((err) => {
+      .catch(() => {
         if (!cancelled) {
-          console.error("[FigureImage] error fetching figure_url:", err);
           setError(true);
           setLoading(false);
         }
@@ -49,14 +75,11 @@ const FigureImage = ({ figureId }) => {
     };
   }, [figureId]);
 
-  console.log("[FigureImage] render state:", { figureId, loading, error, hasData: !!data });
-
   if (loading) {
     return <Skeleton className="h-48 w-full rounded" />;
   }
 
   if (error || !data?.url) {
-    console.warn("[FigureImage] not rendering — error:", error, "data:", data);
     return null;
   }
 

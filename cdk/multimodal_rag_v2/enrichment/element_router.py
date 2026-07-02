@@ -142,6 +142,7 @@ def _create_fallback(element: IRElement) -> EnrichedElement:
         image_s3_key=image_s3_key,
         image_description=image_description,
         enrichment_version=ENRICHMENT_VERSION,
+        is_fallback=True,  # L6: mark so the caller never caches a degraded result
     )
 
 

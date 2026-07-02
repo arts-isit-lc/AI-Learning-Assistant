@@ -463,3 +463,54 @@ class TestDbLookupScoping:
 
         assert result.escalation_used is True
         assert any("file_id = ANY(%s)" in sql for sql, _ in cursor.executed)
+
+
+# ---------------------------------------------------------------------------
+# Tests: exact figure/table reference regex (M11)
+#
+# The direct DB lookup used to match embedding_text with a bare LIKE, so
+# "figure 4" matched "figure 4.1 / 40 / 24" and returned the wrong image.
+# _build_reference_regex anchors the number with non-digit/non-dot boundaries.
+# Postgres uses `~*` (case-insensitive POSIX); these tests mirror that with
+# Python re + IGNORECASE, which is equivalent for these boundary classes.
+# ---------------------------------------------------------------------------
+
+
+class TestReferenceRegex:
+    """_build_reference_regex matches an exact figure/table number only."""
+
+    @staticmethod
+    def _matches(ref_type: str, number: str, text: str) -> bool:
+        import re
+        pattern = ImageEscalation._build_reference_regex(ref_type, number)
+        return re.search(pattern, text, re.IGNORECASE) is not None
+
+    def test_matches_exact_reference_mid_text(self) -> None:
+        assert self._matches("figure", "4.1", "See Figure 4.1 for the layout")
+
+    def test_matches_reference_at_start(self) -> None:
+        assert self._matches("figure", "4.1", "Figure 4.1 shows the tree")
+
+    def test_matches_reference_at_end(self) -> None:
+        assert self._matches("figure", "4.1", "as shown in figure 4.1")
+
+    def test_does_not_match_longer_number_suffix(self) -> None:
+        # "figure 4.1" must NOT match "figure 4.10".
+        assert not self._matches("figure", "4.1", "Figure 4.10 shows ...")
+
+    def test_bare_integer_does_not_match_decimal(self) -> None:
+        # "figure 4" must NOT match "figure 4.1".
+        assert not self._matches("figure", "4", "Figure 4.1 shows ...")
+
+    def test_does_not_match_longer_number_prefix(self) -> None:
+        # "figure 1.1" must NOT match "figure 14.1".
+        assert not self._matches("figure", "1.1", "Figure 14.1 is here")
+
+    def test_matches_table_reference(self) -> None:
+        assert self._matches("table", "2.3", "as shown in Table 2.3 above")
+
+    def test_case_insensitive(self) -> None:
+        assert self._matches("figure", "4.1", "FIGURE 4.1 (uppercase)")
+
+    def test_no_match_when_reference_absent(self) -> None:
+        assert not self._matches("figure", "4.1", "there is no such reference here")

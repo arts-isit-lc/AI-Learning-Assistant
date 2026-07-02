@@ -330,6 +330,18 @@ class ImageEscalation:
             return "", []
         return " AND " + " AND ".join(clauses), params
 
+    @staticmethod
+    def _build_reference_regex(ref_type: str, number: str) -> str:
+        """Build a POSIX regex matching an EXACT figure/table reference (M11).
+
+        Anchors the number between non-digit/non-dot boundaries so a bare
+        substring match can't over-match: "figure 4.1" must not match
+        "figure 4.10" or "figure 14.1", and "figure 4" must not match
+        "figure 4.1". Used with Postgres `~*` (case-insensitive).
+        """
+        num_re = number.replace(".", r"\.")
+        return f"(^|[^0-9.]){ref_type}\\s+{num_re}([^0-9.]|$)"
+
     def _find_image_by_figure_ref_in_db(
         self, ref_type: str, number: str, scope_filter: dict | None = None
     ) -> RankedResult | None:
@@ -361,15 +373,18 @@ class ImageEscalation:
             cur = conn.cursor()
             scope_sql, scope_params = self._scope_predicate(scope_filter)
 
-            # Strategy A: Find image directly by matching embedding_text
-            figure_pattern = f"%{ref_type} {number}%"
+            # Strategy A: Find image directly by matching embedding_text.
+            # M11: exact reference match. A bare LIKE '%figure 4%' also matches
+            # "Figure 4.1 / 40 / 24"; anchor the number with non-digit/non-dot
+            # boundaries via a POSIX regex so "figure 4" != "figure 4.1".
+            ref_regex = self._build_reference_regex(ref_type, number)
             cur.execute(f"""
                 SELECT retrieval_id, embedding_text, metadata
                 FROM retrieval_units
                 WHERE element_type = 'image'
-                AND LOWER(embedding_text) LIKE LOWER(%s){scope_sql}
+                AND embedding_text ~* %s{scope_sql}
                 LIMIT 1;
-            """, (figure_pattern, *scope_params))
+            """, (ref_regex, *scope_params))
 
             row = cur.fetchone()
             if row:
@@ -443,9 +458,9 @@ class ImageEscalation:
                     SELECT metadata->>'provenance_page_num' as page_num
                     FROM retrieval_units
                     WHERE element_type = 'table'
-                    AND LOWER(embedding_text) LIKE LOWER(%s){scope_sql}
+                    AND embedding_text ~* %s{scope_sql}
                     LIMIT 1;
-                """, (f"%{ref_type} {number}%", *scope_params))
+                """, (ref_regex, *scope_params))
 
                 row = cur.fetchone()
                 if row and row[0]:

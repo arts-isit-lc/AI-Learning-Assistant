@@ -288,3 +288,95 @@ class TestCaptionInjectionNoMatch:
         builder._inject_captions_into_elements(units, enriched)
 
         assert units[0].embedding_text == original_text
+
+
+class TestCaptionInjectionAnchoringAndAmbiguity:
+    """M10: captions must anchor to the chunk start and multi-caption pages
+    (ambiguous) must not inject a single page-level caption into every element."""
+
+    def test_mid_text_reference_is_not_treated_as_caption(self) -> None:
+        # "As shown in Figure 2.1 ..." is a reference, NOT a caption. With
+        # .match anchoring (pattern begins with \s*) it must not inject.
+        builder = RetrievalUnitBuilder()
+        enriched = [
+            _make_text_enriched(
+                element_id="ref-text",
+                embedding_text="As shown in Figure 2.1, the runtime grows.",
+                page_num=3,
+            ),
+        ]
+        units = [_make_image_unit(page_num=3)]
+        original = units[0].embedding_text
+
+        builder._inject_captions_into_elements(units, enriched)
+
+        assert units[0].embedding_text == original  # no injection
+
+    def test_leading_whitespace_caption_still_injects(self) -> None:
+        # A genuine caption with leading whitespace still anchors via \s*.
+        builder = RetrievalUnitBuilder()
+        enriched = [
+            _make_text_enriched(
+                element_id="cap",
+                embedding_text="  Figure 4.2: Recursion tree.",
+                page_num=3,
+            ),
+        ]
+        units = [_make_image_unit(page_num=3)]
+
+        builder._inject_captions_into_elements(units, enriched)
+
+        assert "Figure 4.2: Recursion tree." in units[0].embedding_text
+        assert units[0].embedding_text != "A page showing algorithmic content."
+
+    def test_ambiguous_multi_figure_page_skips_injection(self) -> None:
+        # Two distinct figure captions on the same page -> ambiguous. Injecting
+        # one of them into the (single) page image would mislabel it, so skip.
+        builder = RetrievalUnitBuilder()
+        enriched = [
+            _make_text_enriched(
+                element_id="cap-a",
+                embedding_text="Figure 3.1: Binary search.",
+                page_num=7,
+            ),
+            _make_text_enriched(
+                element_id="cap-b",
+                embedding_text="Figure 3.2: Merge sort.",
+                page_num=7,
+            ),
+        ]
+        units = [_make_image_unit(page_num=7)]
+        original = units[0].embedding_text
+
+        builder._inject_captions_into_elements(units, enriched)
+
+        assert units[0].embedding_text == original  # ambiguous -> not injected
+
+    def test_ambiguous_multi_table_page_skips_injection(self) -> None:
+        builder = RetrievalUnitBuilder()
+        enriched = [
+            _make_text_enriched(element_id="t-a", embedding_text="Table 1.1: A.", page_num=9),
+            _make_text_enriched(element_id="t-b", embedding_text="Table 1.2: B.", page_num=9),
+        ]
+        units = [_make_table_unit(page_num=9)]
+        original = units[0].embedding_text
+
+        builder._inject_captions_into_elements(units, enriched)
+
+        assert units[0].embedding_text == original
+
+    def test_single_caption_page_with_two_captions_of_different_types(self) -> None:
+        # One figure caption + one table caption on the same page is NOT
+        # ambiguous per type: each is the sole caption of its own type.
+        builder = RetrievalUnitBuilder()
+        enriched = [
+            _make_text_enriched(element_id="f", embedding_text="Figure 5.1: Graph.", page_num=2),
+            _make_text_enriched(element_id="t", embedding_text="Table 5.1: Data.", page_num=2),
+        ]
+        image_unit = _make_image_unit(page_num=2)
+        table_unit = _make_table_unit(page_num=2)
+
+        builder._inject_captions_into_elements([image_unit, table_unit], enriched)
+
+        assert image_unit.embedding_text.startswith("Figure 5.1: Graph.")
+        assert table_unit.embedding_text.startswith("Table 5.1: Data.")

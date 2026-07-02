@@ -48,10 +48,15 @@ class QueryAnalyzer:
 
     Rule sets (word-boundary matching for single words, substring for phrases):
     - requires_image: figure, diagram, graph, chart, image, picture, visual
-    - requires_formula: equation, formula, derive, solve, calculate, prove
-    - requires_table: table, compare, statistics, values
+    - requires_formula: equation, formula, derive, calculate, prove
+    - requires_table: table, statistics
     - needs_summary: covered, overview, topics, what was taught
     - requires_escalation: show me, look at, in the figure, in the diagram, colour/color, etc.
+
+    Keyword sets are deliberately curated/narrow. Broad words (solve, compare,
+    data, values, about, map) are intentionally excluded — they produced false
+    positives and are better handled by the Haiku fallback. See
+    test_query_analyzer_v2.py::TestRemovedBroadKeywords.
 
     When rules fire -> return immediately (zero LLM cost).
     When no rules fire -> fall back to Claude 3 Haiku for classification.
@@ -81,6 +86,8 @@ class QueryAnalyzer:
 
     # Regex patterns for figure/table/algorithm references that need exact-match lookup
     # Captures: group(1) = type (figure/fig/table/algorithm), group(2) = number (1.1, 2-3, 4)
+    # Deliberately narrow: only figure/table/algorithm are numbered-reference types.
+    # Do NOT add "equation" here — it would incorrectly set requires_image=True.
     _FIGURE_LOOKUP_PATTERN = re.compile(
         r"\b(figure|fig\.?|table|algorithm)\s*(\d+(?:[.-]\d+)*)",
         re.IGNORECASE,

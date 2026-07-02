@@ -127,6 +127,11 @@ def stream_response(
         # Re-raise guardrail-related errors so the caller can classify and retry
         err_msg = str(e)
         if "GUARDRAIL_INTERVENED" in err_msg or "GuardrailIntervention" in err_msg or "guardrail" in err_msg.lower():
+            # Close the stream so a stream-consuming client doesn't hang waiting
+            # for a terminal chunk (M4); the caller returns the blocked/redirect
+            # message over HTTP. Do NOT emit fallback text — this is a guardrail
+            # decision, not a generation failure.
+            send_chunk(appsync_url, session_id, "", done=True)
             raise
         logger.exception("Streaming response failed")
         send_chunk(appsync_url, session_id, FALLBACK_MESSAGE)

@@ -128,6 +128,12 @@ class EnrichedElement:
     course_id: str = ""
     module_id: str = ""
     enrichment_version: str = ""
+    # True when this element is a degraded/fallback result (enrichment failed,
+    # was throttled past retries, or hit the visual cap). Fallbacks must NOT be
+    # cached (L6) — otherwise a transient failure becomes sticky across
+    # re-ingestions. New trailing field with a default: backward-compatible with
+    # already-cached items (missing key -> default False on deserialize).
+    is_fallback: bool = False
 
 
 @dataclass

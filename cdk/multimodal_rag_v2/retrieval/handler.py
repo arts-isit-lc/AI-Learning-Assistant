@@ -195,7 +195,6 @@ def _generate_query_embedding(query: str) -> list[float] | None:
     except Exception:
         logger.exception("Failed to generate query embedding")
         return None
-        return None
 
 
 # ---------------------------------------------------------------------------
@@ -765,6 +764,12 @@ def _append_metadata_filter(
         if isinstance(value, (list, tuple)):
             where_clauses.append(f"{col} = ANY(%s)")
             params.append([str(v) for v in value])
+        elif isinstance(value, bool):
+            # JSONB stores booleans as lowercase 'true'/'false'. str(True) is
+            # 'True', which never matches metadata->>'key' (M8). Compare against
+            # the JSON text form instead.
+            where_clauses.append(f"{col} = %s")
+            params.append("true" if value else "false")
         else:
             where_clauses.append(f"{col} = %s")
             params.append(str(value))

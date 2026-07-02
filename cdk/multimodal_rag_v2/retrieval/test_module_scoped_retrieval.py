@@ -330,6 +330,18 @@ class TestAppendMetadataFilter:
         where, params = self._call(None)
         assert where == [] and params == []
 
+    def test_bool_true_serialized_as_json_text(self) -> None:
+        # JSONB stores booleans as lowercase 'true'/'false'. str(True) == 'True'
+        # never matches metadata->>'key', so a bool must serialize to 'true' (M8).
+        where, params = self._call({"is_document_summary": True})
+        assert where == ["metadata->>'is_document_summary' = %s"]
+        assert params == ["true"]
+
+    def test_bool_false_serialized_as_json_text(self) -> None:
+        where, params = self._call({"is_document_summary": False})
+        assert where == ["metadata->>'is_document_summary' = %s"]
+        assert params == ["false"]
+
 
 class TestFileIdScopePreservedOnFallback:
     """A file_id-list scope must survive the zero-result fallback (High-1)."""

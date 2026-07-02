@@ -16,8 +16,8 @@ connection = None
 db_secret = None
 TABLE_NAME = None
 
-DB_SECRET_NAME = os.environ["SM_DB_CREDENTIALS"]
-RDS_PROXY_ENDPOINT = os.environ["RDS_PROXY_ENDPOINT"]
+DB_SECRET_NAME = os.environ.get("SM_DB_CREDENTIALS")
+RDS_PROXY_ENDPOINT = os.environ.get("RDS_PROXY_ENDPOINT")
 
 def get_secret(secret_name, expect_json=True):
     global db_secret
@@ -113,6 +113,30 @@ def delete_last_two_db_messages(session_id):
         connection.rollback()
         return False
 
+def verify_session_ownership(cursor, session_id, email):
+    """Return True iff `email` owns `session_id`.
+
+    Ownership chain: Sessions -> Student_Modules -> Enrolments -> Users. The
+    student authorizer only proves "is a student", not "owns this session", so
+    without this check any authenticated student could delete another student's
+    messages by passing their session_id (IDOR). Parameterized to prevent
+    injection.
+    """
+    cursor.execute(
+        """
+        SELECT 1
+        FROM "Sessions" s
+        JOIN "Student_Modules" sm ON sm.student_module_id = s.student_module_id
+        JOIN "Enrolments" e ON e.enrolment_id = sm.enrolment_id
+        JOIN "Users" u ON u.user_id = e.user_id
+        WHERE s.session_id = %s AND u.user_email = %s
+        LIMIT 1;
+        """,
+        (session_id, email),
+    )
+    return cursor.fetchone() is not None
+
+
 @logger.inject_lambda_context(clear_state=True)
 def lambda_handler(event, context):
     query_params = event.get("queryStringParameters", {})
@@ -131,6 +155,31 @@ def lambda_handler(event, context):
             },
             'body': json.dumps('Missing required parameter: session_id')
         }
+
+    # IDOR guard (H2): verify the caller owns this session before deleting
+    # anything. Identity comes from the authorizer context, never a query param.
+    authorizer_ctx = (event.get("requestContext", {}) or {}).get("authorizer", {}) or {}
+    caller_email = authorizer_ctx.get("email", "")
+    _cors = {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Headers": "*",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "*",
+    }
+    if not caller_email:
+        logger.warning("Missing caller identity; refusing delete")
+        return {'statusCode': 403, "headers": _cors, 'body': json.dumps("Access denied")}
+    try:
+        _conn = connect_to_db()
+        _cur = _conn.cursor()
+        _owns = verify_session_ownership(_cur, session_id, caller_email)
+        _cur.close()
+    except Exception as e:
+        logger.error(f"Ownership verification failed: {e}")
+        return {'statusCode': 500, "headers": _cors, 'body': json.dumps("Error verifying session ownership")}
+    if not _owns:
+        logger.warning("Access denied: caller does not own session")
+        return {'statusCode': 403, "headers": _cors, 'body': json.dumps("Access denied")}
     
     try:
         # Fetch the conversation history from DynamoDB
