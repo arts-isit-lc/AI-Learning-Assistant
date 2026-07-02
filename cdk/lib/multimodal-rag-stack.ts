@@ -675,6 +675,16 @@ export class MultimodalRagStack extends cdk.Stack {
     });
 
     // ─── Docker Lambda: Chatbot V2 ───────────────────────────────────────────
+    // Diagnostic toggle (DEV-ONLY): when `-c streamGuardrailDisabled=true` is
+    // passed at deploy time, detach the Bedrock guardrail from the streaming
+    // generation call to measure its time-to-first-token cost (see
+    // chatbot_v2/src/flags.py STREAM_GUARDRAIL_DISABLED). While on, streamed
+    // output is UNFILTERED, so the flag is hard-gated: the context value is
+    // ignored in prod and STREAM_GUARDRAIL_DISABLED is always "false" there.
+    const streamGuardrailDisabled =
+      !isProd &&
+      (this.node.tryGetContext("streamGuardrailDisabled") === true ||
+        this.node.tryGetContext("streamGuardrailDisabled") === "true");
     this.chatbotV2Function = new lambda.DockerImageFunction(
       this,
       `${id}-chatbotV2Function`,
@@ -714,7 +724,18 @@ export class MultimodalRagStack extends cdk.Stack {
           PARALLEL_EVAL_RETRIEVAL: "true", // #7: run evaluation + retrieval concurrently
           GUARDRAIL_FAIL_CLOSED: "true", // #11: fail closed on guardrail service error (safer posture)
           ASYNC_RDS_PROJECTION: "true", // #8: offload RDS projection to the SQS consumer
+          // Rollout flag (default OFF = current InvokeModel + synchronous-guardrail
+          // path). "true" routes generation through ConverseStream with the
+          // guardrail in async mode, cutting the measured ~6.8s guardrail TTFT.
+          // Roll out dev-first (e.g. `isProd ? "false" : "true"`), then "true"
+          // once prod-validated; instantly revertible by flipping back to "false".
+          USE_CONVERSE_STREAMING: "false",
           RDS_PROJECTION_QUEUE_URL: rdsProjectionQueue.queueUrl,
+          // DEV-ONLY diagnostic (default "false"): detach the guardrail from the
+          // streaming call to measure its TTFT contribution. Forced "false" in
+          // prod (the -c streamGuardrailDisabled context flag is ignored there),
+          // so production output is never streamed unfiltered.
+          STREAM_GUARDRAIL_DISABLED: String(streamGuardrailDisabled),
         },
       }
     );

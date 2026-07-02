@@ -30,7 +30,7 @@ from prompt_builder import build_system_prompt
 from retrieval_client import invoke_retrieval, get_bounded_history as get_retrieval_history
 from streaming import stream_response
 from guardrails import load_guardrail_config, wrap_user_message, handle_guardrail_error, GUARDRAIL_SERVICE_ERROR_MESSAGE
-from flags import GUARDRAIL_FAIL_CLOSED, CACHE_MODULE_METADATA, PARALLEL_EVAL_RETRIEVAL, ASYNC_RDS_PROJECTION
+from flags import GUARDRAIL_FAIL_CLOSED, CACHE_MODULE_METADATA, PARALLEL_EVAL_RETRIEVAL, ASYNC_RDS_PROJECTION, USE_CONVERSE_STREAMING
 from history import load_chat_history, get_bounded_history, persist_message_pair, MAX_PROMPT_TURNS
 from rds_projection import persist_message_to_rds, log_engagement
 from constants.models import RESPONSE_MODEL_ID, RESPONSE_MAX_TOKENS
@@ -467,8 +467,12 @@ def handler(event, context):
             state.tutor_state, tutor_prompt = process_tutor_turn(state.tutor_state, message_content)
 
             if tutor_prompt:
-                # Use tutor prompt as system prompt for LLM rendering
-                guardrail_tags = wrap_user_message(message_content) if message_content else ""
+                # Use tutor prompt as system prompt for LLM rendering.
+                # The guardContent XML tags are InvokeModel input-tagging syntax;
+                # on the ConverseStream path guardrailConfig assesses the whole
+                # turn, so we skip the tags (they'd otherwise reach Claude as
+                # literal text).
+                guardrail_tags = "" if USE_CONVERSE_STREAMING else (wrap_user_message(message_content) if message_content else "")
                 system_prompt = f"{tutor_prompt}\n\n{guardrail_tags}"
 
                 prompt_history = get_bounded_history(chat_history, MAX_PROMPT_TURNS)
@@ -727,7 +731,9 @@ def handler(event, context):
             "concepts_discussed": ", ".join(state.concepts_discussed),
             "other_modules": ", ".join(other_modules) if other_modules else "explore related topics",
         }
-        guardrail_tags = wrap_user_message(message_content) if message_content else ""
+        # On the ConverseStream path guardrailConfig assesses the full turn, so
+        # skip the InvokeModel input-tagging XML wrapper (see tutor path above).
+        guardrail_tags = "" if USE_CONVERSE_STREAMING else (wrap_user_message(message_content) if message_content else "")
         system_prompt = build_system_prompt(mode, topic, context_vars, rag_context, guardrail_tags)
 
         # Inject math compute results into system prompt (before guardrail tags, after RAG context)

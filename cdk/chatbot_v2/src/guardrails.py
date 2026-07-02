@@ -48,3 +48,20 @@ def handle_guardrail_error(error: Exception, guardrail_id: str) -> dict | None:
     # Service error — not an intervention
     logger.warning("Guardrail service error (not intervention)", extra={"guardrail_id": guardrail_id, "error": err_msg})
     return None
+
+
+def build_intervention_result(block_type: str) -> dict:
+    """Build the blocked-turn result for a guardrail intervention detected via a
+    STREAM SIGNAL (ConverseStream sets stopReason='guardrail_intervened' rather
+    than raising). Mirrors the dict shape returned by handle_guardrail_error so
+    every downstream path (main.handler) treats interventions identically,
+    regardless of whether they surfaced as an exception (InvokeModel) or a
+    stream signal (ConverseStream).
+
+    Args:
+        block_type: "input" (user message blocked) or "output" (model response
+            blocked). Anything other than "input" is treated as an output block.
+    """
+    if block_type == "input":
+        return {"message": GUARDRAIL_REDIRECT_INPUT, "blocked": True, "type": "input"}
+    return {"message": GUARDRAIL_REDIRECT_OUTPUT, "blocked": True, "type": "output"}

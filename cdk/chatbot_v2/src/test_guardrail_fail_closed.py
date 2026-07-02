@@ -75,3 +75,14 @@ class TestGuardrailFailClosed:
         assert out["type"] == "service_error"
         assert out["message"] == main.GUARDRAIL_SERVICE_ERROR_MESSAGE
         assert sr.call_count == 1  # did NOT regenerate without guardrails
+
+    def test_converse_block_dict_passthrough_no_retry(self, monkeypatch):
+        # ConverseStream signals a guardrail block by RETURNING a dict (not by
+        # raising). _stream_with_guardrail_retry must pass that dict through
+        # unchanged and never retry — the block already happened.
+        blocked = {"message": "redirect", "blocked": True, "type": "output"}
+        sr = MagicMock(return_value=blocked)
+        monkeypatch.setattr(main, "stream_response", sr)
+        out = _call()
+        assert out == blocked
+        assert sr.call_count == 1

@@ -45,6 +45,17 @@ PARALLEL_EVAL_RETRIEVAL = _flag("PARALLEL_EVAL_RETRIEVAL", default=False)
 # response path. DynamoDB stays the synchronous source of truth.
 ASYNC_RDS_PROJECTION = _flag("ASYNC_RDS_PROJECTION", default=False)
 
+# Route the generation call through Bedrock's ConverseStream API with the
+# guardrail in ASYNCHRONOUS stream-processing mode, instead of
+# InvokeModelWithResponseStream with a SYNCHRONOUS guardrail. Async mode streams
+# the first token immediately and scans in the background, cutting the measured
+# ~6.8s guardrail TTFT overhead (see engineering-log latency entry). Default OFF
+# = current InvokeModel + synchronous-guardrail behavior, so deploying is a
+# no-op until explicitly enabled per environment. Tradeoff: a few output chunks
+# may reach the user before an output-side block lands (acceptable here — the
+# guardrail does no PII masking).
+USE_CONVERSE_STREAMING = _flag("USE_CONVERSE_STREAMING", default=False)
+
 # --- Diagnostic (default OFF; DEV-ONLY) ---------------------------------------
 # Drop the Bedrock guardrail from the STREAMING generation call to isolate its
 # time-to-first-token cost. Bedrock guardrails on a streaming response default to
