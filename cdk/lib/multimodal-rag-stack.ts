@@ -724,12 +724,12 @@ export class MultimodalRagStack extends cdk.Stack {
           PARALLEL_EVAL_RETRIEVAL: "true", // #7: run evaluation + retrieval concurrently
           GUARDRAIL_FAIL_CLOSED: "true", // #11: fail closed on guardrail service error (safer posture)
           ASYNC_RDS_PROJECTION: "true", // #8: offload RDS projection to the SQS consumer
-          // Rollout flag (default OFF = current InvokeModel + synchronous-guardrail
-          // path). "true" routes generation through ConverseStream with the
-          // guardrail in async mode, cutting the measured ~6.8s guardrail TTFT.
-          // Roll out dev-first (e.g. `isProd ? "false" : "true"`), then "true"
-          // once prod-validated; instantly revertible by flipping back to "false".
-          USE_CONVERSE_STREAMING: "false",
+          // Rollout flag. Dev-first: ConverseStream + async-guardrail generation
+          // is ON in dev (validating the measured ~6.8s guardrail-TTFT win) and
+          // OFF in prod until validated. Flip prod to "true" once validated, or
+          // set both to "false" to fully revert to the InvokeModel +
+          // synchronous-guardrail path.
+          USE_CONVERSE_STREAMING: isProd ? "false" : "true",
           RDS_PROJECTION_QUEUE_URL: rdsProjectionQueue.queueUrl,
           // DEV-ONLY diagnostic (default "false"): detach the guardrail from the
           // streaming call to measure its TTFT contribution. Forced "false" in
