@@ -1,0 +1,44 @@
+[
+  {
+    "query": "What does Figure 3.2 show?",
+    "figure_ref": "figure 3.2",
+    "image_s3_key": "SEED-REPLACE/course/module/figure-3-2.png",
+    "expected_figure_id": "SEED-REPLACE-retrieval-id-1",
+    "ground_truth_facts": [
+      "SEED TEMPLATE — replace with a fact a correct answer must state about the real figure",
+      "SEED TEMPLATE — e.g. the axes / units / what the curve represents"
+    ],
+    "expected_concepts": ["SEED-concept-a"],
+    "course_id": "",
+    "module_id": "",
+    "notes": "SEED TEMPLATE (synthetic, not real data). Phase 2: replace with a real figure-reference question harvested from dev, its actual IR-bucket image key + retrieval_id, and SME-labeled facts."
+  },
+  {
+    "query": "Explain the diagram of the neural network architecture.",
+    "figure_ref": "",
+    "image_s3_key": "SEED-REPLACE/course/module/nn-architecture.png",
+    "expected_figure_id": "SEED-REPLACE-retrieval-id-2",
+    "ground_truth_facts": [
+      "SEED TEMPLATE — a layer/structure the answer must mention",
+      "SEED TEMPLATE — a relationship (e.g. input -> hidden -> output) it must describe"
+    ],
+    "expected_concepts": ["SEED-concept-b"],
+    "course_id": "",
+    "module_id": "",
+    "notes": "SEED TEMPLATE (synthetic). Generic 'describe the diagram' arm (no explicit figure number)."
+  },
+  {
+    "query": "What is the trend in the chart on slide 8?",
+    "figure_ref": "",
+    "image_s3_key": "SEED-REPLACE/course/module/slide-8-chart.png",
+    "expected_figure_id": "SEED-REPLACE-retrieval-id-3",
+    "ground_truth_facts": [
+      "SEED TEMPLATE — the axis labels the answer must read off the chart",
+      "SEED TEMPLATE — the trend/relationship the chart shows"
+    ],
+    "expected_concepts": [],
+    "course_id": "",
+    "module_id": "",
+    "notes": "SEED TEMPLATE (synthetic). Chart/graph question — exercises the OCR/transcription value hypothesis."
+  }
+]
