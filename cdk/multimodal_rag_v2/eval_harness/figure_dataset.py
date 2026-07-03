@@ -59,6 +59,10 @@ class FigureEvalItem:
     course_id: str = ""
     module_id: str = ""
     notes: str = ""
+    # v2: question category (overview|label_lookup|relationship|chart|comparison)
+    # and SME-review lifecycle for the auto-generate -> review workflow.
+    category: str = ""
+    review_status: str = "auto_unreviewed"
 
 
 def load_figure_eval_set(path: str | None = None) -> list[FigureEvalItem]:
@@ -97,6 +101,8 @@ def load_figure_eval_set(path: str | None = None) -> list[FigureEvalItem]:
                 course_id=entry.get("course_id", ""),
                 module_id=entry.get("module_id", ""),
                 notes=entry.get("notes", ""),
+                category=entry.get("category", ""),
+                review_status=entry.get("review_status", "auto_unreviewed"),
             )
         )
     return items

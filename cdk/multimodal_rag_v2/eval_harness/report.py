@@ -83,3 +83,69 @@ def format_report(summaries: list[ArmSummary]) -> str:
         row = name.ljust(label_w) + "  " + "".join(getter(a).rjust(col_w) for a in summaries)
         lines.append(row)
     return "\n".join(lines)
+
+
+# ─── v2 additions: confidence intervals, per-category matrix, arm-E stats ─────
+
+def mean_std_ci(values: list[float]) -> tuple[float, float, float, float]:
+    """(mean, std, ci_low, ci_high) with an approximate 95% normal CI.
+
+    n==0 -> all zeros; n==1 -> zero-width CI at the mean. Small-n CIs are a
+    rough guide (normal approximation), enough to tell 0.94 from 0.90.
+    """
+    n = len(values)
+    if n == 0:
+        return (0.0, 0.0, 0.0, 0.0)
+    m = statistics.mean(values)
+    if n == 1:
+        return (round(m, 4), 0.0, round(m, 4), round(m, 4))
+    sd = statistics.stdev(values)
+    half = 1.96 * (sd / (n ** 0.5))
+    return (round(m, 4), round(sd, 4), round(m - half, 4), round(m + half, 4))
+
+
+def _by_category(run: ArmRun) -> dict:
+    buckets: dict = {}
+    for si in run.scored:
+        buckets.setdefault(si.category or "(uncat)", []).append(si)
+    return buckets
+
+
+def format_category_matrix(runs: list[ArmRun], metric, metric_name: str) -> str:
+    """Category x arm table of a per-item metric's mean (the v2 primary output).
+
+    `metric` is a callable ScoredItem -> float. Cells with no items show '-'.
+    """
+    if not runs:
+        return "(no arms)"
+    categories = sorted({(si.category or "(uncat)") for r in runs for si in r.scored})
+    arms = [r.arm_name for r in runs]
+    per_arm = {r.arm_name: _by_category(r) for r in runs}
+    label_w = max([len(metric_name), *(len(c) for c in categories), 6])
+    col_w = max(14, *(len(a) for a in arms))
+
+    header = metric_name.ljust(label_w) + "  " + "".join(a.rjust(col_w) for a in arms)
+    lines = [header, "-" * len(header)]
+    for cat in categories:
+        cells = []
+        for arm in arms:
+            vals = [metric(si) for si in per_arm[arm].get(cat, [])]
+            cells.append((f"{mean_std_ci(vals)[0]:.2f}" if vals else "-").rjust(col_w))
+        lines.append(cat.ljust(label_w) + "  " + "".join(cells))
+    return "\n".join(lines)
+
+
+def escalation_stats(run: ArmRun) -> dict:
+    """Arm-E signals: how often it escalated, and (of those) how often escalation
+    actually changed the answer (the agreement-rate evidence)."""
+    escalated = [si for si in run.scored if si.escalated]
+    n = len(run.scored)
+    return {
+        "arm": run.arm_name,
+        "n": n,
+        "escalation_freq": round(len(escalated) / n, 4) if n else 0.0,
+        "n_escalated": len(escalated),
+        "answer_change_rate_given_escalation": (
+            round(sum(1 for si in escalated if si.answer_changed) / len(escalated), 4) if escalated else 0.0
+        ),
+    }

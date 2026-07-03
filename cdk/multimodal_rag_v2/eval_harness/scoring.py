@@ -42,6 +42,10 @@ class ArmOutput:
     source_ids: list[str] = field(default_factory=list)
     latency_ms: float = 0.0
     calls: list[BedrockCall] = field(default_factory=list)
+    # v2 (arm E hybrid): whether this turn escalated to live perception, and
+    # whether escalation actually changed the answer (agreement-rate signal).
+    escalated: bool = False
+    answer_changed: bool = False
 
 
 @dataclass
@@ -51,6 +55,7 @@ class JudgeScore:
     correctness: float  # 0..1 — fraction of ground-truth facts supported
     hallucination: float  # 0..1 — degree of unsupported/contradicted claims
     rationale: str = ""
+    failure_category: str = ""  # v2 taxonomy (see experiment_v2.FAILURE_CATEGORIES); "" when correct
 
 
 # A judge maps (query, answer, ground_truth_facts) -> JudgeScore.
@@ -70,6 +75,11 @@ class ScoredItem:
     input_tokens: int
     output_tokens: int
     cost_usd: float
+    # v2 breakdown fields
+    category: str = ""
+    failure_category: str = ""
+    escalated: bool = False
+    answer_changed: bool = False
 
 
 def retrieval_precision(expected_figure_id: str, source_ids: list[str]) -> float:
@@ -117,4 +127,8 @@ def score_item(item: FigureEvalItem, output: ArmOutput, judge: JudgeFn) -> Score
         input_tokens=in_tok,
         output_tokens=out_tok,
         cost_usd=total_cost_usd(output.calls),
+        category=item.category,
+        failure_category=verdict.failure_category,
+        escalated=output.escalated,
+        answer_changed=output.answer_changed,
     )

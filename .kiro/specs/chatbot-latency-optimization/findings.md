@@ -2,8 +2,9 @@
 
 - Date: 2026-07-02 (revised same day across two review rounds)
 - Scope: `chatbot_v2` request flow (structured-learning chatbot) + the `multimodal_rag_v2` retrieval path it calls.
-- Framing (evolved): this began as a latency task, but the evidence has turned it into validating a **multimodal-RAG architecture split — perception as an ingestion concern, interpretation as a runtime concern**. If confirmed across hard question types, that is a more significant result than the latency win alone, and it narrows the likely production shape to two outcomes: (1) rich ingestion + runtime reasoning + rare fallback, or (2) a stored-perception → confidence-check → live-perception hybrid.
-- Status: async-guardrail fix shipped to dev; Step 0 harness built + a **directional 5-figure pilot run** (result below — encouraging but not decision-grade). The figure-architecture changes remain hypotheses pending a full Step 0 run. See "Status & progress" for exactly what is built vs planned.
+- Framing (evolved): this began as a latency task; the evidence has turned it into validating a **multimodal-RAG architecture split — perception as an ingestion concern, interpretation as a runtime concern**. The v2 pilot largely supports this as the **default** architecture: runtime vision shifts from the primary path to a **targeted recovery mechanism**. The remaining question is narrower and mostly an *implementation* one — **stored-perception fidelity for verbatim elements (labels/legends/axes)** — not *whether* to move perception to ingestion.
+- Key insight: **perception is not one capability — different perceptual information has different persistence.** *Persistent* (well-served by stored perception): relationships, objects, charts, concepts, equations. *Exacting* (the failure boundary): verbatim labels, tiny annotations, dense legends. This points to a **semantic (question-type) routing signal** for the fallback — e.g. label-lookup → check transcription / escalate — rather than a model self-confidence estimator.
+- Status: async-guardrail fix shipped to dev; Step 0 harness built (v1 + v2) with two **directional offline pilots** run (results below — encouraging, not decision-grade). The figure-architecture changes remain hypotheses pending a scaled, SME-reviewed run. See "Status & progress".
 - Readiness: this document is ready for architecture review. Only **Step 0 (the evaluation)** is being built; every architecture change below is contingent on its outcome. Do not build richer ingestion, schema changes, corpus reprocessing, or escalation removal before Step 0 decides.
 - Method: CloudWatch (dev, account `…0264`, `ca-central-1`) via the `latency_breakdown` / `stream_latency` / retrieval-function logs; code review of the streaming, reasoning, and enrichment paths.
 
@@ -19,7 +20,8 @@ What is actually built vs planned. Markers: **[DONE]** · **[PENDING]** (conting
 - **Step 0 — the evaluation** (this is "Stage 1" of the roadmap; the only thing being built now):
   - **[DONE] Phase 1 — evaluation harness + dataset scaffolding.** In `multimodal_rag_v2/eval_harness/`: `figure_dataset.py` (schema + loader) + `figure_eval_set.json` (3 seed *templates*, not real data), `scoring.py` (metrics + injected judge), `runner.py`, `report.py`, and tests (25 pass). **Framework only** — it runs on fake arms/judge and produces no real result yet.
   - **[PILOT DONE — directional] Phase 2/3 — offline experiment + pilot run.** Built a runnable offline harness (`experiment.py` + `run_step0.py`: arms A/B/C/D as Bedrock perception+answer on real dev IR-bucket images, model-bootstrapped reference facts, Sonnet text-judge) and ran a 5-figure pilot (result below). NOT a decision yet — needs scale-up + SME-reviewed facts + a de-biased judge.
-  - **[PENDING] Phase 2b — v2 iteration (next, decision-grade).** ~20–30 figures × 5 question categories (incl. label-lookup, relationships, chart-reading, comparison), CIs + a failure taxonomy, a new hybrid arm E (+ escalation frequency), and a de-biased judge with a human-reviewed calibration sample. The decision comes from THIS, not a bigger unchanged run. See "Step 0 — v2 iteration".
+  - **[PILOT DONE — directional] Phase 2b — v2 iteration.** Built the v2 harness (categories, failure taxonomy, CIs, hybrid arm E, Haiku judge) and ran a 6-figure × 5-category pilot (result below). Key read: status-quo short description is weak; rich perception + prompt (D/E) ≈ live escalation except on **label-lookup** (the failure boundary); E escalates only ~7%.
+  - **[PENDING] Decision-grade run.** Scale to ~20–30 figures, **SME-review the generated questions**, **calibrate the Haiku judge** on a 10–20% human-reviewed sample, and resolve the label-lookup gap (better ingestion transcription vs targeted escalation). Then decide delete / replace / hybrid / keep.
 - **[PENDING — only if Step 0 validates] Stage 3 — production architecture:** richer ingestion prompt + perception schema, `ENRICHMENT_VERSION` bump + corpus backfill, retrieval injects the stored analysis, flagged removal of the runtime vision call.
 - **[PENDING] Stage 4 — re-measure & optimize:** multi-field embeddings, response-length tuning (#2), progressive-UX.
 
@@ -134,13 +136,47 @@ Rather than 100 random figures, deliberately probe where live, query-aware perce
 | Numerical / chart interpretation | "value at X", "the trend" | chart reading |
 | Cross-reference / comparison | "compare Figure 4 and Figure 6" | multi-figure |
 
-Design upgrades from the pilot:
-- **Statistics, not point estimates:** mean + std dev + 95% CI per arm (and per category), so 0.94 vs 0.90 is interpretable.
-- **Failure taxonomy** (the biggest addition): the judge classifies each miss — wrong figure, OCR error, missed relationship, hallucinated object, missed equation, prompt misunderstanding, retrieval failure — so we learn *which subsystem* to fix, not just the aggregate score.
-- **Arm E (hybrid)** added (see arms) + its live-escalation frequency.
-- **De-bias the judge:** use a different model than the fact generator (e.g., Haiku judge vs Sonnet-generated facts — same family, so partial), and **human-review 10–20%** to calibrate. (Full independence needs a non-Anthropic model, unavailable here, or human scoring.)
+Confirmed design (v2) — this evaluates a **decision boundary**, not just an architecture:
+- **Primary output = per-category matrix** (category × arm), not an aggregate score — that's what reveals where live perception adds unique value.
+- **Statistics:** mean + std dev + 95% CI per arm and per category.
+- **Failure taxonomy** (biggest addition): the judge classifies each miss — wrong figure, OCR error, missed relationship, hallucinated object, missed equation, prompt misunderstanding, retrieval failure — so we learn *which subsystem* to fix.
+- **Question authoring = auto-generate → SME review/edit** (accept / edit / reject), recording the edit rate (if ~95% survive unchanged, that is itself a useful result). A first pass runs with auto (unreviewed) questions for a directional read; SME review finalizes the set.
+- **Judge = Haiku** (a different model) on **Sonnet-generated references**, + **human-review of 10–20%** to calibrate. Good enough to decide an architecture change (this is not a paper).
+- **Arm E kept deliberately simple — NO confidence *estimator* yet.** Confidence estimation is a separate research problem; conflating it would confound "did stored perception work" with "did the confidence heuristic work." E = a stored-perception answer that ALSO self-reports "I am uncertain because…"; if it flags uncertainty, escalate to live perception and re-answer. The self-report is the inspectable signal.
+- **Agreement rate:** for every escalation, record whether it actually *changed* the answer. If most escalations don't change it, that is strong evidence against runtime perception.
+- **Cost:** compute query-independent perception (short + rich) **once per figure**, reuse across that figure's questions; only A re-perceives per question.
+
+Scope discipline (does each piece reduce the decision's uncertainty?): category breakdown — yes; hybrid fallback — yes; uncertainty taxonomy — yes; a real confidence *estimator* — not yet.
 
 Decision rule: if rich stored perception (esp. D/E) still matches or beats A across the *hard* categories, move to production as a **feature-flagged hybrid (arm E)** — not an outright removal of runtime vision. If it fails specific categories, that pinpoints exactly what ingestion must capture (e.g., transcription for label-lookup).
+
+### Step 0 — v2 pilot result (2026-07-02, DIRECTIONAL)
+
+6 figures × 5 auto-generated category questions (30 total); per-figure perception reused; **Haiku judge on Sonnet-generated facts**; arms A–E.
+
+Correctness by category (primary output):
+
+| category | A live | B short | C rich | D rich+prompt | E hybrid |
+|---|---|---|---|---|---|
+| overview | 0.99 | 0.87 | 0.99 | 0.97 | 0.98 |
+| label_lookup | 0.92 | 0.75 | 0.75 | 0.73 | 0.67 |
+| relationship | 0.99 | 0.33 | 0.82 | 0.92 | 1.00 |
+| chart | 1.00 | 0.50 | 0.97 | 1.00 | 1.00 |
+| comparison | 0.95 | 0.32 | 0.63 | 1.00 | 1.00 |
+| **aggregate** | **0.97** | **0.55** | **0.83** | **0.92** | **0.93** |
+
+Arm E escalated **6.7%** (2/30) and, when it did, changed the answer 100% of the time. Failure taxonomy: B's misses are overwhelmingly `missed_relationship` (×19 — the short description discards structure); that count falls 5→2→1 as perception richens (C→D→E). Label-lookup misses in C/D/E surface as `hallucinated_object` (hallucination D 0.20 / E 0.33) — the stored description lacks the exact label and the model invents one.
+
+Directional reads:
+- **Status quo (B, current short description) is inadequate** beyond overview — collapses on relationship (0.33), comparison (0.32), chart (0.50). Enriching ingestion is clearly warranted.
+- **Rich perception + a good prompt (D) or the hybrid (E) reaches ~0.92–0.93**, close to live escalation (A 0.97) and *winning* on comparison/chart/relationship.
+- **Failure boundary = label lookup.** Stored perception (C/D/E ≈ 0.67–0.75) trails live A (0.92) and hallucinates labels — verbatim transcription in the stored perception isn't precise enough. This is the concrete thing to fix at ingestion (or escalate on).
+- **Hybrid (E) is promising:** ~D-level quality while invoking live vision only 6.7% of the time — but it *under-escalated on label-lookup* (its self-report didn't flag it). A hybrid is viable; the routing signal would need to cover label-lookup (a separate confidence problem, deliberately not built yet).
+- Cost/latency reconfirm the win: A re-perceives per question (~2350 tok, ~6.3s median); B/C/D/E amortize perception (254–739 tok).
+
+Caveats: n=6 (30 Qs), auto/unreviewed questions, model-bootstrapped facts, Haiku judge (de-biased but still an LLM, uncalibrated); A's live query-aware perception can inflate A; label-lookup reference facts may themselves be imperfect. Directional, not decision-grade.
+
+What it changes: the architecture direction (rich perception at ingestion) looks right for most categories; the open question narrows to **label-lookup fidelity** — fixable with better ingestion transcription, or does it need targeted live-escalation? The scaled run + SME review + judge calibration should resolve exactly that.
 
 ### Primary hypothesis — evaluate replacing runtime perception with richer ingestion
 
