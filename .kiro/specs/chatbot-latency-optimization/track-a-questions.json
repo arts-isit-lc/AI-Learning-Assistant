@@ -1,0 +1,1377 @@
+[
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/03fef5bd701c12ec7e16a7520a56ff843c7d16a93e5db3f793ad4c3cb5ca54d7.png",
+    "category": "overview",
+    "question": "What does this figure illustrate about the binary search algorithm?",
+    "reference": [
+      "Chapter 4: Advanced Sorting & Searching (Divide & Conquer)",
+      "O(n^2) sorting algorithms fail for large data sizes",
+      "Divide and Conquer algorithms must be used",
+      "Binary Search: The Power of O(log n)",
+      "Binary Search operates in O(log n) time",
+      "For sorted array of 1,000,000 items",
+      "Linear search: 1,000,000 steps",
+      "Binary search: maximum 20 steps",
+      "Data must be sorted first for Binary Search",
+      "Figure 4.1: Binary Search repeatedly halving the search space",
+      "Target: 42",
+      "Midpoint (35 < 42)",
+      "Step 1 data points: 2, 9, 15, 28, 35, 42, 51, 68",
+      "Step 2 data points: 42, 51, 68",
+      "Midpoint (51 > 42)",
+      "Step 3 data point: 42",
+      "Found"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/03fef5bd701c12ec7e16a7520a56ff843c7d16a93e5db3f793ad4c3cb5ca54d7.png",
+    "category": "label_lookup",
+    "question": "What is the target value being searched for in the example shown?",
+    "reference": [
+      "Chapter 4: Advanced Sorting & Searching (Divide & Conquer)",
+      "O(n^2) sorting algorithms fail for large data sizes",
+      "Divide and Conquer algorithms must be used",
+      "Binary Search: The Power of O(log n)",
+      "Binary Search operates in O(log n) time",
+      "For sorted array of 1,000,000 items",
+      "Linear search: 1,000,000 steps",
+      "Binary search: maximum 20 steps",
+      "Data must be sorted first for Binary Search",
+      "Figure 4.1: Binary Search repeatedly halving the search space",
+      "Target: 42",
+      "Midpoint (35 < 42)",
+      "Step 1 data points: 2, 9, 15, 28, 35, 42, 51, 68",
+      "Step 2 data points: 42, 51, 68",
+      "Midpoint (51 > 42)",
+      "Step 3 data point: 42",
+      "Found"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/03fef5bd701c12ec7e16a7520a56ff843c7d16a93e5db3f793ad4c3cb5ca54d7.png",
+    "category": "relationship",
+    "question": "How does the binary search algorithm repeatedly divide the search space to find the target value?",
+    "reference": [
+      "Chapter 4: Advanced Sorting & Searching (Divide & Conquer)",
+      "O(n^2) sorting algorithms fail for large data sizes",
+      "Divide and Conquer algorithms must be used",
+      "Binary Search: The Power of O(log n)",
+      "Binary Search operates in O(log n) time",
+      "For sorted array of 1,000,000 items",
+      "Linear search: 1,000,000 steps",
+      "Binary search: maximum 20 steps",
+      "Data must be sorted first for Binary Search",
+      "Figure 4.1: Binary Search repeatedly halving the search space",
+      "Target: 42",
+      "Midpoint (35 < 42)",
+      "Step 1 data points: 2, 9, 15, 28, 35, 42, 51, 68",
+      "Step 2 data points: 42, 51, 68",
+      "Midpoint (51 > 42)",
+      "Step 3 data point: 42",
+      "Found"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/03fef5bd701c12ec7e16a7520a56ff843c7d16a93e5db3f793ad4c3cb5ca54d7.png",
+    "category": "chart",
+    "question": "What is the maximum number of steps required to find the target value of 42 in the sorted array of 1,000,000 items using binary search?",
+    "reference": [
+      "Chapter 4: Advanced Sorting & Searching (Divide & Conquer)",
+      "O(n^2) sorting algorithms fail for large data sizes",
+      "Divide and Conquer algorithms must be used",
+      "Binary Search: The Power of O(log n)",
+      "Binary Search operates in O(log n) time",
+      "For sorted array of 1,000,000 items",
+      "Linear search: 1,000,000 steps",
+      "Binary search: maximum 20 steps",
+      "Data must be sorted first for Binary Search",
+      "Figure 4.1: Binary Search repeatedly halving the search space",
+      "Target: 42",
+      "Midpoint (35 < 42)",
+      "Step 1 data points: 2, 9, 15, 28, 35, 42, 51, 68",
+      "Step 2 data points: 42, 51, 68",
+      "Midpoint (51 > 42)",
+      "Step 3 data point: 42",
+      "Found"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/03fef5bd701c12ec7e16a7520a56ff843c7d16a93e5db3f793ad4c3cb5ca54d7.png",
+    "category": "comparison",
+    "question": "How does the number of steps required for binary search to find the target value compare to the number of steps required for a linear search on the same array?",
+    "reference": [
+      "Chapter 4: Advanced Sorting & Searching (Divide & Conquer)",
+      "O(n^2) sorting algorithms fail for large data sizes",
+      "Divide and Conquer algorithms must be used",
+      "Binary Search: The Power of O(log n)",
+      "Binary Search operates in O(log n) time",
+      "For sorted array of 1,000,000 items",
+      "Linear search: 1,000,000 steps",
+      "Binary search: maximum 20 steps",
+      "Data must be sorted first for Binary Search",
+      "Figure 4.1: Binary Search repeatedly halving the search space",
+      "Target: 42",
+      "Midpoint (35 < 42)",
+      "Step 1 data points: 2, 9, 15, 28, 35, 42, 51, 68",
+      "Step 2 data points: 42, 51, 68",
+      "Midpoint (51 > 42)",
+      "Step 3 data point: 42",
+      "Found"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/12a78fcd1f94494128d77eaffdce2e7772dcb07e3a6b0f90ae14c551d78746e2.png",
+    "category": "overview",
+    "question": "What does this figure illustrate about the concept of Linear Search?",
+    "reference": [
+      "Chapter 2: The Baseline - Linear Search & Basic Data Lookups",
+      "Before we implement complex search mechanics like Binary Search, we must understand the simplest way to find information: Linear Search. A linear search simply checks every element in an array one by one until it finds the target. While it operates in O(n) time, it is the only searching option when data is completely unsorted.",
+      "Target: 44",
+      "Array values: [5, 12, 8, 44, 130]",
+      "Linear Search iterating index by index to find a value.",
+      "Array index highlighted: 0"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/12a78fcd1f94494128d77eaffdce2e7772dcb07e3a6b0f90ae14c551d78746e2.png",
+    "category": "label_lookup",
+    "question": "What is the target value being searched for in the array?",
+    "reference": [
+      "Chapter 2: The Baseline - Linear Search & Basic Data Lookups",
+      "Before we implement complex search mechanics like Binary Search, we must understand the simplest way to find information: Linear Search. A linear search simply checks every element in an array one by one until it finds the target. While it operates in O(n) time, it is the only searching option when data is completely unsorted.",
+      "Target: 44",
+      "Array values: [5, 12, 8, 44, 130]",
+      "Linear Search iterating index by index to find a value.",
+      "Array index highlighted: 0"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/12a78fcd1f94494128d77eaffdce2e7772dcb07e3a6b0f90ae14c551d78746e2.png",
+    "category": "relationship",
+    "question": "How does Linear Search iterate through the elements of the array to find the target value?",
+    "reference": [
+      "Chapter 2: The Baseline - Linear Search & Basic Data Lookups",
+      "Before we implement complex search mechanics like Binary Search, we must understand the simplest way to find information: Linear Search. A linear search simply checks every element in an array one by one until it finds the target. While it operates in O(n) time, it is the only searching option when data is completely unsorted.",
+      "Target: 44",
+      "Array values: [5, 12, 8, 44, 130]",
+      "Linear Search iterating index by index to find a value.",
+      "Array index highlighted: 0"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/12a78fcd1f94494128d77eaffdce2e7772dcb07e3a6b0f90ae14c551d78746e2.png",
+    "category": "chart",
+    "question": "At which index position is the target value of 44 found in the array?",
+    "reference": [
+      "Chapter 2: The Baseline - Linear Search & Basic Data Lookups",
+      "Before we implement complex search mechanics like Binary Search, we must understand the simplest way to find information: Linear Search. A linear search simply checks every element in an array one by one until it finds the target. While it operates in O(n) time, it is the only searching option when data is completely unsorted.",
+      "Target: 44",
+      "Array values: [5, 12, 8, 44, 130]",
+      "Linear Search iterating index by index to find a value.",
+      "Array index highlighted: 0"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/12a78fcd1f94494128d77eaffdce2e7772dcb07e3a6b0f90ae14c551d78746e2.png",
+    "category": "comparison",
+    "question": "How does the time complexity of Linear Search compare to more advanced search algorithms like Binary Search when dealing with unsorted data?",
+    "reference": [
+      "Chapter 2: The Baseline - Linear Search & Basic Data Lookups",
+      "Before we implement complex search mechanics like Binary Search, we must understand the simplest way to find information: Linear Search. A linear search simply checks every element in an array one by one until it finds the target. While it operates in O(n) time, it is the only searching option when data is completely unsorted.",
+      "Target: 44",
+      "Array values: [5, 12, 8, 44, 130]",
+      "Linear Search iterating index by index to find a value.",
+      "Array index highlighted: 0"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/252cd5b009386dbaee90e5a56fceadc10f3f810b4cd60b38d18c325b54ab499b.png",
+    "category": "overview",
+    "question": "What does this figure illustrate about the time complexities of different algorithms?",
+    "reference": [
+      "The figure depicts common Big-O time complexities plotted as input size vs execution time",
+      "The x-axis is labeled \"Input Si\"",
+      "The y-axis is labeled \"Time\"",
+      "The curves show the relationships between input size and execution time for O(n^2), O(n), O(log n), and O(1) complexities",
+      "For increasing input size, execution time increases more rapidly for higher complexities like O(n^2) compared to lower complexities like O(1)",
+      "O(n^2) has the steepest curve, followed by O(n), O(log n), and O(1) respectively"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/252cd5b009386dbaee90e5a56fceadc10f3f810b4cd60b38d18c325b54ab499b.png",
+    "category": "label_lookup",
+    "question": "What notation is used to represent the time complexity that grows quadratically with the input size?",
+    "reference": [
+      "The figure depicts common Big-O time complexities plotted as input size vs execution time",
+      "The x-axis is labeled \"Input Si\"",
+      "The y-axis is labeled \"Time\"",
+      "The curves show the relationships between input size and execution time for O(n^2), O(n), O(log n), and O(1) complexities",
+      "For increasing input size, execution time increases more rapidly for higher complexities like O(n^2) compared to lower complexities like O(1)",
+      "O(n^2) has the steepest curve, followed by O(n), O(log n), and O(1) respectively"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/252cd5b009386dbaee90e5a56fceadc10f3f810b4cd60b38d18c325b54ab499b.png",
+    "category": "relationship",
+    "question": "Which time complexity grows faster than O(log n) but slower than O(n) as the input size increases?",
+    "reference": [
+      "The figure depicts common Big-O time complexities plotted as input size vs execution time",
+      "The x-axis is labeled \"Input Si\"",
+      "The y-axis is labeled \"Time\"",
+      "The curves show the relationships between input size and execution time for O(n^2), O(n), O(log n), and O(1) complexities",
+      "For increasing input size, execution time increases more rapidly for higher complexities like O(n^2) compared to lower complexities like O(1)",
+      "O(n^2) has the steepest curve, followed by O(n), O(log n), and O(1) respectively"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/252cd5b009386dbaee90e5a56fceadc10f3f810b4cd60b38d18c325b54ab499b.png",
+    "category": "chart",
+    "question": "Based on the graph, which time complexity appears to have the slowest growth rate for large input sizes?",
+    "reference": [
+      "The figure depicts common Big-O time complexities plotted as input size vs execution time",
+      "The x-axis is labeled \"Input Si\"",
+      "The y-axis is labeled \"Time\"",
+      "The curves show the relationships between input size and execution time for O(n^2), O(n), O(log n), and O(1) complexities",
+      "For increasing input size, execution time increases more rapidly for higher complexities like O(n^2) compared to lower complexities like O(1)",
+      "O(n^2) has the steepest curve, followed by O(n), O(log n), and O(1) respectively"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/252cd5b009386dbaee90e5a56fceadc10f3f810b4cd60b38d18c325b54ab499b.png",
+    "category": "comparison",
+    "question": "How does the growth rate of O(n^2) compare to that of O(n) as the input size increases?",
+    "reference": [
+      "The figure depicts common Big-O time complexities plotted as input size vs execution time",
+      "The x-axis is labeled \"Input Si\"",
+      "The y-axis is labeled \"Time\"",
+      "The curves show the relationships between input size and execution time for O(n^2), O(n), O(log n), and O(1) complexities",
+      "For increasing input size, execution time increases more rapidly for higher complexities like O(n^2) compared to lower complexities like O(1)",
+      "O(n^2) has the steepest curve, followed by O(n), O(log n), and O(1) respectively"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/3c6c04498df6482b099e133683bdfe0d84f22b0c8c97de3a8af542b84b417dfe.png",
+    "category": "overview",
+    "question": "What does this table show about different cache eviction strategies?",
+    "reference": [
+      "The figure is a table titled 'Cache Hit Ratio performance on Zipfian-distributed web traffic'.",
+      "The table has 4 columns labeled 'Eviction Strategy', 'Mechanism', 'Cache Hit Ratio', and 'Compute Overhead'.",
+      "The first row shows the eviction strategy 'First-In, First-Out (FIFO)' with a mechanism of 'Evicts oldest data inserted', a cache hit ratio of '28.5%', and compute overhead of 'Very Low'.",
+      "The second row shows the eviction strategy 'Least Frequently Used (LFU)' with a mechanism of 'Evicts data with lowest access count', a cache hit ratio of '61.2%', and compute overhead of 'High (Priority Queue needed)'.",
+      "The third row shows the eviction strategy 'Least Recently Used (LRU)' with a mechanism of 'Evicts data not accessed recently', a cache hit ratio of '59.8%', and compute overhead of 'Low (Hash Map + Linked List)'."
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/3c6c04498df6482b099e133683bdfe0d84f22b0c8c97de3a8af542b84b417dfe.png",
+    "category": "label_lookup",
+    "question": "What is the mechanism used by the Least Frequently Used (LFU) eviction strategy?",
+    "reference": [
+      "The figure is a table titled 'Cache Hit Ratio performance on Zipfian-distributed web traffic'.",
+      "The table has 4 columns labeled 'Eviction Strategy', 'Mechanism', 'Cache Hit Ratio', and 'Compute Overhead'.",
+      "The first row shows the eviction strategy 'First-In, First-Out (FIFO)' with a mechanism of 'Evicts oldest data inserted', a cache hit ratio of '28.5%', and compute overhead of 'Very Low'.",
+      "The second row shows the eviction strategy 'Least Frequently Used (LFU)' with a mechanism of 'Evicts data with lowest access count', a cache hit ratio of '61.2%', and compute overhead of 'High (Priority Queue needed)'.",
+      "The third row shows the eviction strategy 'Least Recently Used (LRU)' with a mechanism of 'Evicts data not accessed recently', a cache hit ratio of '59.8%', and compute overhead of 'Low (Hash Map + Linked List)'."
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/3c6c04498df6482b099e133683bdfe0d84f22b0c8c97de3a8af542b84b417dfe.png",
+    "category": "relationship",
+    "question": "What type of data structure is mentioned for the Least Recently Used (LRU) eviction strategy?",
+    "reference": [
+      "The figure is a table titled 'Cache Hit Ratio performance on Zipfian-distributed web traffic'.",
+      "The table has 4 columns labeled 'Eviction Strategy', 'Mechanism', 'Cache Hit Ratio', and 'Compute Overhead'.",
+      "The first row shows the eviction strategy 'First-In, First-Out (FIFO)' with a mechanism of 'Evicts oldest data inserted', a cache hit ratio of '28.5%', and compute overhead of 'Very Low'.",
+      "The second row shows the eviction strategy 'Least Frequently Used (LFU)' with a mechanism of 'Evicts data with lowest access count', a cache hit ratio of '61.2%', and compute overhead of 'High (Priority Queue needed)'.",
+      "The third row shows the eviction strategy 'Least Recently Used (LRU)' with a mechanism of 'Evicts data not accessed recently', a cache hit ratio of '59.8%', and compute overhead of 'Low (Hash Map + Linked List)'."
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/3c6c04498df6482b099e133683bdfe0d84f22b0c8c97de3a8af542b84b417dfe.png",
+    "category": "chart",
+    "question": "What is the cache hit ratio for the First-In, First-Out (FIFO) eviction strategy according to the table?",
+    "reference": [
+      "The figure is a table titled 'Cache Hit Ratio performance on Zipfian-distributed web traffic'.",
+      "The table has 4 columns labeled 'Eviction Strategy', 'Mechanism', 'Cache Hit Ratio', and 'Compute Overhead'.",
+      "The first row shows the eviction strategy 'First-In, First-Out (FIFO)' with a mechanism of 'Evicts oldest data inserted', a cache hit ratio of '28.5%', and compute overhead of 'Very Low'.",
+      "The second row shows the eviction strategy 'Least Frequently Used (LFU)' with a mechanism of 'Evicts data with lowest access count', a cache hit ratio of '61.2%', and compute overhead of 'High (Priority Queue needed)'.",
+      "The third row shows the eviction strategy 'Least Recently Used (LRU)' with a mechanism of 'Evicts data not accessed recently', a cache hit ratio of '59.8%', and compute overhead of 'Low (Hash Map + Linked List)'."
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/3c6c04498df6482b099e133683bdfe0d84f22b0c8c97de3a8af542b84b417dfe.png",
+    "category": "comparison",
+    "question": "Which eviction strategy has the highest cache hit ratio according to the table?",
+    "reference": [
+      "The figure is a table titled 'Cache Hit Ratio performance on Zipfian-distributed web traffic'.",
+      "The table has 4 columns labeled 'Eviction Strategy', 'Mechanism', 'Cache Hit Ratio', and 'Compute Overhead'.",
+      "The first row shows the eviction strategy 'First-In, First-Out (FIFO)' with a mechanism of 'Evicts oldest data inserted', a cache hit ratio of '28.5%', and compute overhead of 'Very Low'.",
+      "The second row shows the eviction strategy 'Least Frequently Used (LFU)' with a mechanism of 'Evicts data with lowest access count', a cache hit ratio of '61.2%', and compute overhead of 'High (Priority Queue needed)'.",
+      "The third row shows the eviction strategy 'Least Recently Used (LRU)' with a mechanism of 'Evicts data not accessed recently', a cache hit ratio of '59.8%', and compute overhead of 'Low (Hash Map + Linked List)'."
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/4b39a807e090cb4a1b4ee7ddbf698e6b7d6e50926a9c758586b994ad3fe91b4b.png",
+    "category": "overview",
+    "question": "What does this figure illustrate regarding the performance of different sorting algorithms?",
+    "reference": [
+      "The figure depicts basic sorting metric comparisons",
+      "It compares Bubble Sort and Insertion Sort algorithms",
+      "It has columns for Array State (N=10,000), Total Comparisons, Total Swaps, and Execution Time",
+      "For randomly shuffled data, Bubble Sort has 49,995,000 Total Comparisons, ~25,000,000 Total Swaps, and 310 ms Execution Time",
+      "For randomly shuffled data, Insertion Sort has ~25,000,000 Total Comparisons, ~25,000,000 Total Swaps, and 145 ms Execution Time",
+      "For nearly sorted data (95%), Bubble Sort has 49,995,000 Total Comparisons, ~2,500 Total Swaps, and 280 ms Execution Time",
+      "For nearly sorted data (95%), Insertion Sort has ~10,000 Total Comparisons, ~2,500 Total Swaps, and 2 ms Execution Time (Highly Efficient)"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/4b39a807e090cb4a1b4ee7ddbf698e6b7d6e50926a9c758586b994ad3fe91b4b.png",
+    "category": "label_lookup",
+    "question": "What is the array state for the Bubble Sort algorithm with the highest number of total comparisons?",
+    "reference": [
+      "The figure depicts basic sorting metric comparisons",
+      "It compares Bubble Sort and Insertion Sort algorithms",
+      "It has columns for Array State (N=10,000), Total Comparisons, Total Swaps, and Execution Time",
+      "For randomly shuffled data, Bubble Sort has 49,995,000 Total Comparisons, ~25,000,000 Total Swaps, and 310 ms Execution Time",
+      "For randomly shuffled data, Insertion Sort has ~25,000,000 Total Comparisons, ~25,000,000 Total Swaps, and 145 ms Execution Time",
+      "For nearly sorted data (95%), Bubble Sort has 49,995,000 Total Comparisons, ~2,500 Total Swaps, and 280 ms Execution Time",
+      "For nearly sorted data (95%), Insertion Sort has ~10,000 Total Comparisons, ~2,500 Total Swaps, and 2 ms Execution Time (Highly Efficient)"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/4b39a807e090cb4a1b4ee7ddbf698e6b7d6e50926a9c758586b994ad3fe91b4b.png",
+    "category": "relationship",
+    "question": "According to the text, which sorting algorithm is described as being highly efficient for 'nearly sorted' data?",
+    "reference": [
+      "The figure depicts basic sorting metric comparisons",
+      "It compares Bubble Sort and Insertion Sort algorithms",
+      "It has columns for Array State (N=10,000), Total Comparisons, Total Swaps, and Execution Time",
+      "For randomly shuffled data, Bubble Sort has 49,995,000 Total Comparisons, ~25,000,000 Total Swaps, and 310 ms Execution Time",
+      "For randomly shuffled data, Insertion Sort has ~25,000,000 Total Comparisons, ~25,000,000 Total Swaps, and 145 ms Execution Time",
+      "For nearly sorted data (95%), Bubble Sort has 49,995,000 Total Comparisons, ~2,500 Total Swaps, and 280 ms Execution Time",
+      "For nearly sorted data (95%), Insertion Sort has ~10,000 Total Comparisons, ~2,500 Total Swaps, and 2 ms Execution Time (Highly Efficient)"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/4b39a807e090cb4a1b4ee7ddbf698e6b7d6e50926a9c758586b994ad3fe91b4b.png",
+    "category": "chart",
+    "question": "What is the execution time for the Insertion Sort algorithm on a randomly shuffled array of 10,000 elements?",
+    "reference": [
+      "The figure depicts basic sorting metric comparisons",
+      "It compares Bubble Sort and Insertion Sort algorithms",
+      "It has columns for Array State (N=10,000), Total Comparisons, Total Swaps, and Execution Time",
+      "For randomly shuffled data, Bubble Sort has 49,995,000 Total Comparisons, ~25,000,000 Total Swaps, and 310 ms Execution Time",
+      "For randomly shuffled data, Insertion Sort has ~25,000,000 Total Comparisons, ~25,000,000 Total Swaps, and 145 ms Execution Time",
+      "For nearly sorted data (95%), Bubble Sort has 49,995,000 Total Comparisons, ~2,500 Total Swaps, and 280 ms Execution Time",
+      "For nearly sorted data (95%), Insertion Sort has ~10,000 Total Comparisons, ~2,500 Total Swaps, and 2 ms Execution Time (Highly Efficient)"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/4b39a807e090cb4a1b4ee7ddbf698e6b7d6e50926a9c758586b994ad3fe91b4b.png",
+    "category": "comparison",
+    "question": "For a nearly sorted array (95% sorted), which algorithm has a lower total number of swaps, Bubble Sort or Insertion Sort?",
+    "reference": [
+      "The figure depicts basic sorting metric comparisons",
+      "It compares Bubble Sort and Insertion Sort algorithms",
+      "It has columns for Array State (N=10,000), Total Comparisons, Total Swaps, and Execution Time",
+      "For randomly shuffled data, Bubble Sort has 49,995,000 Total Comparisons, ~25,000,000 Total Swaps, and 310 ms Execution Time",
+      "For randomly shuffled data, Insertion Sort has ~25,000,000 Total Comparisons, ~25,000,000 Total Swaps, and 145 ms Execution Time",
+      "For nearly sorted data (95%), Bubble Sort has 49,995,000 Total Comparisons, ~2,500 Total Swaps, and 280 ms Execution Time",
+      "For nearly sorted data (95%), Insertion Sort has ~10,000 Total Comparisons, ~2,500 Total Swaps, and 2 ms Execution Time (Highly Efficient)"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/4e07ce306bd4ddadf02cc0b8586af9c92c94950377011ba9511e900339674d20.png",
+    "category": "overview",
+    "question": "What does this figure illustrate in terms of data structures and their usage?",
+    "reference": [
+      "The figure depicts a Routing Trie parsing URL paths for an API Gateway",
+      "The Trie has a root node labeled 'Root'",
+      "The root node has one child node labeled 'api'",
+      "The 'api' node has two child nodes labeled 'v1' and 'v2'",
+      "The 'v1' node has two child nodes labeled 'users' and 'posts'"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/4e07ce306bd4ddadf02cc0b8586af9c92c94950377011ba9511e900339674d20.png",
+    "category": "label_lookup",
+    "question": "What is the label of the root node in the tree structure shown?",
+    "reference": [
+      "The figure depicts a Routing Trie parsing URL paths for an API Gateway",
+      "The Trie has a root node labeled 'Root'",
+      "The root node has one child node labeled 'api'",
+      "The 'api' node has two child nodes labeled 'v1' and 'v2'",
+      "The 'v1' node has two child nodes labeled 'users' and 'posts'"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/4e07ce306bd4ddadf02cc0b8586af9c92c94950377011ba9511e900339674d20.png",
+    "category": "relationship",
+    "question": "What hierarchical relationship is depicted between the nodes 'api', 'v1', 'v2', 'users', and 'posts'?",
+    "reference": [
+      "The figure depicts a Routing Trie parsing URL paths for an API Gateway",
+      "The Trie has a root node labeled 'Root'",
+      "The root node has one child node labeled 'api'",
+      "The 'api' node has two child nodes labeled 'v1' and 'v2'",
+      "The 'v1' node has two child nodes labeled 'users' and 'posts'"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/4e07ce306bd4ddadf02cc0b8586af9c92c94950377011ba9511e900339674d20.png",
+    "category": "chart",
+    "question": "Unfortunately, there is no chart or graph present in this figure to read values or trends from.",
+    "reference": [
+      "The figure depicts a Routing Trie parsing URL paths for an API Gateway",
+      "The Trie has a root node labeled 'Root'",
+      "The root node has one child node labeled 'api'",
+      "The 'api' node has two child nodes labeled 'v1' and 'v2'",
+      "The 'v1' node has two child nodes labeled 'users' and 'posts'"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/4e07ce306bd4ddadf02cc0b8586af9c92c94950377011ba9511e900339674d20.png",
+    "category": "comparison",
+    "question": "How do the nodes 'users' and 'posts' compare in terms of their position within the tree structure?",
+    "reference": [
+      "The figure depicts a Routing Trie parsing URL paths for an API Gateway",
+      "The Trie has a root node labeled 'Root'",
+      "The root node has one child node labeled 'api'",
+      "The 'api' node has two child nodes labeled 'v1' and 'v2'",
+      "The 'v1' node has two child nodes labeled 'users' and 'posts'"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/52fe91b2c9f91d6555441e296d9e76cfa0b6e5c1217745f4f3eff0bf6d232d0d.png",
+    "category": "overview",
+    "question": "What does this figure illustrate about implementing an efficient Least Recently Used (LRU) Cache?",
+    "reference": [
+      "Chapter 8: Optimization & Intelligent Caching",
+      "The fastest algorithm is the one that does not need to run at all. Caching is the ultimate optimization strategy.",
+      "To implement an efficient Least Recently Used (LRU) Cache, we must combine two data structures: a Hash Map for O(1) lookups, and a Doubly Linked List for O(1) reordering.",
+      "Hash Map with keys: \"user:1\", \"user:2\"",
+      "Doubly Linked List with nodes: \"user:2\", \"user:1\", \"Tail\"",
+      "\"user:2\" node is labeled \"Most Recent\"",
+      "\"Tail\" node is labeled \"Evict Next\"",
+      "Figure 8.1: An LRU Cache bridging a Hash Map to a Doubly Linked List to ensure O(1) evictions."
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/52fe91b2c9f91d6555441e296d9e76cfa0b6e5c1217745f4f3eff0bf6d232d0d.png",
+    "category": "label_lookup",
+    "question": "What data structure is used for O(1) lookups according to the figure?",
+    "reference": [
+      "Chapter 8: Optimization & Intelligent Caching",
+      "The fastest algorithm is the one that does not need to run at all. Caching is the ultimate optimization strategy.",
+      "To implement an efficient Least Recently Used (LRU) Cache, we must combine two data structures: a Hash Map for O(1) lookups, and a Doubly Linked List for O(1) reordering.",
+      "Hash Map with keys: \"user:1\", \"user:2\"",
+      "Doubly Linked List with nodes: \"user:2\", \"user:1\", \"Tail\"",
+      "\"user:2\" node is labeled \"Most Recent\"",
+      "\"Tail\" node is labeled \"Evict Next\"",
+      "Figure 8.1: An LRU Cache bridging a Hash Map to a Doubly Linked List to ensure O(1) evictions."
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/52fe91b2c9f91d6555441e296d9e76cfa0b6e5c1217745f4f3eff0bf6d232d0d.png",
+    "category": "relationship",
+    "question": "How are the Hash Map and Doubly Linked List related in this implementation of an LRU Cache?",
+    "reference": [
+      "Chapter 8: Optimization & Intelligent Caching",
+      "The fastest algorithm is the one that does not need to run at all. Caching is the ultimate optimization strategy.",
+      "To implement an efficient Least Recently Used (LRU) Cache, we must combine two data structures: a Hash Map for O(1) lookups, and a Doubly Linked List for O(1) reordering.",
+      "Hash Map with keys: \"user:1\", \"user:2\"",
+      "Doubly Linked List with nodes: \"user:2\", \"user:1\", \"Tail\"",
+      "\"user:2\" node is labeled \"Most Recent\"",
+      "\"Tail\" node is labeled \"Evict Next\"",
+      "Figure 8.1: An LRU Cache bridging a Hash Map to a Doubly Linked List to ensure O(1) evictions."
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/52fe91b2c9f91d6555441e296d9e76cfa0b6e5c1217745f4f3eff0bf6d232d0d.png",
+    "category": "chart",
+    "question": "In the Doubly Linked List shown, which node represents the most recently used item?",
+    "reference": [
+      "Chapter 8: Optimization & Intelligent Caching",
+      "The fastest algorithm is the one that does not need to run at all. Caching is the ultimate optimization strategy.",
+      "To implement an efficient Least Recently Used (LRU) Cache, we must combine two data structures: a Hash Map for O(1) lookups, and a Doubly Linked List for O(1) reordering.",
+      "Hash Map with keys: \"user:1\", \"user:2\"",
+      "Doubly Linked List with nodes: \"user:2\", \"user:1\", \"Tail\"",
+      "\"user:2\" node is labeled \"Most Recent\"",
+      "\"Tail\" node is labeled \"Evict Next\"",
+      "Figure 8.1: An LRU Cache bridging a Hash Map to a Doubly Linked List to ensure O(1) evictions."
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/52fe91b2c9f91d6555441e296d9e76cfa0b6e5c1217745f4f3eff0bf6d232d0d.png",
+    "category": "comparison",
+    "question": "How does the role of the Hash Map differ from the role of the Doubly Linked List in this implementation?",
+    "reference": [
+      "Chapter 8: Optimization & Intelligent Caching",
+      "The fastest algorithm is the one that does not need to run at all. Caching is the ultimate optimization strategy.",
+      "To implement an efficient Least Recently Used (LRU) Cache, we must combine two data structures: a Hash Map for O(1) lookups, and a Doubly Linked List for O(1) reordering.",
+      "Hash Map with keys: \"user:1\", \"user:2\"",
+      "Doubly Linked List with nodes: \"user:2\", \"user:1\", \"Tail\"",
+      "\"user:2\" node is labeled \"Most Recent\"",
+      "\"Tail\" node is labeled \"Evict Next\"",
+      "Figure 8.1: An LRU Cache bridging a Hash Map to a Doubly Linked List to ensure O(1) evictions."
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/722997c7ced0d6a499081deb538850c35e64fb50656ee3b2c93bf2fa1c855643.png",
+    "category": "overview",
+    "question": "What topics or concepts does this table of contents cover?",
+    "reference": [
+      "The figure is a table of contents",
+      "The table consists of 8 chapters",
+      "Chapter 1: The Foundation - Algorithmic Complexity",
+      "Chapter 2: The Baseline - Linear Search & Basic Data Lookups",
+      "Chapter 3: Intuitive Sorting - Bubble & Insertion Sort",
+      "Chapter 4: Advanced Sorting & Searching (Divide & Conquer)",
+      "Chapter 5: Graph Theory & Dependency Management",
+      "Chapter 6: Shortest Paths & Network Routing",
+      "Chapter 7: Trees, Tries, & Fast Lookups",
+      "Chapter 8: Optimization & Intelligent Caching"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/722997c7ced0d6a499081deb538850c35e64fb50656ee3b2c93bf2fa1c855643.png",
+    "category": "label_lookup",
+    "question": "What is the title of Chapter 4?",
+    "reference": [
+      "The figure is a table of contents",
+      "The table consists of 8 chapters",
+      "Chapter 1: The Foundation - Algorithmic Complexity",
+      "Chapter 2: The Baseline - Linear Search & Basic Data Lookups",
+      "Chapter 3: Intuitive Sorting - Bubble & Insertion Sort",
+      "Chapter 4: Advanced Sorting & Searching (Divide & Conquer)",
+      "Chapter 5: Graph Theory & Dependency Management",
+      "Chapter 6: Shortest Paths & Network Routing",
+      "Chapter 7: Trees, Tries, & Fast Lookups",
+      "Chapter 8: Optimization & Intelligent Caching"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/722997c7ced0d6a499081deb538850c35e64fb50656ee3b2c93bf2fa1c855643.png",
+    "category": "relationship",
+    "question": "Based on the order of the chapters, what topic seems to follow the topic of 'Graph Theory & Dependency Management'?",
+    "reference": [
+      "The figure is a table of contents",
+      "The table consists of 8 chapters",
+      "Chapter 1: The Foundation - Algorithmic Complexity",
+      "Chapter 2: The Baseline - Linear Search & Basic Data Lookups",
+      "Chapter 3: Intuitive Sorting - Bubble & Insertion Sort",
+      "Chapter 4: Advanced Sorting & Searching (Divide & Conquer)",
+      "Chapter 5: Graph Theory & Dependency Management",
+      "Chapter 6: Shortest Paths & Network Routing",
+      "Chapter 7: Trees, Tries, & Fast Lookups",
+      "Chapter 8: Optimization & Intelligent Caching"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/722997c7ced0d6a499081deb538850c35e64fb50656ee3b2c93bf2fa1c855643.png",
+    "category": "chart",
+    "question": "How many chapters are listed in the table of contents?",
+    "reference": [
+      "The figure is a table of contents",
+      "The table consists of 8 chapters",
+      "Chapter 1: The Foundation - Algorithmic Complexity",
+      "Chapter 2: The Baseline - Linear Search & Basic Data Lookups",
+      "Chapter 3: Intuitive Sorting - Bubble & Insertion Sort",
+      "Chapter 4: Advanced Sorting & Searching (Divide & Conquer)",
+      "Chapter 5: Graph Theory & Dependency Management",
+      "Chapter 6: Shortest Paths & Network Routing",
+      "Chapter 7: Trees, Tries, & Fast Lookups",
+      "Chapter 8: Optimization & Intelligent Caching"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/722997c7ced0d6a499081deb538850c35e64fb50656ee3b2c93bf2fa1c855643.png",
+    "category": "comparison",
+    "question": "Which chapter comes earlier in the order, 'Intuitive Sorting - Bubble & Insertion Sort' or 'Advanced Sorting & Searching (Divide & Conquer)'?",
+    "reference": [
+      "The figure is a table of contents",
+      "The table consists of 8 chapters",
+      "Chapter 1: The Foundation - Algorithmic Complexity",
+      "Chapter 2: The Baseline - Linear Search & Basic Data Lookups",
+      "Chapter 3: Intuitive Sorting - Bubble & Insertion Sort",
+      "Chapter 4: Advanced Sorting & Searching (Divide & Conquer)",
+      "Chapter 5: Graph Theory & Dependency Management",
+      "Chapter 6: Shortest Paths & Network Routing",
+      "Chapter 7: Trees, Tries, & Fast Lookups",
+      "Chapter 8: Optimization & Intelligent Caching"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/87456fb6a14449fa6ce247076f08083c9dbdd8996da86408cb285577fdb329ca.png",
+    "category": "overview",
+    "question": "What does this figure demonstrate through the provided performance data?",
+    "reference": [
+      "The figure depicts a table comparing 'Array Iteration vs Hash Map Lookups'",
+      "The table has columns: 'Total User IDs', 'Linear Search (Array.includes)', 'Hash Map Lookup (Set.has)', 'Speedup Factor'",
+      "The rows show data points for user ID counts of 10,000, 50,000, 500,000, and 2,000,000",
+      "For 10,000 user IDs, Linear Search takes 1.8 ms, Hash Map Lookup takes 0.01 ms, Speedup Factor is 180x",
+      "For 50,000 user IDs, Linear Search takes 9.2 ms, Hash Map Lookup takes 0.01 ms, Speedup Factor is 920x",
+      "For 500,000 user IDs, Linear Search takes 95 ms, Hash Map Lookup takes 0.02 ms, Speedup Factor is 4,750x",
+      "For 2,000,000 user IDs, Linear Search takes 385 ms, Hash Map Lookup takes 0.02 ms, Speedup Factor is 19,250x",
+      "The figure compares the performance of Array traversal against Hash Map constant-time access"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/87456fb6a14449fa6ce247076f08083c9dbdd8996da86408cb285577fdb329ca.png",
+    "category": "label_lookup",
+    "question": "What does the column labeled 'Speedup Factor' represent?",
+    "reference": [
+      "The figure depicts a table comparing 'Array Iteration vs Hash Map Lookups'",
+      "The table has columns: 'Total User IDs', 'Linear Search (Array.includes)', 'Hash Map Lookup (Set.has)', 'Speedup Factor'",
+      "The rows show data points for user ID counts of 10,000, 50,000, 500,000, and 2,000,000",
+      "For 10,000 user IDs, Linear Search takes 1.8 ms, Hash Map Lookup takes 0.01 ms, Speedup Factor is 180x",
+      "For 50,000 user IDs, Linear Search takes 9.2 ms, Hash Map Lookup takes 0.01 ms, Speedup Factor is 920x",
+      "For 500,000 user IDs, Linear Search takes 95 ms, Hash Map Lookup takes 0.02 ms, Speedup Factor is 4,750x",
+      "For 2,000,000 user IDs, Linear Search takes 385 ms, Hash Map Lookup takes 0.02 ms, Speedup Factor is 19,250x",
+      "The figure compares the performance of Array traversal against Hash Map constant-time access"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/87456fb6a14449fa6ce247076f08083c9dbdd8996da86408cb285577fdb329ca.png",
+    "category": "relationship",
+    "question": "How does transforming an array into a Hash Map or Set affect the time complexity of lookups according to the information given?",
+    "reference": [
+      "The figure depicts a table comparing 'Array Iteration vs Hash Map Lookups'",
+      "The table has columns: 'Total User IDs', 'Linear Search (Array.includes)', 'Hash Map Lookup (Set.has)', 'Speedup Factor'",
+      "The rows show data points for user ID counts of 10,000, 50,000, 500,000, and 2,000,000",
+      "For 10,000 user IDs, Linear Search takes 1.8 ms, Hash Map Lookup takes 0.01 ms, Speedup Factor is 180x",
+      "For 50,000 user IDs, Linear Search takes 9.2 ms, Hash Map Lookup takes 0.01 ms, Speedup Factor is 920x",
+      "For 500,000 user IDs, Linear Search takes 95 ms, Hash Map Lookup takes 0.02 ms, Speedup Factor is 4,750x",
+      "For 2,000,000 user IDs, Linear Search takes 385 ms, Hash Map Lookup takes 0.02 ms, Speedup Factor is 19,250x",
+      "The figure compares the performance of Array traversal against Hash Map constant-time access"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/87456fb6a14449fa6ce247076f08083c9dbdd8996da86408cb285577fdb329ca.png",
+    "category": "chart",
+    "question": "What is the approximate speedup factor when checking for 2,000,000 user IDs using a Hash Map lookup compared to a linear search on an array?",
+    "reference": [
+      "The figure depicts a table comparing 'Array Iteration vs Hash Map Lookups'",
+      "The table has columns: 'Total User IDs', 'Linear Search (Array.includes)', 'Hash Map Lookup (Set.has)', 'Speedup Factor'",
+      "The rows show data points for user ID counts of 10,000, 50,000, 500,000, and 2,000,000",
+      "For 10,000 user IDs, Linear Search takes 1.8 ms, Hash Map Lookup takes 0.01 ms, Speedup Factor is 180x",
+      "For 50,000 user IDs, Linear Search takes 9.2 ms, Hash Map Lookup takes 0.01 ms, Speedup Factor is 920x",
+      "For 500,000 user IDs, Linear Search takes 95 ms, Hash Map Lookup takes 0.02 ms, Speedup Factor is 4,750x",
+      "For 2,000,000 user IDs, Linear Search takes 385 ms, Hash Map Lookup takes 0.02 ms, Speedup Factor is 19,250x",
+      "The figure compares the performance of Array traversal against Hash Map constant-time access"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/87456fb6a14449fa6ce247076f08083c9dbdd8996da86408cb285577fdb329ca.png",
+    "category": "comparison",
+    "question": "For the case of 50,000 user IDs, how does the time taken for a linear search using Array.includes() compare to the time taken for a Hash Map lookup using Set.has()?",
+    "reference": [
+      "The figure depicts a table comparing 'Array Iteration vs Hash Map Lookups'",
+      "The table has columns: 'Total User IDs', 'Linear Search (Array.includes)', 'Hash Map Lookup (Set.has)', 'Speedup Factor'",
+      "The rows show data points for user ID counts of 10,000, 50,000, 500,000, and 2,000,000",
+      "For 10,000 user IDs, Linear Search takes 1.8 ms, Hash Map Lookup takes 0.01 ms, Speedup Factor is 180x",
+      "For 50,000 user IDs, Linear Search takes 9.2 ms, Hash Map Lookup takes 0.01 ms, Speedup Factor is 920x",
+      "For 500,000 user IDs, Linear Search takes 95 ms, Hash Map Lookup takes 0.02 ms, Speedup Factor is 4,750x",
+      "For 2,000,000 user IDs, Linear Search takes 385 ms, Hash Map Lookup takes 0.02 ms, Speedup Factor is 19,250x",
+      "The figure compares the performance of Array traversal against Hash Map constant-time access"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/888e8b34a0e363c3d3bd939974c57e4966570ef42c82c4f5629bdaa1b3c55cbe.png",
+    "category": "overview",
+    "question": "What does this table show about the performance of different data structures and algorithms as the input size increases?",
+    "reference": [
+      "The figure depicts a table titled 'Table 1.1: Measured algorithm latency across scaling log datasets.'",
+      "The table has 5 columns: 'Input Size (Logs)', 'O(1) Hash Map Lookup', 'O(log n) Tree Search', 'O(n) Linear Scan', 'O(n*n) Nested Comparison'",
+      "The input sizes are 100, 10,000, 1,000,000, and 10,000,000 logs",
+      "For 100 logs, the latencies are: 0.01 ms, 0.04 ms, 0.15 ms, 1.2 ms",
+      "For 10,000 logs, the latencies are: 0.01 ms, 0.08 ms, 12 ms, 250 ms (Noticeable)",
+      "For 1,000,000 logs, the latencies are: 0.01 ms, 0.12 ms, 1,150 ms, ~40 minutes (Failure)",
+      "For 10,000,000 logs, the latencies are: 0.01 ms, 0.15 ms, 11,800 ms, ~3 days (Timeout)"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/888e8b34a0e363c3d3bd939974c57e4966570ef42c82c4f5629bdaa1b3c55cbe.png",
+    "category": "label_lookup",
+    "question": "What is the name of the column showing the time complexity for linear scan operations?",
+    "reference": [
+      "The figure depicts a table titled 'Table 1.1: Measured algorithm latency across scaling log datasets.'",
+      "The table has 5 columns: 'Input Size (Logs)', 'O(1) Hash Map Lookup', 'O(log n) Tree Search', 'O(n) Linear Scan', 'O(n*n) Nested Comparison'",
+      "The input sizes are 100, 10,000, 1,000,000, and 10,000,000 logs",
+      "For 100 logs, the latencies are: 0.01 ms, 0.04 ms, 0.15 ms, 1.2 ms",
+      "For 10,000 logs, the latencies are: 0.01 ms, 0.08 ms, 12 ms, 250 ms (Noticeable)",
+      "For 1,000,000 logs, the latencies are: 0.01 ms, 0.12 ms, 1,150 ms, ~40 minutes (Failure)",
+      "For 10,000,000 logs, the latencies are: 0.01 ms, 0.15 ms, 11,800 ms, ~3 days (Timeout)"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/888e8b34a0e363c3d3bd939974c57e4966570ef42c82c4f5629bdaa1b3c55cbe.png",
+    "category": "relationship",
+    "question": "According to the table, which operation has the lowest latency for an input size of 10,000,000 logs?",
+    "reference": [
+      "The figure depicts a table titled 'Table 1.1: Measured algorithm latency across scaling log datasets.'",
+      "The table has 5 columns: 'Input Size (Logs)', 'O(1) Hash Map Lookup', 'O(log n) Tree Search', 'O(n) Linear Scan', 'O(n*n) Nested Comparison'",
+      "The input sizes are 100, 10,000, 1,000,000, and 10,000,000 logs",
+      "For 100 logs, the latencies are: 0.01 ms, 0.04 ms, 0.15 ms, 1.2 ms",
+      "For 10,000 logs, the latencies are: 0.01 ms, 0.08 ms, 12 ms, 250 ms (Noticeable)",
+      "For 1,000,000 logs, the latencies are: 0.01 ms, 0.12 ms, 1,150 ms, ~40 minutes (Failure)",
+      "For 10,000,000 logs, the latencies are: 0.01 ms, 0.15 ms, 11,800 ms, ~3 days (Timeout)"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/888e8b34a0e363c3d3bd939974c57e4966570ef42c82c4f5629bdaa1b3c55cbe.png",
+    "category": "chart",
+    "question": "For an input size of 1,000,000 logs, what is the measured latency of the O(log n) tree search operation?",
+    "reference": [
+      "The figure depicts a table titled 'Table 1.1: Measured algorithm latency across scaling log datasets.'",
+      "The table has 5 columns: 'Input Size (Logs)', 'O(1) Hash Map Lookup', 'O(log n) Tree Search', 'O(n) Linear Scan', 'O(n*n) Nested Comparison'",
+      "The input sizes are 100, 10,000, 1,000,000, and 10,000,000 logs",
+      "For 100 logs, the latencies are: 0.01 ms, 0.04 ms, 0.15 ms, 1.2 ms",
+      "For 10,000 logs, the latencies are: 0.01 ms, 0.08 ms, 12 ms, 250 ms (Noticeable)",
+      "For 1,000,000 logs, the latencies are: 0.01 ms, 0.12 ms, 1,150 ms, ~40 minutes (Failure)",
+      "For 10,000,000 logs, the latencies are: 0.01 ms, 0.15 ms, 11,800 ms, ~3 days (Timeout)"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/888e8b34a0e363c3d3bd939974c57e4966570ef42c82c4f5629bdaa1b3c55cbe.png",
+    "category": "comparison",
+    "question": "Compare the latency of the O(1) hash map lookup operation and the O(n) linear scan operation for an input size of 10,000 logs.",
+    "reference": [
+      "The figure depicts a table titled 'Table 1.1: Measured algorithm latency across scaling log datasets.'",
+      "The table has 5 columns: 'Input Size (Logs)', 'O(1) Hash Map Lookup', 'O(log n) Tree Search', 'O(n) Linear Scan', 'O(n*n) Nested Comparison'",
+      "The input sizes are 100, 10,000, 1,000,000, and 10,000,000 logs",
+      "For 100 logs, the latencies are: 0.01 ms, 0.04 ms, 0.15 ms, 1.2 ms",
+      "For 10,000 logs, the latencies are: 0.01 ms, 0.08 ms, 12 ms, 250 ms (Noticeable)",
+      "For 1,000,000 logs, the latencies are: 0.01 ms, 0.12 ms, 1,150 ms, ~40 minutes (Failure)",
+      "For 10,000,000 logs, the latencies are: 0.01 ms, 0.15 ms, 11,800 ms, ~3 days (Timeout)"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/8c7329c3836164bf414e1c5349d3b96de58d6af9a55501fa1b85ea3957ff93bd.png",
+    "category": "overview",
+    "question": "What does this table illustrate regarding API endpoint routing structures?",
+    "reference": [
+      "The figure is a table titled 'Table 7.1: Performance trade-offs in API endpoint routing structures.'",
+      "The table has four columns: 'Lookup Implementation', 'Complexity', 'Reqs/Sec (Throughput)', and 'Memory Consumption'",
+      "The first row shows 'Linear Regex Array' with values 'O(N) * Regex Cost', '1,200 req/s', and '12 MB (Lowest)'",
+      "The second row shows 'Standard Hash Map' with values 'O(1) * Hashing Cost', '45,000 req/s', and '48 MB'",
+      "The third row shows 'Prefix Trie' with values 'O(L) Path Length', '85,000 req/s (Highest)', and '115 MB (Highest)'"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/8c7329c3836164bf414e1c5349d3b96de58d6af9a55501fa1b85ea3957ff93bd.png",
+    "category": "label_lookup",
+    "question": "What is the complexity cost of the Standard Hash Map implementation?",
+    "reference": [
+      "The figure is a table titled 'Table 7.1: Performance trade-offs in API endpoint routing structures.'",
+      "The table has four columns: 'Lookup Implementation', 'Complexity', 'Reqs/Sec (Throughput)', and 'Memory Consumption'",
+      "The first row shows 'Linear Regex Array' with values 'O(N) * Regex Cost', '1,200 req/s', and '12 MB (Lowest)'",
+      "The second row shows 'Standard Hash Map' with values 'O(1) * Hashing Cost', '45,000 req/s', and '48 MB'",
+      "The third row shows 'Prefix Trie' with values 'O(L) Path Length', '85,000 req/s (Highest)', and '115 MB (Highest)'"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/8c7329c3836164bf414e1c5349d3b96de58d6af9a55501fa1b85ea3957ff93bd.png",
+    "category": "relationship",
+    "question": "Which implementation has the highest throughput (Reqs/Sec) and what is its complexity relationship?",
+    "reference": [
+      "The figure is a table titled 'Table 7.1: Performance trade-offs in API endpoint routing structures.'",
+      "The table has four columns: 'Lookup Implementation', 'Complexity', 'Reqs/Sec (Throughput)', and 'Memory Consumption'",
+      "The first row shows 'Linear Regex Array' with values 'O(N) * Regex Cost', '1,200 req/s', and '12 MB (Lowest)'",
+      "The second row shows 'Standard Hash Map' with values 'O(1) * Hashing Cost', '45,000 req/s', and '48 MB'",
+      "The third row shows 'Prefix Trie' with values 'O(L) Path Length', '85,000 req/s (Highest)', and '115 MB (Highest)'"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/8c7329c3836164bf414e1c5349d3b96de58d6af9a55501fa1b85ea3957ff93bd.png",
+    "category": "chart",
+    "question": "What is the memory consumption (in MB) of the Linear Regex Array implementation?",
+    "reference": [
+      "The figure is a table titled 'Table 7.1: Performance trade-offs in API endpoint routing structures.'",
+      "The table has four columns: 'Lookup Implementation', 'Complexity', 'Reqs/Sec (Throughput)', and 'Memory Consumption'",
+      "The first row shows 'Linear Regex Array' with values 'O(N) * Regex Cost', '1,200 req/s', and '12 MB (Lowest)'",
+      "The second row shows 'Standard Hash Map' with values 'O(1) * Hashing Cost', '45,000 req/s', and '48 MB'",
+      "The third row shows 'Prefix Trie' with values 'O(L) Path Length', '85,000 req/s (Highest)', and '115 MB (Highest)'"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/8c7329c3836164bf414e1c5349d3b96de58d6af9a55501fa1b85ea3957ff93bd.png",
+    "category": "comparison",
+    "question": "Which implementation has the lowest memory consumption, and how does its throughput compare to the implementation with the highest throughput?",
+    "reference": [
+      "The figure is a table titled 'Table 7.1: Performance trade-offs in API endpoint routing structures.'",
+      "The table has four columns: 'Lookup Implementation', 'Complexity', 'Reqs/Sec (Throughput)', and 'Memory Consumption'",
+      "The first row shows 'Linear Regex Array' with values 'O(N) * Regex Cost', '1,200 req/s', and '12 MB (Lowest)'",
+      "The second row shows 'Standard Hash Map' with values 'O(1) * Hashing Cost', '45,000 req/s', and '48 MB'",
+      "The third row shows 'Prefix Trie' with values 'O(L) Path Length', '85,000 req/s (Highest)', and '115 MB (Highest)'"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/9ba3bd53df3c4d1961a268996e67d467e3413fc34145e392aebb63a0fafbdc78.png",
+    "category": "overview",
+    "question": "What does this figure illustrate using the graph representation?",
+    "reference": [
+      "Chapter 5: Graph Theory & Dependency Management",
+      "When modeling complex relationships, we use Graphs. In many engineering scenarios, edges have a strict direction. If the graph contains no loops, it is a Directed Acyclic Graph (DAG).",
+      "Figure 5.1: A Directed Acyclic Graph (DAG) representing infrastructure deployment dependencies.",
+      "The graph has 4 nodes labeled \"Auto-Sucks\", \"Database\", \"Frontend\", \"API-stock\"",
+      "There are directed edges from \"Database\" to \"Auto-Sucks\", from \"API-stock\" to \"Auto-Sucks\", and from \"Auto-Sucks\" to \"Frontend\"",
+      "The graph depicts dependencies without any cycles"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/9ba3bd53df3c4d1961a268996e67d467e3413fc34145e392aebb63a0fafbdc78.png",
+    "category": "label_lookup",
+    "question": "What is the label of the node at the bottom of the graph?",
+    "reference": [
+      "Chapter 5: Graph Theory & Dependency Management",
+      "When modeling complex relationships, we use Graphs. In many engineering scenarios, edges have a strict direction. If the graph contains no loops, it is a Directed Acyclic Graph (DAG).",
+      "Figure 5.1: A Directed Acyclic Graph (DAG) representing infrastructure deployment dependencies.",
+      "The graph has 4 nodes labeled \"Auto-Sucks\", \"Database\", \"Frontend\", \"API-stock\"",
+      "There are directed edges from \"Database\" to \"Auto-Sucks\", from \"API-stock\" to \"Auto-Sucks\", and from \"Auto-Sucks\" to \"Frontend\"",
+      "The graph depicts dependencies without any cycles"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/9ba3bd53df3c4d1961a268996e67d467e3413fc34145e392aebb63a0fafbdc78.png",
+    "category": "relationship",
+    "question": "What kind of relationship is depicted between the nodes in this graph?",
+    "reference": [
+      "Chapter 5: Graph Theory & Dependency Management",
+      "When modeling complex relationships, we use Graphs. In many engineering scenarios, edges have a strict direction. If the graph contains no loops, it is a Directed Acyclic Graph (DAG).",
+      "Figure 5.1: A Directed Acyclic Graph (DAG) representing infrastructure deployment dependencies.",
+      "The graph has 4 nodes labeled \"Auto-Sucks\", \"Database\", \"Frontend\", \"API-stock\"",
+      "There are directed edges from \"Database\" to \"Auto-Sucks\", from \"API-stock\" to \"Auto-Sucks\", and from \"Auto-Sucks\" to \"Frontend\"",
+      "The graph depicts dependencies without any cycles"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/9ba3bd53df3c4d1961a268996e67d467e3413fc34145e392aebb63a0fafbdc78.png",
+    "category": "chart",
+    "question": "Based on the graph, does the 'Frontend' node have any incoming or outgoing edges?",
+    "reference": [
+      "Chapter 5: Graph Theory & Dependency Management",
+      "When modeling complex relationships, we use Graphs. In many engineering scenarios, edges have a strict direction. If the graph contains no loops, it is a Directed Acyclic Graph (DAG).",
+      "Figure 5.1: A Directed Acyclic Graph (DAG) representing infrastructure deployment dependencies.",
+      "The graph has 4 nodes labeled \"Auto-Sucks\", \"Database\", \"Frontend\", \"API-stock\"",
+      "There are directed edges from \"Database\" to \"Auto-Sucks\", from \"API-stock\" to \"Auto-Sucks\", and from \"Auto-Sucks\" to \"Frontend\"",
+      "The graph depicts dependencies without any cycles"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/9ba3bd53df3c4d1961a268996e67d467e3413fc34145e392aebb63a0fafbdc78.png",
+    "category": "comparison",
+    "question": "Compare the number of incoming edges between the 'AutoScaler' and 'APIGateLock' nodes.",
+    "reference": [
+      "Chapter 5: Graph Theory & Dependency Management",
+      "When modeling complex relationships, we use Graphs. In many engineering scenarios, edges have a strict direction. If the graph contains no loops, it is a Directed Acyclic Graph (DAG).",
+      "Figure 5.1: A Directed Acyclic Graph (DAG) representing infrastructure deployment dependencies.",
+      "The graph has 4 nodes labeled \"Auto-Sucks\", \"Database\", \"Frontend\", \"API-stock\"",
+      "There are directed edges from \"Database\" to \"Auto-Sucks\", from \"API-stock\" to \"Auto-Sucks\", and from \"Auto-Sucks\" to \"Frontend\"",
+      "The graph depicts dependencies without any cycles"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/b10d658e5e3d42b8e834f0ab5f9eb046ff3d0cb18144041b3b1bd48a66fdf2b4.png",
+    "category": "overview",
+    "question": "What does this figure illustrate about the performance of advanced sorting algorithms?",
+    "reference": [
+      "The figure is titled 'Advanced Sorting Algorithm Performance'.",
+      "It depicts a table comparing the execution times of different sorting algorithms (Merge Sort, Quick Sort, Bubble Sort) on a dataset of N=1,000,000 integers.",
+      "The table has columns for 'Randomly Distributed (N=1M)', 'Nearly Sorted (N=1M)', and 'Reversely Sorted (N=1M)'.",
+      "Merge Sort execution times are 280 ms for randomly distributed data, 275 ms for nearly sorted data, and 285 ms for reversely sorted data.",
+      "Quick Sort execution times are 190 ms (fastest) for randomly distributed data, 210 ms for nearly sorted data, and 38,500 ms (degraded to O(n^2)) for reversely sorted data.",
+      "Bubble Sort execution time is listed as '>2 hours' for randomly distributed data, '1,450 ms (Early exit)' for nearly sorted data, and '>4 hours' for reversely sorted data.",
+      "The time complexities of the algorithms are listed: O(n log n) for Merge Sort, O(n log n) on average for Quick Sort, and O(n^2) for Bubble Sort."
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/b10d658e5e3d42b8e834f0ab5f9eb046ff3d0cb18144041b3b1bd48a66fdf2b4.png",
+    "category": "label_lookup",
+    "question": "What is the time complexity of the Merge Sort algorithm?",
+    "reference": [
+      "The figure is titled 'Advanced Sorting Algorithm Performance'.",
+      "It depicts a table comparing the execution times of different sorting algorithms (Merge Sort, Quick Sort, Bubble Sort) on a dataset of N=1,000,000 integers.",
+      "The table has columns for 'Randomly Distributed (N=1M)', 'Nearly Sorted (N=1M)', and 'Reversely Sorted (N=1M)'.",
+      "Merge Sort execution times are 280 ms for randomly distributed data, 275 ms for nearly sorted data, and 285 ms for reversely sorted data.",
+      "Quick Sort execution times are 190 ms (fastest) for randomly distributed data, 210 ms for nearly sorted data, and 38,500 ms (degraded to O(n^2)) for reversely sorted data.",
+      "Bubble Sort execution time is listed as '>2 hours' for randomly distributed data, '1,450 ms (Early exit)' for nearly sorted data, and '>4 hours' for reversely sorted data.",
+      "The time complexities of the algorithms are listed: O(n log n) for Merge Sort, O(n log n) on average for Quick Sort, and O(n^2) for Bubble Sort."
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/b10d658e5e3d42b8e834f0ab5f9eb046ff3d0cb18144041b3b1bd48a66fdf2b4.png",
+    "category": "relationship",
+    "question": "How does the Merge Sort algorithm work in terms of dividing and merging the array?",
+    "reference": [
+      "The figure is titled 'Advanced Sorting Algorithm Performance'.",
+      "It depicts a table comparing the execution times of different sorting algorithms (Merge Sort, Quick Sort, Bubble Sort) on a dataset of N=1,000,000 integers.",
+      "The table has columns for 'Randomly Distributed (N=1M)', 'Nearly Sorted (N=1M)', and 'Reversely Sorted (N=1M)'.",
+      "Merge Sort execution times are 280 ms for randomly distributed data, 275 ms for nearly sorted data, and 285 ms for reversely sorted data.",
+      "Quick Sort execution times are 190 ms (fastest) for randomly distributed data, 210 ms for nearly sorted data, and 38,500 ms (degraded to O(n^2)) for reversely sorted data.",
+      "Bubble Sort execution time is listed as '>2 hours' for randomly distributed data, '1,450 ms (Early exit)' for nearly sorted data, and '>4 hours' for reversely sorted data.",
+      "The time complexities of the algorithms are listed: O(n log n) for Merge Sort, O(n log n) on average for Quick Sort, and O(n^2) for Bubble Sort."
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/b10d658e5e3d42b8e834f0ab5f9eb046ff3d0cb18144041b3b1bd48a66fdf2b4.png",
+    "category": "chart",
+    "question": "What is the execution time of Quick Sort for a reversely sorted dataset of 1,000,000 integers?",
+    "reference": [
+      "The figure is titled 'Advanced Sorting Algorithm Performance'.",
+      "It depicts a table comparing the execution times of different sorting algorithms (Merge Sort, Quick Sort, Bubble Sort) on a dataset of N=1,000,000 integers.",
+      "The table has columns for 'Randomly Distributed (N=1M)', 'Nearly Sorted (N=1M)', and 'Reversely Sorted (N=1M)'.",
+      "Merge Sort execution times are 280 ms for randomly distributed data, 275 ms for nearly sorted data, and 285 ms for reversely sorted data.",
+      "Quick Sort execution times are 190 ms (fastest) for randomly distributed data, 210 ms for nearly sorted data, and 38,500 ms (degraded to O(n^2)) for reversely sorted data.",
+      "Bubble Sort execution time is listed as '>2 hours' for randomly distributed data, '1,450 ms (Early exit)' for nearly sorted data, and '>4 hours' for reversely sorted data.",
+      "The time complexities of the algorithms are listed: O(n log n) for Merge Sort, O(n log n) on average for Quick Sort, and O(n^2) for Bubble Sort."
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/b10d658e5e3d42b8e834f0ab5f9eb046ff3d0cb18144041b3b1bd48a66fdf2b4.png",
+    "category": "comparison",
+    "question": "How does the execution time of Bubble Sort compare for a nearly sorted dataset versus a reversely sorted dataset?",
+    "reference": [
+      "The figure is titled 'Advanced Sorting Algorithm Performance'.",
+      "It depicts a table comparing the execution times of different sorting algorithms (Merge Sort, Quick Sort, Bubble Sort) on a dataset of N=1,000,000 integers.",
+      "The table has columns for 'Randomly Distributed (N=1M)', 'Nearly Sorted (N=1M)', and 'Reversely Sorted (N=1M)'.",
+      "Merge Sort execution times are 280 ms for randomly distributed data, 275 ms for nearly sorted data, and 285 ms for reversely sorted data.",
+      "Quick Sort execution times are 190 ms (fastest) for randomly distributed data, 210 ms for nearly sorted data, and 38,500 ms (degraded to O(n^2)) for reversely sorted data.",
+      "Bubble Sort execution time is listed as '>2 hours' for randomly distributed data, '1,450 ms (Early exit)' for nearly sorted data, and '>4 hours' for reversely sorted data.",
+      "The time complexities of the algorithms are listed: O(n log n) for Merge Sort, O(n log n) on average for Quick Sort, and O(n^2) for Bubble Sort."
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/b5b33f5787a4b82514f3e30b32a7a684660aeae7efa87335f69a5a4889bf2dc5.png",
+    "category": "overview",
+    "question": "What does this figure illustrate regarding network routing and shortest paths?",
+    "reference": [
+      "Chapter 6: Shortest Paths & Network Routing",
+      "When you add weights to a graph, a new problem emerges: What is the cheapest or fastest path from point A to point B? Dijkstra's Algorithm solves this.",
+      "Figure shows weighted connections between nodes labeled 'au-cen-1', 'us-west-1', 'us-east-1', 'us-east-2'",
+      "Weight/value on edge between 'au-cen-1' and 'us-west-1' is 85ms",
+      "Weight/value on edge between 'us-west-1' and 'us-east-1' is 45ms",
+      "Weight/value on edge between 'us-west-1' and 'us-east-2' is 50ms",
+      "Weight/value on edge between 'us-east-2' and 'us-east-1' is 15ms",
+      "Weight/value on edge between 'au-cen-1' and 'us-east-2' is 30ms",
+      "Figure caption: 'Figure 6.1: Dijkstra's algorithm finding the lowest latency path across AWS regions (Total: 45ms).'"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/b5b33f5787a4b82514f3e30b32a7a684660aeae7efa87335f69a5a4889bf2dc5.png",
+    "category": "label_lookup",
+    "question": "What is the name of the node labeled 'us-west-1'?",
+    "reference": [
+      "Chapter 6: Shortest Paths & Network Routing",
+      "When you add weights to a graph, a new problem emerges: What is the cheapest or fastest path from point A to point B? Dijkstra's Algorithm solves this.",
+      "Figure shows weighted connections between nodes labeled 'au-cen-1', 'us-west-1', 'us-east-1', 'us-east-2'",
+      "Weight/value on edge between 'au-cen-1' and 'us-west-1' is 85ms",
+      "Weight/value on edge between 'us-west-1' and 'us-east-1' is 45ms",
+      "Weight/value on edge between 'us-west-1' and 'us-east-2' is 50ms",
+      "Weight/value on edge between 'us-east-2' and 'us-east-1' is 15ms",
+      "Weight/value on edge between 'au-cen-1' and 'us-east-2' is 30ms",
+      "Figure caption: 'Figure 6.1: Dijkstra's algorithm finding the lowest latency path across AWS regions (Total: 45ms).'"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/b5b33f5787a4b82514f3e30b32a7a684660aeae7efa87335f69a5a4889bf2dc5.png",
+    "category": "relationship",
+    "question": "According to the figure, what is the path with the lowest latency across the AWS regions?",
+    "reference": [
+      "Chapter 6: Shortest Paths & Network Routing",
+      "When you add weights to a graph, a new problem emerges: What is the cheapest or fastest path from point A to point B? Dijkstra's Algorithm solves this.",
+      "Figure shows weighted connections between nodes labeled 'au-cen-1', 'us-west-1', 'us-east-1', 'us-east-2'",
+      "Weight/value on edge between 'au-cen-1' and 'us-west-1' is 85ms",
+      "Weight/value on edge between 'us-west-1' and 'us-east-1' is 45ms",
+      "Weight/value on edge between 'us-west-1' and 'us-east-2' is 50ms",
+      "Weight/value on edge between 'us-east-2' and 'us-east-1' is 15ms",
+      "Weight/value on edge between 'au-cen-1' and 'us-east-2' is 30ms",
+      "Figure caption: 'Figure 6.1: Dijkstra's algorithm finding the lowest latency path across AWS regions (Total: 45ms).'"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/b5b33f5787a4b82514f3e30b32a7a684660aeae7efa87335f69a5a4889bf2dc5.png",
+    "category": "chart",
+    "question": "What is the total latency of the lowest latency path shown in the figure?",
+    "reference": [
+      "Chapter 6: Shortest Paths & Network Routing",
+      "When you add weights to a graph, a new problem emerges: What is the cheapest or fastest path from point A to point B? Dijkstra's Algorithm solves this.",
+      "Figure shows weighted connections between nodes labeled 'au-cen-1', 'us-west-1', 'us-east-1', 'us-east-2'",
+      "Weight/value on edge between 'au-cen-1' and 'us-west-1' is 85ms",
+      "Weight/value on edge between 'us-west-1' and 'us-east-1' is 45ms",
+      "Weight/value on edge between 'us-west-1' and 'us-east-2' is 50ms",
+      "Weight/value on edge between 'us-east-2' and 'us-east-1' is 15ms",
+      "Weight/value on edge between 'au-cen-1' and 'us-east-2' is 30ms",
+      "Figure caption: 'Figure 6.1: Dijkstra's algorithm finding the lowest latency path across AWS regions (Total: 45ms).'"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/b5b33f5787a4b82514f3e30b32a7a684660aeae7efa87335f69a5a4889bf2dc5.png",
+    "category": "comparison",
+    "question": "Between the paths from 'au-cen-1' to 'us-east-1' and from 'au-cen-1' to 'us-west-1', which path has a lower latency?",
+    "reference": [
+      "Chapter 6: Shortest Paths & Network Routing",
+      "When you add weights to a graph, a new problem emerges: What is the cheapest or fastest path from point A to point B? Dijkstra's Algorithm solves this.",
+      "Figure shows weighted connections between nodes labeled 'au-cen-1', 'us-west-1', 'us-east-1', 'us-east-2'",
+      "Weight/value on edge between 'au-cen-1' and 'us-west-1' is 85ms",
+      "Weight/value on edge between 'us-west-1' and 'us-east-1' is 45ms",
+      "Weight/value on edge between 'us-west-1' and 'us-east-2' is 50ms",
+      "Weight/value on edge between 'us-east-2' and 'us-east-1' is 15ms",
+      "Weight/value on edge between 'au-cen-1' and 'us-east-2' is 30ms",
+      "Figure caption: 'Figure 6.1: Dijkstra's algorithm finding the lowest latency path across AWS regions (Total: 45ms).'"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/b867f909fd55f37d9beecc2faccddedcc3043ea71322689e81ea7696f7604315.png",
+    "category": "overview",
+    "question": "What does this figure illustrate regarding different routing strategies and their performance metrics for an intercontinental network routing simulation?",
+    "reference": [
+      "The figure is a table titled 'Metric comparison for an intercontinental network routing simulation'.",
+      "It has four columns: 'Routing Strategy', 'Primary Metric Optimized', 'Resulting Path Hops', and 'End-to-End Latency'.",
+      "The routing strategies listed are: 'Breadth-First Search (BFS)', 'Dijkstra's Algorithm', and 'Bellman-Ford'.",
+      "For BFS, the primary metric optimized is 'Fewest Number of Hops', resulting in 2 hops with an end-to-end latency of '380 ms (Selected high-latency oceanic link)'.",
+      "For Dijkstra's Algorithm, the primary metric optimized is 'Lowest Total Weight (Latency)', resulting in 4 hops with an end-to-end latency of '145 ms (Bypassed congested links)'.",
+      "For Bellman-Ford, the primary metric optimized is 'Handles Negative Weights', resulting in 4 hops with an end-to-end latency of '145 ms (Slower calculation time than Dijkstra)'"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/b867f909fd55f37d9beecc2faccddedcc3043ea71322689e81ea7696f7604315.png",
+    "category": "label_lookup",
+    "question": "What is the primary metric optimized by the Dijkstra's Algorithm routing strategy according to the figure?",
+    "reference": [
+      "The figure is a table titled 'Metric comparison for an intercontinental network routing simulation'.",
+      "It has four columns: 'Routing Strategy', 'Primary Metric Optimized', 'Resulting Path Hops', and 'End-to-End Latency'.",
+      "The routing strategies listed are: 'Breadth-First Search (BFS)', 'Dijkstra's Algorithm', and 'Bellman-Ford'.",
+      "For BFS, the primary metric optimized is 'Fewest Number of Hops', resulting in 2 hops with an end-to-end latency of '380 ms (Selected high-latency oceanic link)'.",
+      "For Dijkstra's Algorithm, the primary metric optimized is 'Lowest Total Weight (Latency)', resulting in 4 hops with an end-to-end latency of '145 ms (Bypassed congested links)'.",
+      "For Bellman-Ford, the primary metric optimized is 'Handles Negative Weights', resulting in 4 hops with an end-to-end latency of '145 ms (Slower calculation time than Dijkstra)'"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/b867f909fd55f37d9beecc2faccddedcc3043ea71322689e81ea7696f7604315.png",
+    "category": "relationship",
+    "question": "Based on the figure, which routing strategy handles negative weights and results in 4 path hops?",
+    "reference": [
+      "The figure is a table titled 'Metric comparison for an intercontinental network routing simulation'.",
+      "It has four columns: 'Routing Strategy', 'Primary Metric Optimized', 'Resulting Path Hops', and 'End-to-End Latency'.",
+      "The routing strategies listed are: 'Breadth-First Search (BFS)', 'Dijkstra's Algorithm', and 'Bellman-Ford'.",
+      "For BFS, the primary metric optimized is 'Fewest Number of Hops', resulting in 2 hops with an end-to-end latency of '380 ms (Selected high-latency oceanic link)'.",
+      "For Dijkstra's Algorithm, the primary metric optimized is 'Lowest Total Weight (Latency)', resulting in 4 hops with an end-to-end latency of '145 ms (Bypassed congested links)'.",
+      "For Bellman-Ford, the primary metric optimized is 'Handles Negative Weights', resulting in 4 hops with an end-to-end latency of '145 ms (Slower calculation time than Dijkstra)'"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/b867f909fd55f37d9beecc2faccddedcc3043ea71322689e81ea7696f7604315.png",
+    "category": "chart",
+    "question": "What is the end-to-end latency value shown for the Breadth-First Search (BFS) routing strategy?",
+    "reference": [
+      "The figure is a table titled 'Metric comparison for an intercontinental network routing simulation'.",
+      "It has four columns: 'Routing Strategy', 'Primary Metric Optimized', 'Resulting Path Hops', and 'End-to-End Latency'.",
+      "The routing strategies listed are: 'Breadth-First Search (BFS)', 'Dijkstra's Algorithm', and 'Bellman-Ford'.",
+      "For BFS, the primary metric optimized is 'Fewest Number of Hops', resulting in 2 hops with an end-to-end latency of '380 ms (Selected high-latency oceanic link)'.",
+      "For Dijkstra's Algorithm, the primary metric optimized is 'Lowest Total Weight (Latency)', resulting in 4 hops with an end-to-end latency of '145 ms (Bypassed congested links)'.",
+      "For Bellman-Ford, the primary metric optimized is 'Handles Negative Weights', resulting in 4 hops with an end-to-end latency of '145 ms (Slower calculation time than Dijkstra)'"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/b867f909fd55f37d9beecc2faccddedcc3043ea71322689e81ea7696f7604315.png",
+    "category": "comparison",
+    "question": "Which routing strategy has a lower end-to-end latency compared to the Bellman-Ford strategy according to the figure?",
+    "reference": [
+      "The figure is a table titled 'Metric comparison for an intercontinental network routing simulation'.",
+      "It has four columns: 'Routing Strategy', 'Primary Metric Optimized', 'Resulting Path Hops', and 'End-to-End Latency'.",
+      "The routing strategies listed are: 'Breadth-First Search (BFS)', 'Dijkstra's Algorithm', and 'Bellman-Ford'.",
+      "For BFS, the primary metric optimized is 'Fewest Number of Hops', resulting in 2 hops with an end-to-end latency of '380 ms (Selected high-latency oceanic link)'.",
+      "For Dijkstra's Algorithm, the primary metric optimized is 'Lowest Total Weight (Latency)', resulting in 4 hops with an end-to-end latency of '145 ms (Bypassed congested links)'.",
+      "For Bellman-Ford, the primary metric optimized is 'Handles Negative Weights', resulting in 4 hops with an end-to-end latency of '145 ms (Slower calculation time than Dijkstra)'"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/d45f9054e8cdeeb7b0ecf8f83fa6dbb03c30a5cea71b54eed5948f71d7384afc.png",
+    "category": "overview",
+    "question": "What does this figure illustrate about the Bubble Sort algorithm?",
+    "reference": [
+      "The figure depicts Bubble Sort swapping adjacent elements when they are out of order.",
+      "Initial State: 42, 18, 33, 7",
+      "Arrows indicating swapping the 42 and 18 elements"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/d45f9054e8cdeeb7b0ecf8f83fa6dbb03c30a5cea71b54eed5948f71d7384afc.png",
+    "category": "label_lookup",
+    "question": "What is the initial state of the array shown in the figure?",
+    "reference": [
+      "The figure depicts Bubble Sort swapping adjacent elements when they are out of order.",
+      "Initial State: 42, 18, 33, 7",
+      "Arrows indicating swapping the 42 and 18 elements"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/d45f9054e8cdeeb7b0ecf8f83fa6dbb03c30a5cea71b54eed5948f71d7384afc.png",
+    "category": "relationship",
+    "question": "How does the Bubble Sort algorithm work according to the description in the text?",
+    "reference": [
+      "The figure depicts Bubble Sort swapping adjacent elements when they are out of order.",
+      "Initial State: 42, 18, 33, 7",
+      "Arrows indicating swapping the 42 and 18 elements"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/d45f9054e8cdeeb7b0ecf8f83fa6dbb03c30a5cea71b54eed5948f71d7384afc.png",
+    "category": "chart",
+    "question": "What values are shown in the initial state array in the figure?",
+    "reference": [
+      "The figure depicts Bubble Sort swapping adjacent elements when they are out of order.",
+      "Initial State: 42, 18, 33, 7",
+      "Arrows indicating swapping the 42 and 18 elements"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  },
+  {
+    "figure": "images/c69f05ae-4c05-4c9b-8d59-21cf9365cfcc/20bfcc31-6a02-41e2-b8d1-a55a2e0650f4/d45f9054e8cdeeb7b0ecf8f83fa6dbb03c30a5cea71b54eed5948f71d7384afc.png",
+    "category": "comparison",
+    "question": "Which two values are shown as being swapped (out of order) in the figure?",
+    "reference": [
+      "The figure depicts Bubble Sort swapping adjacent elements when they are out of order.",
+      "Initial State: 42, 18, 33, 7",
+      "Arrows indicating swapping the 42 and 18 elements"
+    ],
+    "action": "",
+    "edited_question": "",
+    "notes": ""
+  }
+]
