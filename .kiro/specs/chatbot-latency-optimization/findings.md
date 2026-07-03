@@ -57,6 +57,14 @@ Perception is computed once at ingestion and reused across queries; interpretati
 
 ---
 
+## Track A Evaluation Specification v1.0 (FROZEN — 2026-07-02)
+
+The evaluation is frozen to avoid moving-target territory. **Frozen components** (all in `multimodal_rag_v2/eval_harness/`): perception prompts (`perception_prompt_a/b/rich`, `PERCEPTION_PROMPT_TRANSCRIPTION`), answer prompts (`ANSWER_SYSTEM_BASELINE/REVISED/UNCERTAINTY`), the judge prompt + `FAILURE_CATEGORIES`, the question-generation prompts, the arm definitions (A/B/C/D/E), the scoring metrics, and arm-E's self-report routing.
+
+**Policy:** no tweaks to any frozen component while Track A runs. Any change starts a new version — **v1.1 / Validation Round 2** — versioned like code. The review packages (`track-a-questions.json`, `track-a-calibration.json`) are immutable artifacts tied to this spec.
+
+---
+
 ## TL;DR
 
 1. The original dominant cost was **generation TTFT** from the guardrail in **synchronous** stream mode. **Shipped (dev):** ConverseStream with the guardrail in `async` mode (`USE_CONVERSE_STREAMING`, dev-on/prod-off). Measured TTFT **~8s → ~1.5s**.
