@@ -2,11 +2,28 @@
 
 - Date: 2026-07-02 (revised same day across two review rounds)
 - Scope: `chatbot_v2` request flow (structured-learning chatbot) + the `multimodal_rag_v2` retrieval path it calls.
-- Status: async-guardrail fix shipped to dev (see below). Figure-latency work is analysis-only — nothing implemented, and the direction is framed as hypotheses pending an evaluation (see "Revised direction").
-- Readiness: this document is ready for architecture review. The **only** thing ready to *implement* is **Step 0 (the evaluation)** — every architecture change below is contingent on its outcome. Do not build richer ingestion, schema changes, corpus reprocessing, or escalation removal before Step 0 decides.
+- Framing (evolved): this began as a latency task, but the evidence has turned it into validating a **multimodal-RAG architecture split — perception as an ingestion concern, interpretation as a runtime concern**. If confirmed across hard question types, that is a more significant result than the latency win alone, and it narrows the likely production shape to two outcomes: (1) rich ingestion + runtime reasoning + rare fallback, or (2) a stored-perception → confidence-check → live-perception hybrid.
+- Status: async-guardrail fix shipped to dev; Step 0 harness built + a **directional 5-figure pilot run** (result below — encouraging but not decision-grade). The figure-architecture changes remain hypotheses pending a full Step 0 run. See "Status & progress" for exactly what is built vs planned.
+- Readiness: this document is ready for architecture review. Only **Step 0 (the evaluation)** is being built; every architecture change below is contingent on its outcome. Do not build richer ingestion, schema changes, corpus reprocessing, or escalation removal before Step 0 decides.
 - Method: CloudWatch (dev, account `…0264`, `ca-central-1`) via the `latency_breakdown` / `stream_latency` / retrieval-function logs; code review of the streaming, reasoning, and enrichment paths.
 
 > Measured vs inferred: numbers labeled "measured" come from dev CloudWatch this date. Items labeled "estimate/inferred" are reasoned from model-class behavior + our measured rates and are NOT A/B'd in this system.
+
+---
+
+## Status & progress
+
+What is actually built vs planned. Markers: **[DONE]** · **[PENDING]** (contingent on the Step 0 result).
+
+- **[DONE] Async-guardrail migration** — shipped to dev (`USE_CONVERSE_STREAMING`, dev-on/prod-off); prod OFF pending a dev validation pass. Independent of the figure work.
+- **Step 0 — the evaluation** (this is "Stage 1" of the roadmap; the only thing being built now):
+  - **[DONE] Phase 1 — evaluation harness + dataset scaffolding.** In `multimodal_rag_v2/eval_harness/`: `figure_dataset.py` (schema + loader) + `figure_eval_set.json` (3 seed *templates*, not real data), `scoring.py` (metrics + injected judge), `runner.py`, `report.py`, and tests (25 pass). **Framework only** — it runs on fake arms/judge and produces no real result yet.
+  - **[PILOT DONE — directional] Phase 2/3 — offline experiment + pilot run.** Built a runnable offline harness (`experiment.py` + `run_step0.py`: arms A/B/C/D as Bedrock perception+answer on real dev IR-bucket images, model-bootstrapped reference facts, Sonnet text-judge) and ran a 5-figure pilot (result below). NOT a decision yet — needs scale-up + SME-reviewed facts + a de-biased judge.
+  - **[PENDING] Phase 2b — v2 iteration (next, decision-grade).** ~20–30 figures × 5 question categories (incl. label-lookup, relationships, chart-reading, comparison), CIs + a failure taxonomy, a new hybrid arm E (+ escalation frequency), and a de-biased judge with a human-reviewed calibration sample. The decision comes from THIS, not a bigger unchanged run. See "Step 0 — v2 iteration".
+- **[PENDING — only if Step 0 validates] Stage 3 — production architecture:** richer ingestion prompt + perception schema, `ENRICHMENT_VERSION` bump + corpus backfill, retrieval injects the stored analysis, flagged removal of the runtime vision call.
+- **[PENDING] Stage 4 — re-measure & optimize:** multi-field embeddings, response-length tuning (#2), progressive-UX.
+
+Naming note: "Phase 1–3" are the sub-steps of Step 0; "Stage 1–4" are the higher-level roadmap below (Stage 1 = Step 0). Everything from Stage 3 down is a hypothesis, not committed work.
 
 ---
 
@@ -76,14 +93,54 @@ Comparison arms (blind-scored on ~100 real figure questions with references):
 - **B:** ingestion `image_description` only (no runtime vision).
 - **C:** a *richer* ingestion analysis only (prototype the enriched perception prompt offline).
 - **D:** richer ingestion analysis **+ the downstream Sonnet prompt revised** to use it — isolates whether any gap is the *stored information* vs *how the model is instructed to use it* (sometimes the fix is the prompt, not a richer description).
+- **E (hybrid):** stored (rich) perception, escalating to live perception ONLY when stored confidence is low — tests the likely production design. Record escalation frequency: escalating ~3% of the time means the fallback is essentially free; ~60% means the architecture changes.
 
 Metrics per arm (latency is not the only axis — the hypothesis likely improves most of these):
 - answer correctness, hallucination rate, citations/sources actually used, retrieval precision (right figure surfaced), end-to-end latency, token usage, and Bedrock cost.
 
 Staged so nothing touches production:
-- **Phase 1 — build the harness only.** Evaluation dataset (~100 figure questions) + scoring on top of `multimodal_rag_v2/eval_harness/`. Nothing else.
-- **Phase 2 — prototype C/D fully offline.** Manually generate richer descriptions (+ a revised Sonnet prompt) for the ~100 images. Do NOT modify ingestion, migrate schemas, or reprocess the corpus.
-- **Phase 3 — run and decide.** Score A/B/C/D on the metrics above; decide delete / replace / hybrid / keep from data before writing any production code.
+- **[DONE] Phase 1 — harness + dataset scaffolding.** Schema/loader, scoring, runner, report + tests in `multimodal_rag_v2/eval_harness/`. Framework only (fake arms/judge); the seed dataset holds 3 templates, not the real ~100.
+- **[PENDING] Phase 2 — real data + offline arm prototypes.** Populate ~100 real figure questions (SME-labeled facts), wire arms A/B/C/D + the LLM-judge, and generate richer descriptions (+ a revised Sonnet prompt) offline. Do NOT modify ingestion, migrate schemas, or reprocess the corpus.
+- **[PENDING] Phase 3 — run and decide.** Score A/B/C/D on the metrics above; decide delete / replace / hybrid / keep from data before writing any production code.
+
+### Step 0 — preliminary pilot result (2026-07-02, DIRECTIONAL ONLY)
+
+A 5-figure offline pilot (`run_step0.py`, real dev images + Bedrock; Haiku perception held constant with the prompt varied per arm; Sonnet answer + Sonnet text-judge; model-bootstrapped reference facts, avg 8.6/figure):
+
+| metric | A live escalation | B short desc | C rich desc | D rich + revised prompt |
+|---|---|---|---|---|
+| correctness (higher=better) | 0.84 | 0.84 | 0.90 | 0.94 |
+| hallucination (lower=better) | 0.10 | 0.08 | 0.08 | 0.06 |
+
+Directional read: rich, query-independent *stored* perception (C/D) **matched or beat** the live, query-aware escalation (A) on both axes; even the current short description (B) tied A. D (richer description + a revised answer prompt) was best — consistent with "the downstream prompt matters as much as the stored info." This supports the hypothesis that perception can move to ingestion.
+
+This is NOT a decision. Caveats:
+- **n=5**, one broad "what does this figure show" question per figure — no statistical weight, and narrow/specific questions (where query-aware escalation might win) are untested.
+- **Offline proxy** — no production retrieval/injection; it tests perception quality only.
+- **Same-model bias:** reference facts and the judge are both Sonnet, which can favor the comprehensive C/D descriptions. A rigorous run needs a judge that isn't the GT generator (or human scoring).
+- Latency/cost are omitted here because B/C/D perception ran on-the-fly in the proxy (in prod it's precomputed at ingestion → ~0 runtime); the Phase-1 CloudWatch numbers already establish the latency win.
+
+The next step is a targeted v2 iteration (below) that *attacks* the hypothesis on hard question types — NOT a bigger version of this same broad-question run.
+
+### Step 0 — v2 iteration (next; attack the hypothesis, don't just scale it)
+
+Rather than 100 random figures, deliberately probe where live, query-aware perception *should* win if it has any edge. ~20–30 figures × 5 question categories:
+
+| Category | Question shape | Stresses |
+|---|---|---|
+| High-level description | "what does this show" (pilot covered) | summary |
+| Label lookup | "which label / axis / legend says X" | OCR / transcription |
+| Relationship reasoning | "which arrow / what follows X" | flows, structure |
+| Numerical / chart interpretation | "value at X", "the trend" | chart reading |
+| Cross-reference / comparison | "compare Figure 4 and Figure 6" | multi-figure |
+
+Design upgrades from the pilot:
+- **Statistics, not point estimates:** mean + std dev + 95% CI per arm (and per category), so 0.94 vs 0.90 is interpretable.
+- **Failure taxonomy** (the biggest addition): the judge classifies each miss — wrong figure, OCR error, missed relationship, hallucinated object, missed equation, prompt misunderstanding, retrieval failure — so we learn *which subsystem* to fix, not just the aggregate score.
+- **Arm E (hybrid)** added (see arms) + its live-escalation frequency.
+- **De-bias the judge:** use a different model than the fact generator (e.g., Haiku judge vs Sonnet-generated facts — same family, so partial), and **human-review 10–20%** to calibrate. (Full independence needs a non-Anthropic model, unavailable here, or human scoring.)
+
+Decision rule: if rich stored perception (esp. D/E) still matches or beats A across the *hard* categories, move to production as a **feature-flagged hybrid (arm E)** — not an outright removal of runtime vision. If it fails specific categories, that pinpoints exactly what ingestion must capture (e.g., transcription for label-lookup).
 
 ### Primary hypothesis — evaluate replacing runtime perception with richer ingestion
 
@@ -169,7 +226,7 @@ Leading hypothesis (pending Step 0): **avoid a runtime cache unless measurement 
 
 Build **Stage 1 only** right now. Everything after is contingent on Stage 1's result.
 
-1. **Stage 1 — Step 0 evaluation (the only near-term build).** Phases 1–3 above: build the harness + dataset, prototype arms C/D fully offline, run A/B/C/D on the metrics. Low-risk; touches no production code or data.
+1. **Stage 1 — Step 0 evaluation (the only near-term build).** Phases 1–3 above — **Phase 1 (harness) done; Phases 2–3 pending.** Build the harness + dataset, prototype arms C/D fully offline, run A/B/C/D on the metrics. Low-risk; touches no production code or data.
 2. **Stage 2 — review results.** If richer stored perception matches/exceeds live escalation, commit to the change. If it only helps some scenarios, identify exactly which and scope a hybrid to those. If it doesn't, keep escalation (and we've avoided unnecessary work).
 3. **Stage 3 — production architecture (only if Stage 1 validates).** Enrichment prompt + perception schema, `ENRICHMENT_VERSION` bump + corpus backfill, retrieval injects the stored analysis (keep the exact figure-ref lookup), feature-flagged removal of the runtime vision call.
 4. **Stage 4 — re-measure & optimize.** With runtime perception gone/minimized, decide whether multi-field embeddings, response-length tuning (#2), or the progressive-UX change are worth it.
