@@ -226,3 +226,21 @@ class TestReportV2:
         row = rows[0]
         assert row["human_correctness"] is None and row["human_agrees_with_judge"] is None
         assert set(row) >= {"arm", "question", "answer", "reference_facts", "judge_correctness", "judge_rationale"}
+
+    def test_export_question_review(self, tmp_path):
+        import json
+
+        from .report import export_question_review
+
+        ds = [
+            FigureEvalItem(query="What is the y-axis?", figure_ref="", image_s3_key="k1",
+                           expected_figure_id="", ground_truth_facts=["Time (s)"], category="label_lookup"),
+            FigureEvalItem(query="What does it show?", figure_ref="", image_s3_key="k2",
+                           expected_figure_id="", ground_truth_facts=["a plot"], category="overview"),
+        ]
+        path = str(tmp_path / "questions.json")
+        n = export_question_review(ds, path)
+        assert n == 2
+        rows = json.load(open(path, encoding="utf-8"))
+        assert rows[0]["question"] == "What is the y-axis?" and rows[0]["category"] == "label_lookup"
+        assert rows[0]["action"] == "" and "edited_question" in rows[0]  # blank for SME

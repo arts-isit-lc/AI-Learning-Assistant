@@ -190,3 +190,31 @@ def export_calibration_sample(
     with open(path, "w", encoding="utf-8") as f:
         json.dump(sample, f, indent=2, ensure_ascii=False)
     return len(sample)
+
+
+def export_question_review(dataset, path: str) -> int:
+    """Write the auto-generated questions to `path` as JSON for SME review
+    (the "auto-generate -> SME review/edit -> accept/edit/reject" workflow).
+
+    `dataset` is a list of FigureEvalItem. Each row shows the figure, category,
+    generated question, and reference, plus blank fields for the reviewer to
+    accept / edit / reject. Returns the number of rows written.
+    """
+    import json
+
+    rows = [
+        {
+            "figure": item.image_s3_key,
+            "category": item.category,
+            "question": item.query,
+            "reference": item.ground_truth_facts,
+            # to be filled in by the SME reviewer:
+            "action": "",  # accept | edit | reject
+            "edited_question": "",
+            "notes": "",
+        }
+        for item in dataset
+    ]
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(rows, f, indent=2, ensure_ascii=False)
+    return len(rows)

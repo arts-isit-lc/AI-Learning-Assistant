@@ -306,14 +306,23 @@ Leading hypothesis (pending Step 0): **avoid a runtime cache unless measurement 
 
 ## Roadmap (revised after the v2 pilot)
 
-The architecture direction is largely validated; work now targets the label-lookup exception, in this order:
+Research is complete; the architecture is selected pending production validation. Items 1–4 are done; the remaining work runs as **two parallel tracks** so engineering can move the moment validation passes.
 
 1. **[DONE] Step 0 evaluation harness (v1 + v2)** — built, tested (63 tests), two directional pilots run.
 2. **[doing] Commit the harness + docs** — it is now a reusable project asset; don't leave it uncommitted.
 3. **[doing] Judge calibration tooling** — export a 10–20% sample of scored items (question, answer, reference facts, judge verdict) for human review, so the Haiku judge can be calibrated; raises trust in every later run. Tooling added now; the sample is produced on the next run.
 4. **[DONE — directional] Improve ingestion transcription + Track B label study.** A transcription-forced perception prompt (`experiment_v2.PERCEPTION_PROMPT_TRANSCRIPTION`) matched live perception on label-lookup (0.95–0.975) and drove hallucination to 0.00 (see "Track B result"). Evidence points to fixing labels at ingestion — no dedicated label-escalation indicated.
-5. **Track A — production validation study (renamed from "decision-grade").** The architecture decision is largely made; this run now *validates implementation assumptions under realistic conditions* (SME-reviewed questions, calibrated judge, retrieval effects) to reduce deployment risk — not to decide viability. ~20–30 figures × 5 categories.
-6. **Then production:** rich perception at ingestion → structured stored representation → runtime interpretation → **targeted** live-vision fallback only for cases that still need it (routing likely semantic / question-type). `ENRICHMENT_VERSION` bump + corpus backfill; keep the exact figure-ref lookup; flag the change.
+**Track A — production validation (pre-release, NOT research).** Validates implementation assumptions under realistic conditions, not architecture viability. Questions it must answer:
+- Does the production ingestion prompt behave consistently across real course material?
+- Does retrieval still surface the correct figure under production conditions?
+- Does the calibrated judge agree with human reviewers?
+- Any unexpected failure modes not represented in the offline corpus?
+
+Steps: SME-review the generated questions → judge calibration (human-reviewed sample) → ~20–30 figures × 5 categories → sign-off against the production success criteria (`production-design.md`).
+
+**Implementation-prep track (design, NOT merge).** In parallel, so engineering can start immediately if Track A confirms: finalize the perception schema, migration/backfill tooling, feature flags, rollback strategy, monitoring/dashboards, deployment plan. See `production-design.md` + `ADR-perception-at-ingestion.md`.
+
+**Then production** (only after Track A sign-off): rich perception at ingestion → structured stored representation → runtime interpretation → **targeted** feature-flagged live-vision fallback. `ENRICHMENT_VERSION` bump + corpus backfill; keep the exact figure-ref lookup.
 
 Independent track: validate the shipped async-guardrail change in dev (run turns + a blocked-topic prompt), then decide on flipping prod.
 

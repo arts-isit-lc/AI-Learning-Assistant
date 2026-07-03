@@ -42,15 +42,17 @@ from .experiment_v2 import (
     parse_question_gen_response,
 )
 from .figure_dataset import FigureEvalItem
-from .report import escalation_stats, export_calibration_sample, format_category_matrix, format_report, summarize
+from .report import escalation_stats, export_calibration_sample, export_question_review, format_category_matrix, format_report, summarize
 from .run_step0 import HAIKU, SONNET, DEFAULT_BUCKET, _bedrock_text, _bedrock_vision, _sample_image_keys
 from .runner import ArmRun
 from .scoring import score_item
 
 
-def _precompute_figure(br, raw: bytes, media_type: str) -> dict:
+def _precompute_figure(br, raw: bytes, media_type: str, with_perception: bool = True) -> dict:
     """Per-figure, query-independent precompute: category questions, reference
-    facts, and short+rich perception (Haiku). Failures degrade gracefully."""
+    facts, and (when with_perception) short+rich perception (Haiku). Failures
+    degrade gracefully. with_perception=False = the cheap generate-only path
+    (questions + facts only), used to produce the SME question-review package."""
     try:
         q_text, _ = _bedrock_vision(br, SONNET, raw, media_type, build_question_gen_prompt())
         questions = parse_question_gen_response(q_text)
@@ -63,6 +65,8 @@ def _precompute_figure(br, raw: bytes, media_type: str) -> dict:
         facts = []
     if not facts:
         facts = ["(reference facts unavailable)"]
+    if not with_perception:
+        return {"questions": questions, "facts": facts, "short": "", "rich": ""}
     short_text, _ = _bedrock_vision(br, HAIKU, raw, media_type, perception_prompt_b(None))
     rich_text, _ = _bedrock_vision(br, HAIKU, raw, media_type, perception_prompt_rich(None))
     return {"questions": questions, "facts": facts, "short": short_text, "rich": rich_text}
@@ -96,6 +100,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--export-calibration", default=None,
                         help="path to write a human-review calibration sample (JSON) for judge calibration")
     parser.add_argument("--calibration-fraction", type=float, default=0.15)
+    parser.add_argument("--export-questions", default=None,
+                        help="path to write the SME question-review package (JSON)")
+    parser.add_argument("--generate-only", action="store_true",
+                        help="only generate + export questions (skip arms/judge) — cheap SME-prep pass")
     args = parser.parse_args(argv)
 
     session = boto3.Session(region_name=args.region)
@@ -112,7 +120,7 @@ def main(argv: list[str] | None = None) -> int:
     # Precompute per figure concurrently (query-independent work).
     precomp: dict[str, dict] = {}
     with ThreadPoolExecutor(max_workers=min(args.workers, len(keys))) as ex:
-        futs = {ex.submit(_precompute_figure, br, *image_cache[k]): k for k in keys}
+        futs = {ex.submit(_precompute_figure, br, *image_cache[k], not args.generate_only): k for k in keys}
         for fut in futs:
             precomp[futs[fut]] = fut.result()
 
@@ -128,6 +136,13 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     print(f"{len(dataset)} questions across {len(keys)} figures "
           f"(categories: {sorted({i.category for i in dataset})})")
+
+    if args.export_questions:
+        m = export_question_review(dataset, args.export_questions)
+        print(f"Wrote {m} question-review rows for SME review -> {args.export_questions}")
+    if args.generate_only:
+        print("--generate-only: skipping arms/judge (SME-prep pass complete).")
+        return 0
 
     answer_op = lambda system, user: _bedrock_text(br, SONNET, system, user)
 

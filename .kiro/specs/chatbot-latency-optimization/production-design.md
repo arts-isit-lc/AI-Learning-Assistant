@@ -67,3 +67,18 @@ Expected effects (from the pilots): figure-turn retrieval ~5.5s → DB read; TTF
 1. Track A (production validation study) runs first / in parallel — SME-reviewed questions, calibrated judge.
 2. This design is refined against Track A results (esp. any category that regresses).
 3. Only then: implement behind flags → dev backfill + enable → measure → prod.
+
+---
+
+## Production success criteria (define before any merge)
+
+Objective go/no-go for the rollout — checked against the Track A validation study + a dev canary. Written down now so the deployment can be judged objectively:
+
+- **Latency:** P95 first-token latency on figure questions reduced by ≥ X s vs current production (target set from the ~4–6 s pre-token retrieval wait measured in findings).
+- **Quality parity:** correctness not measurably worse than current production; **hallucination rate not increased** (Track B showed labels improve).
+- **Fallback rate:** runtime-vision fallback invoked on **< 5–10 %** of figure requests; if higher, revisit routing / ingestion fidelity before rollout.
+- **Migration:** corpus backfill completes successfully; reads degrade gracefully for not-yet-backfilled images.
+- **Rollback:** the flag-off path (revert to live escalation) is **verified in dev** before enabling in prod.
+- **Judge trust:** the calibrated judge agrees with human reviewers on the 10–20 % sample within an agreed tolerance (else re-calibrate before trusting the study).
+
+Exact thresholds (the "X") are fixed with the team from the Track A baseline before enabling in prod.
