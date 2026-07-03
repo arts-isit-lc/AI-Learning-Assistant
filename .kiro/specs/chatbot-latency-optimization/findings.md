@@ -178,6 +178,24 @@ Caveats: n=6 (30 Qs), auto/unreviewed questions, model-bootstrapped facts, Haiku
 
 What it changes: the architecture direction (rich perception at ingestion) looks right for most categories; the open question narrows to **label-lookup fidelity** — fixable with better ingestion transcription, or does it need targeted live-escalation? The scaled run + SME review + judge calibration should resolve exactly that.
 
+### Step 0 — Track B: label-lookup study result (2026-07-02, DIRECTIONAL)
+
+6 figures × dedicated label-lookup Q+A (40 questions; each reference = the exact expected label text); arms compared on label-lookup only; Haiku judge.
+
+| metric | A live | C rich (current) | C transcription | D transcription |
+|---|---|---|---|---|
+| correctness | 0.975 | 0.950 | 0.950 | 0.975 |
+| hallucination | 0.025 | 0.013 | 0.000 | 0.000 |
+
+Reads:
+- **On precise label questions, stored perception ≈ live.** All stored arms (0.95–0.975) match live A (0.975), and the transcription-forced prompt additionally drives label **hallucination to 0.00** (vs A 0.025, current-rich 0.013). So better ingestion transcription closes the label gap — **fix it at ingestion; a dedicated label-escalation path is not indicated on this evidence.**
+- **Methodology caveat — do NOT compare directly to the v2 pilot's label 0.73.** Track B judges against *exact-answer* references from a dedicated label Q+A generator; the v2 pilot used a *single generic* label question graded against the *broad* fact list. Even current-rich scores 0.95 here, so the v2 pilot's low label number was partly a *measurement artifact* (generic question + broad-facts judging), not purely a perception failure. The "label-lookup failure boundary" is therefore softer than the v2 aggregate implied, and transcription removes what remained.
+- Cost/latency reconfirm the win: A re-perceives per question (2177 tok, ~4.9 s median); the transcription arms amortize perception (396–465 tok).
+
+Caveats: n=6 (40 Qs), auto-generated & unreviewed Q+A, uncalibrated Haiku judge, and the reference is the *generator's own* reading of the label (if the generator misread it, the reference is wrong) — SME spot-check needed. Directional.
+
+Implication: transcription at ingestion looks sufficient for labels, strengthening the "rich perception at ingestion + runtime interpretation, rare/targeted fallback" architecture and reducing the case for a label-specific escalation. Track A (SME-reviewed questions + calibrated judge) should confirm.
+
 ### Primary hypothesis — evaluate replacing runtime perception with richer ingestion
 
 _Pursue only if Step 0 shows richer ingestion matches escalation quality:_
@@ -265,10 +283,9 @@ The architecture direction is largely validated; work now targets the label-look
 1. **[DONE] Step 0 evaluation harness (v1 + v2)** — built, tested (63 tests), two directional pilots run.
 2. **[doing] Commit the harness + docs** — it is now a reusable project asset; don't leave it uncommitted.
 3. **[doing] Judge calibration tooling** — export a 10–20% sample of scored items (question, answer, reference facts, judge verdict) for human review, so the Haiku judge can be calibrated; raises trust in every later run. Tooling added now; the sample is produced on the next run.
-4. **Improve ingestion transcription FIRST (before any routing).** Highest-value engineering question: can a richer perception prompt capture every label / axis / legend / callout verbatim and close the label-lookup gap? Investigate this before choosing escalation — if transcription closes it, the fallback path shrinks further.
-5. **Track B — focused label-lookup study:** ~10 figures × ~100 label-lookup questions, attacking the one weak category directly (more informative than another broad run). Run after step 4.
-6. **Track A — decision-grade evaluation:** ~20–30 figures × 5 categories, SME-reviewed questions, calibrated judge — run AFTER transcription is improved, so we measure the intended architecture rather than a known-fixable weakness.
-7. **Then production:** rich perception at ingestion → structured stored representation → runtime interpretation → **targeted** live-vision fallback only for cases that still need it (routing likely semantic / question-type). `ENRICHMENT_VERSION` bump + corpus backfill; keep the exact figure-ref lookup; flag the change.
+4. **[DONE — directional] Improve ingestion transcription + Track B label study.** A transcription-forced perception prompt (`experiment_v2.PERCEPTION_PROMPT_TRANSCRIPTION`) matched live perception on label-lookup (0.95–0.975) and drove hallucination to 0.00 (see "Track B result"). Evidence points to fixing labels at ingestion — no dedicated label-escalation indicated.
+5. **Track A — decision-grade evaluation (main remaining experiment):** ~20–30 figures × 5 categories, SME-reviewed questions, calibrated judge — the confirmatory run now that transcription addresses the one weak category.
+6. **Then production:** rich perception at ingestion → structured stored representation → runtime interpretation → **targeted** live-vision fallback only for cases that still need it (routing likely semantic / question-type). `ENRICHMENT_VERSION` bump + corpus backfill; keep the exact figure-ref lookup; flag the change.
 
 Independent track: validate the shipped async-guardrail change in dev (run turns + a blocked-topic prompt), then decide on flipping prod.
 

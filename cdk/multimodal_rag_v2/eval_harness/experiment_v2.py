@@ -41,6 +41,47 @@ QUESTION_CATEGORIES: list[tuple[str, str]] = [
 ]
 CATEGORY_NAMES = [name for name, _ in QUESTION_CATEGORIES]
 
+# ─── Track B: transcription-forced perception + label-lookup questions ────────
+# Sharper than perception_prompt_rich: leads with EXHAUSTIVE verbatim
+# transcription (the v2 pilot's failure mode was hallucinated labels, so we force
+# a complete text dump and forbid guessing). Query-independent.
+PERCEPTION_PROMPT_TRANSCRIPTION = (
+    "Transcribe and describe this figure for later question answering.\n"
+    "First, under a heading 'TRANSCRIPTION:', list EVERY piece of visible text EXACTLY as written — "
+    "title, axis labels and units, tick values, legend entries, data labels, callouts, annotations, "
+    "and any text inside the figure — one item per line. Transcribe verbatim; if a piece of text is "
+    "unreadable, write '[illegible]' rather than guessing.\n"
+    "Then, under 'DESCRIPTION:', give a summary, the objects, relationships, any equations, and the "
+    "concepts illustrated. Do NOT answer any question."
+)
+
+
+def build_label_question_gen_prompt(n: int) -> str:
+    return (
+        f"Look at this figure. Generate {n} DISTINCT questions that each require reading a SPECIFIC "
+        "piece of text from the figure — an axis label, a legend entry, a tick value, a data label, "
+        "or an annotation — and each having a short, unambiguous answer readable directly from the "
+        'figure. Return ONLY a JSON array of objects: [{"question": "...", "answer": "..."}]. '
+        "The answer must be the exact text as it appears in the figure."
+    )
+
+
+def parse_label_questions(text: str) -> list[tuple[str, str]]:
+    """Parse [{question, answer}, ...] into (question, expected_answer) pairs."""
+    obj = extract_json(text)
+    if not isinstance(obj, list):
+        raise ValueError("label-question response was not a JSON array")
+    out: list[tuple[str, str]] = []
+    for entry in obj:
+        if not isinstance(entry, dict):
+            continue
+        q = str(entry.get("question", "")).strip()
+        a = str(entry.get("answer", "")).strip()
+        if q and a:
+            out.append((q, a))
+    return out
+
+
 # ─── Failure taxonomy ─────────────────────────────────────────────────────────
 FAILURE_CATEGORIES = [
     "none",

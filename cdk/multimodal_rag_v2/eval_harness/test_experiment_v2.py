@@ -11,12 +11,15 @@ from .experiment_v2 import (
     ANSWER_SYSTEM_UNCERTAINTY,
     CATEGORY_NAMES,
     FAILURE_CATEGORIES,
+    PERCEPTION_PROMPT_TRANSCRIPTION,
     build_answer_arm,
     build_hybrid_arm_e,
     build_judge_prompt_v2,
+    build_label_question_gen_prompt,
     build_question_gen_prompt,
     make_text_judge_v2,
     parse_judge_response_v2,
+    parse_label_questions,
     parse_question_gen_response,
     parse_uncertainty,
 )
@@ -75,6 +78,26 @@ class TestQuestionGen:
     def test_parse_non_object_raises(self):
         with pytest.raises(ValueError):
             parse_question_gen_response("[1,2,3]")
+
+
+class TestTrackB:
+    def test_transcription_prompt_forces_verbatim(self):
+        p = PERCEPTION_PROMPT_TRANSCRIPTION
+        assert "TRANSCRIPTION:" in p and "verbatim" in p and "[illegible]" in p
+        assert "Do NOT answer any question" in p
+
+    def test_label_gen_prompt_requests_pairs_and_count(self):
+        p = build_label_question_gen_prompt(8)
+        assert "8" in p and "question" in p and "answer" in p and "exact text" in p
+
+    def test_parse_label_questions_pairs(self):
+        raw = '[{"question": "What is the y-axis?", "answer": "Time (s)"}, {"question": "", "answer": "x"}, {"question": "Q2", "answer": ""}]'
+        pairs = parse_label_questions(raw)
+        assert pairs == [("What is the y-axis?", "Time (s)")]  # incomplete entries dropped
+
+    def test_parse_label_questions_non_array_raises(self):
+        with pytest.raises(ValueError):
+            parse_label_questions('{"question": "q", "answer": "a"}')
 
 
 class TestUncertainty:
