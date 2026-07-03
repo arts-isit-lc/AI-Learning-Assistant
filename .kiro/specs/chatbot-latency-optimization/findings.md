@@ -2,7 +2,7 @@
 
 - Date: 2026-07-02 (revised same day across two review rounds)
 - Scope: `chatbot_v2` request flow (structured-learning chatbot) + the `multimodal_rag_v2` retrieval path it calls.
-- Framing (evolved): this began as a latency task; the evidence has turned it into validating a **multimodal-RAG architecture split — perception as an ingestion concern, interpretation as a runtime concern**. The v2 pilot largely supports this as the **default** architecture: runtime vision shifts from the primary path to a **targeted recovery mechanism**. The remaining question is narrower and mostly an *implementation* one — **stored-perception fidelity for verbatim elements (labels/legends/axes)** — not *whether* to move perception to ingestion.
+- Framing (evolved): this began as a latency task; the evidence has turned it into a **multimodal-RAG architecture split — perception as an ingestion concern, interpretation as a runtime concern**. After the v2 + Track B pilots this is no longer a hypothesis but the **leading architecture, pending production validation**: runtime vision moves from the primary path to a **rare/defensive fallback**. The one remaining weakness (label-lookup) proved **representational, not architectural** — stored perception simply hadn't preserved enough verbatim text; the transcription-forced ingestion prompt closes it (Track B). The deeper result: **image perception is largely reusable across queries, provided the ingestion representation preserves sufficient fidelity — especially verbatim textual elements.**
 - Key insight: **perception is not one capability — different perceptual information has different persistence.** *Persistent* (well-served by stored perception): relationships, objects, charts, concepts, equations. *Exacting* (the failure boundary): verbatim labels, tiny annotations, dense legends. This points to a **semantic (question-type) routing signal** for the fallback — e.g. label-lookup → check transcription / escalate — rather than a model self-confidence estimator.
 - Status: async-guardrail fix shipped to dev; Step 0 harness built (v1 + v2) with two **directional offline pilots** run (results below — encouraging, not decision-grade). The figure-architecture changes remain hypotheses pending a scaled, SME-reviewed run. See "Status & progress".
 - Readiness: this document is ready for architecture review. Only **Step 0 (the evaluation)** is being built; every architecture change below is contingent on its outcome. Do not build richer ingestion, schema changes, corpus reprocessing, or escalation removal before Step 0 decides.
@@ -21,11 +21,39 @@ What is actually built vs planned. Markers: **[DONE]** · **[PENDING]** (conting
   - **[DONE] Phase 1 — evaluation harness + dataset scaffolding.** In `multimodal_rag_v2/eval_harness/`: `figure_dataset.py` (schema + loader) + `figure_eval_set.json` (3 seed *templates*, not real data), `scoring.py` (metrics + injected judge), `runner.py`, `report.py`, and tests (25 pass). **Framework only** — it runs on fake arms/judge and produces no real result yet.
   - **[PILOT DONE — directional] Phase 2/3 — offline experiment + pilot run.** Built a runnable offline harness (`experiment.py` + `run_step0.py`: arms A/B/C/D as Bedrock perception+answer on real dev IR-bucket images, model-bootstrapped reference facts, Sonnet text-judge) and ran a 5-figure pilot (result below). NOT a decision yet — needs scale-up + SME-reviewed facts + a de-biased judge.
   - **[PILOT DONE — directional] Phase 2b — v2 iteration.** Built the v2 harness (categories, failure taxonomy, CIs, hybrid arm E, Haiku judge) and ran a 6-figure × 5-category pilot (result below). Key read: status-quo short description is weak; rich perception + prompt (D/E) ≈ live escalation except on **label-lookup** (the failure boundary); E escalates only ~7%.
-  - **[PENDING] Decision-grade run.** Scale to ~20–30 figures, **SME-review the generated questions**, **calibrate the Haiku judge** on a 10–20% human-reviewed sample, and resolve the label-lookup gap (better ingestion transcription vs targeted escalation). Then decide delete / replace / hybrid / keep.
+  - **[PENDING] Track A — production validation study.** Architecture decision largely made; this validates implementation assumptions under realistic conditions (SME-reviewed questions, calibrated judge, retrieval effects) to reduce deployment risk — not viability. ~20–30 figures × 5 categories. (Label-lookup already addressed by transcription — Track B.)
+  - **[PENDING] Production implementation** (design drafted in `production-design.md`; parallel to Track A, not merged yet).
 - **[PENDING — only if Step 0 validates] Stage 3 — production architecture:** richer ingestion prompt + perception schema, `ENRICHMENT_VERSION` bump + corpus backfill, retrieval injects the stored analysis, flagged removal of the runtime vision call.
 - **[PENDING] Stage 4 — re-measure & optimize:** multi-field embeddings, response-length tuning (#2), progressive-UX.
 
 Naming note: "Phase 1–3" are the sub-steps of Step 0; "Stage 1–4" are the higher-level roadmap below (Stage 1 = Step 0). Everything from Stage 3 down is a hypothesis, not committed work.
+
+---
+
+## Target architecture (leading — pending production validation)
+
+```
+                    INGESTION  (once per image)
+  Image
+    │
+    ▼
+  Rich perception ──► summary · verbatim OCR/labels · relationships · charts · equations · concepts
+    │
+    ▼
+  Stored structured representation  (perception schema)
+
+                    RUNTIME  (per question)
+  Question
+    │
+    ▼
+  Retrieve stored perception ──► Sonnet interpretation ──► Answer
+    │
+    └── (rare / defensive fallback, feature-flagged)
+              ▼
+        Runtime vision (live perception)
+```
+
+Perception is computed once at ingestion and reused across queries; interpretation stays at runtime; live vision is an exceptional recovery path, not part of the normal request.
 
 ---
 
@@ -284,7 +312,7 @@ The architecture direction is largely validated; work now targets the label-look
 2. **[doing] Commit the harness + docs** — it is now a reusable project asset; don't leave it uncommitted.
 3. **[doing] Judge calibration tooling** — export a 10–20% sample of scored items (question, answer, reference facts, judge verdict) for human review, so the Haiku judge can be calibrated; raises trust in every later run. Tooling added now; the sample is produced on the next run.
 4. **[DONE — directional] Improve ingestion transcription + Track B label study.** A transcription-forced perception prompt (`experiment_v2.PERCEPTION_PROMPT_TRANSCRIPTION`) matched live perception on label-lookup (0.95–0.975) and drove hallucination to 0.00 (see "Track B result"). Evidence points to fixing labels at ingestion — no dedicated label-escalation indicated.
-5. **Track A — decision-grade evaluation (main remaining experiment):** ~20–30 figures × 5 categories, SME-reviewed questions, calibrated judge — the confirmatory run now that transcription addresses the one weak category.
+5. **Track A — production validation study (renamed from "decision-grade").** The architecture decision is largely made; this run now *validates implementation assumptions under realistic conditions* (SME-reviewed questions, calibrated judge, retrieval effects) to reduce deployment risk — not to decide viability. ~20–30 figures × 5 categories.
 6. **Then production:** rich perception at ingestion → structured stored representation → runtime interpretation → **targeted** live-vision fallback only for cases that still need it (routing likely semantic / question-type). `ENRICHMENT_VERSION` bump + corpus backfill; keep the exact figure-ref lookup; flag the change.
 
 Independent track: validate the shipped async-guardrail change in dev (run turns + a blocked-topic prompt), then decide on flipping prod.
