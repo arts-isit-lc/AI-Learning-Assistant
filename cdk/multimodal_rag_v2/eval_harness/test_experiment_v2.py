@@ -183,3 +183,23 @@ class TestReportV2:
         assert stats["n_escalated"] == 2
         assert stats["escalation_freq"] == pytest.approx(2 / 3, abs=1e-3)  # stat is rounded to 4dp
         assert stats["answer_change_rate_given_escalation"] == pytest.approx(0.5)
+
+    def test_export_calibration_sample(self, tmp_path):
+        import json
+
+        from .report import export_calibration_sample
+
+        items = [
+            ScoredItem(query=f"q{i}", correctness=1.0, hallucination=0.0, retrieval_precision=1.0,
+                       citations_used=0, latency_ms=0.0, input_tokens=0, output_tokens=0, cost_usd=0.0,
+                       category="overview", answer=f"ans{i}", rationale="r", reference_facts=["f1"])
+            for i in range(10)
+        ]
+        path = str(tmp_path / "calib.json")
+        n = export_calibration_sample([ArmRun("A", items)], path, fraction=0.2, seed=1)
+        assert n == 2  # round(10 * 0.2)
+        rows = json.load(open(path, encoding="utf-8"))
+        assert len(rows) == 2
+        row = rows[0]
+        assert row["human_correctness"] is None and row["human_agrees_with_judge"] is None
+        assert set(row) >= {"arm", "question", "answer", "reference_facts", "judge_correctness", "judge_rationale"}

@@ -149,3 +149,44 @@ def escalation_stats(run: ArmRun) -> dict:
             round(sum(1 for si in escalated if si.answer_changed) / len(escalated), 4) if escalated else 0.0
         ),
     }
+
+
+def export_calibration_sample(
+    runs: list[ArmRun], path: str, *, fraction: float = 0.15, seed: int = 0
+) -> int:
+    """Write a random `fraction` of scored items to `path` as JSON for HUMAN
+    review, so the LLM-judge can be calibrated (findings.md "Judge calibration").
+
+    Each row carries what a reviewer needs — question, arm answer, reference
+    facts, and the judge's verdict — plus blank `human_*` fields to fill in.
+    Deterministic given `seed`. Returns the number of rows written.
+    """
+    import json
+    import random
+
+    rows = [
+        {
+            "arm": run.arm_name,
+            "category": si.category,
+            "question": si.query,
+            "reference_facts": si.reference_facts,
+            "answer": si.answer,
+            "judge_correctness": si.correctness,
+            "judge_hallucination": si.hallucination,
+            "judge_failure_category": si.failure_category,
+            "judge_rationale": si.rationale,
+            # to be filled in by the human reviewer:
+            "human_correctness": None,
+            "human_hallucination": None,
+            "human_agrees_with_judge": None,
+            "human_notes": "",
+        }
+        for run in runs
+        for si in run.scored
+    ]
+    random.Random(seed).shuffle(rows)
+    k = max(1, round(len(rows) * fraction)) if rows else 0
+    sample = rows[:k]
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(sample, f, indent=2, ensure_ascii=False)
+    return len(sample)

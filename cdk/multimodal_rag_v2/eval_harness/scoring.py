@@ -80,6 +80,10 @@ class ScoredItem:
     failure_category: str = ""
     escalated: bool = False
     answer_changed: bool = False
+    # inspection fields for judge calibration (what the human reviewer sees)
+    answer: str = ""
+    rationale: str = ""
+    reference_facts: list[str] = field(default_factory=list)
 
 
 def retrieval_precision(expected_figure_id: str, source_ids: list[str]) -> float:
@@ -131,4 +135,7 @@ def score_item(item: FigureEvalItem, output: ArmOutput, judge: JudgeFn) -> Score
         failure_category=verdict.failure_category,
         escalated=output.escalated,
         answer_changed=output.answer_changed,
+        answer=output.answer,
+        rationale=verdict.rationale,
+        reference_facts=list(item.ground_truth_facts),
     )

@@ -42,7 +42,7 @@ from .experiment_v2 import (
     parse_question_gen_response,
 )
 from .figure_dataset import FigureEvalItem
-from .report import escalation_stats, format_category_matrix, format_report, summarize
+from .report import escalation_stats, export_calibration_sample, format_category_matrix, format_report, summarize
 from .run_step0 import HAIKU, SONNET, DEFAULT_BUCKET, _bedrock_text, _bedrock_vision, _sample_image_keys
 from .runner import ArmRun
 from .scoring import score_item
@@ -93,6 +93,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--bucket", default=DEFAULT_BUCKET)
     parser.add_argument("--region", default="ca-central-1")
     parser.add_argument("--workers", type=int, default=4, help="concurrent Bedrock calls per arm")
+    parser.add_argument("--export-calibration", default=None,
+                        help="path to write a human-review calibration sample (JSON) for judge calibration")
+    parser.add_argument("--calibration-fraction", type=float, default=0.15)
     args = parser.parse_args(argv)
 
     session = boto3.Session(region_name=args.region)
@@ -167,6 +170,10 @@ def main(argv: list[str] | None = None) -> int:
     for r in runs:
         if r.errors:
             print(f"\n[{r.arm_name}] {len(r.errors)} error(s), e.g. {r.errors[:2]}")
+
+    if args.export_calibration:
+        k = export_calibration_sample(runs, args.export_calibration, fraction=args.calibration_fraction)
+        print(f"\nWrote {k} calibration rows for human review -> {args.export_calibration}")
     return 0
 
 

@@ -258,14 +258,17 @@ Leading hypothesis (pending Step 0): **avoid a runtime cache unless measurement 
 
 ---
 
-## Implementation roadmap (staged — effort proportional to evidence)
+## Roadmap (revised after the v2 pilot)
 
-Build **Stage 1 only** right now. Everything after is contingent on Stage 1's result.
+The architecture direction is largely validated; work now targets the label-lookup exception, in this order:
 
-1. **Stage 1 — Step 0 evaluation (the only near-term build).** Phases 1–3 above — **Phase 1 (harness) done; Phases 2–3 pending.** Build the harness + dataset, prototype arms C/D fully offline, run A/B/C/D on the metrics. Low-risk; touches no production code or data.
-2. **Stage 2 — review results.** If richer stored perception matches/exceeds live escalation, commit to the change. If it only helps some scenarios, identify exactly which and scope a hybrid to those. If it doesn't, keep escalation (and we've avoided unnecessary work).
-3. **Stage 3 — production architecture (only if Stage 1 validates).** Enrichment prompt + perception schema, `ENRICHMENT_VERSION` bump + corpus backfill, retrieval injects the stored analysis (keep the exact figure-ref lookup), feature-flagged removal of the runtime vision call.
-4. **Stage 4 — re-measure & optimize.** With runtime perception gone/minimized, decide whether multi-field embeddings, response-length tuning (#2), or the progressive-UX change are worth it.
+1. **[DONE] Step 0 evaluation harness (v1 + v2)** — built, tested (63 tests), two directional pilots run.
+2. **[doing] Commit the harness + docs** — it is now a reusable project asset; don't leave it uncommitted.
+3. **[doing] Judge calibration tooling** — export a 10–20% sample of scored items (question, answer, reference facts, judge verdict) for human review, so the Haiku judge can be calibrated; raises trust in every later run. Tooling added now; the sample is produced on the next run.
+4. **Improve ingestion transcription FIRST (before any routing).** Highest-value engineering question: can a richer perception prompt capture every label / axis / legend / callout verbatim and close the label-lookup gap? Investigate this before choosing escalation — if transcription closes it, the fallback path shrinks further.
+5. **Track B — focused label-lookup study:** ~10 figures × ~100 label-lookup questions, attacking the one weak category directly (more informative than another broad run). Run after step 4.
+6. **Track A — decision-grade evaluation:** ~20–30 figures × 5 categories, SME-reviewed questions, calibrated judge — run AFTER transcription is improved, so we measure the intended architecture rather than a known-fixable weakness.
+7. **Then production:** rich perception at ingestion → structured stored representation → runtime interpretation → **targeted** live-vision fallback only for cases that still need it (routing likely semantic / question-type). `ENRICHMENT_VERSION` bump + corpus backfill; keep the exact figure-ref lookup; flag the change.
 
 Independent track: validate the shipped async-guardrail change in dev (run turns + a blocked-topic prompt), then decide on flipping prod.
 
