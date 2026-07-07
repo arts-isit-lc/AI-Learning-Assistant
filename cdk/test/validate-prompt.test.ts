@@ -61,6 +61,11 @@ describe("buildLLMPrompt guidance", () => {
     // The over-eager wording that emboldened false positives must be gone.
     expect(prompt).not.toContain("do not stay silent on a real conflict out of caution");
   });
+
+  it("states the 0.0-1.0 confidence range so the model does not use another scale", () => {
+    expect(prompt).toMatch(/0\.0 to 1\.0/);
+    expect(prompt.toLowerCase()).toContain("confidence");
+  });
 });
 
 describe("detectHardContradictions (deterministic rule engine)", () => {
@@ -133,5 +138,26 @@ describe("validateSchema", () => {
 
   it("rejects a response whose conflicts field is not an array", () => {
     expect(() => vp.validateSchema({ conflicts: "nope" })).toThrow(/conflicts/i);
+  });
+});
+
+describe("normalizeConfidence", () => {
+  it("clamps out-of-range values into 0.0-1.0 (the Sonnet 'confidence: 5' bug)", () => {
+    expect(vp.normalizeConfidence(5)).toBe(1);
+    expect(vp.normalizeConfidence(100)).toBe(1);
+    expect(vp.normalizeConfidence(-3)).toBe(0);
+  });
+
+  it("passes through valid decimals unchanged", () => {
+    expect(vp.normalizeConfidence(0.9)).toBe(0.9);
+    expect(vp.normalizeConfidence(0)).toBe(0);
+    expect(vp.normalizeConfidence(1)).toBe(1);
+  });
+
+  it("coerces numeric strings and defaults non-numeric to 0.5", () => {
+    expect(vp.normalizeConfidence("0.8")).toBeCloseTo(0.8);
+    expect(vp.normalizeConfidence("high")).toBe(0.5);
+    expect(vp.normalizeConfidence(undefined)).toBe(0.5);
+    expect(vp.normalizeConfidence(null)).toBe(0.5);
   });
 });

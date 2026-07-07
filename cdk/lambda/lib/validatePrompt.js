@@ -18,7 +18,7 @@ const BEDROCK_TIMEOUT_MS = 30000;
 const RETRY_DELAY_MS = 2000;
 const BATCH_SIZE = 10;
 const MAX_CONCURRENT_BATCHES = 3;
-const VALIDATOR_VERSION = "5";
+const VALIDATOR_VERSION = "6";
 
 const bedrockClient = new BedrockRuntimeClient({ region: REGION });
 
@@ -470,12 +470,15 @@ ${modulePromptsSection}
 
 ## Analyzing scope: ${input.scope}
 
+## Confidence:
+"confidence" MUST be a single decimal from 0.0 to 1.0 (HIGH > 0.8, MEDIUM 0.5–0.8, LOW < 0.5). NEVER use a 1–5, 1–10, or percentage scale, and never output a value greater than 1.0.
+
 ## Output — JSON only, no markdown:
 {
   "conflicts": [
     {
       "type": "BEHAVIORAL_INCOMPATIBILITY | CONSTRAINT_COLLISION | HIERARCHY_VIOLATION",
-      "confidence": 0.0,
+      "confidence": <decimal from 0.0 to 1.0>,
       "prompt_a_source": "system_level_prompt | course_prompt | module_prompt:module_name",
       "prompt_b_source": "system_level_prompt | course_prompt | module_prompt:module_name",
       "prompt_a_text": "the exact constraint statement from prompt A",
@@ -514,6 +517,20 @@ function attemptJsonParse(content) {
   return null;
 }
 
+/**
+ * Coerce a model-provided confidence into the required 0.0–1.0 range.
+ * Some models (e.g. Claude 3 Sonnet) occasionally emit a different scale
+ * (e.g. 5 on a 1–10 scale) or a non-numeric value. Clamp it rather than let one
+ * stray field fail the entire validation via the strict schema check.
+ */
+function normalizeConfidence(value) {
+  const n = typeof value === "number" ? value : parseFloat(value);
+  if (!Number.isFinite(n)) return 0.5;
+  if (n < 0) return 0;
+  if (n > 1) return 1;
+  return n;
+}
+
 async function callBedrockValidation(llmPrompt, metadata = {}) {
   const startTime = Date.now();
   const promptHash = crypto.createHash("md5").update(llmPrompt).digest("hex").slice(0, 8);
@@ -545,6 +562,13 @@ async function callBedrockValidation(llmPrompt, metadata = {}) {
       const parsed = attemptJsonParse(content);
       if (!parsed) {
         throw new Error(`JSON parse failed after repair attempts. Raw: ${content.slice(0, 200)}`);
+      }
+      // Clamp confidence into 0.0–1.0 before the strict schema check so a model that
+      // returns a different scale (e.g. 5) does not fail the whole validation.
+      if (Array.isArray(parsed.conflicts)) {
+        for (const c of parsed.conflicts) {
+          if (c && typeof c === "object") c.confidence = normalizeConfidence(c.confidence);
+        }
       }
       return parsed;
     } catch (err) {
@@ -958,6 +982,7 @@ module.exports = {
   buildLLMPrompt,
   detectHardContradictions,
   extractObligations,
+  normalizeConfidence,
   validateSchema,
   assignLLMSeverity,
   deduplicateConflicts,
