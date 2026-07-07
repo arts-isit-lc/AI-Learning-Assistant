@@ -241,3 +241,32 @@ def test_latency_breakdown_is_emitted_with_phase_keys(wire, monkeypatch):
     ):
         assert key in b, f"latency breakdown missing {key}"
         assert isinstance(b[key], (int, float))
+
+
+# ---------------------------------------------------------------------------
+# Ordering-bug fix: time_sent must reflect TURN time on every persist path
+# ---------------------------------------------------------------------------
+
+
+def test_normal_turn_threads_turn_timestamps_to_persist(wire):
+    main.handler(_event(), _Ctx())
+    kwargs = wire.persist_turn.call_args.kwargs
+    # The handler passes the turn's timestamps so RDS ordering reflects when the
+    # turn happened, not when the (possibly async/delayed) projection is written.
+    assert kwargs.get("user_time_sent") is not None
+    assert kwargs.get("ai_time_sent") is not None
+    assert kwargs["user_time_sent"] <= kwargs["ai_time_sent"]
+
+
+def test_guardrail_block_persists_with_turn_timestamps(wire):
+    # A blocked turn writes RDS synchronously; it must still carry turn-time
+    # timestamps so it can't jump ahead of a still-queued prior turn.
+    wire.stream.return_value = {"message": "[blocked]", "blocked": True, "type": "intervention"}
+    main.handler(_event(), _Ctx())
+
+    calls = main.persist_message_to_rds.call_args_list
+    student_call = [c for c in calls if c.kwargs.get("student_sent") is True][0]
+    ai_call = [c for c in calls if c.kwargs.get("student_sent") is False][0]
+    assert student_call.kwargs.get("time_sent") is not None
+    assert ai_call.kwargs.get("time_sent") is not None
+    assert student_call.kwargs.get("time_sent") <= ai_call.kwargs.get("time_sent")

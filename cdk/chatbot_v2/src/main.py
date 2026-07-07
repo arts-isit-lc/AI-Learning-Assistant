@@ -4,6 +4,7 @@ import os
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 
 import boto3
 import botocore.exceptions
@@ -320,13 +321,33 @@ def _stream_with_guardrail_retry(
             raise
 
 
-def _persist_turn(session_id, message_content, llm_output, blocks, user_email, course_id, module_id) -> None:
+def _utc_now_iso() -> str:
+    """Wall-clock UTC as a naive ISO-8601 string for the RDS ``time_sent``
+    (``timestamp`` without tz) column.
+
+    Captured in-app so message ordering reflects TURN time, not RDS-write time.
+    Under ASYNC_RDS_PROJECTION the RDS projection is written LATER by the SQS
+    consumer, so stamping the write time lets a synchronous guardrail-block turn
+    (written immediately) sort ahead of a still-queued prior turn — the UI loads
+    history ORDER BY time_sent, so that reordered the chat. UTC keeps it aligned
+    with the DB's CURRENT_TIMESTAMP (RDS runs in UTC).
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None).isoformat(sep=" ")
+
+
+def _persist_turn(session_id, message_content, llm_output, blocks, user_email, course_id, module_id,
+                  user_time_sent=None, ai_time_sent=None) -> None:
     """Persist one completed turn consistently for every path (M5).
 
     DynamoDB (canonical text log) is written FIRST so a delayed/failed RDS
     projection never loses a message; the RDS projection (blocks-aware, for UI
     history) is written async via SQS when ASYNC_RDS_PROJECTION is on, else
     synchronously with engagement logging. Best-effort throughout.
+
+    ``user_time_sent`` / ``ai_time_sent`` are the turn's timestamps (ISO
+    strings). They are threaded through BOTH projection modes so RDS ``time_sent``
+    reflects TURN time rather than write time (see _utc_now_iso). None falls back
+    to the server clock inside persist_message_to_rds.
     """
     # DynamoDB = canonical source of truth (text log)
     try:
@@ -347,6 +368,10 @@ def _persist_turn(session_id, message_content, llm_output, blocks, user_email, c
                     "user_email": user_email,
                     "course_id": course_id,
                     "module_id": module_id,
+                    # Turn timestamps ride along so the (delayed) consumer stamps
+                    # time_sent with TURN time, not its processing time.
+                    "user_time_sent": user_time_sent,
+                    "ai_time_sent": ai_time_sent,
                 }),
             )
         except Exception:
@@ -355,9 +380,9 @@ def _persist_turn(session_id, message_content, llm_output, blocks, user_email, c
         try:
             conn = _get_db_connection()
             if message_content:
-                persist_message_to_rds(conn, session_id, message_content, student_sent=True)
+                persist_message_to_rds(conn, session_id, message_content, student_sent=True, time_sent=user_time_sent)
                 log_engagement(conn, user_email, course_id, module_id, "message creation")
-            persist_message_to_rds(conn, session_id, llm_output, student_sent=False, blocks=blocks)
+            persist_message_to_rds(conn, session_id, llm_output, student_sent=False, blocks=blocks, time_sent=ai_time_sent)
             log_engagement(conn, user_email, course_id, module_id, "AI message creation")
         except Exception:
             logger.exception("RDS projection failed (best-effort)")
@@ -415,6 +440,11 @@ def handler(event, context):
         # streaming.py's per-stream ttft_ms (time to first token).
         _t0 = time.perf_counter()
         _timings: dict = {}
+        # Wall-clock turn start = the user message's time_sent. Threaded into
+        # every persist path so RDS history ordering reflects TURN time, not
+        # (async) write time (see _utc_now_iso). The AI message's time_sent is
+        # captured at persist time below, after generation.
+        turn_started_at = _utc_now_iso()
 
         guardrail_id, guardrail_version = _get_guardrail_config()
 
@@ -491,8 +521,8 @@ def handler(event, context):
                 if isinstance(llm_output, dict) and llm_output.get("blocked"):
                     try:
                         conn = _get_db_connection()
-                        persist_message_to_rds(conn, session_id, message_content, student_sent=True)
-                        persist_message_to_rds(conn, session_id, llm_output["message"], student_sent=False)
+                        persist_message_to_rds(conn, session_id, message_content, student_sent=True, time_sent=turn_started_at)
+                        persist_message_to_rds(conn, session_id, llm_output["message"], student_sent=False, time_sent=_utc_now_iso())
                     except Exception:
                         logger.exception("RDS projection failed on guardrail block (best-effort)")
                     return {"statusCode": 200, "headers": CORS_HEADERS, "body": json.dumps({
@@ -508,7 +538,8 @@ def handler(event, context):
                 # replies are text-only, so blocks is a single text block —
                 # this makes tutor turns reconstruct correctly on history reload.
                 tutor_blocks = [{"type": "text", "content": llm_output}]
-                _persist_turn(session_id, message_content, llm_output, tutor_blocks, user_email, course_id, module_id)
+                _persist_turn(session_id, message_content, llm_output, tutor_blocks, user_email, course_id, module_id,
+                              user_time_sent=turn_started_at, ai_time_sent=_utc_now_iso())
                 state.interactions += 1
                 _persist_session_state(state)
 
@@ -765,8 +796,8 @@ def handler(event, context):
             try:
                 conn = _get_db_connection()
                 if message_content:
-                    persist_message_to_rds(conn, session_id, message_content, student_sent=True)
-                persist_message_to_rds(conn, session_id, llm_output["message"], student_sent=False)
+                    persist_message_to_rds(conn, session_id, message_content, student_sent=True, time_sent=turn_started_at)
+                persist_message_to_rds(conn, session_id, llm_output["message"], student_sent=False, time_sent=_utc_now_iso())
             except Exception:
                 logger.exception("RDS projection failed on guardrail block (best-effort)")
             return {
@@ -802,7 +833,8 @@ def handler(event, context):
         # so the normal and tutor paths behave identically (canonical-first,
         # block-aware, engagement-logged, ASYNC_RDS_PROJECTION-aware).
         _persist_t = time.perf_counter()
-        _persist_turn(session_id, message_content, llm_output, blocks, user_email, course_id, module_id)
+        _persist_turn(session_id, message_content, llm_output, blocks, user_email, course_id, module_id,
+                      user_time_sent=turn_started_at, ai_time_sent=_utc_now_iso())
 
         # Count this as one processed turn (H1). `interactions` is the per-turn
         # counter the eval gate reads on the NEXT turn; it must increment whether

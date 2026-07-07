@@ -83,3 +83,41 @@ class TestHandler:
         event = {"Records": [_record({"session_id": "s"})]}
         out = consumer.handler(event, _Ctx())  # must not raise
         assert out == {"batchItemFailures": []}
+
+
+class TestProjectTimestamps:
+    """The async consumer must forward the turn timestamps from the payload so
+    time_sent reflects TURN time, not the consumer's (delayed) write time."""
+
+    def test_forwards_turn_timestamps_from_payload(self, monkeypatch):
+        monkeypatch.setattr(consumer, "_get_db_connection", lambda: MagicMock())
+        persist = MagicMock()
+        monkeypatch.setattr(consumer, "persist_message_to_rds", persist)
+        monkeypatch.setattr(consumer, "log_engagement", MagicMock())
+
+        consumer._project({
+            "session_id": "s", "message_content": "hi", "llm_output": "ans",
+            "user_email": "a@b.c", "course_id": "c", "module_id": "m",
+            "user_time_sent": "2026-07-03 10:00:00.000000",
+            "ai_time_sent": "2026-07-03 10:00:03.500000",
+        })
+
+        student_call = [c for c in persist.call_args_list if c.kwargs.get("student_sent") is True][0]
+        ai_call = [c for c in persist.call_args_list if c.kwargs.get("student_sent") is False][0]
+        assert student_call.kwargs.get("time_sent") == "2026-07-03 10:00:00.000000"
+        assert ai_call.kwargs.get("time_sent") == "2026-07-03 10:00:03.500000"
+
+    def test_back_compat_when_timestamps_absent(self, monkeypatch):
+        monkeypatch.setattr(consumer, "_get_db_connection", lambda: MagicMock())
+        persist = MagicMock()
+        monkeypatch.setattr(consumer, "persist_message_to_rds", persist)
+        monkeypatch.setattr(consumer, "log_engagement", MagicMock())
+
+        consumer._project({
+            "session_id": "s", "message_content": "hi", "llm_output": "ans",
+            "user_email": "a@b.c", "course_id": "c", "module_id": "m",
+        })
+
+        # No timestamps in payload -> time_sent forwarded as None (CURRENT_TIMESTAMP).
+        for c in persist.call_args_list:
+            assert c.kwargs.get("time_sent") is None

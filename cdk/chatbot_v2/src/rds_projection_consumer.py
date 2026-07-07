@@ -60,13 +60,19 @@ def _project(payload: dict) -> None:
     user_email = payload.get("user_email", "")
     course_id = payload.get("course_id", "")
     module_id = payload.get("module_id", "")
+    # Turn timestamps captured by the handler. Forwarded so this (delayed) async
+    # write stamps time_sent with TURN time, not consumer-processing time — the
+    # fix for chat-history reordering under ASYNC_RDS_PROJECTION. Absent on
+    # payloads enqueued before this change -> None -> server clock (back-compat).
+    user_time_sent = payload.get("user_time_sent")
+    ai_time_sent = payload.get("ai_time_sent")
 
     logger.append_keys(session_id=session_id, course_id=course_id)
     conn = _get_db_connection()
     if message_content:
-        persist_message_to_rds(conn, session_id, message_content, student_sent=True)
+        persist_message_to_rds(conn, session_id, message_content, student_sent=True, time_sent=user_time_sent)
         log_engagement(conn, user_email, course_id, module_id, "message creation")
-    persist_message_to_rds(conn, session_id, llm_output, student_sent=False, blocks=blocks)
+    persist_message_to_rds(conn, session_id, llm_output, student_sent=False, blocks=blocks, time_sent=ai_time_sent)
     log_engagement(conn, user_email, course_id, module_id, "AI message creation")
 
 

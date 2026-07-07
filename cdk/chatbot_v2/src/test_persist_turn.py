@@ -75,3 +75,49 @@ def test_dynamo_write_precedes_rds_even_if_rds_fails(monkeypatch):
     # Must not raise — persistence is best-effort — and DynamoDB still ran.
     main._persist_turn("s1", "hello", "answer", BLOCKS, "e@b.com", "c1", "m1")
     dynamo.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Ordering-bug fix: the turn's timestamps must ride through BOTH persist modes
+# so time_sent reflects TURN time, not (async/delayed) RDS-write time.
+# ---------------------------------------------------------------------------
+
+
+def test_async_mode_includes_turn_timestamps_in_payload(monkeypatch):
+    monkeypatch.setattr(main, "ASYNC_RDS_PROJECTION", True)
+    monkeypatch.setattr(main, "RDS_PROJECTION_QUEUE_URL", "https://sqs/queue")
+    monkeypatch.setattr(main, "persist_message_pair", MagicMock())
+    sqs = MagicMock()
+    monkeypatch.setattr(main, "_sqs_client", sqs)
+
+    main._persist_turn(
+        "s1", "hello", "answer", BLOCKS, "e@b.com", "c1", "m1",
+        user_time_sent="2026-07-03 10:00:00.000000",
+        ai_time_sent="2026-07-03 10:00:03.500000",
+    )
+
+    body = json.loads(sqs.send_message.call_args.kwargs["MessageBody"])
+    # The consumer will stamp time_sent from these, not its own (delayed) clock.
+    assert body["user_time_sent"] == "2026-07-03 10:00:00.000000"
+    assert body["ai_time_sent"] == "2026-07-03 10:00:03.500000"
+    assert body["user_time_sent"] < body["ai_time_sent"]
+
+
+def test_sync_mode_passes_turn_timestamps_to_rds(monkeypatch):
+    monkeypatch.setattr(main, "ASYNC_RDS_PROJECTION", False)
+    monkeypatch.setattr(main, "persist_message_pair", MagicMock())
+    monkeypatch.setattr(main, "_get_db_connection", lambda: MagicMock())
+    p2rds = MagicMock()
+    monkeypatch.setattr(main, "persist_message_to_rds", p2rds)
+    monkeypatch.setattr(main, "log_engagement", MagicMock())
+
+    main._persist_turn(
+        "s1", "hello", "answer", BLOCKS, "e@b.com", "c1", "m1",
+        user_time_sent="2026-07-03 10:00:00.000000",
+        ai_time_sent="2026-07-03 10:00:03.500000",
+    )
+
+    student_call = [c for c in p2rds.call_args_list if c.kwargs.get("student_sent") is True][0]
+    ai_call = [c for c in p2rds.call_args_list if c.kwargs.get("student_sent") is False][0]
+    assert student_call.kwargs.get("time_sent") == "2026-07-03 10:00:00.000000"
+    assert ai_call.kwargs.get("time_sent") == "2026-07-03 10:00:03.500000"

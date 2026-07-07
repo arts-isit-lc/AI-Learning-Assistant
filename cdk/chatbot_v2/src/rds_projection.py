@@ -25,6 +25,7 @@ def persist_message_to_rds(
     message_content: str,
     student_sent: bool,
     blocks: list | None = None,
+    time_sent: str | None = None,
 ) -> None:
     """Insert a message into the RDS Messages table and update session timestamp.
 
@@ -39,6 +40,13 @@ def persist_message_to_rds(
         blocks: Optional structured render blocks (text/figure/table/formula) for
             an AI message. Persisted as JSONB so chat-history reload can rebuild
             figures; None (student messages, text-only replies) stores SQL NULL.
+        time_sent: Optional turn timestamp (an ISO-8601 string). When provided it
+            is bound as the row's time_sent so ordering reflects when the TURN
+            happened; when None we fall back to the server clock
+            (CURRENT_TIMESTAMP). This matters under ASYNC_RDS_PROJECTION: the
+            async projection is written by the SQS consumer LATER, so stamping
+            the write time would let a synchronous guardrail-block turn jump
+            ahead of a still-queued prior turn (the UI sorts by time_sent).
     """
     try:
         cur = connection.cursor()
@@ -46,12 +54,22 @@ def persist_message_to_rds(
         # Serialize render blocks to JSON for the jsonb column; None -> SQL NULL.
         blocks_json = json.dumps(blocks) if blocks else None
 
-        # Insert message with a server-generated UUID
-        cur.execute(
-            """INSERT INTO "Messages" (message_id, session_id, student_sent, message_content, message_blocks, time_sent)
-               VALUES (uuid_generate_v4(), %s, %s, %s, %s::jsonb, CURRENT_TIMESTAMP)""",
-            (session_id, student_sent, message_content, blocks_json),
-        )
+        # Insert message with a server-generated UUID. Bind the caller-supplied
+        # turn timestamp when present, else default to the server clock. The two
+        # branches differ only by an internal SQL literal (no user input in the
+        # SQL text), so there is no injection surface.
+        if time_sent is not None:
+            cur.execute(
+                """INSERT INTO "Messages" (message_id, session_id, student_sent, message_content, message_blocks, time_sent)
+                   VALUES (uuid_generate_v4(), %s, %s, %s, %s::jsonb, %s)""",
+                (session_id, student_sent, message_content, blocks_json, time_sent),
+            )
+        else:
+            cur.execute(
+                """INSERT INTO "Messages" (message_id, session_id, student_sent, message_content, message_blocks, time_sent)
+                   VALUES (uuid_generate_v4(), %s, %s, %s, %s::jsonb, CURRENT_TIMESTAMP)""",
+                (session_id, student_sent, message_content, blocks_json),
+            )
 
         # Update session last_accessed
         cur.execute(

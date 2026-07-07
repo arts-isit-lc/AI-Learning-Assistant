@@ -198,3 +198,46 @@ class TestLogEngagement:
         log_engagement(conn, "a@b.com", "c1", "m1", "test")
 
         conn.rollback.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Tests: time_sent threading (message-ordering bug fix)
+# ---------------------------------------------------------------------------
+
+
+class TestTimeSentOrdering:
+    """time_sent must reflect TURN time, not RDS-write time.
+
+    Under ASYNC_RDS_PROJECTION, normal turns are written by the SQS consumer
+    (delayed) while a guardrail-blocked turn is written synchronously. When
+    time_sent is stamped CURRENT_TIMESTAMP at write time, a later blocked turn
+    can get an earlier timestamp than a still-queued prior turn, reordering the
+    UI history (which sorts by time_sent ASC). Passing an explicit time_sent
+    fixes this at the source.
+    """
+
+    def test_uses_provided_time_sent_instead_of_current_timestamp(self) -> None:
+        conn = _make_connection()
+
+        persist_message_to_rds(
+            conn, "s-1", "msg", student_sent=True, time_sent="2026-07-03 10:00:00.000001"
+        )
+
+        insert_call = conn.cursor.return_value.execute.call_args_list[0]
+        sql = insert_call[0][0]
+        params = insert_call[0][1]
+        # The INSERT binds the supplied timestamp instead of CURRENT_TIMESTAMP.
+        assert "CURRENT_TIMESTAMP" not in sql
+        assert "2026-07-03 10:00:00.000001" in params
+
+    def test_defaults_to_current_timestamp_when_time_sent_absent(self) -> None:
+        conn = _make_connection()
+
+        persist_message_to_rds(conn, "s-1", "msg", student_sent=True)
+
+        insert_call = conn.cursor.return_value.execute.call_args_list[0]
+        sql = insert_call[0][0]
+        params = insert_call[0][1]
+        # Back-compat: no time_sent -> server clock, and no extra bind param.
+        assert "CURRENT_TIMESTAMP" in sql
+        assert len(params) == 4
