@@ -51,6 +51,16 @@ describe("buildLLMPrompt guidance", () => {
   it("notes that hard contradictions are detected separately by the rule engine", () => {
     expect(prompt.toLowerCase()).toContain("rule engine");
   });
+
+  it("instructs that silence / same-mode usage is NOT a conflict (precision guard)", () => {
+    // Guards against the false positive where a course prompt that engages via
+    // questions was flagged as behaviorally incompatible with the Socratic rule.
+    expect(prompt).toMatch(/NOT conflicts/i);
+    expect(prompt.toLowerCase()).toContain("silence");
+    expect(prompt.toLowerCase()).toContain("both use questions");
+    // The over-eager wording that emboldened false positives must be gone.
+    expect(prompt).not.toContain("do not stay silent on a real conflict out of caution");
+  });
 });
 
 describe("detectHardContradictions (deterministic rule engine)", () => {
