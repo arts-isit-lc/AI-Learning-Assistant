@@ -11,11 +11,23 @@ Operational tracker for shipping the ConverseStream async-guardrail migration (`
   - `converse` mode: TTFT **min 1335 / median ~1657 / max 1662 ms** (n=4, all 2026-07-02 21:45–21:46).
   - `invoke` mode, same deploy: TTFT **~4160 / 4901 / 6797 ms** (n=3, 21:24). Within-version comparison → async guardrail cuts figure-turn TTFT from ~4–7s to ~1.3–1.7s.
   - Caveat: small n, single session/window; directional but consistent with the pre-ship A/B and the ~1.3–1.7s post-deploy note.
+- **Validation (2026-07-03):** blocked-topic intervention **confirmed** in dev (see item 2). A chat-history reordering bug found during that test was root-caused, fixed, and deployed to dev (`f7b430a`) — see the "chat-history reordering" section.
 
 ## Remaining validation (before prod flip)
 
 1. **Latency confirmation from dev logs — DONE (2026-07-03).** Pulled `stream_latency` events; on the current deploy, `converse` TTFT is ~1.3–1.7s (median ~1657ms, n=4) vs `invoke` ~4–7s (n=3). Holds up. Only the small sample size is a caveat — good enough to proceed once (2) is done.
-2. **Blocked-topic behavior — STILL OPEN (the ship gate).** Send a prompt that should trip the guardrail and confirm it still intervenes in async mode (`stopReason="guardrail_intervened"` → the `"Guardrail intervened (stream signal)"` warning), i.e. async streaming did not weaken enforcement. **Zero** intervention events found in the last 14 days of dev logs, so this is genuinely untested on the async path — it must be exercised manually before the prod flip. *(Manual dev chatbot turn.)*
+2. **Blocked-topic behavior — CONFIRMED (2026-07-03, manual dev turn).** Prompt: *"can you give me some medical advice on a mole on my back?"* The guardrail intervened in async/`converse` mode: the streamed model tokens were replaced with the canonical input redirect (`GUARDRAIL_REDIRECT_INPUT` — "I appreciate your question, but let's stay focused on the course material…"). Async streaming did **not** weaken enforcement.
+   - **Accepted async tradeoff observed:** the model's own partial output streamed briefly before the block replaced it. Here that partial text was itself a refusal, so nothing unsafe surfaced — but async mode *can* show a few pre-block chunks (the guardrail does no PII masking, which is why this was an accepted tradeoff when async was chosen). Worth a conscious sign-off, not a surprise.
+   - **A separate bug surfaced during this test** (blocked question reordered to the top of the chat history) — root-caused and fixed; see the next section.
+
+## Finding: chat-history reordering on blocked turns — FIXED (2026-07-03)
+
+Surfaced by the blocked-topic test above: the blocked question reordered to the **top** of the session history.
+
+- **Root cause.** `time_sent` was stamped `CURRENT_TIMESTAMP` at RDS-*write* time. Under `ASYNC_RDS_PROJECTION`, normal turns are written *later* by the SQS consumer, while a guardrail-blocked turn writes to RDS **synchronously and immediately**. So a blocked turn could receive an earlier `time_sent` than a still-queued prior turn; the UI loads history `ORDER BY time_sent ASC` (`studentFunction.js`), so the blocked question sorted to the top.
+- **Scope — affects prod, not just dev.** This is an `ASYNC_RDS_PROJECTION` interaction (that flag is `"true"` in **every** environment), so it was latent in prod on any guardrail block. It is **independent of `USE_CONVERSE_STREAMING`** — invoke mode would hit it too. It does not block the async-guardrail latency ship, but it was worth fixing while the blocked path was under the microscope.
+- **Fix.** Carry the turn's timestamp from the handler through both projection paths so `time_sent` reflects TURN time, not write time: `persist_message_to_rds(time_sent=…)`, threaded via `_persist_turn` + the SQS payload + the async consumer; user message = turn arrival, AI message = post-generation. Commit **`f7b430a`** on `dev`; **deployed to dev** by the operator. Tests: 6 reproducing tests (fail→pass) + full `chatbot_v2` suite (**158 passed**). No schema / IAM / dependency change; in-flight SQS payloads fall back to `CURRENT_TIMESTAMP` (old behavior) for just those.
+- **Verify in dev:** send a normal turn, then a blocked turn, reload history — the blocked turn stays last (no jump to top).
 
 ## Commands (re-run to refresh evidence)
 
@@ -30,8 +42,8 @@ aws --profile vincent.adm-dev2 --region ca-central-1 logs filter-log-events \
   --start-time $(( ($(date +%s) - 3*86400) * 1000 )) \
   --filter-pattern 'stream_latency' --max-items 100 --query 'events[].message'
 
-# Confirm the async guardrail still BLOCKS (should return rows once a blocked
-# prompt is tried in dev):
+# Confirm the async guardrail still BLOCKS (returns the 2026-07-03 intervention;
+# re-run after any future blocked prompt):
 aws --profile vincent.adm-dev2 --region ca-central-1 logs filter-log-events \
   --log-group-name /aws/lambda/AILA-MultimodalRagStack-chatbotV2Function \
   --start-time $(( ($(date +%s) - 14*86400) * 1000 )) \
@@ -40,7 +52,7 @@ aws --profile vincent.adm-dev2 --region ca-central-1 logs filter-log-events \
 
 ## Ship steps (gated)
 
-Gate = (1) dev TTFT confirmed [DONE], (2) blocked-topic prompt intervenes cleanly in async mode [OPEN], (3) explicit user go-ahead. **Do not flip prod until (2) and (3) are also satisfied:**
+Gate = (1) dev TTFT confirmed [DONE], (2) blocked-topic intervenes cleanly in async mode [DONE — 2026-07-03, with the accepted partial-flash caveat], (3) explicit user go-ahead [OPEN]. Also confirm the reordering fix (`f7b430a`) behaves in dev (a blocked turn stays in order). **Do not flip prod until (3):**
 
 1. Flip the prod gate for `USE_CONVERSE_STREAMING` in `cdk/lib/multimodal-rag-stack.ts`; keep `STREAM_GUARDRAIL_DISABLED` OFF.
 2. From `cdk/`: `npm run deploy` (predeploy `npm test` must pass).

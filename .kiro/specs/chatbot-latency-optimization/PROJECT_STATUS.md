@@ -14,7 +14,7 @@
 
 ## Waiting on (operational gates)
 
-- ☐ **Release Blocker #1 — async-guardrail intervention verified in dev.** Submit a known-blocked prompt in the dev chatbot and confirm: streaming stops, the intervention message displays, no unsafe partial output leaks, and the log records `stopReason="guardrail_intervened"`. ~10-minute QA task. Blocks the async-guardrail prod flip and nothing else.
+- ✓ **Release Blocker #1 — async-guardrail intervention verified in dev (2026-07-03).** A blocked prompt intervened correctly in async mode (canonical redirect shown). One accepted caveat: async mode can flash a few pre-block model chunks (benign in the test). A chat-history reordering bug found during the test was fixed + deployed (`f7b430a`). Remaining for the prod flip is only the go-ahead. See `async-guardrail-validation.md`.
 - ☐ SME review complete — Track A question curation (accept/edit/reject + edit rate)
 - ☐ Judge calibration complete — judge-vs-human agreement on the 40-row sample
 
@@ -24,7 +24,7 @@
 
 ## Suggested ownership (parallel, without crossing the validation gate)
 
-- **Async-guardrail rollout** — finish intervention validation, flip prod, done.
+- **Async-guardrail rollout** — intervention validated + reorder bug fixed; only the prod flip (on go-ahead) remains.
 - **Track A** — coordinate SMEs, collect calibration, produce the final report.
 - **Production implementation** — refine code behind flags; no merge until Track A signs off.
 
