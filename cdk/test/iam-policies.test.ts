@@ -438,7 +438,7 @@ describe('IAM Policy Guardrails', () => {
     const json = apiTemplate.toJSON();
     const resources = json.Resources ?? {};
 
-    // (1) SSM parameter exists with the Haiku default value (environment = 'dev' in tests)
+    // (1) SSM parameter exists with the Claude 3 Sonnet default value (environment = 'dev' in tests)
     let validationParamLogicalId: string | undefined;
     let validationParamProps: Record<string, unknown> | undefined;
     for (const [logicalId, resource] of Object.entries(resources)) {
@@ -453,7 +453,7 @@ describe('IAM Policy Guardrails', () => {
     }
 
     expect(validationParamLogicalId).toBeDefined();
-    expect(validationParamProps!.Value).toBe('anthropic.claude-3-haiku-20240307-v1:0');
+    expect(validationParamProps!.Value).toBe('anthropic.claude-3-sonnet-20240229-v1:0');
 
     // (2) instructorFunction reads it via VALIDATION_MODEL_ID_PARAM (a Ref to the param,
     // which resolves to the parameter name at deploy time — not a hardcoded model id)
@@ -498,6 +498,41 @@ describe('IAM Policy Guardrails', () => {
 
     // No wildcard resources on that statement
     for (const { statement } of validationSsm) {
+      const resource = statement.Resource;
+      const resList = Array.isArray(resource) ? resource : [resource];
+      for (const r of resList) {
+        if (typeof r === 'string') {
+          expect(r).not.toBe('*');
+        }
+      }
+    }
+  });
+
+  /**
+   * Validates: Prompt Conflict Checker validation model + IAM Security Policy.
+   * The instructor role (dbLambdaRole) can invoke the Claude 3 Sonnet validation
+   * model, scoped to the exact foundation-model ARN (never a wildcard). Sonnet is
+   * used because Claude 3.5 is not available in ca-central-1.
+   */
+  test('dbLambdaRole grants bedrock:InvokeModel on the Claude 3 Sonnet foundation-model ARN', () => {
+    const statements = collectPolicyStatements(apiTemplate);
+    const invokeStatements = statements.filter(
+      ({ logicalId, statement }) =>
+        logicalId.toLowerCase().includes('dblambdarole') &&
+        statementHasAction(statement, 'bedrock:InvokeModel')
+    );
+
+    expect(invokeStatements.length).toBeGreaterThanOrEqual(1);
+
+    // The Sonnet ARN must be present (region renders as a token, so assert on the
+    // serialized form to cover both literal and Fn::Join representations).
+    const serialized = JSON.stringify(invokeStatements.map((s) => s.statement.Resource));
+    expect(serialized).toContain(
+      'foundation-model/anthropic.claude-3-sonnet-20240229-v1:0'
+    );
+
+    // InvokeModel must never be granted on a bare wildcard.
+    for (const { statement } of invokeStatements) {
       const resource = statement.Resource;
       const resList = Array.isArray(resource) ? resource : [resource];
       for (const r of resList) {

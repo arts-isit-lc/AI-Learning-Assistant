@@ -553,12 +553,17 @@ export class ApiGatewayStack extends cdk.Stack {
       })
     );
 
-    // Grant Bedrock InvokeModel permission for prompt conflict validation (Claude 3 Haiku)
+    // Grant Bedrock InvokeModel permission for prompt conflict validation.
+    // Claude 3 Sonnet is the current validation model (better precision on borderline
+    // behavioral conflicts than Haiku); Haiku is kept allowed so the model can be
+    // switched at runtime via the ValidationModelId SSM parameter without redeploying.
+    // NOTE: Claude 3.5 is not available in ca-central-1 — do not switch to it.
     dbLambdaRole.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ["bedrock:InvokeModel"],
         resources: [
+          `arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0`,
           `arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-3-haiku-20240307-v1:0`,
         ],
       })
@@ -587,7 +592,7 @@ export class ApiGatewayStack extends cdk.Stack {
       {
         parameterName: `/AILA/${environment}/ValidationModelId`,
         description: "Bedrock model ID used by the instructor prompt conflict checker",
-        stringValue: "anthropic.claude-3-haiku-20240307-v1:0",
+        stringValue: "anthropic.claude-3-sonnet-20240229-v1:0",
       }
     );
 

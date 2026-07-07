@@ -11,7 +11,7 @@ const crypto = require("crypto");
 // Falls back to the VALIDATION_MODEL_ID env var, then a hardcoded default.
 let VALIDATION_MODEL_ID =
   process.env.VALIDATION_MODEL_ID ||
-  "anthropic.claude-3-haiku-20240307-v1:0";
+  "anthropic.claude-3-sonnet-20240229-v1:0";
 const VALIDATION_MODEL_ID_PARAM = process.env.VALIDATION_MODEL_ID_PARAM || "";
 const REGION = process.env.REGION || "ca-central-1";
 const BEDROCK_TIMEOUT_MS = 30000;
