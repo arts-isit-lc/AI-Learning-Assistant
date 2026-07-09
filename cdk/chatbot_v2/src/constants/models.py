@@ -1,11 +1,14 @@
 """Model IDs and configuration thresholds for the Chatbot V2 Lambda."""
 
-# Response generation model (Claude 3 Sonnet)
-RESPONSE_MODEL_ID = "anthropic.claude-3-sonnet-20240229-v1:0"
+# Response generation model (Claude Sonnet 4.5 via Geo-US cross-Region inference).
+# ca-central-1 has no in-Region access to the 4.5 family; the "us." inference
+# profile routes to US+Canada Regions only. Account is set to zero data
+# retention, so no prompt/response data is persisted in any Region.
+RESPONSE_MODEL_ID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 RESPONSE_MAX_TOKENS = 4000
 
-# Evaluation model (Claude 3 Haiku — cheaper, faster)
-EVAL_MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0"
+# Evaluation model (Claude Haiku 4.5 — cheaper, faster; same Geo-US profile family)
+EVAL_MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 EVAL_MAX_TOKENS = 500
 
 # Completion thresholds (configurable)

@@ -22,7 +22,9 @@ from ..models.data_models import (
 
 logger = Logger(service="multimodal-rag-enrichment")
 
-MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0"
+# Claude Haiku 4.5 via Geo-US cross-Region inference (ca-central-1 has no
+# in-Region 4.5 access). Zero-data-retention account => nothing persisted.
+MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 # Bedrock Claude vision accepts jpeg, png, gif, and webp. Adapters do not
 # normalize image formats (except the PDF adapter, which emits PNG), so the

@@ -438,7 +438,7 @@ describe('IAM Policy Guardrails', () => {
     const json = apiTemplate.toJSON();
     const resources = json.Resources ?? {};
 
-    // (1) SSM parameter exists with the Claude 3 Sonnet default value (environment = 'dev' in tests)
+    // (1) SSM parameter exists with the Claude Haiku 4.5 default value (environment = 'dev' in tests)
     let validationParamLogicalId: string | undefined;
     let validationParamProps: Record<string, unknown> | undefined;
     for (const [logicalId, resource] of Object.entries(resources)) {
@@ -453,7 +453,7 @@ describe('IAM Policy Guardrails', () => {
     }
 
     expect(validationParamLogicalId).toBeDefined();
-    expect(validationParamProps!.Value).toBe('anthropic.claude-3-sonnet-20240229-v1:0');
+    expect(validationParamProps!.Value).toBe('us.anthropic.claude-haiku-4-5-20251001-v1:0');
 
     // (2) instructorFunction reads it via VALIDATION_MODEL_ID_PARAM (a Ref to the param,
     // which resolves to the parameter name at deploy time — not a hardcoded model id)
@@ -509,12 +509,14 @@ describe('IAM Policy Guardrails', () => {
   });
 
   /**
-   * Validates: Prompt Conflict Checker validation model + IAM Security Policy.
-   * The instructor role (dbLambdaRole) can invoke the Claude 3 Sonnet validation
-   * model, scoped to the exact foundation-model ARN (never a wildcard). Sonnet is
-   * used because Claude 3.5 is not available in ca-central-1.
+   * Validates: Prompt Conflict Checker validation model + cross-Region inference IAM.
+   * The instructor role (dbLambdaRole) can invoke the validation model (Haiku
+   * 4.5) and the runtime-switchable Sonnet 4.5 via Geo-US cross-Region
+   * inference. Each model requires BOTH its inference-profile ARN and the
+   * underlying foundation-model ARN in every US destination Region — never a
+   * wildcard. The retired Claude 3 ids must be gone.
    */
-  test('dbLambdaRole grants bedrock:InvokeModel on the Claude 3 Sonnet foundation-model ARN', () => {
+  test('dbLambdaRole grants bedrock:InvokeModel on the Claude 4.5 inference profiles + destination FM ARNs', () => {
     const statements = collectPolicyStatements(apiTemplate);
     const invokeStatements = statements.filter(
       ({ logicalId, statement }) =>
@@ -524,12 +526,28 @@ describe('IAM Policy Guardrails', () => {
 
     expect(invokeStatements.length).toBeGreaterThanOrEqual(1);
 
-    // The Sonnet ARN must be present (region renders as a token, so assert on the
-    // serialized form to cover both literal and Fn::Join representations).
+    // Region/account render as tokens, so assert on the serialized form.
     const serialized = JSON.stringify(invokeStatements.map((s) => s.statement.Resource));
-    expect(serialized).toContain(
-      'foundation-model/anthropic.claude-3-sonnet-20240229-v1:0'
-    );
+
+    // Inference-profile ARNs (Geo-US): validation model (Haiku 4.5) + the
+    // runtime-switchable Sonnet 4.5.
+    expect(serialized).toContain('inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0');
+    expect(serialized).toContain('inference-profile/us.anthropic.claude-sonnet-4-5-20250929-v1:0');
+
+    // Underlying foundation-model ARNs must be present in each US destination
+    // Region (Geo-US from ca-central-1 routes to us-east-1/us-east-2/us-west-2).
+    for (const region of ['us-east-1', 'us-east-2', 'us-west-2']) {
+      expect(serialized).toContain(
+        `arn:aws:bedrock:${region}::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0`
+      );
+      expect(serialized).toContain(
+        `arn:aws:bedrock:${region}::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0`
+      );
+    }
+
+    // Retired Claude 3 ids must no longer be granted.
+    expect(serialized).not.toContain('claude-3-sonnet-20240229');
+    expect(serialized).not.toContain('claude-3-haiku-20240307');
 
     // InvokeModel must never be granted on a bare wildcard.
     for (const { statement } of invokeStatements) {
@@ -540,6 +558,72 @@ describe('IAM Policy Guardrails', () => {
           expect(r).not.toBe('*');
         }
       }
+    }
+  });
+
+  /**
+   * Validates: cross-Region inference IAM for the RAG roles (MultimodalRagStack).
+   * chatbotV2 (Sonnet 4.5 + Haiku 4.5) and enrichment + retrieval (Haiku 4.5)
+   * must each grant InvokeModel on the inference-profile ARN plus the underlying
+   * foundation-model ARN in every US destination Region, never a wildcard, and
+   * never the retired Claude 3 ids.
+   */
+  test('RAG roles grant bedrock:InvokeModel on Claude 4.5 inference profiles + destination FM ARNs', () => {
+    const statements = collectInlineRoleStatements(ragTemplate);
+    const invokeStatements = statements.filter(({ statement }) =>
+      statementHasAction(statement, 'bedrock:InvokeModel')
+    );
+
+    expect(invokeStatements.length).toBeGreaterThanOrEqual(1);
+
+    const serialized = JSON.stringify(invokeStatements.map((s) => s.statement.Resource));
+
+    // Haiku 4.5 is used by all three RAG roles; Sonnet 4.5 by chatbotV2.
+    expect(serialized).toContain('inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0');
+    expect(serialized).toContain('inference-profile/us.anthropic.claude-sonnet-4-5-20250929-v1:0');
+    for (const region of ['us-east-1', 'us-east-2', 'us-west-2']) {
+      expect(serialized).toContain(
+        `arn:aws:bedrock:${region}::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0`
+      );
+    }
+
+    // No retired Claude 3 ids, no bare wildcard.
+    expect(serialized).not.toContain('claude-3-haiku-20240307');
+    expect(serialized).not.toContain('claude-3-sonnet-20240229');
+    for (const { statement } of invokeStatements) {
+      const resource = statement.Resource;
+      const resList = Array.isArray(resource) ? resource : [resource];
+      for (const r of resList) {
+        if (typeof r === 'string') {
+          expect(r).not.toBe('*');
+        }
+      }
+    }
+  });
+
+  /**
+   * Regression guard: the retired Claude 3 model ids must not appear in ANY IAM
+   * policy across the API, DB, DBFlow, or RAG stacks after the 4.5 migration.
+   */
+  test('no IAM policy references retired Claude 3 model ids', () => {
+    const templates = [
+      { name: 'ApiGatewayStack', template: apiTemplate },
+      { name: 'DatabaseStack', template: dbTemplate },
+      { name: 'DBFlowStack', template: dbFlowTemplate },
+      { name: 'MultimodalRagStack', template: ragTemplate },
+    ];
+    for (const { name, template } of templates) {
+      const all = [
+        ...collectPolicyStatements(template),
+        ...collectInlineRoleStatements(template),
+      ];
+      const serialized = JSON.stringify(all.map((s) => s.statement.Resource));
+      expect({ stack: name, hasSonnet3: serialized.includes('claude-3-sonnet-20240229') }).toEqual(
+        expect.objectContaining({ hasSonnet3: false })
+      );
+      expect({ stack: name, hasHaiku3: serialized.includes('claude-3-haiku-20240307') }).toEqual(
+        expect.objectContaining({ hasHaiku3: false })
+      );
     }
   });
 

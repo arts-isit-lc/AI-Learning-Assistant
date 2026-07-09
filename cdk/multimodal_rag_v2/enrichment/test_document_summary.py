@@ -365,7 +365,7 @@ class TestDocumentSummaryGeneratorWithBedrock:
 
         client.invoke_model.assert_called_once()
         call_kwargs = client.invoke_model.call_args[1]
-        assert call_kwargs["modelId"] == "anthropic.claude-3-haiku-20240307-v1:0"
+        assert call_kwargs["modelId"] == "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 
 class TestDocumentSummaryGeneratorWithoutBedrock:

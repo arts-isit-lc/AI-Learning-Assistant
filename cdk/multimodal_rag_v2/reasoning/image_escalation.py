@@ -19,8 +19,8 @@ from ..models.data_models import ImageAnalysis, RankedResult
 
 logger = Logger(service="multimodal-rag-reasoning")
 
-# Claude 3 Haiku model ID for vision analysis
-VISION_MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0"
+# Claude Haiku 4.5 model ID for vision analysis (Geo-US cross-Region inference)
+VISION_MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 # Max images to vision-analyze per escalation. Kept at 2 so a generic two-image
 # request ("compare the two diagrams") still works; the calls run in PARALLEL

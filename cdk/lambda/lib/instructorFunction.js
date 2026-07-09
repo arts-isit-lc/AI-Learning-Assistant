@@ -1422,7 +1422,7 @@ exports.handler = async (event) => {
               has_conflicts: false,
               validated_at: new Date().toISOString(),
               validation_scope: scope,
-              model_version: process.env.VALIDATION_MODEL_ID || "anthropic.claude-3-haiku-20240307-v1:0",
+              model_version: process.env.VALIDATION_MODEL_ID || "us.anthropic.claude-haiku-4-5-20251001-v1:0",
             });
           }
         } else {

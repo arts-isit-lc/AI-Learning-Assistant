@@ -24,8 +24,9 @@ from aws_lambda_powertools import Logger
 
 logger = Logger(service="text-generation")
 
-# Claude 3 Haiku for vision analysis (fast + cheap)
-VISION_MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0"
+# Claude Haiku 4.5 for vision analysis (fast + cheap), via Geo-US cross-Region
+# inference profile (ca-central-1 has no in-Region 4.5 access).
+VISION_MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 # Regex to detect figure/table/algorithm references
 _FIGURE_REF_PATTERN = re.compile(

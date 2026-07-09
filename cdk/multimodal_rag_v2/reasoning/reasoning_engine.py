@@ -29,8 +29,8 @@ from .image_escalation import EscalationResult, ImageEscalation
 
 logger = Logger(service="multimodal-rag-reasoning")
 
-# Default model for answer generation
-DEFAULT_MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0"
+# Default model for answer generation (Claude Haiku 4.5 via Geo-US CRIS)
+DEFAULT_MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 # Fallback response when LLM is unavailable
 FALLBACK_ANSWER = (

@@ -47,7 +47,7 @@ def test_successful_evaluation():
     assert result.concepts_misunderstood == []
     # Verify invoke_model was called with correct model ID
     call_args = client.invoke_model.call_args
-    assert call_args.kwargs["modelId"] == "anthropic.claude-3-haiku-20240307-v1:0"
+    assert call_args.kwargs["modelId"] == "us.anthropic.claude-haiku-4-5-20251001-v1:0"
     assert call_args.kwargs["contentType"] == "application/json"
     assert call_args.kwargs["accept"] == "application/json"
     print("Test 1 passed: Successful evaluation call returns correct result")

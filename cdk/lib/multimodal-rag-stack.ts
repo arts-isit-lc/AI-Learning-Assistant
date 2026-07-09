@@ -11,6 +11,13 @@ import { Construct } from "constructs";
 import { Duration } from "aws-cdk-lib";
 import { DatabaseStack } from "./database-stack";
 import { VpcStack } from "./vpc-stack";
+import {
+  SONNET_45,
+  HAIKU_45,
+  TITAN_EMBED_V2,
+  crisInvokeResources,
+  inRegionModelResource,
+} from "./constants/bedrock";
 
 export class MultimodalRagStack extends cdk.Stack {
   public readonly irBucket: s3.Bucket;
@@ -178,13 +185,13 @@ export class MultimodalRagStack extends cdk.Stack {
               actions: ["s3:GetObject"],
               resources: [this.irBucket.bucketArn, `${this.irBucket.bucketArn}/*`],
             }),
-            // Bedrock InvokeModel — Claude 3 Haiku (vision) + Titan Embed v2
+            // Bedrock InvokeModel — Claude Haiku 4.5 (vision, Geo-US CRIS) + Titan Embed v2
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: ["bedrock:InvokeModel"],
               resources: [
-                `arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-3-haiku-20240307-v1:0`,
-                `arn:aws:bedrock:${this.region}::foundation-model/amazon.titan-embed-text-v2:0`,
+                ...crisInvokeResources(HAIKU_45, this.region, this.account),
+                inRegionModelResource(TITAN_EMBED_V2, this.region),
               ],
             }),
             // DynamoDB GetItem/PutItem on EmbeddingCache table
@@ -268,13 +275,13 @@ export class MultimodalRagStack extends cdk.Stack {
       inlinePolicies: {
         ragRetrievalPolicy: new iam.PolicyDocument({
           statements: [
-            // Bedrock InvokeModel — Claude 3 Haiku (query analysis + reasoning) + Titan Embed v2
+            // Bedrock InvokeModel — Claude Haiku 4.5 (query analysis + reasoning, Geo-US CRIS) + Titan Embed v2
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: ["bedrock:InvokeModel"],
               resources: [
-                `arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-3-haiku-20240307-v1:0`,
-                `arn:aws:bedrock:${this.region}::foundation-model/amazon.titan-embed-text-v2:0`,
+                ...crisInvokeResources(HAIKU_45, this.region, this.account),
+                inRegionModelResource(TITAN_EMBED_V2, this.region),
               ],
             }),
             // DynamoDB GetItem on EmbeddingCache table (read-only for retrieval)
@@ -519,7 +526,8 @@ export class MultimodalRagStack extends cdk.Stack {
       inlinePolicies: {
         chatbotV2Policy: new iam.PolicyDocument({
           statements: [
-            // Bedrock InvokeModel — Claude 3 Sonnet (generation) + Claude 3 Haiku (evaluation)
+            // Bedrock InvokeModel — Claude Sonnet 4.5 (generation) + Claude Haiku 4.5
+            // (evaluation), both via Geo-US cross-Region inference profiles.
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: [
@@ -527,8 +535,8 @@ export class MultimodalRagStack extends cdk.Stack {
                 "bedrock:InvokeModelWithResponseStream",
               ],
               resources: [
-                `arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0`,
-                `arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-3-haiku-20240307-v1:0`,
+                ...crisInvokeResources(SONNET_45, this.region, this.account),
+                ...crisInvokeResources(HAIKU_45, this.region, this.account),
               ],
             }),
             // Bedrock ApplyGuardrail — required when invoking the model WITH a

@@ -74,7 +74,7 @@ def handler(event, context):
                 "course_access_code" varchar,
                 "course_student_access" bool,
                 "system_prompt" text,
-                "llm_model_id" varchar DEFAULT 'meta.llama3-70b-instruct-v1:0',
+                "llm_model_id" varchar DEFAULT 'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
                 "conflict_metadata" jsonb DEFAULT NULL,
                 "validation_hash" text,
                 "validation_cached_report" jsonb
@@ -231,6 +231,19 @@ def handler(event, context):
             -- Idempotent migration: persist AI message render blocks (figures/
             -- tables/formulas) so chat-history reload can reconstruct them.
             ALTER TABLE "Messages" ADD COLUMN IF NOT EXISTS message_blocks jsonb;
+
+            -- Idempotent migration (2026-07): retire Claude 3 Sonnet as the
+            -- per-course model. Set the column default (used by new courses) to
+            -- the Claude Sonnet 4.5 Geo-US inference profile, and remap existing
+            -- rows still pinned to the old Sonnet 3 id. Both are no-ops once
+            -- applied (SET DEFAULT is declarative; the UPDATE then matches no
+            -- rows). Llama 3 70B rows are intentionally left unchanged pending a
+            -- future replacement decision.
+            ALTER TABLE "Courses"
+                ALTER COLUMN "llm_model_id" SET DEFAULT 'us.anthropic.claude-sonnet-4-5-20250929-v1:0';
+            UPDATE "Courses"
+                SET "llm_model_id" = 'us.anthropic.claude-sonnet-4-5-20250929-v1:0'
+                WHERE "llm_model_id" = 'anthropic.claude-3-sonnet-20240229-v1:0';
 
             -- Repair databases provisioned when file_id was created as UUID. The
             -- retrieval scope filter binds `file_id = ANY(%s)` as a text[] with no

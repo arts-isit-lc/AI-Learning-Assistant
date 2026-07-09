@@ -9,8 +9,9 @@ const {
   InvokeModelCommand,
 } = require("@aws-sdk/client-bedrock-runtime");
 
-// NOTE: Hard-coded to Haiku for cost/speed. Make configurable via env var in future.
-const TOPIC_EXTRACTION_MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0";
+// NOTE: Hard-coded to Haiku 4.5 (Geo-US cross-Region inference profile) for
+// cost/speed. Make configurable via env var in future.
+const TOPIC_EXTRACTION_MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0";
 const REGION = process.env.REGION || "ca-central-1";
 const BEDROCK_TIMEOUT_MS = 30000;
 const MAX_RETRIES = 3;

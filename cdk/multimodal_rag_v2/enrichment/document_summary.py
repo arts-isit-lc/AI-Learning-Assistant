@@ -33,7 +33,8 @@ from ..models.data_models import (
 
 logger = Logger(service="multimodal-rag-enrichment")
 
-MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0"
+# Claude Haiku 4.5 via Geo-US cross-Region inference (see enrichment version).
+MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 # Maximum characters of text content to collect for summary generation
 _MAX_CONTENT_CHARS = 2000

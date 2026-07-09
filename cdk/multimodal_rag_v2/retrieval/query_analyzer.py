@@ -19,8 +19,8 @@ logger = Logger(service="multimodal-rag-retrieval")
 _LECTURE_NUMBER_PATTERN = re.compile(r"(?:lecture|lec)[\s_-]*(\d+)", re.IGNORECASE)
 _WEEK_NUMBER_PATTERN = re.compile(r"\bweek[\s_-]*(\d+)", re.IGNORECASE)
 
-# Haiku model ID for fallback classification
-_HAIKU_MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0"
+# Haiku 4.5 model ID for fallback classification (Geo-US cross-Region inference)
+_HAIKU_MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 # Precompiled word-boundary patterns for rule matching (avoids substring false positives)
 def _compile_rules(rules: dict[str, list[str]]) -> dict[str, list[re.Pattern]]:

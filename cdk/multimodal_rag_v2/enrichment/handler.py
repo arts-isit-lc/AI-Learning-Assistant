@@ -869,7 +869,8 @@ Document text:
         })
 
         response = bedrock_client.invoke_model(
-            modelId="anthropic.claude-3-haiku-20240307-v1:0",
+            # Claude Haiku 4.5 via Geo-US cross-Region inference profile.
+            modelId="us.anthropic.claude-haiku-4-5-20251001-v1:0",
             body=request_body,
         )
         result = json_mod.loads(response["body"].read())
@@ -904,7 +905,7 @@ Document text:
             parsed["confidence"] = 0.85
         parsed["coverage"] = 1.0 if total_chars <= max_chars else round(max_chars / total_chars, 2)
         parsed["extracted_at"] = datetime.now(timezone.utc).isoformat()
-        parsed["model"] = "anthropic.claude-3-haiku-20240307-v1:0"
+        parsed["model"] = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
         parsed["version"] = 2
         parsed["extraction_method"] = "full_document" if total_chars <= max_chars else "sampled_document"
 

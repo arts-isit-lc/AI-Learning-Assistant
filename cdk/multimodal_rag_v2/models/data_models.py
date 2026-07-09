@@ -16,7 +16,10 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 IR_VERSION: str = "ir-v1"
-ENRICHMENT_VERSION: str = "haiku-v5-2026-06"
+# Bumped 2026-07: enrichment vision + document-summary models moved from
+# Claude 3 Haiku to Claude Haiku 4.5. Invalidates the enrichment cache =>
+# next ingestion re-enriches affected elements.
+ENRICHMENT_VERSION: str = "haiku45-v6-2026-07"
 EMBEDDING_VERSION: str = "titan-v2-1024"
 
 

@@ -493,7 +493,7 @@ class TestModelConfiguration:
         engine.generate_answer(query="Q?", context=context)
 
         call_args = mock_client.invoke_model.call_args
-        assert call_args[1]["modelId"] == "anthropic.claude-3-haiku-20240307-v1:0"
+        assert call_args[1]["modelId"] == "us.anthropic.claude-haiku-4-5-20251001-v1:0"
 
     def test_uses_custom_model_id(self):
         """Test that a custom model ID is used when specified."""

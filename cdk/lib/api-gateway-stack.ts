@@ -25,6 +25,14 @@ import * as appsync from "aws-cdk-lib/aws-appsync";
 import * as ses from "aws-cdk-lib/aws-ses";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as bedrock from "aws-cdk-lib/aws-bedrock";
+import {
+  SONNET_45,
+  HAIKU_45,
+  LLAMA3_70B,
+  TITAN_EMBED_V2,
+  crisInvokeResources,
+  inRegionModelResource,
+} from "./constants/bedrock";
 import * as events from "aws-cdk-lib/aws-events";
 import * as targets from "aws-cdk-lib/aws-events-targets";
 
@@ -553,18 +561,20 @@ export class ApiGatewayStack extends cdk.Stack {
       })
     );
 
-    // Grant Bedrock InvokeModel permission for prompt conflict validation.
-    // Claude 3 Sonnet is the current validation model (better precision on borderline
-    // behavioral conflicts than Haiku); Haiku is kept allowed so the model can be
-    // switched at runtime via the ValidationModelId SSM parameter without redeploying.
-    // NOTE: Claude 3.5 is not available in ca-central-1 — do not switch to it.
+    // Grant Bedrock InvokeModel permission for prompt conflict validation via
+    // Geo-US cross-Region inference. Haiku 4.5 is the current validation model
+    // (the ValidationModelId SSM default); Sonnet 4.5 is kept allowed so the
+    // model can be switched at runtime via that SSM parameter without a
+    // redeploy. Each model needs its inference-profile ARN plus the underlying
+    // foundation-model ARN in every Geo-US destination Region — crisInvokeResources
+    // builds that list (see ./constants/bedrock).
     dbLambdaRole.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ["bedrock:InvokeModel"],
         resources: [
-          `arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0`,
-          `arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-3-haiku-20240307-v1:0`,
+          ...crisInvokeResources(HAIKU_45, this.region, this.account),
+          ...crisInvokeResources(SONNET_45, this.region, this.account),
         ],
       })
     );
@@ -592,7 +602,7 @@ export class ApiGatewayStack extends cdk.Stack {
       {
         parameterName: `/AILA/${environment}/ValidationModelId`,
         description: "Bedrock model ID used by the instructor prompt conflict checker",
-        stringValue: "anthropic.claude-3-sonnet-20240229-v1:0",
+        stringValue: "us.anthropic.claude-haiku-4-5-20251001-v1:0",
       }
     );
 
@@ -1294,10 +1304,10 @@ export class ApiGatewayStack extends cdk.Stack {
       effect: iam.Effect.ALLOW,
       actions: ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
       resources: [
-        `arn:aws:bedrock:${this.region}::foundation-model/meta.llama3-70b-instruct-v1:0`,
-        `arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0`,
-        `arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-3-haiku-20240307-v1:0`,
-        `arn:aws:bedrock:${this.region}::foundation-model/amazon.titan-embed-text-v2:0`,
+        inRegionModelResource(LLAMA3_70B, this.region),
+        ...crisInvokeResources(SONNET_45, this.region, this.account),
+        ...crisInvokeResources(HAIKU_45, this.region, this.account),
+        inRegionModelResource(TITAN_EMBED_V2, this.region),
       ],
     }));
 

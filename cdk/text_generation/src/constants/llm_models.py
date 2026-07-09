@@ -8,16 +8,19 @@ LLM_MODELS = {
         'provider': 'Meta',
         'description': 'Large language model optimized for instruction following and educational conversations'
     },
-    'CLAUDE_3_SONNET': {
-        'id': 'anthropic.claude-3-sonnet-20240229-v1:0',
-        'name': 'Claude 3 Sonnet',
+    'CLAUDE_SONNET_4_5': {
+        # Geo-US cross-Region inference profile (ca-central-1 has no in-Region
+        # 4.5 access; routes to US+Canada only; zero-data-retention account).
+        'id': 'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
+        'name': 'Claude Sonnet 4.5',
         'provider': 'Anthropic',
-        'description': 'Balanced model with strong reasoning capabilities and safety features'
+        'description': 'High-capability model with strong reasoning, coding, and safety features'
     }
 }
 
-# Default model ID
-DEFAULT_LLM_MODEL_ID = LLM_MODELS['LLAMA_70B']['id']
+# Default model ID for new courses and the instructor Settings dropdown.
+# Llama 3 70B remains a selectable option pending a future replacement decision.
+DEFAULT_LLM_MODEL_ID = LLM_MODELS['CLAUDE_SONNET_4_5']['id']
 
 # Helper function to get model name by ID
 def get_model_name_by_id(model_id):

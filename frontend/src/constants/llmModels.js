@@ -8,16 +8,19 @@ export const LLM_MODELS = {
     provider: 'Meta',
     description: 'Large language model optimized for instruction following and educational conversations'
   },
-  CLAUDE_3_SONNET: {
-    id: 'anthropic.claude-3-sonnet-20240229-v1:0',
-    name: 'Claude 3 Sonnet',
+  CLAUDE_SONNET_4_5: {
+    // Geo-US cross-Region inference profile id (kept in sync with the backend
+    // catalog in text_generation/src/constants/llm_models.py).
+    id: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
+    name: 'Claude Sonnet 4.5',
     provider: 'Anthropic',
-    description: 'Balanced model with strong reasoning capabilities and safety features'
+    description: 'High-capability model with strong reasoning, coding, and safety features'
   }
 };
 
-// Default model ID
-export const DEFAULT_LLM_MODEL_ID = LLM_MODELS.LLAMA_70B.id;
+// Default model ID for new courses and the Settings dropdown. Llama 3 70B stays
+// selectable pending a future replacement decision.
+export const DEFAULT_LLM_MODEL_ID = LLM_MODELS.CLAUDE_SONNET_4_5.id;
 
 // Helper function to get model options for dropdowns
 export const getLLMModelOptions = () => {
