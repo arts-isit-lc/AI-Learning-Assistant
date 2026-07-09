@@ -44,22 +44,29 @@ DROP TABLE IF EXISTS upsertion_record CASCADE;
 
 ## Step 2: DynamoDB — Clear chat history
 
+Uses the AWS CLI for the deletes (no `boto3` dependency — `python3` is only used
+to parse the scan output with its standard library, so this works on a clean
+Homebrew Python). The CLI auto-paginates the scan, so it covers the whole table.
+
 ```bash
 aws dynamodb scan --table-name DynamoDB-Conversation-Table --region ca-central-1 \
-  --projection-expression "SessionId" --output json | \
-python3 -c "
-import json, sys, boto3
-data = json.load(sys.stdin)
-client = boto3.client('dynamodb', region_name='ca-central-1')
-items = data.get('Items', [])
-print(f'Deleting {len(items)} items...')
-for i, item in enumerate(items):
-    client.delete_item(TableName='DynamoDB-Conversation-Table', Key={'SessionId': item['SessionId']})
-    if (i + 1) % 100 == 0:
-        print(f'  {i + 1}/{len(items)} deleted')
-print('Done.')
-"
+  --projection-expression "SessionId" --output json --no-cli-pager \
+| python3 -c "import json,sys; [print(i['SessionId']['S']) for i in json.load(sys.stdin).get('Items',[])]" \
+| while IFS= read -r sid; do
+    [ -z "$sid" ] && continue
+    aws dynamodb delete-item --table-name DynamoDB-Conversation-Table --region ca-central-1 \
+      --key "{\"SessionId\":{\"S\":\"$sid\"}}" --no-cli-pager
+  done
+echo "Done."
 ```
+
+> Assumes `SessionId` is the table's sole (HASH) primary key. Verify with
+> `aws dynamodb describe-table --table-name DynamoDB-Conversation-Table --region ca-central-1 --query 'Table.KeySchema'`
+> — if there is also a RANGE (sort) key, add it to the `--key` object.
+>
+> Older note: the previous version of this step used a `boto3` script, which
+> fails with `ModuleNotFoundError: No module named 'boto3'` on a Python that
+> doesn't have it installed. The CLI version above avoids that.
 
 ## Step 3: S3 — Empty buckets
 
