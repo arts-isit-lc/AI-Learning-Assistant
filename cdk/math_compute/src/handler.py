@@ -18,6 +18,7 @@ from validator import validate_input, ValidationResult
 from compute import execute_computation, ComputeResult
 from verifier import verify_result, VerificationResult
 from step_generator import generate_steps
+from compare import compare_expressions
 
 logger = Logger(service="math-compute")
 
@@ -46,6 +47,11 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     trace_id = str(uuid.uuid4())
     start_time = time.time()
     stages: list[dict] = []
+
+    # Tier-2 formula comparison: compare two expressions/equations for symbolic
+    # equivalence. Distinct entry from the single-input compute pipeline below.
+    if event.get("operation") == "compare_expressions":
+        return _handle_compare_expressions(event, trace_id, start_time)
 
     raw_input = event.get("raw_input", "").strip()
     operation_hint = event.get("operation_hint")
@@ -171,6 +177,52 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         stages=stages,
         start_time=start_time,
     )
+
+
+def _handle_compare_expressions(
+    event: dict[str, Any], trace_id: str, start_time: float
+) -> dict[str, Any]:
+    """Compare two expressions/equations for symbolic equivalence (Tier 2).
+
+    Response carries a ``comparison`` block: {equivalent: True|False|None,
+    method, reason}. equivalent=None means "not determined" (unparseable or
+    SymPy could not decide) — the caller degrades to a lexical-only comparison.
+    """
+    left = (event.get("left") or "").strip()
+    right = (event.get("right") or "").strip()
+    if not left or not right:
+        comparison = {"equivalent": None, "method": "", "reason": "missing input"}
+        status = "failed"
+        failure_reason: str | None = "parse_error"
+        failure_message: str | None = "compare_expressions requires non-empty 'left' and 'right'."
+    else:
+        comparison = compare_expressions(left, right)
+        failure_reason = None
+        failure_message = None
+        # A determinate verdict (True/False) is 'verified'; None is 'partial'.
+        status = "verified" if comparison.get("equivalent") is not None else "partial"
+
+    total_latency = round((time.time() - start_time) * 1000, 2)
+    logger.info(
+        "compare_expressions complete",
+        extra={
+            "trace_id": trace_id,
+            "status": status,
+            "equivalent": comparison.get("equivalent"),
+            "total_latency_ms": total_latency,
+        },
+    )
+    return {
+        "status": status,
+        "comparison": comparison,
+        "answer": None,
+        "verification": None,
+        "steps": [],
+        "failure_reason": failure_reason,
+        "failure_message": failure_message,
+        "clarification_needed": None,
+        "trace": {"trace_id": trace_id, "stages": [], "total_latency_ms": total_latency},
+    }
 
 
 def _build_response(

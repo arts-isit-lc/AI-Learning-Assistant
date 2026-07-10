@@ -45,9 +45,11 @@ from ..pricing import estimate_cost_usd
 from ..reasoning.comparison.comparison_engine import ComparisonEngine
 from ..reasoning.comparison.table_comparator import TableComparator
 from ..reasoning.context_builder import ContextBuilder
+from ..reasoning.formula.equivalence_checker import MathComputeEquivalenceChecker
+from ..reasoning.formula.formula_comparator import FormulaComparator
 from ..reasoning.image_escalation import ImageEscalation
 from ..reasoning.reasoning_engine import ReasoningEngine
-from ..reasoning.reference_resolver import TableReferenceResolver
+from ..reasoning.reference_resolver import FormulaReferenceResolver, TableReferenceResolver
 from .cross_encoder_reranker import CrossEncoderReranker
 from .hybrid_search_engine import HybridSearchEngine
 from .production_ranker import ProductionRanker
@@ -63,6 +65,9 @@ EMBEDDING_CACHE_TABLE = os.environ.get("EMBEDDING_CACHE_TABLE", "")
 DB_SECRET_ARN = os.environ.get("DB_SECRET_ARN", "")
 DB_PROXY_ENDPOINT = os.environ.get("DB_PROXY_ENDPOINT", "")
 IR_BUCKET_NAME = os.environ.get("IR_BUCKET_NAME", "")
+# math_compute Lambda for Tier-2 symbolic formula equivalence. Optional: unset =>
+# formula comparison runs lexical Tier 1 only (equivalence stays UNKNOWN).
+MATH_COMPUTE_FUNCTION_NAME = os.environ.get("MATH_COMPUTE_FUNCTION_NAME", "")
 
 # ---------------------------------------------------------------------------
 # Service wiring (module-level singletons, initialized once per container)
@@ -70,6 +75,7 @@ IR_BUCKET_NAME = os.environ.get("IR_BUCKET_NAME", "")
 
 _bedrock_client = boto3.client("bedrock-runtime")
 _s3_client = boto3.client("s3")
+_lambda_client = boto3.client("lambda")
 
 _embedding_cache = EmbeddingCache()
 
@@ -121,13 +127,24 @@ _image_escalation = ImageEscalation(
     bucket_name=IR_BUCKET_NAME,
     db_connection_factory=_get_db_connection,
 )
-# Structured comparison engine (table-native). Deterministic, no Bedrock call —
-# resolves referenced tables via the same scoped DB lookup the image path uses
-# and computes a verified diff. Registry-keyed by ComparisonType so the deferred
-# formula comparator can be added without touching the wiring.
+# Structured comparison engine, registry-keyed by ComparisonType.
+# - TABLE: deterministic schema/shape/value diff (no Bedrock).
+# - FORMULA: lexical Tier 1 diff, plus best-effort Tier 2 symbolic equivalence via
+#   math_compute when MATH_COMPUTE_FUNCTION_NAME is set (else Tier 1 only).
+_equivalence_checker = (
+    MathComputeEquivalenceChecker(_lambda_client, MATH_COMPUTE_FUNCTION_NAME)
+    if MATH_COMPUTE_FUNCTION_NAME
+    else None
+)
 _comparison_engine = ComparisonEngine(
-    resolvers={ComparisonType.TABLE: TableReferenceResolver(db_connection_factory=_get_db_connection)},
-    comparators={ComparisonType.TABLE: TableComparator()},
+    resolvers={
+        ComparisonType.TABLE: TableReferenceResolver(db_connection_factory=_get_db_connection),
+        ComparisonType.FORMULA: FormulaReferenceResolver(db_connection_factory=_get_db_connection),
+    },
+    comparators={
+        ComparisonType.TABLE: TableComparator(),
+        ComparisonType.FORMULA: FormulaComparator(equivalence_checker=_equivalence_checker),
+    },
 )
 _reasoning_engine = ReasoningEngine(
     bedrock_client=_bedrock_client,

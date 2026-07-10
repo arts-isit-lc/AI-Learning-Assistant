@@ -260,3 +260,33 @@ class TestFormulaResultsWithComparison:
         formula_resolved = [_result(ElementType.FORMULA, "rf1", "pf1", 1.0, {"latex_repr": "a=b"}, "a=b")]
         rr = self._rr(ComparisonType.FORMULA, formula_resolved)
         assert handler._table_results_with_comparison(rr, finals) == handler._build_table_results(finals)
+
+
+class TestHandlerFormulaEngineWiring:
+    """The retrieval handler's engine must register FORMULA (Phase 1 gap) and
+    wire the Tier-2 checker only when MATH_COMPUTE_FUNCTION_NAME is set (P2-T3)."""
+
+    def test_formula_and_table_both_registered(self):
+        from ..models.data_models import ComparisonType
+        assert ComparisonType.TABLE in handler._comparison_engine._comparators
+        assert ComparisonType.FORMULA in handler._comparison_engine._comparators
+        assert ComparisonType.FORMULA in handler._comparison_engine._resolvers
+
+    def test_equivalence_checker_none_without_env(self):
+        # MATH_COMPUTE_FUNCTION_NAME is unset under test -> Tier 1 only.
+        assert handler._equivalence_checker is None
+
+    def test_formula_comparison_runs_via_fallback(self):
+        from ..models.data_models import ComparisonType, ElementType, EquivalenceStatus, QueryIntent
+        intent = QueryIntent()
+        intent.requires_formula_comparison = True
+        ranked = [
+            _result(ElementType.FORMULA, "f1", "p1", 0.9, {"latex_repr": "a = b"}, "a = b"),
+            _result(ElementType.FORMULA, "f2", "p2", 0.9, {"latex_repr": "c = d"}, "c = d"),
+        ]
+        sc = handler._comparison_engine.compare(intent, ranked, None)
+        assert sc is not None
+        assert sc.comparison_type is ComparisonType.FORMULA
+        assert len(sc.referents) == 2
+        # No checker in tests -> equivalence stays UNKNOWN (lexical Tier 1 only).
+        assert sc.facts.equivalence.status is EquivalenceStatus.UNKNOWN

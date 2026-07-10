@@ -642,6 +642,60 @@ describe('IAM Policy Guardrails', () => {
   });
 
   /**
+   * Validates: formula comparison Phase 2 (Tier 2). The retrieval role may invoke
+   * the math_compute Lambda for symbolic equivalence, scoped to that function ARN
+   * (least privilege — never a wildcard).
+   */
+  test('ragRetrievalRole grants lambda:InvokeFunction scoped to math_compute', () => {
+    const statements = collectInlineRoleStatements(ragTemplate);
+    const invoke = statements.filter(
+      ({ logicalId, statement }) =>
+        logicalId.toLowerCase().includes('ragretrievalrole') &&
+        statementHasAction(statement, 'lambda:InvokeFunction')
+    );
+
+    expect(invoke.length).toBeGreaterThanOrEqual(1);
+
+    const serialized = JSON.stringify(invoke.map((s) => s.statement.Resource));
+    // Scoped to the math_compute function (name appears in the constructed ARN).
+    expect(serialized).toContain('mathComputeFunction');
+
+    for (const { statement } of invoke) {
+      const resource = statement.Resource;
+      const resList = Array.isArray(resource) ? resource : [resource];
+      for (const r of resList) {
+        if (typeof r === 'string') {
+          expect(r).not.toBe('*');
+        }
+      }
+    }
+  });
+
+  /**
+   * Validates: formula comparison Phase 2 — the retrieval Lambda is told the
+   * math_compute function name so it can invoke it for Tier-2 equivalence.
+   */
+  test('ragRetrievalFunction injects MATH_COMPUTE_FUNCTION_NAME', () => {
+    const json = ragTemplate.toJSON();
+    const resources = json.Resources ?? {};
+
+    let found = false;
+    for (const [, resource] of Object.entries(resources)) {
+      const res = resource as Record<string, unknown>;
+      if (res.Type !== 'AWS::Lambda::Function') continue;
+      const props = res.Properties as Record<string, unknown> | undefined;
+      const env = props?.Environment as Record<string, unknown> | undefined;
+      const vars = env?.Variables as Record<string, unknown> | undefined;
+      const value = vars?.MATH_COMPUTE_FUNCTION_NAME;
+      if (typeof value === 'string' && value.includes('mathComputeFunction')) {
+        found = true;
+        break;
+      }
+    }
+    expect(found).toBe(true);
+  });
+
+  /**
    * Validates: multi-image figure comparison (T8) — model ids are injected as
    * env from constants/bedrock.ts (single source of truth), not hardcoded in
    * Python. The retrieval Lambda gets Haiku 4.5 (single-image) as VISION_MODEL_ID

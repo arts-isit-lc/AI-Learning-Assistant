@@ -325,6 +325,17 @@ export class MultimodalRagStack extends cdk.Stack {
               actions: ["s3:GetObject"],
               resources: [this.irBucket.bucketArn, `${this.irBucket.bucketArn}/*`],
             }),
+            // Invoke math_compute (SymPy) for Tier-2 symbolic formula equivalence.
+            // Explicit ARN constructed from the deterministic function name
+            // (the function is defined later in this stack), least privilege —
+            // no '*'. Formula comparison degrades to lexical-only if unavailable.
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ["lambda:InvokeFunction"],
+              resources: [
+                `arn:aws:lambda:${this.region}:${this.account}:function:${id}-mathComputeFunction`,
+              ],
+            }),
             // CloudWatch Logs scoped to retrieval function log group
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
@@ -439,6 +450,9 @@ export class MultimodalRagStack extends cdk.Stack {
           QUERY_EMBEDDING_CACHE: "true", // #5: behavior-preserving (cached embeddings)
           RAG_RETURN_PASSAGES: "true", // #1: return passages + skip reasoning LLM (eliminates double generation)
           STRICT_IMAGE_ESCALATION: "true", // #9: gate vision escalation to explicit figure references
+          // Tier-2 formula comparison: invoke math_compute for symbolic
+          // equivalence. Absent/empty => formula comparison uses lexical Tier 1 only.
+          MATH_COMPUTE_FUNCTION_NAME: `${id}-mathComputeFunction`,
         },
       }
     );
