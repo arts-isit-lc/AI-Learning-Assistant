@@ -20,7 +20,9 @@ from ..models.data_models import (
     QueryIntent,
     RankedResult,
     ReasoningResult,
+    ResolutionConfidence,
     StructuredContext,
+    VisionAnalysis,
 )
 from ..flags import RAG_RETURN_PASSAGES, STRICT_IMAGE_ESCALATION
 from ..pricing import estimate_cost_usd
@@ -155,6 +157,7 @@ class ReasoningEngine:
         if (
             escalation_result.escalation_used
             and escalation_result.image_analyses
+            and escalation_result.vision_analysis is None  # not the multi-image path
             and query_intent is not None
             and hasattr(query_intent, "figure_reference")
             and query_intent.figure_reference is not None
@@ -215,6 +218,7 @@ class ReasoningEngine:
                 sources=self._extract_sources(context),
                 escalation_used=escalation_result.escalation_used,
                 image_analyses=escalation_result.image_analyses,
+                vision_analysis=escalation_result.vision_analysis,
             )
 
         answer = self._invoke_llm(
@@ -242,6 +246,7 @@ class ReasoningEngine:
             sources=sources,
             escalation_used=escalation_result.escalation_used,
             image_analyses=escalation_result.image_analyses,
+            vision_analysis=escalation_result.vision_analysis,
         )
 
     def _handle_escalation(
@@ -310,8 +315,24 @@ class ReasoningEngine:
         # Format the base context
         formatted = self.context_builder.format_for_prompt(context)
 
-        # Inject escalation results if available — PREPEND so it's prioritized by the LLM
-        if escalation_result.escalation_used and escalation_result.image_analyses:
+        # Inject escalation results if available — PREPEND so it's prioritized by the LLM.
+        # Multi-image (MULTI) takes precedence: one comparison/description over >= 2
+        # figures. The SINGLE-image section is unchanged.
+        if escalation_result.vision_analysis is not None:
+            escalation_section = self._format_multi_image_section(
+                escalation_result.vision_analysis,
+                query_intent=getattr(self, "_last_query_intent", None),
+            )
+            formatted = f"{escalation_section}\n\n{formatted}"
+            logger.info(
+                "Multi-image analysis injected into context",
+                extra={
+                    "escalation_section_length": len(escalation_section),
+                    "prompt_intent": escalation_result.vision_analysis.prompt_intent,
+                    "figures_resolved": len(escalation_result.vision_analysis.reference_mapping),
+                },
+            )
+        elif escalation_result.escalation_used and escalation_result.image_analyses:
             escalation_section = self._format_escalation_section(
                 escalation_result.image_analyses,
                 query_intent=getattr(self, '_last_query_intent', None),
@@ -367,6 +388,57 @@ class ReasoningEngine:
                 f"{analysis.analysis}"
             )
         return "\n".join(sections)
+
+    def _format_multi_image_section(
+        self, vision_analysis: VisionAnalysis, query_intent=None
+    ) -> str:
+        """Format a MULTI vision analysis into a prompt section (T5).
+
+        Labels every resolved figure, uses a comparison vs. analysis heading, notes
+        any requested figure that could not be located, and adds a hedge when a
+        figure was resolved with LOW confidence — so the final answer can qualify
+        itself rather than confidently discussing the wrong image.
+        """
+        mapping = vision_analysis.reference_mapping
+        resolved_labels = [rr.reference for rr in mapping]
+        is_compare = vision_analysis.prompt_intent == "compare"
+
+        heading = "Visual Comparison of " if is_compare else "Visual Analysis of "
+        lines: list[str] = [f"## {heading}{self._join_labels(resolved_labels)}", ""]
+
+        if query_intent is not None:
+            requested = [
+                f"{r.ref_type.title()} {r.number}"
+                for r in (getattr(query_intent, "figure_references", None) or [])
+            ]
+            missing = [label for label in requested if label not in resolved_labels]
+            if missing:
+                lines.append(
+                    f"Note: {self._join_labels(missing)} could not be located in the "
+                    f"available course materials, so the analysis below covers only "
+                    f"{self._join_labels(resolved_labels)}."
+                )
+                lines.append("")
+
+        if any(rr.confidence == ResolutionConfidence.LOW for rr in mapping):
+            lines.append(
+                "Note: one or more of these figures could not be identified with certainty "
+                "(multiple figures in scope share that number). If the wrong figure appears, "
+                "invite the student to confirm which figure they meant."
+            )
+            lines.append("")
+
+        lines.append(vision_analysis.analysis)
+        return "\n".join(lines)
+
+    @staticmethod
+    def _join_labels(labels: list[str]) -> str:
+        """Join figure labels into a readable phrase ("A", "A and B", "A, B and C")."""
+        if not labels:
+            return "the referenced figures"
+        if len(labels) == 1:
+            return labels[0]
+        return ", ".join(labels[:-1]) + " and " + labels[-1]
 
     def _invoke_llm(
         self,

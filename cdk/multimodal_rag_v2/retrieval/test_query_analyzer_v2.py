@@ -247,3 +247,99 @@ class TestWeekNumberExtraction:
     def test_no_week_returns_none(self, analyzer: QueryAnalyzer) -> None:
         intent = analyzer.analyze("What is photosynthesis?")
         assert intent.week_number is None
+
+
+# ---------------------------------------------------------------------------
+# Multi-Figure References — multi-image intent vs. comparison intent
+# ---------------------------------------------------------------------------
+
+
+class TestMultiFigureReferences:
+    """finditer-based extraction of ALL references + the multi_image/comparison split."""
+
+    def test_two_references_extracted_in_order(self, analyzer: QueryAnalyzer) -> None:
+        intent = analyzer.analyze("Compare figure 2.1 and figure 4.1")
+        assert [(r.ref_type, r.number) for r in intent.figure_references] == [
+            ("figure", "2.1"),
+            ("figure", "4.1"),
+        ]
+
+    def test_single_reference_back_compat(self, analyzer: QueryAnalyzer) -> None:
+        """figure_reference stays populated (first ref) for single-reference queries."""
+        intent = analyzer.analyze("Explain Figure 2.1")
+        assert intent.figure_reference is not None
+        assert intent.figure_reference.number == "2.1"
+        assert len(intent.figure_references) == 1
+        assert intent.requires_multi_image is False
+        assert intent.requires_comparison is False
+
+    def test_figure_reference_is_first_of_many(self, analyzer: QueryAnalyzer) -> None:
+        intent = analyzer.analyze("Compare figure 2.1 and figure 4.1")
+        assert intent.figure_reference is not None
+        assert intent.figure_reference.number == "2.1"
+
+    def test_comparison_query_sets_both_flags(self, analyzer: QueryAnalyzer) -> None:
+        intent = analyzer.analyze(
+            "Compare figure 2.1 and figure 4.1 — which does a better job?"
+        )
+        assert intent.requires_multi_image is True
+        assert intent.requires_comparison is True
+
+    def test_explain_both_is_multi_image_not_comparison(self, analyzer: QueryAnalyzer) -> None:
+        """Two references without comparison language: multi-image, NOT comparison."""
+        intent = analyzer.analyze("Explain figure 2.1 and figure 4.1")
+        assert intent.requires_multi_image is True
+        assert intent.requires_comparison is False
+
+    def test_summarize_both_is_multi_image_not_comparison(self, analyzer: QueryAnalyzer) -> None:
+        intent = analyzer.analyze("Summarize Figure 2.1 and Figure 4.1")
+        assert intent.requires_multi_image is True
+        assert intent.requires_comparison is False
+
+    def test_versus_triggers_comparison(self, analyzer: QueryAnalyzer) -> None:
+        intent = analyzer.analyze("Figure 2.1 vs figure 4.1")
+        assert intent.requires_multi_image is True
+        assert intent.requires_comparison is True
+
+    def test_duplicate_reference_deduped(self, analyzer: QueryAnalyzer) -> None:
+        """Same reference twice collapses to one -> not multi-image."""
+        intent = analyzer.analyze("Compare figure 2.1 with figure 2.1")
+        assert len(intent.figure_references) == 1
+        assert intent.requires_multi_image is False
+        assert intent.requires_comparison is False
+
+    def test_mixed_types_extracted(self, analyzer: QueryAnalyzer) -> None:
+        intent = analyzer.analyze("Compare Figure 2.1 and Table 3.2")
+        assert [(r.ref_type, r.number) for r in intent.figure_references] == [
+            ("figure", "2.1"),
+            ("table", "3.2"),
+        ]
+        assert intent.requires_multi_image is True
+
+    def test_parsed_references_capped(self, analyzer: QueryAnalyzer) -> None:
+        """No more than _MAX_PARSED_REFERENCES distinct references are kept."""
+        intent = analyzer.analyze(
+            "Compare figure 1.1, figure 2.1, figure 3.1, figure 4.1, "
+            "figure 5.1, figure 6.1, figure 7.1"
+        )
+        assert len(intent.figure_references) == QueryAnalyzer._MAX_PARSED_REFERENCES
+
+    def test_comparison_language_without_two_figures_not_comparison(
+        self, analyzer: QueryAnalyzer
+    ) -> None:
+        """'compare' with only one figure reference is not a figure comparison."""
+        intent = analyzer.analyze("Compare figure 2.1 to what we learned in lecture 3")
+        assert len(intent.figure_references) == 1
+        assert intent.requires_multi_image is False
+        assert intent.requires_comparison is False
+
+    def test_multi_reference_sets_requires_image_and_lookup(self, analyzer: QueryAnalyzer) -> None:
+        intent = analyzer.analyze("Compare figure 2.1 and figure 4.1")
+        assert intent.requires_image is True
+        assert intent.requires_figure_lookup is True
+
+    def test_no_references_leaves_multi_flags_false(self, analyzer: QueryAnalyzer) -> None:
+        intent = analyzer.analyze("What is machine learning?")
+        assert intent.figure_references == []
+        assert intent.requires_multi_image is False
+        assert intent.requires_comparison is False

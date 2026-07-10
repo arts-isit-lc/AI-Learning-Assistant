@@ -275,12 +275,15 @@ export class MultimodalRagStack extends cdk.Stack {
       inlinePolicies: {
         ragRetrievalPolicy: new iam.PolicyDocument({
           statements: [
-            // Bedrock InvokeModel — Claude Haiku 4.5 (query analysis + reasoning, Geo-US CRIS) + Titan Embed v2
+            // Bedrock InvokeModel — Claude Haiku 4.5 (query analysis + single-image
+            // vision escalation) + Claude Sonnet 4.5 (multi-image figure comparison),
+            // both via Geo-US CRIS, plus Titan Embed v2 (in-Region).
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: ["bedrock:InvokeModel"],
               resources: [
                 ...crisInvokeResources(HAIKU_45, this.region, this.account),
+                ...crisInvokeResources(SONNET_45, this.region, this.account),
                 inRegionModelResource(TITAN_EMBED_V2, this.region),
               ],
             }),
@@ -423,6 +426,12 @@ export class MultimodalRagStack extends cdk.Stack {
           DB_PROXY_ENDPOINT: db.rdsProxyEndpoint,
           IR_BUCKET_NAME: this.irBucket.bucketName,
           REGION: this.region,
+          // Vision model ids injected from constants/bedrock.ts (single source of
+          // truth): Haiku 4.5 for single-image escalation, Sonnet 4.5 for the
+          // multi-image figure-comparison call. COMPARISON_VISION_MODEL_ID doubles
+          // as the runtime kill-switch — repoint it to Haiku 4.5 to disable Sonnet.
+          VISION_MODEL_ID: HAIKU_45.profileId,
+          COMPARISON_VISION_MODEL_ID: SONNET_45.profileId,
           // Optimization feature flags — all enabled in every environment per
           // operator decision. Each remains instantly revertible: set a flag back
           // to "false" + redeploy. (Behavioral flags ideally pass the eval harness

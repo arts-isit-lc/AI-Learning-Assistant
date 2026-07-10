@@ -602,6 +602,75 @@ describe('IAM Policy Guardrails', () => {
   });
 
   /**
+   * Validates: multi-image figure comparison (T8).
+   * The ragRetrievalRole specifically must grant bedrock:InvokeModel on BOTH the
+   * Haiku 4.5 (single-image escalation) AND Sonnet 4.5 (multi-image comparison)
+   * inference profiles + their destination-Region foundation-model ARNs. Sonnet
+   * 4.5 was previously only on chatbotV2Role; the comparison call runs in the
+   * retrieval Lambda, so the retrieval role now needs it too.
+   */
+  test('ragRetrievalRole grants bedrock:InvokeModel on Haiku 4.5 AND Sonnet 4.5 profiles', () => {
+    const statements = collectInlineRoleStatements(ragTemplate);
+    const retrievalInvoke = statements.filter(
+      ({ logicalId, statement }) =>
+        logicalId.toLowerCase().includes('ragretrievalrole') &&
+        statementHasAction(statement, 'bedrock:InvokeModel')
+    );
+
+    expect(retrievalInvoke.length).toBeGreaterThanOrEqual(1);
+
+    const serialized = JSON.stringify(retrievalInvoke.map((s) => s.statement.Resource));
+    expect(serialized).toContain('inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0');
+    expect(serialized).toContain('inference-profile/us.anthropic.claude-sonnet-4-5-20250929-v1:0');
+    for (const region of ['us-east-1', 'us-east-2', 'us-west-2']) {
+      expect(serialized).toContain(
+        `arn:aws:bedrock:${region}::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0`
+      );
+    }
+
+    // Never a bare wildcard, never a retired Claude 3 id.
+    expect(serialized).not.toContain('claude-3-sonnet-20240229');
+    for (const { statement } of retrievalInvoke) {
+      const resource = statement.Resource;
+      const resList = Array.isArray(resource) ? resource : [resource];
+      for (const r of resList) {
+        if (typeof r === 'string') {
+          expect(r).not.toBe('*');
+        }
+      }
+    }
+  });
+
+  /**
+   * Validates: multi-image figure comparison (T8) — model ids are injected as
+   * env from constants/bedrock.ts (single source of truth), not hardcoded in
+   * Python. The retrieval Lambda gets Haiku 4.5 (single-image) as VISION_MODEL_ID
+   * and Sonnet 4.5 (comparison) as COMPARISON_VISION_MODEL_ID.
+   */
+  test('ragRetrievalFunction injects VISION_MODEL_ID (Haiku 4.5) + COMPARISON_VISION_MODEL_ID (Sonnet 4.5)', () => {
+    const json = ragTemplate.toJSON();
+    const resources = json.Resources ?? {};
+
+    let found = false;
+    for (const [, resource] of Object.entries(resources)) {
+      const res = resource as Record<string, unknown>;
+      if (res.Type !== 'AWS::Lambda::Function') continue;
+      const props = res.Properties as Record<string, unknown> | undefined;
+      const env = props?.Environment as Record<string, unknown> | undefined;
+      const vars = env?.Variables as Record<string, unknown> | undefined;
+      if (
+        vars &&
+        vars.VISION_MODEL_ID === 'us.anthropic.claude-haiku-4-5-20251001-v1:0' &&
+        vars.COMPARISON_VISION_MODEL_ID === 'us.anthropic.claude-sonnet-4-5-20250929-v1:0'
+      ) {
+        found = true;
+        break;
+      }
+    }
+    expect(found).toBe(true);
+  });
+
+  /**
    * Regression guard: the retired Claude 3 model ids must not appear in ANY IAM
    * policy across the API, DB, DBFlow, or RAG stacks after the 4.5 migration.
    */

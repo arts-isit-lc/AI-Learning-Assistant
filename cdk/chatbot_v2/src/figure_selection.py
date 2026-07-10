@@ -137,8 +137,11 @@ def select_figures(
 
     fig_match = _FIGURE_REF_PATTERN.search(query)
     has_figure_ref = fig_match is not None
-    # group(2) is the number (e.g. "4.1"); present only for a specific reference.
-    specific_ref = bool(fig_match and fig_match.group(2))
+    # All distinct figure NUMBERS named in the query (group(2) is the number).
+    # >= 2 distinct numbers => a multi-figure query ("figure 2.1 and figure 4.1").
+    specific_numbers = {m.group(2) for m in _FIGURE_REF_PATTERN.finditer(query) if m.group(2)}
+    specific_ref = bool(specific_numbers)
+    multi_ref = len(specific_numbers) >= 2
 
     selected: list[str] = []
     seen: set[str] = set()
@@ -148,11 +151,11 @@ def select_figures(
             selected.append(rid)
             seen.add(rid)
 
-    # A query that names a specific figure ("figure 4.1") must show ONLY that
-    # figure. Retrieval also returns sibling diagrams from the same file (2.1,
-    # 3.1, ...) that score highly for being visually similar — not what the
-    # student asked for. Prefer the exact image escalation analysed (matched by
-    # S3 key); if it can't be mapped, fall back to a single best-scoring image.
+    # A query that names specific figure(s) should show exactly those. Retrieval
+    # also returns sibling diagrams from the same file that score highly for being
+    # visually similar — not what the student asked for. Prefer the exact images
+    # the vision model escalated/analysed (matched by S3 key): one for a single
+    # reference, ALL of them for a multi-figure comparison ("2.1 and 4.1").
     if specific_ref:
         if retrieval_result.escalation_used and escalated_keys:
             for img in image_results:
@@ -161,13 +164,22 @@ def select_figures(
                 if img.get("image_s3_key") in escalated_keys:
                     _take(img.get("retrieval_id"))
         if not selected:
-            best_rid, best_score = None, None
-            for img in image_results:
-                score = img.get("score", 0) or 0
-                rid = img.get("retrieval_id")
-                if rid and score >= score_threshold and (best_score is None or score > best_score):
-                    best_rid, best_score = rid, score
-            _take(best_rid)
+            if multi_ref:
+                # Multi-figure query but escalation didn't map keys: fall back to
+                # the top images by rank (image_results is score-ordered) so a
+                # comparison still surfaces more than one figure — not a single best.
+                for img in image_results:
+                    if len(selected) >= max_figures:
+                        break
+                    _take(img.get("retrieval_id"))
+            else:
+                best_rid, best_score = None, None
+                for img in image_results:
+                    score = img.get("score", 0) or 0
+                    rid = img.get("retrieval_id")
+                    if rid and score >= score_threshold and (best_score is None or score > best_score):
+                        best_rid, best_score = rid, score
+                _take(best_rid)
         _log_selected(selected, has_figure_ref, specific_ref, retrieval_result.escalation_used)
         return selected[:max_figures]
 

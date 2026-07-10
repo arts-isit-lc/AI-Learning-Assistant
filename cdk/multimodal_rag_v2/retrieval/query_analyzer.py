@@ -11,7 +11,7 @@ import re
 
 from aws_lambda_powertools import Logger
 
-from ..models.data_models import QueryIntent
+from ..models.data_models import FigureReference, QueryIntent
 
 logger = Logger(service="multimodal-rag-retrieval")
 
@@ -93,6 +93,18 @@ class QueryAnalyzer:
         re.IGNORECASE,
     )
 
+    # Comparison-intent language. Only sets requires_comparison alongside >= 2
+    # figure references (see analyze) — a match with < 2 references is ignored, so
+    # "compare this to lecture 3" (zero/one figures) is not a figure comparison.
+    _COMPARISON_PATTERN = re.compile(
+        r"\b(compare|comparison|versus|vs|difference|differences|better|worse|best|"
+        r"which one|which is|stronger|clearer)\b",
+        re.IGNORECASE,
+    )
+
+    # Max distinct references parsed per query (abuse guard + downstream cost bound).
+    _MAX_PARSED_REFERENCES = 5
+
     RULES = _compile_rules(_RAW_RULES)
 
     def __init__(self, bedrock_client=None):
@@ -148,18 +160,20 @@ class QueryAnalyzer:
         intent.lecture_number = self._extract_lecture_number(query)
         intent.week_number = self._extract_week_number(query)
 
-        # Check for figure/table/algorithm reference patterns (exact-match lookup)
-        fig_match = self._FIGURE_LOOKUP_PATTERN.search(query)
-        if fig_match:
+        # Check for figure/table/algorithm reference patterns (exact-match lookup).
+        # Capture ALL distinct references (finditer, not search) so a multi-figure
+        # query ("compare figure 2.1 and figure 4.1") is not collapsed to the first.
+        references = self._extract_figure_references(query)
+        if references:
             intent.requires_figure_lookup = True
             intent.requires_image = True  # figures are visual content
-
-            # Extract structured reference
-            from ..models.data_models import FigureReference
-            raw_type = fig_match.group(1).lower().rstrip(".")
-            ref_type = "figure" if raw_type in ("figure", "fig") else raw_type
-            ref_number = fig_match.group(2)
-            intent.figure_reference = FigureReference(ref_type=ref_type, number=ref_number)
+            intent.figure_references = references
+            intent.figure_reference = references[0]  # back-compat: single-reference consumers
+            intent.requires_multi_image = len(references) >= 2
+            intent.requires_comparison = (
+                intent.requires_multi_image
+                and self._COMPARISON_PATTERN.search(query) is not None
+            )
 
         return intent
 
@@ -284,3 +298,27 @@ class QueryAnalyzer:
         if match:
             return int(match.group(1))
         return None
+
+    @classmethod
+    def _extract_figure_references(cls, query: str) -> list[FigureReference]:
+        """Extract every distinct figure/table/algorithm reference, in order.
+
+        Uses finditer (not search) so multi-figure queries keep every reference.
+        De-duplicated by (ref_type, number) preserving first-seen order and bounded
+        by _MAX_PARSED_REFERENCES so a query stuffed with "figure N" tokens cannot
+        fan out into unbounded downstream image lookups.
+        """
+        seen: set[tuple[str, str]] = set()
+        refs: list[FigureReference] = []
+        for match in cls._FIGURE_LOOKUP_PATTERN.finditer(query):
+            raw_type = match.group(1).lower().rstrip(".")
+            ref_type = "figure" if raw_type in ("figure", "fig") else raw_type
+            number = match.group(2)
+            key = (ref_type, number)
+            if key in seen:
+                continue
+            seen.add(key)
+            refs.append(FigureReference(ref_type=ref_type, number=number))
+            if len(refs) >= cls._MAX_PARSED_REFERENCES:
+                break
+        return refs

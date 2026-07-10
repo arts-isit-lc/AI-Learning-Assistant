@@ -240,3 +240,63 @@ class TestBuildFigureGrounding:
 
     def test_none_result(self):
         assert fs.build_figure_grounding(None, ["img-1"]) == ""
+
+
+class TestMultiFigureSelection:
+    """T6: a multi-figure query attaches ALL escalated figures (not just one)."""
+
+    def test_multi_reference_attaches_both_escalated_figures(self):
+        rr = _rr(
+            escalation_used=True,
+            image_analyses=[
+                {"image_s3_key": "s3://b/21.png", "analysis": "", "confidence": 0.9},
+                {"image_s3_key": "s3://b/41.png", "analysis": "", "confidence": 0.9},
+            ],
+            image_results=[
+                {"retrieval_id": "fig21", "score": 0.1, "image_s3_key": "s3://b/21.png"},
+                {"retrieval_id": "fig41", "score": 0.1, "image_s3_key": "s3://b/41.png"},
+                {"retrieval_id": "sibling", "score": 0.09, "image_s3_key": "s3://b/other.png"},
+            ],
+        )
+        # Both referenced figures attach; the high-scoring sibling does NOT.
+        assert fs.select_figures(rr, "compare figure 2.1 and figure 4.1") == ["fig21", "fig41"]
+
+    def test_multi_reference_fallback_to_top_images_when_keys_unmapped(self):
+        rr = _rr(
+            escalation_used=True,
+            image_analyses=[],  # nothing to map by key
+            image_results=[
+                {"retrieval_id": "a", "score": 0.1, "image_s3_key": "s3://b/a.png"},
+                {"retrieval_id": "b", "score": 0.09, "image_s3_key": "s3://b/b.png"},
+            ],
+        )
+        # Multi-figure query falls back to top images by rank, not a single best.
+        assert fs.select_figures(rr, "compare figure 2.1 and figure 4.1") == ["a", "b"]
+
+    def test_multi_reference_capped_at_max_figures(self):
+        rr = _rr(
+            escalation_used=True,
+            image_analyses=[
+                {"image_s3_key": f"s3://b/{i}.png", "analysis": "", "confidence": 0.9}
+                for i in range(4)
+            ],
+            image_results=[
+                {"retrieval_id": f"f{i}", "score": 0.1, "image_s3_key": f"s3://b/{i}.png"}
+                for i in range(4)
+            ],
+        )
+        out = fs.select_figures(
+            rr, "compare figure 1.1, figure 2.1 and figure 3.1", max_figures=2
+        )
+        assert len(out) == 2
+
+    def test_single_reference_still_attaches_one(self):
+        rr = _rr(
+            escalation_used=True,
+            image_analyses=[{"image_s3_key": "s3://b/41.png", "analysis": "x", "confidence": 0.9}],
+            image_results=[
+                {"retrieval_id": "fig41", "score": 0.1, "image_s3_key": "s3://b/41.png"},
+                {"retrieval_id": "sibling", "score": 0.09, "image_s3_key": "s3://b/other.png"},
+            ],
+        )
+        assert fs.select_figures(rr, "explain figure 4.1") == ["fig41"]

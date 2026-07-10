@@ -1,67 +1,67 @@
 # Multi-Image Reasoning (incl. Figure Comparison) — Spec
 
-**Status:** Proposed — not started. Awaiting go-ahead before implementation.
-**Area:** `multimodal_rag_v2` (retrieval query analysis, reasoning/image escalation, retrieval handler response), `chatbot_v2` (figure selection + grounding). Frontend block rendering: verify only.
-**Related:** builds on `cross-module-file-referencing` (scope filtering) and the single-image escalation path already in `reasoning/image_escalation.py`.
-**Refined via** `planning-refinement.md` (3 iterations; final score ~9.2/10). Iteration 3 reframed the feature around *multi-image reasoning* (comparison is one prompt mode) per review feedback. Residual risks in §13.
+**Status:** Proposed — not started. Model + residency **decided** (Claude Sonnet 4.5 via Geo-US CRIS; §4.3/§4.10). Awaiting go-ahead before implementation.
+**Area:** `multimodal_rag_v2` (retrieval query analysis, reasoning/image escalation, retrieval handler response), `chatbot_v2` (figure selection + grounding), `cdk/lib` (env vars + one IAM grant). Frontend block rendering: verify only.
+**Related:** builds on `cross-module-file-referencing` (scope filtering) and the single-image escalation path already in `reasoning/image_escalation.py` (now Claude Haiku 4.5). Model IDs live in `cdk/lib/constants/bedrock.ts`.
+**Refined via** `planning-refinement.md` (5 iterations; final score ~9.4/10). Iter 3 reframed around *multi-image reasoning*; iter 4 pinned Sonnet 4.5 + grounded CDK/IAM; iter 5 phased the SINGLE migration, moved model IDs to injected env, hardened the prompt, and added resolution confidence + reference mapping. Residual risks in §13.
 
 ---
 
 ## 1. Problem Statement
 
-A student asks: *"Compare figure 2.1 and figure 4.1 and tell me which one does a better job at demonstrating the algorithm."* The current pipeline cannot answer this. It silently answers about **figure 2.1 only**, drops figure 4.1 entirely, and returns a description rather than a comparative judgment. The failure occurs at three layers:
+A student asks: *"Compare figure 2.1 and figure 4.1 and tell me which one does a better job at demonstrating the algorithm."* The current pipeline cannot answer this. It silently answers about **figure 2.1 only**, drops figure 4.1, and returns a description rather than a comparative judgment. Three failures:
 
-1. **Query analysis captures one reference.** `retrieval/query_analyzer.py` uses `self._FIGURE_LOOKUP_PATTERN.search(query)` — `.search()` returns only the first match, so `"figure 2.1 and figure 4.1"` collapses to `figure 2.1`. `QueryIntent.figure_reference` is a single `FigureReference | None`, so the multi-figure intent is structurally lost before retrieval runs.
+1. **Query analysis captures one reference.** `retrieval/query_analyzer.py` uses `_FIGURE_LOOKUP_PATTERN.search(query)` — `.search()` returns only the first match, so `"figure 2.1 and figure 4.1"` collapses to `figure 2.1`. `QueryIntent.figure_reference` is a single `FigureReference | None`.
 
-2. **The vision model never sees two figures together.** `reasoning/image_escalation.py` has `_MAX_ESCALATION_IMAGES = 2`, but `_analyze_images` runs a **separate** vision call per image, and `_invoke_vision_llm` sends exactly one image block per request. Two images are analyzed in isolation. For a *specific* numbered reference, `_find_image_by_figure_ref_in_db` resolves a single image and escalation returns one analysis.
+2. **The vision model never sees two figures together.** `reasoning/image_escalation.py` has `_MAX_ESCALATION_IMAGES = 2`, but `_analyze_images` runs a **separate** vision call per image, and `_invoke_vision_llm` sends one image block per request. For a specific numbered reference, `_find_image_by_figure_ref_in_db` resolves a single image.
 
-3. **No multi-image reasoning, and the final generator is text-only.** `reasoning/reasoning_engine.py` short-circuits figure-reference queries — it returns `image_analyses[0].analysis` verbatim and skips the reasoning LLM. The chatbot's final Sonnet generation (`chatbot_v2/src/main.py`) is text-only. `chatbot_v2/src/figure_selection.py` `select_figures` deliberately attaches **only one** figure for a specific reference. There is no path that reasons over two images at once.
+3. **No multi-image reasoning; final generator is text-only.** `reasoning/reasoning_engine.py` short-circuits figure-reference queries — returns `image_analyses[0].analysis` verbatim. The chatbot's final Sonnet 4.5 generation is text-only, and `figure_selection.py` `select_figures` attaches **only one** figure for a specific reference.
 
 ### What happens today (concrete trace)
 `analyze()` extracts `figure 2.1` → escalation analyzes 2.1's image alone → reasoning returns "here is what I can see in Figure 2.1: …" verbatim → chatbot displays figure 2.1 only. Figure 4.1 is never retrieved, analyzed, or mentioned.
 
 ### Framing
-The underlying capability is **multi-image reasoning**, of which "comparison" is one mode. The pipeline is:
+The capability is **multi-image reasoning**; "comparison" is one prompt mode:
 
 ```
-Query → extract references → resolve images → multi-image vision analysis (prompt selected by intent) → grounding → final LLM
+Query → extract references → resolve images (+confidence) → ONE multi-image vision call (prompt by intent) → grounding → final LLM
 ```
 
-Comparison ("which is better") and description ("explain both") share every stage except the prompt. This spec builds that seam and ships two prompt modes; more modes (summarize-all, diff-only, 3+ figures) are future work (§2, §13).
+Comparison ("which is better") and description ("explain both") share every stage except the prompt. v1 ships two modes; more (summarize-all, diff-only, 3+ figures) are future work.
 
 ---
 
 ## 2. Goals / Non-Goals
 
 **Goals**
-- Parse **all** figure/table/algorithm references in a query (bounded), not just the first.
-- Distinguish **multi-image intent** (≥2 references → look at all of them) from **comparison intent** (verb-driven → rank/judge them). These are separate concepts.
-- Resolve each referenced figure to an image and co-present them to a **single multimodal vision call** so the model sees them together.
-- Select the vision prompt by intent: **COMPARE** (evaluative) or **DESCRIBE_EACH** (non-judgmental).
-- Produce a grounded answer via the existing chatbot generation path, and **display all** referenced figures (capped at 2).
-- Degrade gracefully when only one (or neither) referenced figure resolves, and when a reference is ambiguous across files.
+- Parse **all** references in a query (bounded), not just the first.
+- Distinguish **multi-image intent** (≥2 references) from **comparison intent** (verb-driven). Separate concepts.
+- Resolve each referenced figure to an image (with a **resolution confidence**) and co-present them to a **single multimodal vision call**.
+- Select the vision prompt by intent: **COMPARE** (evaluative, scope-limited) or **DESCRIBE_EACH**.
+- Ground the final answer via the existing chatbot path; **display all** referenced figures (≤2); **hedge** when resolution is low-confidence.
+- Degrade gracefully when one/neither figure resolves.
 
 **Non-Goals (v1)**
-- More than 2 images per answer (cap at 2 with a user-facing note; raising the cap is future work — the `MULTI` model already accommodates it).
-- Prompt modes beyond COMPARE / DESCRIBE_EACH (e.g. summarize-all, difference-only). The mode seam is built so these are additive later.
-- Multi-image reasoning for **generic** references with no figure numbers ("compare the two diagrams") — resolving *which* two images is unreliable, so that stays on today's score-based path. Future work.
-- Cross-encoder changes; frontend redesign (verify multi-figure rendering only — ESLint-only, no test framework); changes to the authorization/scope model.
+- Migrating the SINGLE-image path onto `VisionAnalysis` (deferred — §4.2, §13). v1 leaves it untouched.
+- >2 images per answer; prompt modes beyond COMPARE / DESCRIBE_EACH; multi-image for **generic** references ("compare the two diagrams"); cross-encoder changes; frontend redesign; auth/scope model changes.
 
 ---
 
 ## 3. Requirements
 
-- **R1.** Query analysis MUST extract every distinct reference into an ordered, de-duplicated list, bounded by `_MAX_PARSED_REFERENCES` (default 5).
-- **R2.** `QueryIntent` MUST expose `figure_references` (list) while preserving the singular `figure_reference` (= first element or `None`) for backward compatibility with existing consumers.
-- **R3.** `QueryIntent` MUST expose two independent flags: `requires_multi_image` (≥2 distinct references) and `requires_comparison` (comparison language present **and** multi-image). Comparison MUST NOT be inferred from reference count alone.
-- **R4.** In multi-image mode, escalation MUST resolve each referenced figure to an image (reusing sibling-link + scoped DB-lookup), fetch up to `_MAX_ESCALATION_IMAGES` (2), and issue **one** multimodal vision call with all images, returning a single `VisionAnalysis(mode=MULTI)`.
-- **R5.** The vision prompt MUST be selected by intent: COMPARE when `requires_comparison`, else DESCRIBE_EACH (§4.5).
-- **R6.** Escalation output MUST use a single unified `VisionAnalysis` model for both single- and multi-image products (no overloaded optional fields; §4.2).
-- **R7.** Resolved images MUST be surfaced in the retrieval response `image_results` (deduped by `retrieval_id`) so the chatbot can display each — including figures found via direct DB lookup rather than ranked results.
-- **R8.** The reasoning engine MUST NOT short-circuit to a single analysis in multi-image mode; it MUST inject a multi-image section (labeling every figure) into the grounding that reaches final generation.
-- **R9.** `chatbot_v2` `select_figures` MUST attach all resolved figures for a multi-image query (capped at `_MAX_FIGURES`).
-- **R10.** When only one referenced figure resolves, the answer MUST cover the one found and explicitly note the other was not located; when none resolve, behavior MUST match today's fallback.
-- **R11.** Reference resolution MUST be deterministic and scope-bounded: candidates ordered by (query-context module first, then retrieval rank), top candidate taken, ambiguity logged; all lookups reuse the anchored regex + `scope_filter` (§4.6).
+- **R1.** Extract every distinct reference into an ordered, de-duplicated list, bounded by `_MAX_PARSED_REFERENCES` (default 5).
+- **R2.** `QueryIntent` exposes `figure_references` (list) while preserving singular `figure_reference` (= first / `None`) for existing consumers.
+- **R3.** Two independent flags: `requires_multi_image` (≥2 distinct references) and `requires_comparison` (comparison language **and** multi-image). Comparison MUST NOT be inferred from count alone.
+- **R4.** In multi-image mode, escalation resolves each referenced figure (reusing sibling-link + scoped DB-lookup), fetches up to `_MAX_ESCALATION_IMAGES` (2), and issues **one** multimodal vision call, returning a single `VisionAnalysis(mode=MULTI)`.
+- **R5.** Prompt selected by intent: COMPARE when `requires_comparison`, else DESCRIBE_EACH (§4.5). The COMPARE prompt MUST scope judgment to visual-communication quality, not algorithm correctness.
+- **R6.** The MULTI product is a new `VisionAnalysis` object; the **SINGLE path and its `image_analyses` output are unchanged in v1** (phased migration — §4.2).
+- **R7.** Resolved images MUST be surfaced in the response `image_results` (deduped by `retrieval_id`) so the chatbot can display each — including DB-lookup-resolved figures. The wire `image_analyses` for a MULTI query is derived from the resolved images; for SINGLE it is unchanged.
+- **R8.** Each resolved reference MUST carry a `resolution_confidence` (HIGH/MEDIUM/LOW) and be recorded in a `reference_mapping` (requested reference → chosen `retrieval_id`). On LOW confidence, grounding MUST instruct the final answer to hedge.
+- **R9.** Reasoning MUST NOT short-circuit to a single analysis in multi-image mode; it injects a multi-image section (labeling every figure) into grounding.
+- **R10.** `select_figures` attaches all resolved figures for a multi-image query (≤ `_MAX_FIGURES`).
+- **R11.** When only one figure resolves, answer about the one found and note the other wasn't located; when none, match today's fallback.
+- **R12.** Reference resolution is deterministic and scope-bounded (anchored regex + `scope_filter`); ordering and confidence per §4.6.
+- **R13.** Model IDs (`VISION_MODEL_ID` Haiku 4.5, `COMPARISON_VISION_MODEL_ID` Sonnet 4.5) MUST be injected as Lambda env from `cdk/lib/constants/bedrock.ts`; Python holds only defensive defaults (§4.3).
 
 ---
 
@@ -69,95 +69,106 @@ Comparison ("which is better") and description ("explain both") share every stag
 
 ### 4.1 Query analysis — references + two intents (`retrieval/query_analyzer.py`, `models/data_models.py`)
 
-Replace `.search()` with `finditer()`, de-dupe, cap, and set the two independent flags:
-
 ```text
 matches = _FIGURE_LOOKUP_PATTERN.finditer(query)                    # was .search()
 refs = ordered_unique[(norm_type(m.group(1)), m.group(2)) for m in matches][:_MAX_PARSED_REFERENCES]
 intent.figure_references = [FigureReference(t, n) for (t, n) in refs]
-intent.figure_reference  = intent.figure_references[0] if refs else None    # back-compat (unchanged consumers)
+intent.figure_reference  = intent.figure_references[0] if refs else None    # back-compat
 intent.requires_figure_lookup = bool(refs)
 intent.requires_image = intent.requires_image or bool(refs)
 intent.requires_multi_image = len(intent.figure_references) >= 2
 intent.requires_comparison  = intent.requires_multi_image and _COMPARISON_PATTERN.search(query) is not None
 ```
 
-`_COMPARISON_PATTERN` matches comparison language: `compare`, `comparison`, `versus`, `vs`, `difference(s) between`, `better|worse|best`, `which (one|is)`, `stronger|clearer`. Verb matching is imperfect; the design degrades gracefully (see note below), so we accept false negatives rather than over-invest.
+`_COMPARISON_PATTERN`: `compare|comparison|versus|vs|difference(s) between|better|worse|best|which (one|is)|stronger|clearer`. `QueryIntent` gains `figure_references: list`, `requires_multi_image: bool`, `requires_comparison: bool` (singular `figure_reference` retained).
 
-`QueryIntent` additions (`figure_reference` singular retained):
-```text
-figure_references: list[FigureReference] = field(default_factory=list)
-requires_multi_image: bool = False
-requires_comparison: bool = False
-```
+> **Why two flags.** "Explain 2.1 and 4.1" / "Summarize 2.1 and 4.1" are multi-image but **not** comparisons; a COMPARE prompt would mis-shape the answer. `requires_multi_image` decides *whether to co-analyze all images*; `requires_comparison` decides *which prompt*. **Graceful degradation:** both images are in the single call regardless of mode, so a missed verb still yields a usable answer.
 
-> **Why two flags, not one.** "Explain figure 2.1 and figure 4.1" and "Summarize figures 2.1 and 4.1" are multi-image but **not** comparisons; forcing a COMPARE prompt on them yields a wrong-shaped answer. `requires_multi_image` decides *whether to look at all images in one call*; `requires_comparison` only decides *which prompt*. **Graceful degradation:** because both images are in the single vision call regardless of mode, a missed comparison verb still lets the DESCRIBE_EACH output (and the final LLM) produce a usable, if less pointed, comparison — a false negative is not catastrophic.
+### 4.2 Vision-analysis model — MULTI only in v1 (`models/data_models.py`)
 
-### 4.2 Unified vision-analysis model (`models/data_models.py`)
-
-Replace the two ad-hoc fields from the earlier draft with one model used by **both** the single- and multi-image paths:
+**Decision (revised per review): phase it.** Add `VisionAnalysis` for the **MULTI** path only; leave the working SINGLE path and its `image_analyses` **untouched** in v1.
 
 ```text
-class VisionMode(Enum):        # structural: how many images this analysis covers
-    SINGLE
-    MULTI
+class VisionMode(Enum):  SINGLE; MULTI          # SINGLE reserved for the later migration
+class ResolutionConfidence(Enum):  HIGH; MEDIUM; LOW
 
 @dataclass
-class VisionAnalysis:
-    mode: VisionMode
+class ResolvedReference:                # audit trail: what was asked → what we picked
+    reference: str                      # "Figure 2.1"
+    retrieval_id: str
+    image_s3_key: str
+    confidence: ResolutionConfidence
+
+@dataclass
+class VisionAnalysis:                    # MULTI-image product
+    mode: VisionMode                     # MULTI in v1
     analysis: str
-    confidence: float
-    resolved_images: list[RankedResult]   # carries image_s3_key AND retrieval_id for display + union
-    prompt_intent: str = "describe"        # "compare" | "describe_each" | "describe" (observability)
+    confidence: float                    # vision-model confidence
+    resolved_images: list[RankedResult]  # full objects for display + image_results union
+    reference_mapping: list[ResolvedReference]
+    prompt_intent: str                   # "compare" | "describe_each"
 
 @dataclass
 class EscalationResult:
     escalation_used: bool
-    vision_analyses: list[VisionAnalysis] = field(default_factory=list)
+    image_analyses: list[ImageAnalysis] = field(default_factory=list)   # SINGLE — UNCHANGED
+    vision_analysis: VisionAnalysis | None = None                       # MULTI — NEW, additive
 ```
 
-- Single-image escalation (existing behavior) now emits `VisionAnalysis(SINGLE, …, resolved_images=[img])` — one per image, exactly as today, just wrapped. The score-based two-image fallback becomes two `SINGLE` entries.
-- Multi-image escalation emits **one** `VisionAnalysis(MULTI, …, resolved_images=[img1, img2])`.
-- `resolved_images` carrying `RankedResult`s (not bare keys) makes R7 (the `image_results` union) and display mapping fall out naturally.
-
-> **Trade-off (called out).** Migrating the working single-image path onto `VisionAnalysis` adds regression surface to code that isn't broken. Mitigations: (a) the external retrieval **wire contract is preserved** — the handler still emits an `image_analyses`-shaped list plus `image_results`, derived from `vision_analyses` (§4.4), so `chatbot_v2` needs no contract change; (b) explicit single-path regression tests (T3). If we prefer zero churn on the single path in v1, the alternative is to keep `image_analyses` for SINGLE and add `vision_analyses` only for MULTI — cleaner-later vs safer-now. Recommendation: unify (this section).
+> **Why phased, not unified (asymmetric risk).** A comparison-mode bug affects only users trying the new feature; a single-image-mode bug breaks *every* figure explanation. So v1 minimizes regression surface: SINGLE output is byte-for-byte unchanged, MULTI is purely additive. `reference_mapping` is the debugging record for the predictable failure — "why did it compare the wrong two images?" Full unification onto `VisionAnalysis` is documented, deferred tech debt (§13).
 
 ### 4.3 Escalation — resolve + one multimodal call (`reasoning/image_escalation.py`)
 
-Add a multi-image branch to `escalate()`, evaluated **before** the single-reference strategies when `query_intent.requires_multi_image`:
+Model IDs come from injected env (R13); Python keeps only defaults so tests/local run without env:
+
+```text
+VISION_MODEL_ID            = os.environ.get("VISION_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0")
+COMPARISON_VISION_MODEL_ID = os.environ.get("COMPARISON_VISION_MODEL_ID", "us.anthropic.claude-sonnet-4-5-20250929-v1:0")
+```
+
+New multi-image branch in `escalate()`, before the single-reference strategies, when `requires_multi_image`:
 
 ```text
 if query_intent and getattr(query_intent, "requires_multi_image", False):
-    resolved = []                                   # list[RankedResult], deterministic + scoped (§4.6)
+    resolved = []                                   # list[(RankedResult, ResolvedReference)]
     for ref in query_intent.figure_references[:_MAX_ESCALATION_IMAGES]:
-        img = self._resolve_figure_image(ref, results, scope_filter)   # extraction of existing logic
-        if img: resolved.append(img)
+        img, conf = self._resolve_figure_image(ref, results, scope_filter)   # §4.6, scoped + deterministic
+        if img: resolved.append((img, ResolvedReference(f"{ref.ref_type.title()} {ref.number}",
+                                                        img.retrieval_id, img.image_s3_key, conf)))
     if len(resolved) >= 2:
         intent = "compare" if query_intent.requires_comparison else "describe_each"
-        text, conf = self._invoke_vision_llm_multi(resolved, query, intent)   # ONE call, N image blocks
-        return EscalationResult(True, [VisionAnalysis(MULTI, text, conf, resolved, intent)])
+        text, vconf = self._invoke_vision_llm_multi([r for r,_ in resolved], query, intent,
+                                                    low_confidence=any(rr.confidence==LOW for _,rr in resolved))
+        return EscalationResult(True, vision_analysis=VisionAnalysis(
+            MULTI, text, vconf, [r for r,_ in resolved], [rr for _,rr in resolved], intent))
     if len(resolved) == 1:
-        return self._single(resolved[0], query, note_missing=True)     # R10 graceful degrade
-# else fall through to existing single-reference / score-based strategies (now wrapped as SINGLE)
+        return self._single(resolved[0][0], query, note_missing=True)     # R11 graceful degrade (SINGLE path)
+# else fall through to existing single-reference / score-based strategies (UNCHANGED)
 ```
 
-- `_resolve_figure_image(ref, results, scope_filter)` extracts the **existing** two-step logic: `_find_sibling_linked_images(results, ref.number)` first, then `_find_image_by_figure_ref_in_db(ref.ref_type, ref.number, scope_filter)`. Same anchored regex (`_build_reference_regex`), same scoping — no new matching rules (R11).
-- `_invoke_vision_llm_multi(resolved, query, intent)` builds **one** Bedrock message that **interleaves** a text label and an image block per figure ("Image 1 — Figure 2.1:", image, "Image 2 — Figure 4.1:", image, …), then the mode prompt (§4.5). Claude 3 messages accept multiple image blocks, so this is a single request. Exactly **one** vision call in multi-image mode.
-- Model: env-configurable `COMPARISON_VISION_MODEL_ID` (recommend a Claude 3.x Sonnet vision model for evaluative quality; existing Haiku `VISION_MODEL_ID` is an acceptable fallback). Exact id taken from existing generation config (§13 prereq).
+- `_resolve_figure_image` extracts the **existing** two-step logic (`_find_sibling_linked_images` → `_find_image_by_figure_ref_in_db`) and returns `(RankedResult|None, ResolutionConfidence)`. Same anchored regex + scoping — no new matching rules (R12).
+- `_invoke_vision_llm_multi` builds **one** Bedrock message **interleaving** a text label + image block per figure ("Image 1 — Figure 2.1:", image, …) then the mode prompt (§4.5), invoked with `COMPARISON_VISION_MODEL_ID` (Sonnet 4.5). Exactly **one** vision call. `_MAX_ESCALATION_IMAGES=2` retained (multimodal cost grows fast; 2 is the v1 boundary).
+- **Model split:** MULTI comparison uses **Sonnet 4.5**; the untouched single-image path uses **Haiku 4.5** (`VISION_MODEL_ID`). Both via Geo-US CRIS (US+Canada, zero data retention — ADR-006), so this inherits the project's residency posture — no new decision. IAM/env wiring in §4.10.
 
-### 4.4 Retrieval handler — union + wire-contract adapter (`retrieval/handler.py`)
+### 4.4 Retrieval handler — additive wire adapter (`retrieval/handler.py`)
 
-Build the response from `vision_analyses` while keeping the existing wire shape:
+SINGLE responses are unchanged. Only the MULTI branch adds behavior:
+
 ```text
-resolved = dedupe_by_retrieval_id(flatten(va.resolved_images for va in vision_analyses))
-response["image_results"]   = _build_image_results(dedupe_by_retrieval_id(final_results_images + resolved))   # R7
-response["image_analyses"]  = [{"image_s3_key": r.image_s3_key} for r in resolved]   # legacy shape, unchanged for chatbot
+if escalation_result.vision_analysis:                      # MULTI
+    va = escalation_result.vision_analysis
+    image_results  = _build_image_results(dedupe_by_retrieval_id(final_results_images + va.resolved_images))  # R7
+    image_analyses = [{"image_s3_key": r.image_s3_key} for r in va.resolved_images]  # derive wire shape for chatbot mapping
+else:                                                       # SINGLE / none — UNCHANGED
+    image_results  = _build_image_results(final_results_images)
+    image_analyses = [{"image_s3_key": a.image_s3_key} for a in escalation_result.image_analyses]
 ```
-This fixes the pre-existing gap where a DB-lookup-resolved figure (absent from `final_results`) had no displayable `retrieval_id`. No response-contract shape change.
+
+Fixes the pre-existing gap where a DB-lookup-resolved figure (absent from `final_results`) had no displayable `retrieval_id`. Wire shape unchanged; only the MULTI case derives it.
 
 ### 4.5 Vision prompts (the heart of the feature)
 
-Both prompts send **all** images in one call, interleaved with labels. Only the instruction block differs.
+Both send **all** images in one call, interleaved with labels. Only the instruction differs.
 
 **COMPARE** (when `requires_comparison`):
 ```text
@@ -166,65 +177,85 @@ You are shown multiple images, each labeled with its figure number (above each i
 
 The student asked: "<query>"
 
-Compare the figures. Structure your analysis:
+Compare the figures on how well they VISUALLY COMMUNICATE the subject. Structure your analysis:
 1. Per figure: briefly, what it depicts (labels, axes, steps shown).
 2. Similarities in how they present the subject.
 3. Differences (level of detail, clarity, completeness, what each omits).
 4. Strengths and weaknesses of EACH for the student's stated purpose.
-5. A direct, justified answer to the student's question (e.g., which does a better job, and why).
-Ground every claim in what is actually visible. If the images are insufficient to judge, say so.
+5. A direct, justified answer to the student's question, based only on what is visible.
+
+Constraints:
+- Judge ONLY visual-communication quality (clarity, labeling, layout, completeness of what is shown),
+  NOT the correctness of the underlying algorithm or concept.
+- Do NOT assume information from the surrounding course that is not visible in the images.
+- Do NOT infer an algorithm's correctness from how a figure looks.
+- If the images do not contain enough information to judge, say so rather than guessing.
+<if low_confidence>- Note that a referenced figure could not be identified with certainty and invite the student to confirm.</if>
 ```
 
-**DESCRIBE_EACH** (multi-image, no comparison verb — e.g. "explain both"):
+**DESCRIBE_EACH** (multi-image, no comparison verb):
 ```text
-You are analyzing figures from course materials to answer a student's question.
-You are shown multiple images, each labeled with its figure number (above each image).
-
-The student asked: "<query>"
-
-Describe each figure in turn: what it depicts, its key labels/axes/steps, and how it relates
-to the question. Do NOT rank or judge the figures against each other unless the student asked.
+... same header + query ...
+Describe each figure in turn: what it depicts, key labels/axes/steps, and how it relates to the question.
+Do NOT rank or judge the figures against each other unless the student asked. Ground claims in what is visible.
 ```
 
-The resulting `VisionAnalysis.analysis` is injected as grounding (§4.7); the chatbot's Sonnet writes the final answer from it. Prompt wording is expected to iterate post-launch — it is the primary quality lever, so it is isolated here for easy tuning.
+The resulting analysis is injected as grounding (§4.7); the chatbot's Sonnet 4.5 writes the final answer. Prompt wording is the primary quality lever, isolated here for tuning.
 
-### 4.6 Reference resolution & ambiguity
+### 4.6 Reference resolution, ambiguity & confidence
 
-A referenced number can resolve to multiple in-scope units (e.g. the querying module's own "Figure 2.1" and a cross-module-referenced file that also has a "Figure 2.1"). Resolution (`_resolve_figure_image`, and the ordering inside `_find_image_by_figure_ref_in_db`):
+A number can resolve to multiple in-scope units (e.g. the module's own "Figure 2.1" and a cross-module-referenced file's "Figure 2.1"). `_resolve_figure_image` returns the chosen image **and** a confidence:
 
-1. Prefer a **sibling-linked** match — a figure whose caption co-occurs with the query's retrieved context (strongest relevance signal).
-2. Else DB lookup within `scope_filter`, ordering candidates by **(a)** same `module_id` as the query context, then **(b)** retrieval rank / recency; take the **top** deterministically.
-3. Log `references_requested`, `candidates_per_reference`, and the chosen `retrieval_id` when >1 candidate existed, so ambiguous corpora are observable.
+| Situation | Confidence |
+|---|---|
+| Sibling-linked match (caption co-occurs with retrieved context) | HIGH |
+| Single DB match in scope | HIGH |
+| ≥2 candidates, same `module_id` | MEDIUM |
+| ≥2 candidates across modules | LOW |
 
-Scope isolation from `cross-module-file-referencing` is preserved — every lookup passes the same `scope_filter`, so a number is only ever matched within the student's allowed files. Cross-file duplicate numbers remain an inherent ambiguity (§13).
+Ordering when >1 candidate: (a) same `module_id` as query context, then (b) retrieval rank; take the top deterministically. All lookups pass the same `scope_filter` (isolation from `cross-module-file-referencing` preserved). On any LOW (or overall-low) resolution, the grounding section (§4.7) instructs the final answer to hedge rather than confidently compare a possibly-wrong image. `reference_mapping` records every requested→chosen decision for debugging/observability.
 
 ### 4.7 Reasoning — multi-image grounding, no short-circuit (`reasoning/reasoning_engine.py`)
 
 ```text
-multi = next((va for va in vision_analyses if va.mode == MULTI), None)
-if multi and query_intent.requires_multi_image:
-    section = _format_multi_image_section(query_intent.figure_references, multi)   # labels all figures; COMPARE vs DESCRIBE heading
-    inject section into answer/passages  → reaches chatbot Sonnet as grounding
-elif figure_reference set and SINGLE analysis present:
-    ... existing single-figure short-circuit (unchanged) ...
+va = escalation_result.vision_analysis
+if va and query_intent.requires_multi_image:
+    section = _format_multi_image_section(va)     # labels all figures (from reference_mapping);
+                                                  # COMPARE vs DESCRIBE heading; prepends an
+                                                  # ambiguity note if any ResolvedReference is LOW
+    inject section into answer/passages → reaches chatbot Sonnet 4.5 as grounding
+elif figure_reference set and image_analyses present:
+    ... existing single-figure short-circuit (UNCHANGED) ...
 ```
-The reasoning engine's own `_invoke_llm`/`_build_messages` stay text-only and unchanged — the visual reasoning already happened in §4.3.
 
-### 4.8 Chatbot — attach all figures (`chatbot_v2/src/figure_selection.py`, `src/main.py`)
+Reasoning's own `_invoke_llm`/`_build_messages` stay text-only — the visual reasoning already happened in §4.3.
 
-`select_figures`: when the query has ≥2 references (or escalation resolved ≥2 images), attach **all** resolved figures up to `_MAX_FIGURES` instead of collapsing to one. The existing key-matching loop over `image_results` already handles N images — only the single-figure cap for the multi-reference case is removed. `main.py` is unchanged: `build_figure_grounding` + `assemble_blocks` already take a list; the multi-image analysis arrives via `rag_context` grounding.
+### 4.8 Chatbot — attach all figures (`chatbot_v2/src/figure_selection.py`)
+
+When the query has ≥2 references (or escalation resolved ≥2 images), attach **all** resolved figures ≤ `_MAX_FIGURES` instead of collapsing to one. The existing key-matching loop over `image_results` already handles N images — only the single-figure cap for the multi-reference case is removed. `main.py` unchanged: grounding + `assemble_blocks` already take a list.
 
 ### 4.9 Edge cases
 
 | Case | Behavior |
 |---|---|
-| One of two figures not found | Analyze the found one; answer notes the other wasn't located (R10). |
-| Neither found | Fall back to current text answer / "couldn't find". |
-| >2 references | Resolve first 2 distinct; answer states only two were considered (bounded cost). |
+| One of two figures not found | Analyze the found one; note the other wasn't located (R11). |
+| Neither found | Current text answer / "couldn't find". |
+| >2 references | Resolve first 2 distinct; answer states only two were considered. |
 | Same figure twice ("2.1 vs 2.1") | De-duped → 1 reference → not multi-image → existing single path. |
-| Multi-image, no comparison verb ("explain 2.1 and 4.1") | DESCRIBE_EACH prompt; both figures shown. |
-| Same number in two in-scope files | §4.6 deterministic resolution + logging. |
+| Multi-image, no comparison verb | DESCRIBE_EACH; both figures shown. |
+| Same number in ≥2 in-scope files | §4.6 deterministic pick + confidence (MEDIUM/LOW) + hedge. |
 | Query stuffed with "figure" tokens | `_MAX_PARSED_REFERENCES` bounds lookups (abuse guard). |
+
+### 4.10 Model + IAM + env wiring (CDK)
+
+Follows the "Adding a Bedrock Model" checklist in `cdk-conventions`; the Claude 4.5 upgrade already did most of it.
+
+- **Model def** — reuse `SONNET_45` / `HAIKU_45` in `cdk/lib/constants/bedrock.ts` (single source of truth). No new constant.
+- **Env injection (R13)** — set `environment: { VISION_MODEL_ID: HAIKU_45.profileId, COMPARISON_VISION_MODEL_ID: SONNET_45.profileId }` on the retrieval/reasoning Lambda so Python is unaware of raw IDs and the model is swappable/kill-switchable without a code+image change.
+- **Pricing** — Sonnet 4.5 rate already in `pricing.py`; `_normalize_model_id` strips the `us.` prefix before lookup. No change.
+- **IAM (the one real delta)** — the retrieval role (`ragRetrievalPolicy` in `multimodal-rag-stack.ts`) grants `crisInvokeResources(HAIKU_45, …)` only; add `...crisInvokeResources(SONNET_45, this.region, this.account)` to the same `bedrock:InvokeModel` statement (inference-profile ARN + FM ARN per Geo-US destination Region). Explicit ARNs, least privilege, no wildcards (`iam-security-policy`).
+- **Marketplace** — already present via Haiku 4.5 (Anthropic); confirm, don't duplicate.
+- **Tests** — `SONNET_45` ARN assertions + env-var assertions in `cdk/test/iam-policies.test.ts` / stack test.
 
 ---
 
@@ -233,63 +264,82 @@ The reasoning engine's own `_invoke_llm`/`_build_messages` stay text-only and un
 ```
 "compare fig 2.1 and 4.1 …"
   → QueryAnalyzer: figure_references=[2.1,4.1], requires_multi_image=True, requires_comparison=True
-  → Escalation: resolve 2.1 + 4.1 (scoped, deterministic) → ONE vision call (COMPARE prompt)
-                → EscalationResult[ VisionAnalysis(MULTI, analysis, resolved=[2.1,4.1]) ]
-  → Handler: image_results ∪= resolved (deduped); image_analyses (legacy shape) derived
-  → Reasoning: inject "Visual Comparison of Figure 2.1 and 4.1" section (no short-circuit)
-  → Chatbot: select_figures attaches BOTH; Sonnet writes evaluative answer from grounding
+  → Escalation: resolve 2.1 + 4.1 (scoped, deterministic, +confidence) → ONE Sonnet-4.5 call (COMPARE prompt)
+                → EscalationResult(vision_analysis=VisionAnalysis(MULTI, analysis,
+                                   resolved=[2.1,4.1], reference_mapping=[{2.1→id,HIGH},{4.1→id,HIGH}]))
+  → Handler: image_results ∪= resolved (deduped); wire image_analyses derived from resolved
+  → Reasoning: inject "Visual Comparison of Figure 2.1 and 4.1" (+ hedge if any LOW); no short-circuit
+  → Chatbot: select_figures attaches BOTH; Sonnet 4.5 writes evaluative answer from grounding
   → Response: evaluative text + 2 figure blocks
 ```
 
 ---
 
-## 6. Tasks
+## 6. Tasks (phased — prove the reasoning path before touching IAM/deploy)
 
-- [ ] **T1.** `query_analyzer.py` + `data_models.py` (QueryIntent): `finditer` extraction, dedupe, parse cap; add `figure_references`, `requires_multi_image`, `requires_comparison` (+ `_COMPARISON_PATTERN`); retain singular `figure_reference`. Tests: 2-ref extraction; **"explain 2.1 and 4.1" → multi_image=True, comparison=False**; "compare …" → both True; dedupe; cap; single-ref back-compat.
-- [ ] **T2.** `data_models.py`: add `VisionMode` enum + `VisionAnalysis`; change `EscalationResult` to `vision_analyses`. Tests: construction/defaults; enum values.
-- [ ] **T3.** `image_escalation.py`: extract `_resolve_figure_image`; add multi-image branch; `_invoke_vision_llm_multi` (one interleaved message, mode-driven prompt from §4.5); wrap single path as `VisionAnalysis(SINGLE)`; `COMPARISON_VISION_MODEL_ID` env. Tests: **single call whose body has 2 image blocks**; COMPARE vs DESCRIBE_EACH prompt selection; one-found degrade (R10); cap-at-2; none-found fallback; **single-image path regression** (behavior unchanged).
-- [ ] **T4.** `retrieval/handler.py`: derive `image_results` (union resolved, dedupe) + legacy `image_analyses` from `vision_analyses`. Tests: DB-lookup-resolved figure appears in `image_results` with a resolvable `retrieval_id`.
-- [ ] **T5.** `reasoning_engine.py`: multi-image section (`_format_multi_image_section`, COMPARE/DESCRIBE heading, all labels); suppress short-circuit in multi-image mode; preserve single path. Tests: multi-image output is not a single verbatim analysis and labels both figures; single-figure path unchanged.
-- [ ] **T6.** `chatbot_v2/src/figure_selection.py`: multi-reference detection (`findall`); attach all resolved figures ≤ `_MAX_FIGURES`. Tests: 2-ref query attaches both `retrieval_id`s; single-ref regression.
-- [ ] **T7.** Ambiguity resolution ordering (§4.6) in `_find_image_by_figure_ref_in_db` + candidate logging. Tests: same number in two in-scope files resolves deterministically (own module preferred); >1 candidate is logged.
-- [ ] **T8.** CDK: `COMPARISON_VISION_MODEL_ID` env var on the retrieval/reasoning Lambda + `Template.fromStack()` assertion; confirm Bedrock `InvokeModel` IAM already covers the chosen model (no new resource).
-- [ ] **T9.** Frontend (verify): chat renderer shows multiple `figure` blocks in one turn; minimal fix only if needed (ESLint, no test framework).
-- [ ] **T10.** Manual E2E: doc with distinct Figure 2.1 & 4.1 → comparison query (evaluative answer + both figures); "explain both" (descriptive, both figures); one-missing and none-missing degradations.
+**Phase 1 — Data model + analysis**
+- [ ] **T1.** `query_analyzer.py` + `QueryIntent`: `finditer` extraction, dedupe, parse cap; add `figure_references`, `requires_multi_image`, `requires_comparison` (+ `_COMPARISON_PATTERN`); retain singular `figure_reference`. Tests: 2-ref extraction; **"explain 2.1 and 4.1" → multi_image=True, comparison=False**; "compare …" → both True; dedupe; cap; single-ref back-compat.
+- [ ] **T2.** `data_models.py`: add `VisionMode`, `ResolutionConfidence`, `ResolvedReference`, `VisionAnalysis` (MULTI); add `EscalationResult.vision_analysis` (**keep `image_analyses`**). Tests: construction/defaults; `reference_mapping` shape.
+
+**Phase 2 — Retrieval resolution**
+- [ ] **T7.** `_resolve_figure_image` + confidence ordering (§4.6) in `_find_image_by_figure_ref_in_db`; `reference_mapping`/candidate logging. Tests: same number in two in-scope files → deterministic pick, MEDIUM/LOW confidence; sibling-link → HIGH; >1 candidate logged.
+- [ ] **T3.** `image_escalation.py`: multi-image branch; `_invoke_vision_llm_multi` (one interleaved message → Sonnet 4.5 via `COMPARISON_VISION_MODEL_ID`); model IDs from env with defaults (R13); MULTI emits `VisionAnalysis`; **single path untouched (still Haiku 4.5)**. Tests: **one call whose body has 2 image blocks and targets the Sonnet 4.5 profile**; COMPARE vs DESCRIBE_EACH selection; COMPARE prompt contains the scope-limiting constraints (§4.5); one-found degrade (R11); cap-at-2; env-override respected; **SINGLE-path regression**.
+
+**Phase 3 — Grounding**
+- [ ] **T5.** `reasoning_engine.py`: `_format_multi_image_section` (labels all figures from `reference_mapping`, COMPARE/DESCRIBE heading, LOW-confidence hedge); suppress short-circuit in multi-image mode; preserve single path. Tests: multi-image output isn't a single verbatim analysis, labels both figures; hedge appears when a reference is LOW; single path unchanged.
+- [ ] **T4.** `retrieval/handler.py`: MULTI branch unions resolved into `image_results` + derives wire `image_analyses`; SINGLE branch unchanged. Tests: DB-lookup-resolved figure appears in `image_results`; SINGLE response byte-for-byte unchanged.
+
+**Phase 4 — UI**
+- [ ] **T6.** `figure_selection.py`: multi-reference detection; attach all resolved figures ≤ `_MAX_FIGURES`. Tests: 2-ref attaches both `retrieval_id`s; single-ref regression.
+- [ ] **T9.** Frontend (verify): chat renderer shows multiple `figure` blocks; minimal fix only if needed (ESLint, no test framework).
+
+**Phase 5 — Infrastructure**
+- [ ] **T8.** CDK (`multimodal-rag-stack.ts`): inject `VISION_MODEL_ID` + `COMPARISON_VISION_MODEL_ID` env from `bedrock.ts`; add `crisInvokeResources(SONNET_45, …)` to the retrieval role (today `HAIKU_45` only); confirm Marketplace perms. Add `SONNET_45` ARN + env assertions to `iam-policies.test.ts` / stack test. (Model def + pricing already exist.)
+- [ ] **T10.** Manual E2E (post-deploy): distinct Figure 2.1 & 4.1 → comparison (evaluative + both figures); "explain both" (descriptive); one-missing + none-missing; a cross-module duplicate number → confirm hedge.
 
 ## 7. Security / Trust Boundary
-References are parsed from the query and used only in the existing anchored, `scope_filter`-bounded DB lookup (`_build_reference_regex` + `_scope_predicate`) — multi-reference loops the same safe lookup (R11). `_MAX_PARSED_REFERENCES` bounds per-query work. No new Bedrock permission (same `InvokeModel`); the comparison model must be enabled for the account/region (§13). Course/module/file isolation from `cross-module-file-referencing` is preserved.
+References are parsed from the query and used only in the existing anchored, `scope_filter`-bounded DB lookup — multi-reference loops the same safe lookup (R12). `_MAX_PARSED_REFERENCES` bounds per-query work. The one new IAM grant is `bedrock:InvokeModel` for `SONNET_45` on the retrieval role via `crisInvokeResources()` (explicit inference-profile + destination-Region FM ARNs, no wildcards — `iam-security-policy`), asserted in `iam-policies.test.ts`. Sonnet 4.5 confirmed `ACTIVE` in ca-central-1. Course/module/file isolation preserved.
 
 ## 8. Observability
-Escalation: `requires_multi_image`, `requires_comparison`, prompt intent, references requested/resolved, candidates-per-reference, resolved `retrieval_id`s, model id, single-call latency. Reasoning: multi-image section injected (bool). Chatbot: figures attached count + intent. A requested-vs-resolved gap flags ingestion/caption coverage; a high candidates-per-reference flags corpus ambiguity.
+Structured fields correlated by `query_id` (consistent with existing `bedrock_call` events), from which CloudWatch metrics/Insights derive:
+- **Volume:** `multi_image_requests_total`, `comparison_requests_total` (COMPARE) vs describe_each, `sonnet_invocation_count`.
+- **Resolution health:** references requested vs resolved, `multi_image_resolution_success_rate` (all resolved), **`multi_image_partial_resolution_rate`** (e.g. requested 2, resolved 1 — the ingestion/caption-coverage signal), `resolution_confidence` distribution, `reference_mapping` (requested→chosen `retrieval_id`).
+- **Cost/latency:** single-call latency, avg input/output tokens, est. cost (via `pricing.py`).
+Reasoning: multi-image section injected + hedge applied (bools). Chatbot: figures attached count + intent.
 
 ## 9. Acceptance Criteria
-- **AC-R1/2/3:** `analyze("compare figure 2.1 and figure 4.1 …")` → `figure_references=[2.1,4.1]`, `requires_multi_image=True`, `requires_comparison=True`, `figure_reference==2.1`. `analyze("explain figure 2.1 and figure 4.1")` → `requires_multi_image=True`, `requires_comparison=False`.
-- **AC-R4/6:** Multi-image mode makes exactly **one** vision call whose request body has **two** image blocks; result is one `VisionAnalysis(MULTI)` with two `resolved_images`.
-- **AC-R5:** COMPARE query uses the compare prompt; multi-image-without-verb uses DESCRIBE_EACH.
-- **AC-R7:** A figure resolved via direct DB lookup (not in ranked results) appears in `image_results` with a resolvable `retrieval_id`.
-- **AC-R8:** Reasoning output for a multi-image query is not a single verbatim analysis and labels both figures.
-- **AC-R9:** `select_figures` returns both `retrieval_id`s (≤ `_MAX_FIGURES`) for the multi-image query; single-reference returns one.
-- **AC-R10:** With only 2.1 present, the answer covers 2.1 and notes 4.1 wasn't found; with neither, behavior matches today.
-- **AC-R11:** With the same number in two in-scope files, resolution is deterministic (own module preferred) and the multi-candidate case is logged; no lookup runs without the anchored regex + `scope_filter`.
+- **AC-R1/2/3:** `analyze("compare figure 2.1 and figure 4.1 …")` → `figure_references=[2.1,4.1]`, `requires_multi_image=True`, `requires_comparison=True`, `figure_reference==2.1`. `"explain figure 2.1 and figure 4.1"` → `requires_multi_image=True`, `requires_comparison=False`.
+- **AC-R4/R6:** Multi-image mode makes exactly **one** vision call whose body has **two** image blocks and uses the Sonnet 4.5 profile; result is one `VisionAnalysis(MULTI)`; `EscalationResult.image_analyses` (SINGLE) is untouched for single/no-ref queries.
+- **AC-R5:** COMPARE query uses the compare prompt including the visual-quality/no-correctness constraints; multi-image-without-verb uses DESCRIBE_EACH.
+- **AC-R7:** A DB-lookup-resolved figure appears in `image_results` with a resolvable `retrieval_id`; the SINGLE-query wire response is unchanged.
+- **AC-R8:** Two in-scope files with the same number → chosen deterministically, confidence MEDIUM/LOW, `reference_mapping` recorded; LOW triggers a hedge in the grounding.
+- **AC-R9:** Multi-image reasoning output is not a single verbatim analysis and labels both figures.
+- **AC-R10:** `select_figures` returns both `retrieval_id`s (≤ `_MAX_FIGURES`) for multi-image; single-reference returns one.
+- **AC-R11:** Only 2.1 present → answer covers 2.1 and notes 4.1 wasn't found; neither → today's fallback.
+- **AC-R13:** With `COMPARISON_VISION_MODEL_ID` set, the comparison call targets that id; unset → the Sonnet 4.5 default.
 
 ## 10. Test Strategy
-pytest, colocated `test_*.py`, factories, `monkeypatch`, deterministic — mock Bedrock and S3 (no network/creds). Critical-path test: mock `bedrock_client.invoke_model` and assert the serialized body carries **two** `image` blocks for a multi-image query (AC-R4). Plus mode-selection, degrade/cap/none, single-path regression, `image_results` union, and ambiguity-ordering tests. CDK assertion for T8. Run: `cd cdk && python -m pytest multimodal_rag_v2/ chatbot_v2/ -v` and `cd cdk && npm test`.
+pytest, colocated `test_*.py`, factories, `monkeypatch`, deterministic — mock Bedrock and S3 (no network/creds). Critical-path test: mock `invoke_model`, assert the serialized body carries **two** `image` blocks and the Sonnet 4.5 profile id (AC-R4). Plus: mode selection, COMPARE-prompt-constraints presence, confidence/`reference_mapping` + hedge, degrade/cap/none, **SINGLE-path regression (unchanged)**, `image_results` union, env-override. CDK `iam-policies.test.ts` ARN + env assertions (T8). Run: `cd cdk && python -m pytest multimodal_rag_v2/ chatbot_v2/ -v` and `cd cdk && npm test`.
 
 ## 11. Rollout
-Additive, backward-compatible — no schema change, no migration. Behavior changes only for queries with ≥2 references (previously mishandled). `COMPARISON_VISION_MODEL_ID` default lets the feature fall back to the existing vision model if a Sonnet vision model isn't enabled; flip to Sonnet once model access is confirmed.
+**Additive and wire-compatible.** The single-image path is **untouched** — for single/no-reference queries, `EscalationResult.image_analyses` and the response `image_analyses`/`image_results` are byte-for-byte unchanged (v1 does NOT migrate SINGLE to `VisionAnalysis`; deferred — §13). Only new ≥2-reference queries exercise the additive multi-image path (adds `vision_analysis`, derives its wire fields). No schema change, no migration. The retrieval role IAM grant + env vars (T8) are the only deploy-time delta, gated by the `predeploy` `npm test`. `COMPARISON_VISION_MODEL_ID` repoints to Haiku 4.5 as a kill-switch.
 
-## 12. What changed from iteration 2 (review response)
-- Reframed from "figure comparison" to **multi-image reasoning**; comparison is one prompt mode.
-- Split `requires_multi_image` (structural) from `requires_comparison` (verb-driven) — fixes mislabeling "explain both" as a comparison (R3).
-- Replaced overloaded `EscalationResult` optional fields with a unified `VisionAnalysis` (`SINGLE`/`MULTI`) model (R6, §4.2).
-- Added a dedicated vision-prompt section with COMPARE and DESCRIBE_EACH templates (§4.5).
-- Added explicit reference-ambiguity resolution (§4.6, R11).
+## 12. Refinement log
+**Iter 3:** reframed to *multi-image reasoning* (comparison = one mode); split `requires_multi_image` vs `requires_comparison`; unified `VisionAnalysis`; prompt section; ambiguity resolution.
+**Iter 4:** pinned Sonnet 4.5 (`SONNET_45` CRIS profile), single-image stays Haiku 4.5; residency resolved (Geo-US + zero-retention, ADR-006); grounded CDK/IAM.
+**Iter 5 (this review):**
+- **Phased the SINGLE→`VisionAnalysis` migration** — v1 keeps `image_analyses` untouched, adds `VisionAnalysis` for MULTI only (asymmetric-risk argument; §4.2).
+- **Model IDs moved to injected Lambda env** from `bedrock.ts` (R13, §4.3/§4.10) — swappable/kill-switch without code+image change.
+- **Hardened the COMPARE prompt** — judge visual-communication quality only, no correctness-from-appearance, no off-image assumptions (§4.5).
+- **Added `resolution_confidence` + `reference_mapping`** (§4.2/§4.6) with a LOW-confidence hedge.
+- **Expanded observability** with resolution-success/partial rates + token/cost metrics (§8).
+- **Reordered tasks into 5 phases**; corrected rollout wording to "additive; single path unchanged."
 
 ## 13. Residual Risks / Open Items (honest notes)
-- **Quality depends on the vision model.** Haiku is weaker at evaluative reasoning than Sonnet; Sonnet needs Bedrock model access (prereq before T3) and costs more. Bounded: fires only on ≥2-reference queries. Env-toggle with Haiku fallback.
-- **Comparison-verb detection is fuzzy.** False negatives fall back to DESCRIBE_EACH; acceptable because both images are in the vision call regardless (§4.1 note).
-- **Single-image path migration** to `VisionAnalysis` touches working code (regression-tested; wire contract preserved). Alternative low-churn modeling noted in §4.2.
+- **Deferred SINGLE→`VisionAnalysis` migration** is intentional tech debt to protect the load-bearing single-image path; schedule as a follow-up once MULTI is proven.
+- **Cost: Sonnet 4.5 ≈ 3× Haiku 4.5/token** ($3/$15 vs $1/$5 per 1M). Bounded — ≥2-reference comparison queries only, one call each; `COMPARISON_VISION_MODEL_ID` kill-switch. Model access + residency **resolved**.
+- **Comparison-verb detection is fuzzy** → DESCRIBE_EACH fallback; both images are in the call regardless.
+- **Cross-file duplicate figure numbers** can't be perfectly disambiguated; mitigated by deterministic pick + confidence + hedge (no longer a silent wrong answer).
 - **Frontend rendering assumed, not verified** (T9).
-- **>2 figures capped at 2** (v1) with a user-facing note; `MULTI` model already accommodates raising it.
-- **Cross-file duplicate figure numbers** remain inherently ambiguous; §4.6 makes resolution deterministic + observable but cannot disambiguate intent perfectly.
-- **Figure-level precision inherits ingestion limits** — page images are whole-page fallbacks and multi-figure pages are skipped as ambiguous during caption linking; a reference may resolve to a page image rather than a tight crop (pre-existing).
+- **>2 figures capped at 2** (v1); `MULTI` model accommodates raising it later.
+- **Figure-level precision inherits ingestion limits** — page images are whole-page fallbacks; multi-figure pages are skipped as ambiguous during caption linking, so a reference may resolve to a page image rather than a tight crop (pre-existing).

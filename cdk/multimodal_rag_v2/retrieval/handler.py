@@ -244,6 +244,54 @@ def _element_type_value(result: Any) -> str:
     return et.value if hasattr(et, "value") else et
 
 
+def _dedupe_by_retrieval_id(results: list) -> list:
+    """Preserve order, dropping later duplicates by retrieval_id."""
+    seen: set[str] = set()
+    out: list = []
+    for r in results:
+        rid = getattr(r, "retrieval_id", None)
+        if rid is not None and rid in seen:
+            continue
+        if rid is not None:
+            seen.add(rid)
+        out.append(r)
+    return out
+
+
+def _image_response_parts(
+    reasoning_result, final_results: list
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Build (wire image_analyses, image_results) for the response.
+
+    Multi-image (MULTI) escalation resolves figures that may NOT be in the ranked
+    results (a direct DB lookup). Union those into image_results (deduped) and derive
+    the wire image_analyses from them so the chatbot can map/display each figure. The
+    SINGLE path is UNCHANGED: reasoning_result.image_analyses is used verbatim and
+    image_results is built from final_results only.
+    """
+    vision_analysis = getattr(reasoning_result, "vision_analysis", None)
+    if vision_analysis is not None:
+        source = _dedupe_by_retrieval_id(
+            list(final_results) + list(vision_analysis.resolved_images)
+        )
+        wire = [
+            {"image_s3_key": r.image_s3_key, "analysis": "", "confidence": vision_analysis.confidence}
+            for r in vision_analysis.resolved_images
+            if r.image_s3_key
+        ]
+        return wire, _build_image_results(source)
+
+    wire = [
+        {
+            "image_s3_key": ia.image_s3_key,
+            "analysis": ia.analysis,
+            "confidence": ia.confidence,
+        }
+        for ia in reasoning_result.image_analyses
+    ]
+    return wire, _build_image_results(final_results)
+
+
 def _build_image_results(final_results: list) -> list[dict[str, Any]]:
     """Structured IMAGE blocks for the client.
 
@@ -610,19 +658,14 @@ def _handle_query(
         },
     )
 
+    wire_image_analyses, image_results = _image_response_parts(reasoning_result, final_results)
+
     return _build_response(200, {
         "answer": reasoning_result.answer,
         "sources": reasoning_result.sources,
         "escalation_used": reasoning_result.escalation_used,
-        "image_analyses": [
-            {
-                "image_s3_key": ia.image_s3_key,
-                "analysis": ia.analysis,
-                "confidence": ia.confidence,
-            }
-            for ia in reasoning_result.image_analyses
-        ],
-        "image_results": _build_image_results(final_results),
+        "image_analyses": wire_image_analyses,
+        "image_results": image_results,
         "table_results": _build_table_results(final_results),
         "formula_results": _build_formula_results(final_results),
     })

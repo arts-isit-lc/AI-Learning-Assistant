@@ -9,11 +9,16 @@ import pytest
 
 from ..models.data_models import (
     ElementType,
+    FigureReference,
     ImageAnalysis,
     QueryIntent,
     RankedResult,
     ReasoningResult,
+    ResolutionConfidence,
+    ResolvedReference,
     StructuredContext,
+    VisionAnalysis,
+    VisionMode,
 )
 from .context_builder import ContextBuilder
 from .image_escalation import EscalationResult, ImageEscalation
@@ -510,3 +515,139 @@ class TestModelConfiguration:
 
         call_args = mock_client.invoke_model.call_args
         assert call_args[1]["modelId"] == "anthropic.claude-3-sonnet-20240229-v1:0"
+
+
+# ---------------------------------------------------------------------------
+# Multi-image reasoning (T5): grounding section, no single-analysis short-circuit
+# ---------------------------------------------------------------------------
+
+
+def _multi_escalation_result(
+    prompt_intent: str = "compare",
+    low_confidence: bool = False,
+    resolved: tuple[str, ...] = ("Figure 2.1", "Figure 4.1"),
+) -> EscalationResult:
+    conf = ResolutionConfidence.LOW if low_confidence else ResolutionConfidence.HIGH
+    mapping = [
+        ResolvedReference(label, f"rid-{i}", f"s3://b/{i}.png", conf)
+        for i, label in enumerate(resolved)
+    ]
+    images = [
+        _make_ranked_result(f"rid-{i}", element_type=ElementType.IMAGE, image_s3_key=f"s3://b/{i}.png")
+        for i, _ in enumerate(resolved)
+    ]
+    va = VisionAnalysis(
+        mode=VisionMode.MULTI,
+        analysis="AI comparison text here.",
+        confidence=0.9,
+        resolved_images=images,
+        reference_mapping=mapping,
+        prompt_intent=prompt_intent,
+    )
+    return EscalationResult(escalation_used=True, vision_analysis=va)
+
+
+def _multi_intent(compare: bool = True, refs: tuple[str, ...] = ("2.1", "4.1")) -> QueryIntent:
+    frefs = [FigureReference("figure", n) for n in refs]
+    return QueryIntent(
+        requires_image=True,
+        requires_figure_lookup=True,
+        figure_reference=frefs[0],
+        figure_references=frefs,
+        requires_multi_image=True,
+        requires_comparison=compare,
+    )
+
+
+class TestMultiImageReasoning:
+    """MULTI vision analysis is injected as grounding; no single-analysis short-circuit."""
+
+    def test_multi_sets_vision_analysis_and_injects_grounding(self) -> None:
+        mock_client = MagicMock()
+        mock_client.invoke_model.return_value = _mock_bedrock_response("Generated comparison answer.")
+        mock_escalation = MagicMock(spec=ImageEscalation)
+        mock_escalation.escalate.return_value = _multi_escalation_result("compare")
+
+        engine = ReasoningEngine(bedrock_client=mock_client, image_escalation=mock_escalation)
+        result = engine.generate_answer(
+            query="compare figure 2.1 and figure 4.1",
+            context=_make_context(),
+            ranked_results=[_make_ranked_result()],
+            query_intent=_multi_intent(compare=True),
+        )
+
+        assert result.vision_analysis is not None
+        assert result.vision_analysis.mode is VisionMode.MULTI
+        assert result.escalation_used is True
+        # NOT the single-figure verbatim short-circuit
+        assert not result.answer.startswith("Based on my visual analysis of")
+        # The multi-image section reached the reasoning LLM prompt (grounding)
+        body = json.loads(mock_client.invoke_model.call_args.kwargs["body"])
+        user_message = body["messages"][-1]["content"]
+        assert "Visual Comparison of Figure 2.1 and Figure 4.1" in user_message
+        assert "AI comparison text here." in user_message
+
+    def test_format_section_compare_labels_both_figures(self) -> None:
+        engine = ReasoningEngine()
+        va = _multi_escalation_result("compare").vision_analysis
+        section = engine._format_multi_image_section(va, query_intent=_multi_intent(True))
+        assert section.startswith("## Visual Comparison of Figure 2.1 and Figure 4.1")
+        assert "AI comparison text here." in section
+
+    def test_format_section_describe_heading(self) -> None:
+        engine = ReasoningEngine()
+        va = _multi_escalation_result("describe_each").vision_analysis
+        section = engine._format_multi_image_section(va, query_intent=_multi_intent(False))
+        assert section.startswith("## Visual Analysis of Figure 2.1 and Figure 4.1")
+
+    def test_missing_figure_is_noted(self) -> None:
+        engine = ReasoningEngine()
+        # Requested 2.1 and 4.1 but only 2.1 resolved
+        va = _multi_escalation_result("describe_each", resolved=("Figure 2.1",)).vision_analysis
+        section = engine._format_multi_image_section(va, query_intent=_multi_intent(True, refs=("2.1", "4.1")))
+        assert "Figure 4.1 could not be located" in section
+
+    def test_low_confidence_hedge_present_only_when_low(self) -> None:
+        engine = ReasoningEngine()
+        hedged = engine._format_multi_image_section(
+            _multi_escalation_result("compare", low_confidence=True).vision_analysis,
+            query_intent=_multi_intent(True),
+        )
+        plain = engine._format_multi_image_section(
+            _multi_escalation_result("compare", low_confidence=False).vision_analysis,
+            query_intent=_multi_intent(True),
+        )
+        assert "could not be identified with certainty" in hedged
+        assert "could not be identified with certainty" not in plain
+
+    def test_context_injection_prepends_multi_section(self) -> None:
+        engine = ReasoningEngine()
+        engine._last_query_intent = _multi_intent(True)
+        formatted = engine._format_context_with_escalation(
+            _make_context(), _multi_escalation_result("compare")
+        )
+        assert formatted.startswith("## Visual Comparison of Figure 2.1 and Figure 4.1")
+
+    def test_single_reference_short_circuit_unchanged(self) -> None:
+        """SINGLE path (image_analyses) still returns the verbatim analysis; vision_analysis None."""
+        mock_escalation = MagicMock(spec=ImageEscalation)
+        mock_escalation.escalate.return_value = EscalationResult(
+            escalation_used=True,
+            image_analyses=[ImageAnalysis("s3://b/1.png", "single analysis", 0.9)],
+        )
+        engine = ReasoningEngine(bedrock_client=MagicMock(), image_escalation=mock_escalation)
+        intent = QueryIntent(
+            requires_image=True,
+            requires_figure_lookup=True,
+            figure_reference=FigureReference("figure", "2.1"),
+            figure_references=[FigureReference("figure", "2.1")],
+            requires_multi_image=False,
+        )
+        result = engine.generate_answer(
+            query="explain figure 2.1",
+            context=_make_context(),
+            ranked_results=[_make_ranked_result()],
+            query_intent=intent,
+        )
+        assert result.answer.startswith("Based on my visual analysis of Figure 2.1")
+        assert result.vision_analysis is None

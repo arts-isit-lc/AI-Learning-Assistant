@@ -111,3 +111,68 @@ class TestBuildImageResults:
     def test_excludes_images_without_s3_key(self):
         results = [_result(ElementType.IMAGE, "img-2", "p", 0.9, {}, "desc", image_s3_key=None)]
         assert handler._build_image_results(results) == []
+
+
+# ---------------------------------------------------------------------------
+# T4: multi-image response assembly (union resolved figures, derive wire shape)
+# ---------------------------------------------------------------------------
+
+
+class TestDedupeByRetrievalId:
+    def test_drops_later_duplicates_preserving_order(self):
+        a = _result(ElementType.IMAGE, "r1", "p", image_s3_key="s3://b/1.png")
+        b = _result(ElementType.IMAGE, "r2", "p", image_s3_key="s3://b/2.png")
+        a_dup = _result(ElementType.IMAGE, "r1", "p", image_s3_key="s3://b/1.png")
+        out = handler._dedupe_by_retrieval_id([a, b, a_dup])
+        assert [r.retrieval_id for r in out] == ["r1", "r2"]
+
+
+class TestImageResponsePartsSingle:
+    """SINGLE path is unchanged: image_analyses verbatim, image_results from final only."""
+
+    def test_single_path_unchanged(self):
+        ia = SimpleNamespace(image_s3_key="s3://b/1.png", analysis="desc", confidence=0.9)
+        reasoning_result = SimpleNamespace(vision_analysis=None, image_analyses=[ia])
+        final = [
+            _result(
+                ElementType.IMAGE, "img-1", "p", 0.95,
+                {"provenance_page_num": 5}, "Fig 1", "s3://b/1.png",
+            )
+        ]
+        wire, image_results = handler._image_response_parts(reasoning_result, final)
+        assert wire == [{"image_s3_key": "s3://b/1.png", "analysis": "desc", "confidence": 0.9}]
+        assert [r["retrieval_id"] for r in image_results] == ["img-1"]
+
+
+class TestImageResponsePartsMulti:
+    """MULTI path: resolved figures union into image_results; wire derived from them."""
+
+    def test_db_lookup_figure_appears_in_image_results(self):
+        # Resolved via a direct DB lookup -> NOT present in final_results (the gap R7 fixes).
+        db_img = _result(
+            ElementType.IMAGE, "db-img", "p", 1.0,
+            {"provenance_page_num": 2, "module_id": "m1"}, "Figure 4.1", "s3://b/41.png",
+        )
+        vision_analysis = SimpleNamespace(resolved_images=[db_img], confidence=0.9)
+        reasoning_result = SimpleNamespace(vision_analysis=vision_analysis, image_analyses=[])
+        final = [_result(ElementType.TEXT, "t1", "p", 0.7, {}, "text")]  # no ranked images
+
+        wire, image_results = handler._image_response_parts(reasoning_result, final)
+        ids = [r["retrieval_id"] for r in image_results]
+        assert "db-img" in ids  # resolvable retrieval_id surfaced for display
+        assert wire == [{"image_s3_key": "s3://b/41.png", "analysis": "", "confidence": 0.9}]
+
+    def test_unions_and_dedupes_with_ranked_images(self):
+        ranked_img = _result(ElementType.IMAGE, "img-1", "p", 0.9, {}, "F1", "s3://b/1.png")
+        resolved_dup = _result(ElementType.IMAGE, "img-1", "p", 1.0, {}, "F1", "s3://b/1.png")
+        resolved_new = _result(ElementType.IMAGE, "img-2", "p", 1.0, {}, "F2", "s3://b/2.png")
+        vision_analysis = SimpleNamespace(
+            resolved_images=[resolved_dup, resolved_new], confidence=0.8
+        )
+        reasoning_result = SimpleNamespace(vision_analysis=vision_analysis, image_analyses=[])
+
+        wire, image_results = handler._image_response_parts(reasoning_result, [ranked_img])
+        ids = [r["retrieval_id"] for r in image_results]
+        assert ids.count("img-1") == 1  # deduped
+        assert "img-2" in ids
+        assert {w["image_s3_key"] for w in wire} == {"s3://b/1.png", "s3://b/2.png"}

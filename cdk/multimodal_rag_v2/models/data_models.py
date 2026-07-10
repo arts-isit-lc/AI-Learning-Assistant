@@ -37,6 +37,21 @@ class ElementType(Enum):
     FORMULA = "formula"
 
 
+class VisionMode(Enum):
+    """Structural mode of a VisionAnalysis: one image vs. several co-analyzed."""
+
+    SINGLE = "single"
+    MULTI = "multi"
+
+
+class ResolutionConfidence(Enum):
+    """Confidence that a parsed figure reference resolved to the intended image."""
+
+    HIGH = "high"      # sibling-linked, or a single in-scope DB match
+    MEDIUM = "medium"  # multiple candidates within the same module
+    LOW = "low"        # candidates span multiple modules — may be the wrong figure
+
+
 # ---------------------------------------------------------------------------
 # Layer 1: Ingestion data models
 # ---------------------------------------------------------------------------
@@ -179,6 +194,12 @@ class QueryIntent:
     lecture_number: int | None = None
     week_number: int | None = None
     figure_reference: FigureReference | None = None
+    # Multi-image reasoning (multi-figure comparison): figure_references holds ALL
+    # distinct references parsed from the query in order; figure_reference remains
+    # the first (or None) so single-reference consumers are unaffected.
+    figure_references: list[FigureReference] = field(default_factory=list)
+    requires_multi_image: bool = False  # True when >= 2 distinct references
+    requires_comparison: bool = False   # True when comparison language AND multi-image
 
 
 @dataclass
@@ -258,6 +279,9 @@ class ReasoningResult:
     sources: list[str]
     escalation_used: bool = False
     image_analyses: list[ImageAnalysis] = field(default_factory=list)
+    # Set for the multi-image (MULTI) path so the retrieval handler can surface the
+    # resolved figures (image_results union + wire image_analyses). None for SINGLE.
+    vision_analysis: VisionAnalysis | None = None
 
 
 @dataclass
@@ -267,6 +291,37 @@ class ImageAnalysis:
     image_s3_key: str
     analysis: str
     confidence: float
+
+
+@dataclass
+class ResolvedReference:
+    """Audit record mapping a requested figure reference to the image chosen for it.
+
+    Recorded on every multi-image resolution so debugging "why did it compare the
+    wrong two images?" is a data lookup, not a guess.
+    """
+
+    reference: str  # e.g. "Figure 2.1"
+    retrieval_id: str
+    image_s3_key: str
+    confidence: ResolutionConfidence
+
+
+@dataclass
+class VisionAnalysis:
+    """Product of a multi-image (MULTI) vision call over >= 2 co-presented figures.
+
+    v1 uses this for the MULTI path only; the single-image path continues to return
+    ImageAnalysis (see EscalationResult). SINGLE is reserved for a later migration
+    that unifies both paths onto this model.
+    """
+
+    mode: VisionMode
+    analysis: str
+    confidence: float  # vision-model confidence in the analysis
+    resolved_images: list[RankedResult] = field(default_factory=list)
+    reference_mapping: list[ResolvedReference] = field(default_factory=list)
+    prompt_intent: str = "describe_each"  # "compare" | "describe_each"
 
 
 # ---------------------------------------------------------------------------

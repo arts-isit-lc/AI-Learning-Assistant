@@ -15,12 +15,27 @@ from typing import Any
 
 from aws_lambda_powertools import Logger
 
-from ..models.data_models import ImageAnalysis, RankedResult
+from ..models.data_models import (
+    ImageAnalysis,
+    RankedResult,
+    ResolutionConfidence,
+    ResolvedReference,
+    VisionAnalysis,
+    VisionMode,
+)
 
 logger = Logger(service="multimodal-rag-reasoning")
 
-# Claude Haiku 4.5 model ID for vision analysis (Geo-US cross-Region inference)
-VISION_MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+# Vision model IDs are injected as Lambda env vars from cdk/lib/constants/bedrock.ts
+# (single source of truth); the defaults keep local/unit runs working without env.
+# Single-image escalation uses Haiku 4.5; the multi-image comparison call uses the
+# stronger Sonnet 4.5 (COMPARISON_VISION_MODEL_ID). Both route via Geo-US CRIS.
+VISION_MODEL_ID = os.environ.get(
+    "VISION_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+)
+COMPARISON_VISION_MODEL_ID = os.environ.get(
+    "COMPARISON_VISION_MODEL_ID", "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+)
 
 # Max images to vision-analyze per escalation. Kept at 2 so a generic two-image
 # request ("compare the two diagrams") still works; the calls run in PARALLEL
@@ -31,10 +46,16 @@ _MAX_ESCALATION_IMAGES = int(os.environ.get("ESCALATION_MAX_IMAGES", "2"))
 
 @dataclass
 class EscalationResult:
-    """Result of image escalation processing."""
+    """Result of image escalation processing.
+
+    ``image_analyses`` carries the SINGLE-image path output and is UNCHANGED in v1.
+    The multi-image path instead sets ``vision_analysis`` (one MULTI product over
+    >= 2 co-presented figures). The two are mutually exclusive per escalation.
+    """
 
     escalation_used: bool
     image_analyses: list[ImageAnalysis] = field(default_factory=list)
+    vision_analysis: VisionAnalysis | None = None
 
 
 class ImageEscalation:
@@ -108,6 +129,27 @@ class ImageEscalation:
         )
 
         try:
+            # Strategy 0 (multi-image): >= 2 distinct references -> resolve each and
+            # co-present ALL of them in ONE vision call (Sonnet 4.5). Additive; the
+            # SINGLE-image strategies below are untouched.
+            if getattr(query_intent, "requires_multi_image", False):
+                multi = self._escalate_multi_image(results, query, query_intent, scope_filter)
+                if multi is not None:
+                    va = multi.vision_analysis
+                    logger.info(
+                        "Escalation complete via multi-image strategy",
+                        extra={
+                            "prompt_intent": va.prompt_intent if va else None,
+                            "references_requested": len(getattr(query_intent, "figure_references", []) or []),
+                            "references_resolved": len(va.reference_mapping) if va else 0,
+                            "escalation_latency_ms": round((time.time() - escalation_start) * 1000, 2),
+                        },
+                    )
+                    return multi
+                logger.info(
+                    "Multi-image escalation resolved nothing; falling back to standard strategies"
+                )
+
             # Strategy 1: If figure_reference is set, find sibling-linked images
             if query_intent is not None and query_intent.figure_reference is not None:
                 logger.info(
@@ -379,11 +421,14 @@ class ImageEscalation:
             # "Figure 4.1 / 40 / 24"; anchor the number with non-digit/non-dot
             # boundaries via a POSIX regex so "figure 4" != "figure 4.1".
             ref_regex = self._build_reference_regex(ref_type, number)
+            # ORDER BY retrieval_id makes the single-pick deterministic when several
+            # in-scope images match the same reference number (R12).
             cur.execute(f"""
                 SELECT retrieval_id, embedding_text, metadata
                 FROM retrieval_units
                 WHERE element_type = 'image'
                 AND embedding_text ~* %s{scope_sql}
+                ORDER BY retrieval_id
                 LIMIT 1;
             """, (ref_regex, *scope_params))
 
@@ -739,3 +784,254 @@ class ImageEscalation:
         else:
             # Default to png for unknown extensions
             return "image/png"
+
+    # -----------------------------------------------------------------------
+    # Multi-image reasoning (>= 2 referenced figures co-presented in ONE call)
+    # -----------------------------------------------------------------------
+
+    def _escalate_multi_image(
+        self,
+        results: list[RankedResult],
+        query: str,
+        query_intent: Any,
+        scope_filter: dict | None,
+    ) -> EscalationResult | None:
+        """Resolve every referenced figure and analyze them in ONE vision call.
+
+        Returns an EscalationResult carrying a single MULTI VisionAnalysis, or None
+        when nothing resolved / the vision call failed (caller then falls back to the
+        SINGLE-image strategies). When only one of several references resolves we
+        still return a MULTI product (describe_each) so the grounding layer can note
+        the missing figure (R11); the reference_mapping-vs-figure_references gap is
+        the partial-resolution signal.
+        """
+        references = getattr(query_intent, "figure_references", None) or []
+        resolved_images: list[RankedResult] = []
+        mapping: list[ResolvedReference] = []
+        for ref in references[:_MAX_ESCALATION_IMAGES]:
+            image, confidence = self._resolve_figure_image(
+                ref, results, scope_filter=scope_filter
+            )
+            if image is not None and image.image_s3_key:
+                resolved_images.append(image)
+                mapping.append(
+                    ResolvedReference(
+                        reference=f"{ref.ref_type.title()} {ref.number}",
+                        retrieval_id=image.retrieval_id,
+                        image_s3_key=image.image_s3_key,
+                        confidence=confidence,
+                    )
+                )
+
+        if not resolved_images:
+            return None
+
+        # Compare only when the student asked to AND we actually have >= 2 images;
+        # otherwise describe (e.g. only one of two references resolved).
+        prompt_intent = (
+            "compare"
+            if getattr(query_intent, "requires_comparison", False) and len(resolved_images) >= 2
+            else "describe_each"
+        )
+        labels = [rr.reference for rr in mapping]
+        low_confidence = any(rr.confidence == ResolutionConfidence.LOW for rr in mapping)
+
+        analysis_text, vision_confidence = self._invoke_vision_llm_multi(
+            resolved_images, labels, query, prompt_intent, low_confidence=low_confidence
+        )
+        if analysis_text is None:
+            return None
+
+        return EscalationResult(
+            escalation_used=True,
+            vision_analysis=VisionAnalysis(
+                mode=VisionMode.MULTI,
+                analysis=analysis_text,
+                confidence=vision_confidence,
+                resolved_images=resolved_images,
+                reference_mapping=mapping,
+                prompt_intent=prompt_intent,
+            ),
+        )
+
+    def _resolve_figure_image(
+        self, ref: Any, results: list[RankedResult], scope_filter: dict | None = None
+    ) -> tuple[RankedResult | None, ResolutionConfidence]:
+        """Resolve one figure reference to an image plus a resolution confidence.
+
+        Reuses the existing strategies: a sibling-linked image (co-occurs with the
+        query's retrieved context) is the strongest signal -> HIGH. Otherwise a
+        scoped, deterministic direct DB lookup provides the image, and confidence
+        reflects ambiguity: a lone in-scope match -> HIGH; several candidates in one
+        module -> MEDIUM; candidates spanning modules -> LOW (possibly wrong figure).
+        """
+        sibling_images = self._find_sibling_linked_images(results, ref.number)
+        if sibling_images:
+            return sibling_images[0], ResolutionConfidence.HIGH
+
+        image = self._find_image_by_figure_ref_in_db(
+            ref.ref_type, ref.number, scope_filter=scope_filter
+        )
+        if image is None:
+            return None, ResolutionConfidence.LOW
+
+        count, module_count = self._count_image_candidates(
+            ref.ref_type, ref.number, scope_filter=scope_filter
+        )
+        if count >= 2 and module_count >= 2:
+            confidence = ResolutionConfidence.LOW
+        elif count >= 2:
+            confidence = ResolutionConfidence.MEDIUM
+        else:
+            confidence = ResolutionConfidence.HIGH
+        return image, confidence
+
+    def _count_image_candidates(
+        self, ref_type: str, number: str, scope_filter: dict | None = None
+    ) -> tuple[int, int]:
+        """Count in-scope IMAGE units whose text matches the EXACT reference and how
+        many distinct modules they span. Used only to assign resolution confidence.
+
+        Returns (candidate_count, distinct_module_count); (0, 0) on no-DB/error.
+        """
+        if self._db_connection_factory is None:
+            return 0, 0
+        try:
+            conn = self._db_connection_factory()
+            if conn is None:
+                return 0, 0
+            cur = conn.cursor()
+            scope_sql, scope_params = self._scope_predicate(scope_filter)
+            ref_regex = self._build_reference_regex(ref_type, number)
+            cur.execute(f"""
+                SELECT metadata->>'module_id'
+                FROM retrieval_units
+                WHERE element_type = 'image'
+                AND embedding_text ~* %s{scope_sql}
+                LIMIT 10;
+            """, (ref_regex, *scope_params))
+            rows = cur.fetchall()
+            cur.close()
+            modules = {r[0] for r in rows if r and r[0] is not None}
+            return len(rows), len(modules)
+        except Exception:
+            logger.exception("Error counting figure-reference candidates")
+            return 0, 0
+
+    def _invoke_vision_llm_multi(
+        self,
+        images: list[RankedResult],
+        labels: list[str],
+        query: str,
+        prompt_intent: str,
+        low_confidence: bool = False,
+    ) -> tuple[str | None, float]:
+        """Invoke the multi-image vision model (Sonnet 4.5) with ALL images in ONE call.
+
+        Interleaves a text label and an image block per figure, then the mode prompt.
+        Returns (analysis_text, confidence); (None, 0.0) if no image could be fetched
+        or the call fails (caller degrades gracefully).
+        """
+        try:
+            import json
+
+            content: list[dict] = []
+            for idx, (image, label) in enumerate(zip(images, labels), start=1):
+                if not image.image_s3_key:
+                    continue
+                image_bytes = self._fetch_image(image.image_s3_key)
+                if image_bytes is None:
+                    continue
+                content.append({"type": "text", "text": f"Image {idx} — {label}:"})
+                content.append(
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": self._get_media_type(image.image_s3_key),
+                            "data": base64.b64encode(image_bytes).decode("utf-8"),
+                        },
+                    }
+                )
+
+            if not any(block["type"] == "image" for block in content):
+                logger.warning("Multi-image vision call aborted: no images could be fetched")
+                return None, 0.0
+
+            content.append(
+                {"type": "text", "text": self._multi_image_prompt(query, prompt_intent, low_confidence)}
+            )
+
+            response = self.bedrock_client.invoke_model(
+                modelId=COMPARISON_VISION_MODEL_ID,
+                contentType="application/json",
+                accept="application/json",
+                body=json.dumps(
+                    {
+                        "anthropic_version": "bedrock-2023-05-31",
+                        "max_tokens": 1500,
+                        "messages": [{"role": "user", "content": content}],
+                    }
+                ),
+            )
+            response_body = json.loads(response["body"].read())
+            analysis_text = response_body["content"][0]["text"]
+            stop_reason = response_body.get("stop_reason", "end_turn")
+            confidence = 0.9 if stop_reason == "end_turn" else 0.7
+            logger.info(
+                "Multi-image vision analysis complete",
+                extra={
+                    "model_id": COMPARISON_VISION_MODEL_ID,
+                    "prompt_intent": prompt_intent,
+                    "image_count": sum(1 for b in content if b["type"] == "image"),
+                    "analysis_length": len(analysis_text),
+                },
+            )
+            return analysis_text, confidence
+        except Exception:
+            logger.exception("Failed to invoke multi-image vision LLM")
+            return None, 0.0
+
+    @staticmethod
+    def _multi_image_prompt(query: str, prompt_intent: str, low_confidence: bool = False) -> str:
+        """Build the trailing instruction block for a multi-image vision call.
+
+        COMPARE is scope-limited to visual-communication quality (NOT algorithm
+        correctness), so a "which demonstrates the algorithm better?" question does
+        not turn into an unsupported correctness judgment from appearance alone.
+        """
+        header = (
+            "You are analyzing figures from course materials to answer a student's question.\n"
+            "You are shown the images above, each labeled with its figure number.\n\n"
+            f'The student asked: "{query}"\n\n'
+        )
+        if prompt_intent == "compare":
+            body = (
+                "Compare the figures on how well they VISUALLY COMMUNICATE the subject. "
+                "Structure your analysis:\n"
+                "1. Per figure: briefly, what it depicts (labels, axes, steps shown).\n"
+                "2. Similarities in how they present the subject.\n"
+                "3. Differences (level of detail, clarity, completeness, what each omits).\n"
+                "4. Strengths and weaknesses of EACH for the student's stated purpose.\n"
+                "5. A direct, justified answer to the student's question, based only on what is visible.\n\n"
+                "Constraints:\n"
+                "- Judge ONLY visual-communication quality (clarity, labeling, layout, completeness "
+                "of what is shown), NOT the correctness of the underlying algorithm or concept.\n"
+                "- Do NOT assume information from the surrounding course that is not visible in the images.\n"
+                "- Do NOT infer an algorithm's correctness from how a figure looks.\n"
+                "- If the images do not contain enough information to judge, say so rather than guessing."
+            )
+        else:
+            body = (
+                "Describe each figure in turn: what it depicts, its key labels/axes/steps, and how it "
+                "relates to the question. Do NOT rank or judge the figures against each other unless the "
+                "student asked. Ground every claim in what is actually visible."
+            )
+        note = ""
+        if low_confidence:
+            note = (
+                "\n\nNote: one or more referenced figures could not be identified with certainty "
+                "(multiple figures in scope share that number). If a figure shown does not match what "
+                "the student meant, say so and invite them to confirm which figure they intended."
+            )
+        return header + body + note
