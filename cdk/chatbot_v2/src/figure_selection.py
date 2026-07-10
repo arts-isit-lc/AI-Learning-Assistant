@@ -52,6 +52,16 @@ _FORMULA_REF_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Detects DISTINCT numbered table references ("table 2.1") and comparison-intent
+# language. Used only to reinforce grounding when a student asks to compare two
+# specific tables; the deterministic comparison facts themselves arrive via the
+# retrieval context (rag_context), not from here.
+_TABLE_NUMBER_PATTERN = re.compile(r"\btable\s+(\d+(?:[.-]\d+)*)", re.IGNORECASE)
+_COMPARISON_VERB_PATTERN = re.compile(
+    r"\b(compare|comparison|versus|vs|difference|differences|better|worse|which)\b",
+    re.IGNORECASE,
+)
+
 
 def _log_candidate_scores(block_type: str, candidates: list | None) -> None:
     """Log the score distribution of candidate blocks (for threshold tuning).
@@ -454,6 +464,29 @@ def build_table_grounding(table_blocks: list[dict] | None) -> str:
         "These tables from the course materials are displayed alongside your reply. "
         "Reference and explain them directly; do NOT say a table cannot be found.\n"
         + "\n".join(lines)
+    )
+
+
+def build_comparison_grounding(table_blocks: list[dict] | None, query: str) -> str:
+    """Reinforce that two referenced tables are being COMPARED (table-native).
+
+    The deterministic, verified comparison facts are produced upstream (in the
+    retrieval Lambda) and arrive in the retrieval context, so this does NOT
+    restate facts — it just instructs the model to use that comparison and not
+    disclaim it. Fires only when the student named >= 2 distinct tables with a
+    comparison verb AND >= 2 table blocks are being shown.
+    """
+    if not table_blocks or len(table_blocks) < 2:
+        return ""
+    numbers = {m.group(1) for m in _TABLE_NUMBER_PATTERN.finditer(query or "")}
+    if len(numbers) < 2 or _COMPARISON_VERB_PATTERN.search(query or "") is None:
+        return ""
+    return (
+        "## Table comparison\n"
+        "The tables shown below are being compared for the student. A deterministic, "
+        "verified comparison of them (shared/unique columns, sizes, and differing values) "
+        "appears in the retrieved context above — use it to explain concretely how the "
+        "tables differ. Do NOT say you cannot compare them, and do NOT invent columns or cells."
     )
 
 

@@ -52,6 +52,28 @@ class ResolutionConfidence(Enum):
     LOW = "low"        # candidates span multiple modules — may be the wrong figure
 
 
+class ComparisonType(Enum):
+    """The content type a structured comparison operates on.
+
+    v1 ships TABLE only; FORMULA is added by the deferred formula-comparison
+    spec. Used as the registry key that selects a resolver + comparator.
+    """
+
+    TABLE = "table"
+
+
+class ComparisonIntent(Enum):
+    """Prompt shape for a structured comparison: evaluative vs. side-by-side.
+
+    Mirrors the multi-image feature's ``compare`` / ``describe_each`` intents but
+    as a typed enum. v1 only produces COMPARE (comparison verb present); DESCRIBE
+    is reserved for a future multi-referent-without-verb path.
+    """
+
+    COMPARE = "compare"
+    DESCRIBE = "describe"
+
+
 # ---------------------------------------------------------------------------
 # Layer 1: Ingestion data models
 # ---------------------------------------------------------------------------
@@ -200,6 +222,10 @@ class QueryIntent:
     figure_references: list[FigureReference] = field(default_factory=list)
     requires_multi_image: bool = False  # True when >= 2 distinct references
     requires_comparison: bool = False   # True when comparison language AND multi-image
+    # Table-native comparison: >= 2 distinct TABLE references AND comparison
+    # language. Independent of the image path; when true the reasoning engine
+    # runs the deterministic table comparator instead of image escalation.
+    requires_table_comparison: bool = False
 
 
 @dataclass
@@ -282,6 +308,9 @@ class ReasoningResult:
     # Set for the multi-image (MULTI) path so the retrieval handler can surface the
     # resolved figures (image_results union + wire image_analyses). None for SINGLE.
     vision_analysis: VisionAnalysis | None = None
+    # Set for the table-native comparison path so the handler can union the
+    # resolved tables into table_results. Additive; None for all other queries.
+    structured_comparison: StructuredComparison | None = None
 
 
 @dataclass
@@ -322,6 +351,95 @@ class VisionAnalysis:
     resolved_images: list[RankedResult] = field(default_factory=list)
     reference_mapping: list[ResolvedReference] = field(default_factory=list)
     prompt_intent: str = "describe_each"  # "compare" | "describe_each"
+
+
+# ---------------------------------------------------------------------------
+# Structured comparison (table-native) models
+#
+# Non-visual counterpart to VisionAnalysis: compares the STRUCTURED content of
+# two referents (v1: tables) deterministically. The comparator is the source of
+# truth — it computes `ComparisonFacts`; the LLM only explains them. No image
+# bytes and no comparison LLM call are involved.
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ResolvedReferent:
+    """One referenced item resolved to its structured content + confidence.
+
+    ``structured_content`` is the ONLY input the comparator reads (a plain dict,
+    e.g. {headers, rows, summary} for a table) — keeping the comparator pure and
+    testable without retrieval-layer objects. ``result`` carries the full
+    RankedResult purely for the retrieval handler's display union (table_results)
+    and MUST NOT be read by the comparator.
+    """
+
+    reference: str  # e.g. "Table 2.1"
+    retrieval_id: str
+    parent_element_id: str
+    confidence: ResolutionConfidence
+    structured_content: dict[str, Any] = field(default_factory=dict)
+    result: RankedResult | None = None
+
+
+@dataclass
+class TableShape:
+    """Per-referent shape/columns of a table (N-way-ready)."""
+
+    label: str
+    n_rows: int
+    n_cols: int
+    columns: list[str] = field(default_factory=list)
+
+
+@dataclass
+class RowAlignmentResult:
+    """Result of aligning rows across referents on a chosen key column.
+
+    ``differing_cells`` is bounded; ``unaligned_by_label`` maps each referent's
+    label to how many of its keys were not shared by all referents.
+    """
+
+    key_columns: list[str] = field(default_factory=list)
+    aligned_rows: int = 0
+    differing_cells: list[dict[str, Any]] = field(default_factory=list)
+    unaligned_by_label: dict[str, int] = field(default_factory=dict)
+
+
+@dataclass
+class ComparisonFacts:
+    """Base/marker for the typed facts a comparator produces."""
+
+
+@dataclass
+class TableComparisonFacts(ComparisonFacts):
+    """Deterministic, verified diff between tables (N-way-ready)."""
+
+    per_referent: list[TableShape] = field(default_factory=list)
+    shared_columns: list[str] = field(default_factory=list)
+    unique_columns: dict[str, list[str]] = field(default_factory=dict)
+    row_alignment: RowAlignmentResult | None = None
+
+
+@dataclass
+class StructuredComparison:
+    """Product of a structured comparison over >= 1 resolved referents.
+
+    ``referents`` are the comparator inputs (and grounding labels/confidence);
+    ``resolved_results`` exposes the full RankedResults for the handler's
+    display union. Mirrors VisionAnalysis (referents/facts vs. resolved images).
+    """
+
+    comparison_type: ComparisonType
+    intent: ComparisonIntent
+    referents: list[ResolvedReferent] = field(default_factory=list)
+    facts: ComparisonFacts | None = None
+    degraded: bool = False
+
+    @property
+    def resolved_results(self) -> list[RankedResult]:
+        """Full RankedResults for the referents (for the display union)."""
+        return [r.result for r in self.referents if r.result is not None]
 
 
 # ---------------------------------------------------------------------------

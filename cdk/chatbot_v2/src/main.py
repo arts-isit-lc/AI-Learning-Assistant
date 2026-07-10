@@ -714,6 +714,7 @@ def handler(event, context):
             from figure_selection import (
                 select_figures as select_figs, select_tables, select_formulas,
                 build_figure_grounding, build_table_grounding, build_formula_grounding,
+                build_comparison_grounding,
             )
             selected_figures = select_figs(retrieval_result, retrieval_query)
             table_blocks = select_tables(retrieval_result, retrieval_query)
@@ -721,6 +722,7 @@ def handler(event, context):
             grounding = "\n\n".join(g for g in (
                 build_figure_grounding(retrieval_result, selected_figures),
                 build_table_grounding(table_blocks),
+                build_comparison_grounding(table_blocks, retrieval_query),
                 build_formula_grounding(formula_blocks),
             ) if g)
         except Exception:

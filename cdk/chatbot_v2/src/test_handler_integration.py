@@ -270,3 +270,86 @@ def test_guardrail_block_persists_with_turn_timestamps(wire):
     assert student_call.kwargs.get("time_sent") is not None
     assert ai_call.kwargs.get("time_sent") is not None
     assert student_call.kwargs.get("time_sent") <= ai_call.kwargs.get("time_sent")
+
+
+# ---------------------------------------------------------------------------
+# Option B: the AppSync stream is authoritative, so EVERY handler exit path that
+# streamed text must emit exactly ONE terminal message via _stream_final — the
+# final blocks/metadata on a shown turn, or error=True on failure. A missing
+# terminal message hangs the client until its 130s watchdog and then shows the
+# retry banner even though the answer streamed. These pin that seam.
+# ---------------------------------------------------------------------------
+
+
+def test_normal_turn_emits_one_terminal_stream_message(wire, monkeypatch):
+    sf = MagicMock()
+    monkeypatch.setattr(main, "_stream_final", sf)
+    main.handler(_event(), _Ctx())
+    sf.assert_called_once()
+    kwargs = sf.call_args.kwargs
+    assert kwargs.get("llm_output") == "LLM answer about recursion."
+    assert kwargs.get("blocks") == [{"type": "text", "content": "LLM answer about recursion."}]
+    assert not kwargs.get("error")  # a shown answer is not an error
+
+
+def test_guardrail_block_emits_one_terminal_stream_message(wire, monkeypatch):
+    # A guardrail redirect is a SHOWN message (no error flag) — delivered over
+    # the stream so the client renders it even if the POST already timed out.
+    wire.stream.return_value = {"message": "[blocked]", "blocked": True, "type": "intervention"}
+    sf = MagicMock()
+    monkeypatch.setattr(main, "_stream_final", sf)
+    main.handler(_event(), _Ctx())
+    sf.assert_called_once()
+    kwargs = sf.call_args.kwargs
+    assert kwargs.get("llm_output") == "[blocked]"
+    assert kwargs.get("blocks") == [{"type": "text", "content": "[blocked]"}]
+    assert not kwargs.get("error")
+
+
+def test_tutor_turn_emits_one_terminal_stream_message(wire, monkeypatch):
+    # The tutor path streams text via _stream_with_guardrail_retry, so it must
+    # emit the terminal message too (this was the gap: it returned HTTP 200 but
+    # never terminated the stream, so a slow tutor turn hung the watchdog).
+    wire.state.tutor_state = {"active": True, "completed": False, "step_list": []}
+    monkeypatch.setattr(main, "process_tutor_turn", lambda ts, msg: (ts, "tutor system prompt"))
+    sf = MagicMock()
+    monkeypatch.setattr(main, "_stream_final", sf)
+    main.handler(_event(message_content="next step"), _Ctx())
+    sf.assert_called_once()
+    kwargs = sf.call_args.kwargs
+    assert kwargs.get("llm_output") == "LLM answer about recursion."
+    assert kwargs.get("blocks") == [{"type": "text", "content": "LLM answer about recursion."}]
+    assert not kwargs.get("error")
+
+
+def test_tutor_guardrail_block_emits_one_terminal_stream_message(wire, monkeypatch):
+    wire.state.tutor_state = {"active": True, "completed": False, "step_list": []}
+    monkeypatch.setattr(main, "process_tutor_turn", lambda ts, msg: (ts, "tutor system prompt"))
+    wire.stream.return_value = {"message": "[blocked]", "blocked": True, "type": "intervention"}
+    sf = MagicMock()
+    monkeypatch.setattr(main, "_stream_final", sf)
+    resp = main.handler(_event(message_content="next step"), _Ctx())
+    assert json.loads(resp["body"])["llm_output"] == "[blocked]"
+    sf.assert_called_once()
+    kwargs = sf.call_args.kwargs
+    assert kwargs.get("llm_output") == "[blocked]"
+    assert not kwargs.get("error")
+
+
+def test_state_load_failure_emits_error_terminal_message(wire, monkeypatch):
+    # A failed exit must terminate the stream with error=True so the client
+    # surfaces the retry banner immediately instead of waiting out the watchdog.
+    import botocore.exceptions
+
+    def _boom(sid):
+        raise botocore.exceptions.ClientError(
+            {"Error": {"Code": "InternalServerError", "Message": "boom"}}, "GetItem"
+        )
+
+    monkeypatch.setattr(main, "_load_session_state", _boom)
+    sf = MagicMock()
+    monkeypatch.setattr(main, "_stream_final", sf)
+    resp = main.handler(_event(), _Ctx())
+    assert resp["statusCode"] == 503
+    sf.assert_called_once()
+    assert sf.call_args.kwargs.get("error") is True

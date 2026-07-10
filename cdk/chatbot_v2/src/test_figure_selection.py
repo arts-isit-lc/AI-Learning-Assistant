@@ -300,3 +300,36 @@ class TestMultiFigureSelection:
             ],
         )
         assert fs.select_figures(rr, "explain figure 4.1") == ["fig41"]
+
+
+class TestBuildComparisonGrounding:
+    _BLOCKS = [{"type": "table", "id": "t1"}, {"type": "table", "id": "t2"}]
+
+    def test_fires_for_two_referenced_tables_with_compare_verb(self):
+        out = fs.build_comparison_grounding(self._BLOCKS, "compare table 2.1 and table 3.1")
+        assert "## Table comparison" in out
+        assert "invent columns or cells" in out
+
+    def test_empty_when_fewer_than_two_blocks(self):
+        assert fs.build_comparison_grounding([{"type": "table", "id": "t1"}], "compare table 2.1 and table 3.1") == ""
+
+    def test_empty_when_fewer_than_two_table_numbers(self):
+        assert fs.build_comparison_grounding(self._BLOCKS, "compare table 2.1 to the lecture notes") == ""
+
+    def test_empty_without_comparison_verb(self):
+        assert fs.build_comparison_grounding(self._BLOCKS, "explain table 2.1 and table 3.1") == ""
+
+    def test_empty_for_no_blocks(self):
+        assert fs.build_comparison_grounding([], "compare table 2.1 and table 3.1") == ""
+
+
+class TestSelectTablesComparison:
+    def test_attaches_both_referenced_tables(self):
+        # T8 prepends the two resolved tables so they are the top entries;
+        # select_tables (max 2) therefore surfaces BOTH for a comparison query.
+        rr = _rr(table_results=[
+            {"retrieval_id": "t-21", "score": 1.0, "headers": ["id"], "rows": [["1"]], "summary": "T2.1"},
+            {"retrieval_id": "t-31", "score": 1.0, "headers": ["id"], "rows": [["2"]], "summary": "T3.1"},
+        ])
+        out = fs.select_tables(rr, "compare table 2.1 and table 3.1")
+        assert [b["id"] for b in out] == ["t-21", "t-31"]

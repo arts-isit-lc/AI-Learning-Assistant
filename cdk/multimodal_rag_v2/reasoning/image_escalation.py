@@ -23,6 +23,7 @@ from ..models.data_models import (
     VisionAnalysis,
     VisionMode,
 )
+from .reference_lookup import build_reference_regex, scope_predicate
 
 logger = Logger(service="multimodal-rag-reasoning")
 
@@ -347,43 +348,21 @@ class ImageEscalation:
     def _scope_predicate(scope_filter: dict | None) -> tuple[str, list]:
         """Render a file/module scope filter into an AND SQL fragment + params.
 
-        Mirrors the retrieval handler's scope selection for the two promoted
-        scope columns so direct DB figure lookups are restricted to the same
-        files/modules as the main search (preventing a "Figure 4.1" match from
-        another course/file). file_id and module_id are TEXT columns, so a list
-        value binds as text[] via `= ANY(%s)` and a scalar as `= %s`.
-
-        Returns ("", []) when no scope is supplied.
+        Thin delegate to the shared ``reference_lookup.scope_predicate`` so the
+        image and table paths use one implementation. Kept as a static method
+        for backwards compatibility with existing callers/tests.
         """
-        if not scope_filter:
-            return "", []
-        clauses: list[str] = []
-        params: list = []
-        for key in ("file_id", "module_id"):
-            if key not in scope_filter:
-                continue
-            value = scope_filter[key]
-            if isinstance(value, (list, tuple)):
-                clauses.append(f"{key} = ANY(%s)")
-                params.append([str(v) for v in value])
-            else:
-                clauses.append(f"{key} = %s")
-                params.append(str(value))
-        if not clauses:
-            return "", []
-        return " AND " + " AND ".join(clauses), params
+        return scope_predicate(scope_filter)
 
     @staticmethod
     def _build_reference_regex(ref_type: str, number: str) -> str:
         """Build a POSIX regex matching an EXACT figure/table reference (M11).
 
-        Anchors the number between non-digit/non-dot boundaries so a bare
-        substring match can't over-match: "figure 4.1" must not match
-        "figure 4.10" or "figure 14.1", and "figure 4" must not match
-        "figure 4.1". Used with Postgres `~*` (case-insensitive).
+        Thin delegate to the shared ``reference_lookup.build_reference_regex``
+        so the image and table paths use one implementation. Kept as a static
+        method for backwards compatibility with existing callers/tests.
         """
-        num_re = number.replace(".", r"\.")
-        return f"(^|[^0-9.]){ref_type}\\s+{num_re}([^0-9.]|$)"
+        return build_reference_regex(ref_type, number)
 
     def _find_image_by_figure_ref_in_db(
         self, ref_type: str, number: str, scope_filter: dict | None = None

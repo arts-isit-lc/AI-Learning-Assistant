@@ -21,7 +21,9 @@ from ..models.data_models import (
     RankedResult,
     ReasoningResult,
     ResolutionConfidence,
+    StructuredComparison,
     StructuredContext,
+    TableComparisonFacts,
     VisionAnalysis,
 )
 from ..flags import RAG_RETURN_PASSAGES, STRICT_IMAGE_ESCALATION
@@ -64,6 +66,7 @@ class ReasoningEngine:
         context_builder: ContextBuilder | None = None,
         image_escalation: ImageEscalation | None = None,
         model_id: str = DEFAULT_MODEL_ID,
+        comparison_engine: Any = None,
     ) -> None:
         """Initialize ReasoningEngine with dependencies.
 
@@ -72,11 +75,15 @@ class ReasoningEngine:
             context_builder: ContextBuilder for formatting context into prompts.
             image_escalation: ImageEscalation for vision LLM analysis of images.
             model_id: Bedrock model ID for answer generation.
+            comparison_engine: ComparisonEngine for deterministic structured
+                (table-native) comparison. When None, the comparison path is
+                skipped and behavior is unchanged.
         """
         self.bedrock_client = bedrock_client
         self.context_builder = context_builder or ContextBuilder()
         self.image_escalation = image_escalation
         self.model_id = model_id
+        self.comparison_engine = comparison_engine
 
     def generate_answer(
         self,
@@ -140,13 +147,27 @@ class ReasoningEngine:
         Separated from generate_answer so the outer method can wrap all
         exceptions in a fallback response.
         """
-        # Step 1: Image escalation (if required and available)
-        escalation_result = self._handle_escalation(
-            query=query,
+        # Step 0: Structured comparison (table-native) — deterministic, no Bedrock
+        # call. Takes precedence over image escalation for a table-comparison
+        # query (which ALSO sets requires_image/requires_multi_image). If nothing
+        # resolves we fall through to normal escalation (today's behavior).
+        structured_comparison = self._handle_structured_comparison(
             ranked_results=ranked_results or [],
             query_intent=query_intent,
             scope_filter=scope_filter,
         )
+
+        # Step 1: Image escalation — skipped when a structured comparison resolved
+        # (the comparison replaces the vision path for this query).
+        if structured_comparison is not None:
+            escalation_result = EscalationResult(escalation_used=False, image_analyses=[])
+        else:
+            escalation_result = self._handle_escalation(
+                query=query,
+                ranked_results=ranked_results or [],
+                query_intent=query_intent,
+                scope_filter=scope_filter,
+            )
 
         # Store query_intent for use in formatting
         self._last_query_intent = query_intent
@@ -184,6 +205,7 @@ class ReasoningEngine:
         formatted_context = self._format_context_with_escalation(
             context=context,
             escalation_result=escalation_result,
+            structured_comparison=structured_comparison,
         )
 
         # Step 3: Invoke Bedrock LLM — add system guidance when escalation was used
@@ -219,6 +241,7 @@ class ReasoningEngine:
                 escalation_used=escalation_result.escalation_used,
                 image_analyses=escalation_result.image_analyses,
                 vision_analysis=escalation_result.vision_analysis,
+                structured_comparison=structured_comparison,
             )
 
         answer = self._invoke_llm(
@@ -247,6 +270,7 @@ class ReasoningEngine:
             escalation_used=escalation_result.escalation_used,
             image_analyses=escalation_result.image_analyses,
             vision_analysis=escalation_result.vision_analysis,
+            structured_comparison=structured_comparison,
         )
 
     def _handle_escalation(
@@ -295,10 +319,35 @@ class ReasoningEngine:
 
         return EscalationResult(escalation_used=False, image_analyses=[])
 
+    def _handle_structured_comparison(
+        self,
+        ranked_results: list[RankedResult],
+        query_intent: QueryIntent | None,
+        scope_filter: dict | None = None,
+    ) -> StructuredComparison | None:
+        """Run the deterministic structured (table) comparison if requested.
+
+        Returns a StructuredComparison when the query is a table comparison and
+        at least one referent resolved; otherwise None (caller falls back to the
+        normal escalation path). Never raises.
+        """
+        if query_intent is None or self.comparison_engine is None:
+            return None
+        if not getattr(query_intent, "requires_table_comparison", False):
+            return None
+        try:
+            return self.comparison_engine.compare(
+                query_intent, ranked_results, scope_filter
+            )
+        except Exception:
+            logger.exception("Structured comparison failed, proceeding without")
+            return None
+
     def _format_context_with_escalation(
         self,
         context: StructuredContext,
         escalation_result: EscalationResult,
+        structured_comparison: StructuredComparison | None = None,
     ) -> str:
         """Format context for prompt, injecting escalation results.
 
@@ -314,6 +363,27 @@ class ReasoningEngine:
         """
         # Format the base context
         formatted = self.context_builder.format_for_prompt(context)
+
+        # Structured comparison (table-native) takes precedence and PREPENDS its
+        # deterministic facts. For a comparison query the escalation result is
+        # empty (the vision path was skipped), so the escalation branches below
+        # do not fire.
+        if structured_comparison is not None:
+            comparison_section = self._format_comparison_section(
+                structured_comparison,
+                query_intent=getattr(self, "_last_query_intent", None),
+            )
+            formatted = f"{comparison_section}\n\n{formatted}"
+            logger.info(
+                "Structured comparison injected into context",
+                extra={
+                    "comparison_type": structured_comparison.comparison_type.value,
+                    "intent": structured_comparison.intent.value,
+                    "referents_resolved": len(structured_comparison.referents),
+                    "comparison_section_length": len(comparison_section),
+                },
+            )
+            return formatted
 
         # Inject escalation results if available — PREPEND so it's prioritized by the LLM.
         # Multi-image (MULTI) takes precedence: one comparison/description over >= 2
@@ -439,6 +509,86 @@ class ReasoningEngine:
         if len(labels) == 1:
             return labels[0]
         return ", ".join(labels[:-1]) + " and " + labels[-1]
+
+    def _format_comparison_section(
+        self, structured_comparison: StructuredComparison, query_intent=None
+    ) -> str:
+        """Format a StructuredComparison into a grounding section (table-native).
+
+        Renders the deterministic facts as ground truth, labels each referent,
+        notes any requested table that could not be located, and hedges when a
+        referent resolved with LOW confidence. The final generator writes the
+        prose from THIS — it must not recompute or invent cells.
+        """
+        sc = structured_comparison
+        labels = [r.reference for r in sc.referents]
+        lines: list[str] = [f"## Structured comparison of {self._join_labels(labels)}", ""]
+
+        if query_intent is not None:
+            requested = [
+                f"{r.ref_type.title()} {r.number}"
+                for r in (getattr(query_intent, "figure_references", None) or [])
+                if r.ref_type == "table"
+            ]
+            missing = [label for label in requested if label not in labels]
+            if missing:
+                lines.append(
+                    f"Note: {self._join_labels(missing)} could not be located in the "
+                    f"available course materials, so the comparison below covers only "
+                    f"{self._join_labels(labels)}."
+                )
+                lines.append("")
+
+        if any(r.confidence == ResolutionConfidence.LOW for r in sc.referents):
+            lines.append(
+                "Note: one or more of these tables could not be identified with certainty "
+                "(multiple tables in scope share that number). If the wrong table appears, "
+                "invite the student to confirm which one they meant."
+            )
+            lines.append("")
+
+        lines.append(
+            "Verified facts (computed deterministically — treat as ground truth; "
+            "do not recompute or invent cells):"
+        )
+        facts = sc.facts
+        if isinstance(facts, TableComparisonFacts):
+            for shape in facts.per_referent:
+                cols = ", ".join(shape.columns) if shape.columns else "no columns detected"
+                lines.append(
+                    f"- {shape.label}: {shape.n_rows} rows x {shape.n_cols} columns [{cols}]"
+                )
+            lines.append(
+                f"- Shared columns: "
+                f"{', '.join(facts.shared_columns) if facts.shared_columns else 'none'}"
+            )
+            for label, cols in facts.unique_columns.items():
+                if cols:
+                    lines.append(f"- Only in {label}: {', '.join(cols)}")
+            ra = facts.row_alignment
+            if ra is not None:
+                unaligned = ", ".join(f"{k}: {v}" for k, v in ra.unaligned_by_label.items())
+                lines.append(
+                    f"- Row alignment on {', '.join(ra.key_columns)}: "
+                    f"{ra.aligned_rows} shared key(s); {len(ra.differing_cells)} differing cell(s)"
+                    + (f"; unaligned rows -> {unaligned}" if unaligned else "")
+                )
+                for d in ra.differing_cells[:10]:
+                    vals = "; ".join(f"{lbl}={val}" for lbl, val in d["values_by_label"].items())
+                    lines.append(f"    - {d['column']} @ {ra.key_columns[0]}={d['key']}: {vals}")
+            else:
+                lines.append(
+                    "- Row-level alignment: not available (no shared key column); "
+                    "compared on schema/shape only."
+                )
+
+        lines.append("")
+        lines.append(
+            "Both tables are shown to the student below. Write a direct comparison grounded "
+            "ONLY in these facts and the table data. Do NOT invent cells or columns. If a "
+            "table is missing or low-confidence, say so rather than guessing."
+        )
+        return "\n".join(lines)
 
     def _invoke_llm(
         self,

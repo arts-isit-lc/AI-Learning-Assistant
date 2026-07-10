@@ -176,3 +176,41 @@ class TestImageResponsePartsMulti:
         assert ids.count("img-1") == 1  # deduped
         assert "img-2" in ids
         assert {w["image_s3_key"] for w in wire} == {"s3://b/1.png", "s3://b/2.png"}
+
+
+class TestTableResultsWithComparison:
+    """_table_results_with_comparison unions resolved comparison tables (T8)."""
+
+    def _reasoning_result(self, resolved):
+        return SimpleNamespace(
+            structured_comparison=SimpleNamespace(resolved_results=resolved)
+        )
+
+    def test_no_comparison_matches_plain_builder(self):
+        finals = [
+            _result(
+                ElementType.TABLE, "t1", "tbl-1", 0.9,
+                {"table_headers": ["a"], "table_rows": [["1"]], "table_summary": "s"}, "x",
+            )
+        ]
+        rr = SimpleNamespace(structured_comparison=None)
+        assert handler._table_results_with_comparison(rr, finals) == handler._build_table_results(finals)
+
+    def test_unions_resolved_tables_absent_from_finals(self):
+        # Both compared tables were resolved by DB lookup (not in final_results).
+        finals = [_result(ElementType.TEXT, "x", "txt", 0.5, {}, "t")]
+        resolved = [
+            _result(ElementType.TABLE, "r-21", "tbl-21", 1.0, {"table_headers": ["id"], "table_summary": "T2.1"}, "Table 2.1"),
+            _result(ElementType.TABLE, "r-31", "tbl-31", 1.0, {"table_headers": ["id"], "table_summary": "T3.1"}, "Table 3.1"),
+        ]
+        out = handler._table_results_with_comparison(self._reasoning_result(resolved), finals)
+        assert [b["retrieval_id"] for b in out] == ["r-21", "r-31"]
+
+    def test_dedupes_resolved_against_finals_by_parent(self):
+        # Same physical table (parent tbl-21) in both resolved and finals -> one
+        # block, and the resolved (prepended, authoritative) unit wins.
+        resolved = [_result(ElementType.TABLE, "r-21", "tbl-21", 1.0, {"table_headers": ["id"]}, "resolved")]
+        finals = [_result(ElementType.TABLE, "f-21", "tbl-21", 0.8, {"table_headers": ["id"]}, "final")]
+        out = handler._table_results_with_comparison(self._reasoning_result(resolved), finals)
+        assert len(out) == 1
+        assert out[0]["retrieval_id"] == "r-21"

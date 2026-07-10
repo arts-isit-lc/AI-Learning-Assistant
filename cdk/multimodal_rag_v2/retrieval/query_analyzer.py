@@ -174,6 +174,17 @@ class QueryAnalyzer:
                 intent.requires_multi_image
                 and self._COMPARISON_PATTERN.search(query) is not None
             )
+            # Table-native comparison is an INDEPENDENT signal: >= 2 distinct
+            # TABLE references + comparison language. It reuses the parsed
+            # references (tables are already captured by _FIGURE_LOOKUP_PATTERN)
+            # but routes to the deterministic table comparator, not the vision
+            # path. A mixed query ("table 2.1 and figure 4.1") has < 2 table
+            # refs, so it does not trigger this (mixed-type is out of scope).
+            table_refs = [r for r in references if r.ref_type == "table"]
+            intent.requires_table_comparison = (
+                len(table_refs) >= 2
+                and self._COMPARISON_PATTERN.search(query) is not None
+            )
 
         return intent
 

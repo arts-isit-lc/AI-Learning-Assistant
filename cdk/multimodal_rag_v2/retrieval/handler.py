@@ -40,11 +40,14 @@ from aws_lambda_powertools import Logger
 
 from ..cache.embedding_cache import EmbeddingCache
 from ..flags import QUERY_EMBEDDING_CACHE
-from ..models.data_models import EMBEDDING_VERSION, QueryIntent, TypeCaps
+from ..models.data_models import ComparisonType, EMBEDDING_VERSION, QueryIntent, TypeCaps
 from ..pricing import estimate_cost_usd
+from ..reasoning.comparison.comparison_engine import ComparisonEngine
+from ..reasoning.comparison.table_comparator import TableComparator
 from ..reasoning.context_builder import ContextBuilder
 from ..reasoning.image_escalation import ImageEscalation
 from ..reasoning.reasoning_engine import ReasoningEngine
+from ..reasoning.reference_resolver import TableReferenceResolver
 from .cross_encoder_reranker import CrossEncoderReranker
 from .hybrid_search_engine import HybridSearchEngine
 from .production_ranker import ProductionRanker
@@ -118,10 +121,19 @@ _image_escalation = ImageEscalation(
     bucket_name=IR_BUCKET_NAME,
     db_connection_factory=_get_db_connection,
 )
+# Structured comparison engine (table-native). Deterministic, no Bedrock call —
+# resolves referenced tables via the same scoped DB lookup the image path uses
+# and computes a verified diff. Registry-keyed by ComparisonType so the deferred
+# formula comparator can be added without touching the wiring.
+_comparison_engine = ComparisonEngine(
+    resolvers={ComparisonType.TABLE: TableReferenceResolver(db_connection_factory=_get_db_connection)},
+    comparators={ComparisonType.TABLE: TableComparator()},
+)
 _reasoning_engine = ReasoningEngine(
     bedrock_client=_bedrock_client,
     context_builder=_context_builder,
     image_escalation=_image_escalation,
+    comparison_engine=_comparison_engine,
 )
 
 
@@ -339,6 +351,23 @@ def _build_table_results(final_results: list) -> list[dict[str, Any]]:
             "content": r.content,
         })
     return out
+
+
+def _table_results_with_comparison(reasoning_result, final_results: list) -> list[dict[str, Any]]:
+    """Build table_results, unioning any tables resolved by a structured comparison.
+
+    A comparison referent may be resolved by a direct DB lookup and thus absent
+    from ``final_results``. Prepend the resolved tables (authoritative) so BOTH
+    compared tables are surfaced to the client. ``_build_table_results`` dedupes
+    by ``parent_element_id`` (first wins), so a resolved table that also appears
+    in final_results is not duplicated. SINGLE/non-comparison queries are
+    unchanged (resolved is empty).
+    """
+    sc = getattr(reasoning_result, "structured_comparison", None)
+    resolved = list(getattr(sc, "resolved_results", []) or []) if sc is not None else []
+    if resolved:
+        return _build_table_results(resolved + list(final_results))
+    return _build_table_results(final_results)
 
 
 def _build_formula_results(final_results: list) -> list[dict[str, Any]]:
@@ -666,7 +695,7 @@ def _handle_query(
         "escalation_used": reasoning_result.escalation_used,
         "image_analyses": wire_image_analyses,
         "image_results": image_results,
-        "table_results": _build_table_results(final_results),
+        "table_results": _table_results_with_comparison(reasoning_result, final_results),
         "formula_results": _build_formula_results(final_results),
     })
 
