@@ -14,11 +14,28 @@ type ChatChunk {
   session_id: String!
   chunk: String!
   done: Boolean!
+  # Final-turn payload (populated only on the terminal done=true message, so the
+  # stream is the authoritative delivery channel — the POST is a fire-and-forget
+  # trigger that may time out on slow turns). Nullable on incremental chunks.
+  llm_output: String
+  blocks: AWSJSON
+  session_name: String
+  llm_verdict: Boolean
+  error: Boolean
 }
 
 type Mutation {
   sendNotification(message: String!, request_id: String!): Notification
-  sendChatChunk(session_id: String!, chunk: String!, done: Boolean!): ChatChunk
+  sendChatChunk(
+    session_id: String!
+    chunk: String!
+    done: Boolean!
+    llm_output: String
+    blocks: AWSJSON
+    session_name: String
+    llm_verdict: Boolean
+    error: Boolean
+  ): ChatChunk
 }
 
 type Query {

@@ -29,7 +29,7 @@ from concept_tracker import introduce_concepts, discuss_concepts, demonstrate_co
 from mode_selector import select_mode
 from prompt_builder import build_system_prompt
 from retrieval_client import invoke_retrieval, get_bounded_history as get_retrieval_history
-from streaming import stream_response
+from streaming import stream_response, send_final
 from guardrails import load_guardrail_config, wrap_user_message, handle_guardrail_error, GUARDRAIL_SERVICE_ERROR_MESSAGE
 from flags import GUARDRAIL_FAIL_CLOSED, CACHE_MODULE_METADATA, PARALLEL_EVAL_RETRIEVAL, ASYNC_RDS_PROJECTION, USE_CONVERSE_STREAMING
 from history import load_chat_history, get_bounded_history, persist_message_pair, MAX_PROMPT_TURNS
@@ -108,6 +108,25 @@ def _get_appsync_url() -> str:
     else:
         _appsync_url = ""
     return _appsync_url
+
+
+def _stream_final(session_id: str, *, llm_output: str | None = None, blocks=None,
+                  session_name: str | None = None, llm_verdict: bool | None = None,
+                  error: bool = False) -> None:
+    """Emit the SINGLE terminal stream message for a turn (best-effort).
+
+    The AppSync stream is the authoritative delivery channel — the HTTP POST is a
+    fire-and-forget trigger that can hit API Gateway's 29s timeout on a slow
+    (multi-image) turn — so EVERY handler exit path emits exactly one of these:
+    the final blocks + metadata on success, or error=True on failure. No-ops
+    without a session_id (the client's watchdog is the backstop)."""
+    if not session_id:
+        return
+    try:
+        send_final(_get_appsync_url(), session_id, llm_output=llm_output, blocks=blocks,
+                   session_name=session_name, llm_verdict=llm_verdict, error=error)
+    except Exception:
+        logger.exception("Failed to emit terminal stream message (best-effort)")
 
 
 def _get_db_connection():
@@ -407,6 +426,9 @@ def _session_state_view(state) -> dict:
 @logger.inject_lambda_context(clear_state=True)
 def handler(event, context):
     """Chatbot V2 Lambda handler — full learning pipeline orchestration."""
+    # Bound before the try so the outer except handlers can stream a terminal
+    # error (the stream is authoritative; the client renders/aborts from it).
+    session_id = ""
     try:
         # Parse request
         query_params = event.get("queryStringParameters", {}) or {}
@@ -455,6 +477,7 @@ def handler(event, context):
             _timings["state_load_ms"] = round((time.perf_counter() - _t) * 1000, 2)
         except (botocore.exceptions.ClientError, botocore.exceptions.EndpointConnectionError) as e:
             logger.exception("Session_State_Table read failure")
+            _stream_final(session_id, error=True)
             return {"statusCode": 503, "headers": CORS_HEADERS, "body": json.dumps("Service temporarily unavailable")}
 
         is_new_session = state is None
@@ -470,6 +493,7 @@ def handler(event, context):
                 logger.info("Loaded module_concepts", extra={"count": len(state.module_concepts), "module_name": module_name})
             except (psycopg2.OperationalError, psycopg2.InterfaceError, botocore.exceptions.ClientError) as e:
                 logger.exception("DB connection failure during module context retrieval")
+                _stream_final(session_id, error=True)
                 return {"statusCode": 503, "headers": CORS_HEADERS, "body": json.dumps("Service temporarily unavailable")}
         else:
             # For existing sessions, load module name for prompt context.
@@ -800,13 +824,18 @@ def handler(event, context):
                 persist_message_to_rds(conn, session_id, llm_output["message"], student_sent=False, time_sent=_utc_now_iso())
             except Exception:
                 logger.exception("RDS projection failed on guardrail block (best-effort)")
+            blocked_blocks = [{"type": "text", "content": llm_output["message"]}]
+            # Authoritative delivery over the stream. A guardrail redirect is a
+            # shown message, not a failure — no error flag.
+            _stream_final(session_id, llm_output=llm_output["message"], blocks=blocked_blocks,
+                          session_name=session_name, llm_verdict=state.module_complete)
             return {
                 "statusCode": 200,
                 "headers": CORS_HEADERS,
                 "body": json.dumps({
                     "session_name": session_name,
                     "llm_output": llm_output["message"],
-                    "blocks": [{"type": "text", "content": llm_output["message"]}],
+                    "blocks": blocked_blocks,
                     "llm_verdict": state.module_complete,
                     "session_state": _session_state_view(state),
                 }),
@@ -856,8 +885,14 @@ def handler(event, context):
         # Step 14: Analytics (post-response)
         logger.info("Analytics", extra={"coverage": calculate_coverage(state), "mastery_concepts": len(calculate_mastery_profile(state))})
 
-        # Return structured response (blocks were assembled before persistence
-        # above, so they are saved with the AI message and reused here).
+        # Authoritative delivery: stream the final blocks + metadata. On a slow
+        # multi-image turn the POST below has likely already 504'd at API
+        # Gateway's 29s cap, so the client renders from THIS terminal message.
+        _stream_final(session_id, llm_output=llm_output, blocks=blocks,
+                      session_name=session_name, llm_verdict=state.module_complete)
+
+        # Structured HTTP response — best-effort ack (used when the turn finished
+        # within 29s; ignored by the client on a timed-out slow turn).
         return {
             "statusCode": 200,
             "headers": CORS_HEADERS,
@@ -872,14 +907,18 @@ def handler(event, context):
 
     except (psycopg2.OperationalError, psycopg2.InterfaceError):
         logger.exception("Database connection failure")
+        _stream_final(session_id, error=True)
         return {"statusCode": 503, "headers": CORS_HEADERS, "body": json.dumps("Service temporarily unavailable")}
     except botocore.exceptions.ClientError as e:
         error_code = e.response.get("Error", {}).get("Code", "")
         if error_code in ("ServiceUnavailable", "InternalServerError", "ProvisionedThroughputExceededException"):
             logger.exception("AWS service unavailable")
+            _stream_final(session_id, error=True)
             return {"statusCode": 503, "headers": CORS_HEADERS, "body": json.dumps("Service temporarily unavailable")}
         logger.exception("Unhandled AWS client error in chatbot V2 handler")
+        _stream_final(session_id, error=True)
         return {"statusCode": 500, "headers": CORS_HEADERS, "body": json.dumps("Internal server error")}
     except Exception:
         logger.exception("Unhandled error in chatbot V2 handler")
+        _stream_final(session_id, error=True)
         return {"statusCode": 500, "headers": CORS_HEADERS, "body": json.dumps("Internal server error")}

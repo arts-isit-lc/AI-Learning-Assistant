@@ -1,4 +1,5 @@
 import json
+import json
 import time
 from typing import Iterator
 import httpx
@@ -37,30 +38,65 @@ def buffer_chunks(token_stream: Iterator[str], chunk_size: int = CHUNK_SIZE) -> 
         yield buffer
 
 
-def send_chunk(appsync_url: str, session_id: str, chunk: str, done: bool = False) -> None:
-    """Send a chat chunk via AppSync sendChatChunk mutation.
-    Failures are logged but do not interrupt response generation."""
+_SEND_MUTATION = '''
+mutation SendChatChunk($session_id: String!, $chunk: String!, $done: Boolean!, $llm_output: String, $blocks: AWSJSON, $session_name: String, $llm_verdict: Boolean, $error: Boolean) {
+    sendChatChunk(session_id: $session_id, chunk: $chunk, done: $done, llm_output: $llm_output, blocks: $blocks, session_name: $session_name, llm_verdict: $llm_verdict, error: $error) {
+        session_id
+        chunk
+        done
+        llm_output
+        blocks
+        session_name
+        llm_verdict
+        error
+    }
+}
+'''
+
+
+def _send(appsync_url: str, session_id: str, chunk: str, done: bool,
+          llm_output=None, blocks=None, session_name=None,
+          llm_verdict=None, error=False) -> None:
+    """POST a sendChatChunk mutation to AppSync. Best-effort: failures are logged
+    but never interrupt the turn."""
     if not appsync_url:
         return
     try:
-        query = '''
-        mutation SendChatChunk($session_id: String!, $chunk: String!, $done: Boolean!) {
-            sendChatChunk(session_id: $session_id, chunk: $chunk, done: $done) {
-                session_id
-                chunk
-                done
-            }
-        }
-        '''
         payload = {
-            "query": query,
-            "variables": {"session_id": session_id, "chunk": chunk, "done": done}
+            "query": _SEND_MUTATION,
+            "variables": {
+                "session_id": session_id, "chunk": chunk, "done": done,
+                "llm_output": llm_output, "blocks": blocks,
+                "session_name": session_name, "llm_verdict": llm_verdict,
+                "error": error,
+            },
         }
         headers = {"Content-Type": "application/json", "Authorization": "API_KEY"}
         with httpx.Client(timeout=10.0) as client:
             client.post(appsync_url, headers=headers, json=payload)
     except Exception:
         logger.exception("Failed to send chat chunk to AppSync", extra={"session_id": session_id, "done": done})
+
+
+def send_chunk(appsync_url: str, session_id: str, chunk: str, done: bool = False) -> None:
+    """Send an incremental answer-text chunk (done=false). The terminal done
+    message is emitted separately via send_final so it can carry the final blocks."""
+    _send(appsync_url, session_id, chunk, done)
+
+
+def send_final(appsync_url: str, session_id: str, *, llm_output: str | None = None,
+               blocks: list | None = None, session_name: str | None = None,
+               llm_verdict: bool | None = None, error: bool = False) -> None:
+    """Emit the SINGLE terminal (done=true) stream message carrying the authoritative
+    final payload — the render blocks + session metadata — or an error flag. This is
+    what makes the WebSocket stream authoritative so the HTTP POST can be a
+    fire-and-forget trigger (decoupled from API Gateway's 29s timeout)."""
+    _send(
+        appsync_url, session_id, chunk="", done=True,
+        llm_output=llm_output,
+        blocks=json.dumps(blocks) if blocks is not None else None,
+        session_name=session_name, llm_verdict=llm_verdict, error=bool(error),
+    )
 
 
 def _guardrail_attached(model_kwargs: dict) -> bool:
@@ -266,11 +302,12 @@ def stream_response(
             elif kind == "block_type":
                 block_type = ev[1]
 
-        # Send remaining buffer + signal done (always close the stream so a
-        # stream-consuming client never hangs waiting for a terminal chunk).
+        # Flush remaining buffered text. The terminal done message (carrying the
+        # authoritative blocks + metadata, or an error flag) is emitted ONCE by the
+        # handler via send_final AFTER block assembly — never here — so the stream
+        # has a single, payload-bearing terminator.
         if chunk_buffer:
             send_chunk(appsync_url, session_id, chunk_buffer)
-        send_chunk(appsync_url, session_id, "", done=True)
 
         # Stream latency (diagnostic): ttft_ms isolates model start-up from
         # stream_total_ms; a large ttft_ms with small input_tokens points at
@@ -308,13 +345,10 @@ def stream_response(
         # Re-raise guardrail-related errors so the caller can classify and retry
         err_msg = str(e)
         if "GUARDRAIL_INTERVENED" in err_msg or "GuardrailIntervention" in err_msg or "guardrail" in err_msg.lower():
-            # Close the stream so a stream-consuming client doesn't hang waiting
-            # for a terminal chunk; the caller returns the blocked/redirect
-            # message over HTTP. Do NOT emit fallback text — this is a guardrail
-            # decision, not a generation failure.
-            send_chunk(appsync_url, session_id, "", done=True)
+            # Guardrail decision, not a generation failure. Do NOT emit fallback
+            # text or a terminal done here — the handler emits the single terminal
+            # message (the redirect/blocked message) via send_final.
             raise
         logger.exception("Streaming response failed")
         send_chunk(appsync_url, session_id, FALLBACK_MESSAGE)
-        send_chunk(appsync_url, session_id, "", done=True)
         return FALLBACK_MESSAGE
