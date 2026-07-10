@@ -15,7 +15,6 @@ from aws_lambda_powertools import Logger
 from ...models.data_models import (
     ComparisonIntent,
     ComparisonType,
-    FigureReference,
     QueryIntent,
     RankedResult,
     StructuredComparison,
@@ -92,10 +91,11 @@ class ComparisonEngine:
 
     def _plan(
         self, query_intent: QueryIntent
-    ) -> tuple[ComparisonType, list[FigureReference], ComparisonIntent] | None:
+    ) -> tuple[ComparisonType, list, ComparisonIntent] | None:
         """Decide the comparison type, referenced items, and prompt intent.
 
-        v1 only supports table comparison (comparison verb present -> COMPARE).
+        Table takes precedence over formula when both somehow fire (comparison
+        verb present -> COMPARE).
         """
         if getattr(query_intent, "requires_table_comparison", False):
             table_refs = [
@@ -103,4 +103,9 @@ class ComparisonEngine:
                 if r.ref_type == "table"
             ]
             return ComparisonType.TABLE, table_refs, ComparisonIntent.COMPARE
+        if getattr(query_intent, "requires_formula_comparison", False):
+            # formula_references may be empty (keyword-only query) — the resolver
+            # then falls back to the top retrieved formulas.
+            formula_refs = list(getattr(query_intent, "formula_references", None) or [])
+            return ComparisonType.FORMULA, formula_refs, ComparisonIntent.COMPARE
         return None

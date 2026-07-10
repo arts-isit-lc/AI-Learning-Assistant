@@ -171,3 +171,88 @@ class TestGenerateAnswerComparison:
         assert result.structured_comparison is None
         comparison_engine.compare.assert_not_called()
         image_escalation.escalate.assert_called_once()
+
+
+# --- Formula comparison wiring (Phase 1) -----------------------------------
+
+from ..models.data_models import FormulaReference  # noqa: E402
+from .formula.formula_comparator import FormulaComparator  # noqa: E402
+
+
+def _formula_referent(label, latex, confidence=ResolutionConfidence.HIGH):
+    return ResolvedReferent(
+        reference=label,
+        retrieval_id=label,
+        parent_element_id=label,
+        confidence=confidence,
+        structured_content={"latex": latex},
+    )
+
+
+def _formula_comparison(referents):
+    facts = FormulaComparator().compare(referents)
+    return StructuredComparison(
+        comparison_type=ComparisonType.FORMULA,
+        intent=ComparisonIntent.COMPARE,
+        referents=referents,
+        facts=facts,
+    )
+
+
+def _formula_intent(numbers):
+    intent = QueryIntent()
+    intent.requires_formula_comparison = True
+    intent.requires_image = True  # formula path must win over any image intent
+    intent.formula_references = [FormulaReference(number=n) for n in numbers]
+    return intent
+
+
+class TestFormatComparisonSectionFormula:
+    def _engine(self):
+        return ReasoningEngine(context_builder=_FakeContextBuilder())
+
+    def test_section_has_labels_symbols_and_conservative_equivalence(self):
+        sc = _formula_comparison([
+            _formula_referent("Equation 3.4", r"y = w x + b"),
+            _formula_referent("Equation 5.2", r"y = w x + b + \lambda"),
+        ])
+        section = self._engine()._format_comparison_section(sc, query_intent=_formula_intent(["3.4", "5.2"]))
+        assert "## Structured comparison of Equation 3.4 and Equation 5.2" in section
+        assert "Verified facts" in section
+        assert "Only in Equation 5.2: greek lambda" in section
+        # Conservative equivalence wording (Phase 1 has no symbolic engine).
+        assert "Symbolic equivalence: not determined" in section
+        assert "invent symbols" in section
+        assert "do NOT assert mathematical equivalence" in section
+
+    def test_missing_formula_note(self):
+        sc = _formula_comparison([_formula_referent("Equation 3.4", "x = 1")])
+        section = self._engine()._format_comparison_section(sc, query_intent=_formula_intent(["3.4", "5.2"]))
+        assert "Equation 5.2 could not be located" in section
+
+
+class TestGenerateAnswerFormulaComparison:
+    def test_formula_comparison_skips_escalation_and_grounds(self, monkeypatch):
+        monkeypatch.setattr(re_mod, "RAG_RETURN_PASSAGES", True)
+        sc = _formula_comparison([
+            _formula_referent("Equation 3.4", "y = w x + b"),
+            _formula_referent("Equation 5.2", r"y = w x + b + \lambda"),
+        ])
+        comparison_engine = MagicMock()
+        comparison_engine.compare.return_value = sc
+        image_escalation = MagicMock()
+
+        eng = ReasoningEngine(
+            context_builder=_FakeContextBuilder(),
+            image_escalation=image_escalation,
+            comparison_engine=comparison_engine,
+        )
+        result = eng.generate_answer(
+            query="compare equation 3.4 and equation 5.2",
+            context=StructuredContext(),
+            ranked_results=[],
+            query_intent=_formula_intent(["3.4", "5.2"]),
+        )
+        assert result.structured_comparison is sc
+        image_escalation.escalate.assert_not_called()
+        assert "## Structured comparison of Equation 3.4 and Equation 5.2" in result.answer

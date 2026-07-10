@@ -16,6 +16,9 @@ from typing import Any
 from aws_lambda_powertools import Logger
 
 from ..models.data_models import (
+    ComparisonType,
+    EquivalenceStatus,
+    FormulaComparisonFacts,
     ImageAnalysis,
     QueryIntent,
     RankedResult,
@@ -333,7 +336,10 @@ class ReasoningEngine:
         """
         if query_intent is None or self.comparison_engine is None:
             return None
-        if not getattr(query_intent, "requires_table_comparison", False):
+        if not (
+            getattr(query_intent, "requires_table_comparison", False)
+            or getattr(query_intent, "requires_formula_comparison", False)
+        ):
             return None
         try:
             return self.comparison_engine.compare(
@@ -521,15 +527,25 @@ class ReasoningEngine:
         prose from THIS — it must not recompute or invent cells.
         """
         sc = structured_comparison
+        is_formula = sc.comparison_type == ComparisonType.FORMULA
+        noun = "formula" if is_formula else "table"
         labels = [r.reference for r in sc.referents]
         lines: list[str] = [f"## Structured comparison of {self._join_labels(labels)}", ""]
 
+        # Missing-referent note (requested vs resolved), per type.
         if query_intent is not None:
-            requested = [
-                f"{r.ref_type.title()} {r.number}"
-                for r in (getattr(query_intent, "figure_references", None) or [])
-                if r.ref_type == "table"
-            ]
+            if is_formula:
+                requested = [
+                    f"Equation {r.number}"
+                    for r in (getattr(query_intent, "formula_references", None) or [])
+                    if getattr(r, "number", "")
+                ]
+            else:
+                requested = [
+                    f"{r.ref_type.title()} {r.number}"
+                    for r in (getattr(query_intent, "figure_references", None) or [])
+                    if r.ref_type == "table"
+                ]
             missing = [label for label in requested if label not in labels]
             if missing:
                 lines.append(
@@ -541,54 +557,96 @@ class ReasoningEngine:
 
         if any(r.confidence == ResolutionConfidence.LOW for r in sc.referents):
             lines.append(
-                "Note: one or more of these tables could not be identified with certainty "
-                "(multiple tables in scope share that number). If the wrong table appears, "
-                "invite the student to confirm which one they meant."
+                f"Note: one or more of these {noun}s could not be identified with certainty. "
+                f"If the wrong {noun} appears, invite the student to confirm which one they meant."
             )
             lines.append("")
 
+        invent = "symbols" if is_formula else "cells"
         lines.append(
             "Verified facts (computed deterministically — treat as ground truth; "
-            "do not recompute or invent cells):"
+            f"do not recompute or invent {invent}):"
         )
+
         facts = sc.facts
         if isinstance(facts, TableComparisonFacts):
-            for shape in facts.per_referent:
-                cols = ", ".join(shape.columns) if shape.columns else "no columns detected"
-                lines.append(
-                    f"- {shape.label}: {shape.n_rows} rows x {shape.n_cols} columns [{cols}]"
-                )
-            lines.append(
-                f"- Shared columns: "
-                f"{', '.join(facts.shared_columns) if facts.shared_columns else 'none'}"
-            )
-            for label, cols in facts.unique_columns.items():
-                if cols:
-                    lines.append(f"- Only in {label}: {', '.join(cols)}")
-            ra = facts.row_alignment
-            if ra is not None:
-                unaligned = ", ".join(f"{k}: {v}" for k, v in ra.unaligned_by_label.items())
-                lines.append(
-                    f"- Row alignment on {', '.join(ra.key_columns)}: "
-                    f"{ra.aligned_rows} shared key(s); {len(ra.differing_cells)} differing cell(s)"
-                    + (f"; unaligned rows -> {unaligned}" if unaligned else "")
-                )
-                for d in ra.differing_cells[:10]:
-                    vals = "; ".join(f"{lbl}={val}" for lbl, val in d["values_by_label"].items())
-                    lines.append(f"    - {d['column']} @ {ra.key_columns[0]}={d['key']}: {vals}")
-            else:
-                lines.append(
-                    "- Row-level alignment: not available (no shared key column); "
-                    "compared on schema/shape only."
-                )
+            self._append_table_facts(lines, facts)
+        elif isinstance(facts, FormulaComparisonFacts):
+            self._append_formula_facts(lines, facts)
 
         lines.append("")
-        lines.append(
-            "Both tables are shown to the student below. Write a direct comparison grounded "
-            "ONLY in these facts and the table data. Do NOT invent cells or columns. If a "
-            "table is missing or low-confidence, say so rather than guessing."
-        )
+        if is_formula:
+            lines.append(
+                "Both formulas are shown to the student below. Write a direct comparison "
+                "grounded ONLY in these facts and the formula text. Do NOT invent symbols, and "
+                "do NOT assert mathematical equivalence beyond what is stated above — if "
+                'equivalence is "not determined", do not claim the formulas are equal or '
+                "unequal. If a formula is missing or low-confidence, say so rather than guessing."
+            )
+        else:
+            lines.append(
+                "Both tables are shown to the student below. Write a direct comparison grounded "
+                "ONLY in these facts and the table data. Do NOT invent cells or columns. If a "
+                "table is missing or low-confidence, say so rather than guessing."
+            )
         return "\n".join(lines)
+
+    @staticmethod
+    def _append_table_facts(lines: list[str], facts: TableComparisonFacts) -> None:
+        for shape in facts.per_referent:
+            cols = ", ".join(shape.columns) if shape.columns else "no columns detected"
+            lines.append(f"- {shape.label}: {shape.n_rows} rows x {shape.n_cols} columns [{cols}]")
+        lines.append(
+            f"- Shared columns: "
+            f"{', '.join(facts.shared_columns) if facts.shared_columns else 'none'}"
+        )
+        for label, cols in facts.unique_columns.items():
+            if cols:
+                lines.append(f"- Only in {label}: {', '.join(cols)}")
+        ra = facts.row_alignment
+        if ra is not None:
+            unaligned = ", ".join(f"{k}: {v}" for k, v in ra.unaligned_by_label.items())
+            lines.append(
+                f"- Row alignment on {', '.join(ra.key_columns)}: "
+                f"{ra.aligned_rows} shared key(s); {len(ra.differing_cells)} differing cell(s)"
+                + (f"; unaligned rows -> {unaligned}" if unaligned else "")
+            )
+            for d in ra.differing_cells[:10]:
+                vals = "; ".join(f"{lbl}={val}" for lbl, val in d["values_by_label"].items())
+                lines.append(f"    - {d['column']} @ {ra.key_columns[0]}={d['key']}: {vals}")
+        else:
+            lines.append(
+                "- Row-level alignment: not available (no shared key column); "
+                "compared on schema/shape only."
+            )
+
+    @staticmethod
+    def _append_formula_facts(lines: list[str], facts: FormulaComparisonFacts) -> None:
+        _CATS = ("variables", "constants", "operators", "functions", "greek")
+        for profile in facts.per_referent:
+            parts: list[str] = []
+            for cat in _CATS:
+                vals = getattr(profile, cat)
+                if vals:
+                    parts.append(f"{cat} {{{', '.join(vals)}}}")
+            descriptor = "; ".join(parts) if parts else "no symbols detected"
+            eq_type = profile.equation_type.value.replace("_", " ")
+            lines.append(f"- {profile.label}: {descriptor}; type: {eq_type}")
+        shared_bits = [f"{cat} {', '.join(vals)}" for cat, vals in facts.shared.items() if vals]
+        lines.append(f"- Shared: {'; '.join(shared_bits) if shared_bits else 'none'}")
+        for label, cats in facts.unique.items():
+            uniq_bits = [f"{cat} {', '.join(vals)}" for cat, vals in cats.items() if vals]
+            if uniq_bits:
+                lines.append(f"- Only in {label}: {'; '.join(uniq_bits)}")
+        eq = facts.equivalence
+        if eq.status == EquivalenceStatus.EQUIVALENT:
+            lines.append("- Symbolic equivalence (per SymPy): equivalent")
+        elif eq.status == EquivalenceStatus.NOT_EQUIVALENT:
+            lines.append("- Symbolic equivalence (per SymPy): NOT equivalent")
+        else:
+            lines.append(
+                "- Symbolic equivalence: not determined (symbolic check unavailable or inconclusive)"
+            )
 
     def _invoke_llm(
         self,

@@ -353,21 +353,42 @@ def _build_table_results(final_results: list) -> list[dict[str, Any]]:
     return out
 
 
-def _table_results_with_comparison(reasoning_result, final_results: list) -> list[dict[str, Any]]:
-    """Build table_results, unioning any tables resolved by a structured comparison.
+def _resolved_results_for(reasoning_result, comparison_type) -> list:
+    """Resolved RankedResults from a structured comparison of the given type.
 
-    A comparison referent may be resolved by a direct DB lookup and thus absent
-    from ``final_results``. Prepend the resolved tables (authoritative) so BOTH
-    compared tables are surfaced to the client. ``_build_table_results`` dedupes
-    by ``parent_element_id`` (first wins), so a resolved table that also appears
-    in final_results is not duplicated. SINGLE/non-comparison queries are
-    unchanged (resolved is empty).
+    Returns [] unless a comparison of exactly ``comparison_type`` ran — so a
+    formula comparison never leaks into table_results and vice versa.
     """
     sc = getattr(reasoning_result, "structured_comparison", None)
-    resolved = list(getattr(sc, "resolved_results", []) or []) if sc is not None else []
+    if sc is None or getattr(sc, "comparison_type", None) != comparison_type:
+        return []
+    return list(getattr(sc, "resolved_results", []) or [])
+
+
+def _table_results_with_comparison(reasoning_result, final_results: list) -> list[dict[str, Any]]:
+    """Build table_results, unioning any tables resolved by a table comparison.
+
+    A referent may be resolved by a direct DB lookup and thus absent from
+    ``final_results``. Prepend resolved tables (authoritative) so BOTH compared
+    tables are surfaced. ``_build_table_results`` dedupes by ``parent_element_id``
+    (first wins), so a resolved table already in final_results is not duplicated.
+    """
+    resolved = _resolved_results_for(reasoning_result, ComparisonType.TABLE)
     if resolved:
         return _build_table_results(resolved + list(final_results))
     return _build_table_results(final_results)
+
+
+def _formula_results_with_comparison(reasoning_result, final_results: list) -> list[dict[str, Any]]:
+    """Build formula_results, unioning any formulas resolved by a formula comparison.
+
+    Parallel to _table_results_with_comparison: prepend resolved formulas so both
+    compared formulas are surfaced even when resolved by DB/top-k fallback.
+    """
+    resolved = _resolved_results_for(reasoning_result, ComparisonType.FORMULA)
+    if resolved:
+        return _build_formula_results(resolved + list(final_results))
+    return _build_formula_results(final_results)
 
 
 def _build_formula_results(final_results: list) -> list[dict[str, Any]]:
@@ -696,7 +717,7 @@ def _handle_query(
         "image_analyses": wire_image_analyses,
         "image_results": image_results,
         "table_results": _table_results_with_comparison(reasoning_result, final_results),
-        "formula_results": _build_formula_results(final_results),
+        "formula_results": _formula_results_with_comparison(reasoning_result, final_results),
     })
 
 

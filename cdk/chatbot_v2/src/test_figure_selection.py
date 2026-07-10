@@ -333,3 +333,38 @@ class TestSelectTablesComparison:
         ])
         out = fs.select_tables(rr, "compare table 2.1 and table 3.1")
         assert [b["id"] for b in out] == ["t-21", "t-31"]
+
+
+class TestBuildFormulaComparisonGrounding:
+    _BLOCKS = [{"type": "formula", "id": "f1"}, {"type": "formula", "id": "f2"}]
+
+    def test_fires_for_two_formulas_with_compare_verb_and_keyword(self):
+        out = fs.build_formula_comparison_grounding(self._BLOCKS, "compare equation 3.4 and equation 5.2")
+        assert "## Formula comparison" in out
+        assert "do NOT assert mathematical equivalence" in out
+
+    def test_fires_for_keyword_only_named_equations(self):
+        out = fs.build_formula_comparison_grounding(self._BLOCKS, "compare the momentum equation and the energy equation")
+        assert "## Formula comparison" in out
+
+    def test_empty_when_fewer_than_two_blocks(self):
+        assert fs.build_formula_comparison_grounding([{"type": "formula", "id": "f1"}], "compare equation 3.4 and 5.2") == ""
+
+    def test_empty_without_comparison_verb(self):
+        assert fs.build_formula_comparison_grounding(self._BLOCKS, "explain equation 3.4 and equation 5.2") == ""
+
+    def test_empty_without_formula_keyword(self):
+        assert fs.build_formula_comparison_grounding(self._BLOCKS, "compare these two things") == ""
+
+    def test_empty_for_no_blocks(self):
+        assert fs.build_formula_comparison_grounding([], "compare equation 3.4 and equation 5.2") == ""
+
+
+class TestSelectFormulasComparison:
+    def test_attaches_both_referenced_formulas(self):
+        rr = _rr(formula_results=[
+            {"retrieval_id": "f-34", "score": 1.0, "latex": "y=wx+b", "content": "y=wx+b", "page_num": 3},
+            {"retrieval_id": "f-52", "score": 1.0, "latex": "y=wx+b+\\lambda", "content": "...", "page_num": 5},
+        ])
+        out = fs.select_formulas(rr, "compare equation 3.4 and equation 5.2")
+        assert [b["id"] for b in out] == ["f-34", "f-52"]

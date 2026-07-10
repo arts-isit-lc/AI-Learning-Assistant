@@ -77,3 +77,63 @@ def test_structured_comparison_resolved_results_property() -> None:
 def test_reasoning_result_structured_comparison_defaults_none() -> None:
     rr = ReasoningResult(answer="a", sources=[])
     assert rr.structured_comparison is None
+
+
+# --- Formula comparison models (Phase 1) -----------------------------------
+
+from .data_models import (  # noqa: E402
+    EquationType,
+    EquivalenceResult,
+    EquivalenceStatus,
+    FormulaComparisonFacts,
+    FormulaProfile,
+    FormulaReference,
+    QueryIntent,
+)
+
+
+def test_comparison_type_has_formula() -> None:
+    assert ComparisonType.FORMULA.value == "formula"
+
+
+def test_formula_reference_defaults() -> None:
+    ref = FormulaReference()
+    assert ref.number == ""
+    assert ref.keyword == ""
+    ref2 = FormulaReference(number="3.4", keyword="equation")
+    assert (ref2.number, ref2.keyword) == ("3.4", "equation")
+
+
+def test_equation_and_equivalence_enums() -> None:
+    assert EquationType.OPTIMIZATION_OBJECTIVE.value == "optimization_objective"
+    assert EquationType.UNKNOWN.value == "unknown"
+    assert EquivalenceStatus.EQUIVALENT.value == "equivalent"
+    assert EquivalenceStatus.UNKNOWN.value == "unknown"
+
+
+def test_equivalence_result_default_unknown() -> None:
+    er = EquivalenceResult()
+    assert er.status is EquivalenceStatus.UNKNOWN
+    assert er.method == "" and er.reason == ""
+
+
+def test_formula_profile_defaults() -> None:
+    p = FormulaProfile(label="Equation 3.4")
+    assert p.equation_type is EquationType.UNKNOWN
+    assert p.variables == [] and p.functions == []
+    assert p.tokens == [] and p.normalized_tokens == []
+
+
+def test_formula_comparison_facts_is_comparison_facts_and_unknown_by_default() -> None:
+    facts = FormulaComparisonFacts(per_referent=[FormulaProfile(label="A")])
+    assert isinstance(facts, ComparisonFacts)
+    # Each FormulaComparisonFacts gets its own EquivalenceResult (default_factory).
+    assert facts.equivalence.status is EquivalenceStatus.UNKNOWN
+    other = FormulaComparisonFacts()
+    assert other.equivalence is not facts.equivalence
+
+
+def test_query_intent_formula_defaults() -> None:
+    intent = QueryIntent()
+    assert intent.formula_references == []
+    assert intent.requires_formula_comparison is False

@@ -182,8 +182,13 @@ class TestTableResultsWithComparison:
     """_table_results_with_comparison unions resolved comparison tables (T8)."""
 
     def _reasoning_result(self, resolved):
+        # comparison_type is required on the real StructuredComparison; the union
+        # is now type-scoped, so the stub must carry it.
+        from ..models.data_models import ComparisonType
         return SimpleNamespace(
-            structured_comparison=SimpleNamespace(resolved_results=resolved)
+            structured_comparison=SimpleNamespace(
+                comparison_type=ComparisonType.TABLE, resolved_results=resolved
+            )
         )
 
     def test_no_comparison_matches_plain_builder(self):
@@ -214,3 +219,44 @@ class TestTableResultsWithComparison:
         out = handler._table_results_with_comparison(self._reasoning_result(resolved), finals)
         assert len(out) == 1
         assert out[0]["retrieval_id"] == "r-21"
+
+
+from ..models.data_models import ComparisonType  # noqa: E402
+
+
+class TestFormulaResultsWithComparison:
+    """_formula_results_with_comparison unions resolved formulas; type-scoped (T7)."""
+
+    def _rr(self, comparison_type, resolved):
+        return SimpleNamespace(
+            structured_comparison=SimpleNamespace(
+                comparison_type=comparison_type, resolved_results=resolved
+            )
+        )
+
+    def test_unions_resolved_formulas_absent_from_finals(self):
+        finals = [_result(ElementType.TEXT, "x", "txt", 0.5, {}, "t")]
+        resolved = [
+            _result(ElementType.FORMULA, "rf1", "pf1", 1.0, {"latex_repr": "a=b"}, "a=b"),
+            _result(ElementType.FORMULA, "rf2", "pf2", 1.0, {"latex_repr": "c=d"}, "c=d"),
+        ]
+        out = handler._formula_results_with_comparison(self._rr(ComparisonType.FORMULA, resolved), finals)
+        assert [b["retrieval_id"] for b in out] == ["rf1", "rf2"]
+
+    def test_no_comparison_matches_plain_builder(self):
+        finals = [_result(ElementType.FORMULA, "f1", "p1", 0.9, {"latex_repr": "a=b"}, "a=b")]
+        rr = SimpleNamespace(structured_comparison=None)
+        assert handler._formula_results_with_comparison(rr, finals) == handler._build_formula_results(finals)
+
+    def test_table_comparison_does_not_leak_into_formula_results(self):
+        finals = [_result(ElementType.FORMULA, "f1", "p1", 0.9, {"latex_repr": "a=b"}, "a=b")]
+        table_resolved = [_result(ElementType.TABLE, "t1", "tp1", 1.0, {"table_headers": ["h"]}, "T")]
+        rr = self._rr(ComparisonType.TABLE, table_resolved)
+        assert handler._formula_results_with_comparison(rr, finals) == handler._build_formula_results(finals)
+
+    def test_formula_comparison_does_not_leak_into_table_results(self):
+        finals = [_result(ElementType.TABLE, "t1", "tp1", 0.9,
+                          {"table_headers": ["h"], "table_rows": [["1"]], "table_summary": "s"}, "T")]
+        formula_resolved = [_result(ElementType.FORMULA, "rf1", "pf1", 1.0, {"latex_repr": "a=b"}, "a=b")]
+        rr = self._rr(ComparisonType.FORMULA, formula_resolved)
+        assert handler._table_results_with_comparison(rr, finals) == handler._build_table_results(finals)

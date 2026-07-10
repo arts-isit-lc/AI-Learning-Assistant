@@ -11,7 +11,7 @@ import re
 
 from aws_lambda_powertools import Logger
 
-from ..models.data_models import FigureReference, QueryIntent
+from ..models.data_models import FigureReference, FormulaReference, QueryIntent
 
 logger = Logger(service="multimodal-rag-retrieval")
 
@@ -102,6 +102,16 @@ class QueryAnalyzer:
         re.IGNORECASE,
     )
 
+    # Formula/equation references. SEPARATE from _FIGURE_LOOKUP_PATTERN on purpose:
+    # this sets formula flags only and must NEVER set requires_image (the figure
+    # pattern's comment is explicit about that guard). The number is optional so a
+    # keyword-only mention ("the energy equation") is recognized as formula intent
+    # even though it yields no numbered lookup reference.
+    _FORMULA_LOOKUP_PATTERN = re.compile(
+        r"\b(equation|eqn|eq|formula)\.?\s*\(?(\d+(?:[.-]\d+)*)?\)?",
+        re.IGNORECASE,
+    )
+
     # Max distinct references parsed per query (abuse guard + downstream cost bound).
     _MAX_PARSED_REFERENCES = 5
 
@@ -185,6 +195,20 @@ class QueryAnalyzer:
                 len(table_refs) >= 2
                 and self._COMPARISON_PATTERN.search(query) is not None
             )
+
+        # Formula references + comparison intent — INDEPENDENT of figure/table refs
+        # and of requires_image (guard preserved). requires_formula_comparison fires
+        # when there is comparison language AND either >= 2 numbered formula refs OR
+        # a formula-intent signal (keyword rule / a numbered ref). Resolution then
+        # decides which formulas (numbered lookup -> top-2 retrieved fallback).
+        formula_refs = self._extract_formula_references(query)
+        if formula_refs:
+            intent.formula_references = formula_refs
+            intent.requires_formula = True  # a numbered equation reference is formula content
+        intent.requires_formula_comparison = (
+            self._COMPARISON_PATTERN.search(query) is not None
+            and (len(formula_refs) >= 2 or intent.requires_formula)
+        )
 
         return intent
 
@@ -330,6 +354,27 @@ class QueryAnalyzer:
                 continue
             seen.add(key)
             refs.append(FigureReference(ref_type=ref_type, number=number))
+            if len(refs) >= cls._MAX_PARSED_REFERENCES:
+                break
+        return refs
+
+    @classmethod
+    def _extract_formula_references(cls, query: str) -> list[FormulaReference]:
+        """Extract every distinct NUMBERED formula/equation reference, in order.
+
+        Only numbered matches ("equation 3.4", "eq. 5") become lookup references —
+        keyword-only mentions ("the energy equation") carry no number to resolve by,
+        so they drive requires_formula (and thus comparison intent) but are not
+        returned here. De-duplicated by number, bounded by _MAX_PARSED_REFERENCES.
+        """
+        seen: set[str] = set()
+        refs: list[FormulaReference] = []
+        for match in cls._FORMULA_LOOKUP_PATTERN.finditer(query):
+            number = match.group(2)
+            if not number or number in seen:
+                continue
+            seen.add(number)
+            refs.append(FormulaReference(number=number, keyword=match.group(1).lower()))
             if len(refs) >= cls._MAX_PARSED_REFERENCES:
                 break
         return refs

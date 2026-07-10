@@ -90,3 +90,57 @@ def test_no_resolved_referents_returns_none() -> None:
         comparators={ComparisonType.TABLE: _FakeComparator()},
     )
     assert engine.compare(_table_comparison_intent(["2.1", "3.1"]), [], None) is None
+
+
+# --- Formula dispatch (Phase 1) --------------------------------------------
+
+from ...models.data_models import FormulaReference  # noqa: E402
+
+
+def _formula_comparison_intent(numbers):
+    intent = QueryIntent()
+    intent.requires_formula_comparison = True
+    intent.formula_references = [FormulaReference(number=n) for n in numbers]
+    return intent
+
+
+def test_dispatches_formula_comparison():
+    resolver = _FakeResolver([_referent("Equation 3.4"), _referent("Equation 5.2")])
+    comparator = _FakeComparator()
+    engine = ComparisonEngine(
+        resolvers={ComparisonType.FORMULA: resolver},
+        comparators={ComparisonType.FORMULA: comparator},
+    )
+    result = engine.compare(_formula_comparison_intent(["3.4", "5.2"]), [], None)
+    assert result is not None
+    assert result.comparison_type is ComparisonType.FORMULA
+    assert result.intent is ComparisonIntent.COMPARE
+    assert [(r.number) for r in resolver.received_refs] == ["3.4", "5.2"]
+
+
+def test_formula_comparison_keyword_only_dispatches_with_empty_refs():
+    # No numbered refs (keyword-only query) — engine still dispatches; the
+    # resolver receives [] and is expected to fall back to top retrieved formulas.
+    resolver = _FakeResolver([_referent("Formula 1"), _referent("Formula 2")])
+    engine = ComparisonEngine(
+        resolvers={ComparisonType.FORMULA: resolver},
+        comparators={ComparisonType.FORMULA: _FakeComparator()},
+    )
+    intent = QueryIntent()
+    intent.requires_formula_comparison = True  # no formula_references
+    result = engine.compare(intent, [], None)
+    assert result is not None
+    assert resolver.received_refs == []
+
+
+def test_table_takes_precedence_over_formula():
+    # If both flags were somehow set, TABLE wins in _plan.
+    intent = _formula_comparison_intent(["3.4", "5.2"])
+    intent.requires_table_comparison = True
+    intent.figure_references = [FigureReference("table", "1"), FigureReference("table", "2")]
+    engine = ComparisonEngine(
+        resolvers={ComparisonType.TABLE: _FakeResolver([_referent("Table 1"), _referent("Table 2")])},
+        comparators={ComparisonType.TABLE: _FakeComparator()},
+    )
+    result = engine.compare(intent, [], None)
+    assert result.comparison_type is ComparisonType.TABLE

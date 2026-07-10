@@ -61,6 +61,8 @@ _COMPARISON_VERB_PATTERN = re.compile(
     r"\b(compare|comparison|versus|vs|difference|differences|better|worse|which)\b",
     re.IGNORECASE,
 )
+# Formula-intent keyword for the comparison-grounding reinforcement.
+_FORMULA_KEYWORD_PATTERN = re.compile(r"\b(equation|eqn|eq|formula)\b", re.IGNORECASE)
 
 
 def _log_candidate_scores(block_type: str, candidates: list | None) -> None:
@@ -487,6 +489,31 @@ def build_comparison_grounding(table_blocks: list[dict] | None, query: str) -> s
         "verified comparison of them (shared/unique columns, sizes, and differing values) "
         "appears in the retrieved context above — use it to explain concretely how the "
         "tables differ. Do NOT say you cannot compare them, and do NOT invent columns or cells."
+    )
+
+
+def build_formula_comparison_grounding(formula_blocks: list[dict] | None, query: str) -> str:
+    """Reinforce that two referenced formulas are being COMPARED (formula-native).
+
+    Parallel to build_comparison_grounding (tables). The deterministic structural
+    comparison (and, when available, SymPy equivalence) is produced upstream and
+    arrives in the retrieval context; this only nudges the model to use it and not
+    disclaim it. Fires only on a comparison verb + a formula keyword + >= 2 formula
+    blocks. Conservative about equivalence (Phase 1 has no symbolic engine).
+    """
+    if not formula_blocks or len(formula_blocks) < 2:
+        return ""
+    q = query or ""
+    if _COMPARISON_VERB_PATTERN.search(q) is None or _FORMULA_KEYWORD_PATTERN.search(q) is None:
+        return ""
+    return (
+        "## Formula comparison\n"
+        "The formulas shown below are being compared for the student. A deterministic "
+        "structural comparison of them (shared/unique variables, functions, and symbols) "
+        "appears in the retrieved context above — use it to explain concretely how the "
+        "formulas differ. Do NOT invent symbols, and do NOT assert mathematical equivalence "
+        "beyond what the context states (if it says equivalence was not determined, do not "
+        "claim the formulas are equal or unequal)."
     )
 
 

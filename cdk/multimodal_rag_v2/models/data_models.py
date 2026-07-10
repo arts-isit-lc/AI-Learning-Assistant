@@ -55,11 +55,11 @@ class ResolutionConfidence(Enum):
 class ComparisonType(Enum):
     """The content type a structured comparison operates on.
 
-    v1 ships TABLE only; FORMULA is added by the deferred formula-comparison
-    spec. Used as the registry key that selects a resolver + comparator.
+    Used as the registry key that selects a resolver + comparator.
     """
 
     TABLE = "table"
+    FORMULA = "formula"
 
 
 class ComparisonIntent(Enum):
@@ -72,6 +72,32 @@ class ComparisonIntent(Enum):
 
     COMPARE = "compare"
     DESCRIBE = "describe"
+
+
+class EquationType(Enum):
+    """Best-effort LEXICAL classification of a formula (token heuristics, NOT
+    semantic parsing). May be UNKNOWN; must never be presented as authoritative."""
+
+    SCALAR_EQUALITY = "scalar_equality"
+    VECTOR_EQUATION = "vector_equation"
+    MATRIX_EQUATION = "matrix_equation"
+    OPTIMIZATION_OBJECTIVE = "optimization_objective"
+    PROBABILITY_EXPRESSION = "probability_expression"
+    RECURSIVE_DEFINITION = "recursive_definition"
+    PIECEWISE = "piecewise"
+    UNKNOWN = "unknown"
+
+
+class EquivalenceStatus(Enum):
+    """Symbolic-equivalence verdict. UNKNOWN = unparsed or undecided.
+
+    In Phase 1 (lexical only) this is always UNKNOWN; Phase 2 (SymPy via
+    math_compute) may set EQUIVALENT/NOT_EQUIVALENT.
+    """
+
+    EQUIVALENT = "equivalent"
+    NOT_EQUIVALENT = "not_equivalent"
+    UNKNOWN = "unknown"
 
 
 # ---------------------------------------------------------------------------
@@ -204,6 +230,19 @@ class FigureReference:
 
 
 @dataclass
+class FormulaReference:
+    """A reference to a formula/equation in course materials.
+
+    A dedicated type — a formula is not a figure, so we do not overload
+    FigureReference. (A future StructuredReference base could unify the
+    reference types, but that migration is out of scope.)
+    """
+
+    number: str = ""   # "3.4" when the query gives one; "" for keyword-only refs
+    keyword: str = ""  # matched token: "equation" | "eq" | "eqn" | "formula"
+
+
+@dataclass
 class QueryIntent:
     """Structured output of QueryAnalyzer."""
 
@@ -226,6 +265,12 @@ class QueryIntent:
     # language. Independent of the image path; when true the reasoning engine
     # runs the deterministic table comparator instead of image escalation.
     requires_table_comparison: bool = False
+    # Formula-native comparison: comparison language AND (>= 2 numbered formula
+    # references OR a formula-intent keyword). Sets formula flags only — never
+    # requires_image. Resolution (numbered -> top-2 retrieved fallback) decides
+    # which formulas are actually compared.
+    formula_references: list[FormulaReference] = field(default_factory=list)
+    requires_formula_comparison: bool = False
 
 
 @dataclass
@@ -419,6 +464,49 @@ class TableComparisonFacts(ComparisonFacts):
     shared_columns: list[str] = field(default_factory=list)
     unique_columns: dict[str, list[str]] = field(default_factory=dict)
     row_alignment: RowAlignmentResult | None = None
+
+
+@dataclass
+class EquivalenceResult:
+    """Symbolic-equivalence verdict for a formula pair (Tier 2 fills this)."""
+
+    status: EquivalenceStatus = EquivalenceStatus.UNKNOWN
+    method: str = ""   # e.g. "sympy simplify(a-b)==0"
+    reason: str = ""   # short, for observability/grounding
+
+
+@dataclass
+class FormulaProfile:
+    """Per-referent lexical profile of a formula (N-way-ready).
+
+    Raw + normalized token streams are retained so future similarity metrics
+    (Jaccard, TF-IDF, edit distance, tree matching) need not re-tokenize.
+    """
+
+    label: str
+    variables: list[str] = field(default_factory=list)
+    constants: list[str] = field(default_factory=list)
+    operators: list[str] = field(default_factory=list)
+    functions: list[str] = field(default_factory=list)
+    greek: list[str] = field(default_factory=list)
+    equation_type: EquationType = EquationType.UNKNOWN  # best-effort lexical
+    tokens: list[str] = field(default_factory=list)
+    normalized_tokens: list[str] = field(default_factory=list)
+
+
+@dataclass
+class FormulaComparisonFacts(ComparisonFacts):
+    """Deterministic lexical diff between formulas (N-way-ready).
+
+    ``equivalence`` is UNKNOWN in Phase 1 (lexical only); Phase 2 may fill it.
+    """
+
+    per_referent: list[FormulaProfile] = field(default_factory=list)
+    # category -> shared values across ALL referents (variables/functions/...)
+    shared: dict[str, list[str]] = field(default_factory=dict)
+    # label -> {category -> values unique to that referent}
+    unique: dict[str, dict[str, list[str]]] = field(default_factory=dict)
+    equivalence: EquivalenceResult = field(default_factory=EquivalenceResult)
 
 
 @dataclass
