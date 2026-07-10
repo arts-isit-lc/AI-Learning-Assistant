@@ -14,6 +14,7 @@ from io import BytesIO
 from unittest.mock import MagicMock
 
 from ..models.data_models import (
+    CrossModalFamily,
     ElementType,
     FigureReference,
     GroundedArtifact,
@@ -137,8 +138,8 @@ class TestGroundingVisionCall:
         )
         va = out.vision_analysis
         assert va is not None
-        assert va.mode is VisionMode.CROSS_MODAL_GROUNDING
-        assert va.prompt_intent == "ground"
+        assert va.mode is VisionMode.CROSS_MODAL
+        assert va.cross_modal_family is CrossModalFamily.GROUNDING
         assert va.analysis.startswith("Row North")
         assert [i.retrieval_id for i in va.resolved_images] == ["img-1"]
         assert [r.artifact.label for r in va.resolved_artifacts] == ["Table 3.2"]
@@ -266,7 +267,7 @@ class TestGroundingAbstraction:
             query_intent=QueryIntent(requires_cross_modal_grounding=True),
         )
         assert out.escalation_used is True
-        assert out.vision_analysis.mode is VisionMode.CROSS_MODAL_GROUNDING
+        assert out.vision_analysis.mode is VisionMode.CROSS_MODAL
         body, _ = _invoke_body_and_model(esc)
         text_blocks = [b["text"] for b in body["messages"][0]["content"] if b["type"] == "text"]
         # The FORMULA label + fallback-rendered latex reached the vision call.

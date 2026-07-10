@@ -305,7 +305,7 @@ from ..models.data_models import (  # noqa: E402
 
 
 def _grounding_reasoning_result(resolved_table=None, resolved_image=None):
-    """A reasoning_result stub carrying a CROSS_MODAL_GROUNDING vision_analysis."""
+    """A reasoning_result stub carrying a CROSS_MODAL vision_analysis."""
     resolved_artifacts = []
     if resolved_table is not None:
         resolved_artifacts.append(
@@ -316,7 +316,7 @@ def _grounding_reasoning_result(resolved_table=None, resolved_image=None):
             )
         )
     va = SimpleNamespace(
-        mode=VisionMode.CROSS_MODAL_GROUNDING,
+        mode=VisionMode.CROSS_MODAL,
         resolved_images=[resolved_image] if resolved_image is not None else [],
         resolved_artifacts=resolved_artifacts,
         confidence=0.9,

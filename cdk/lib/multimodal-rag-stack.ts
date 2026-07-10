@@ -455,6 +455,10 @@ export class MultimodalRagStack extends cdk.Stack {
           // env — no new IAM/model. Kill-switch: set "false" (or repoint
           // COMPARISON_VISION_MODEL_ID to Haiku 4.5) + redeploy.
           CROSS_MODAL_GROUNDING_ENABLED: "true",
+          // Cross-modal explanation: sibling prompt family that INTERPRETS how a
+          // table + image relate (vs. grounding's placement). Same Sonnet grant/env
+          // — no new IAM/model. Same kill-switch.
+          CROSS_MODAL_EXPLANATION_ENABLED: "true",
           // Tier-2 formula comparison: invoke math_compute for symbolic
           // equivalence. Absent/empty => formula comparison uses lexical Tier 1 only.
           MATH_COMPUTE_FUNCTION_NAME: `${id}-mathComputeFunction`,

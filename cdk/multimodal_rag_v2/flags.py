@@ -49,6 +49,10 @@ STRICT_IMAGE_ESCALATION = _flag("STRICT_IMAGE_ESCALATION", default=False)
 # onto the image. Default OFF (safety contract) — enabled per-env via the
 # retrieval Lambda; the COMPARISON_VISION_MODEL_ID kill-switch also covers it.
 CROSS_MODAL_GROUNDING_ENABLED = _flag("CROSS_MODAL_GROUNDING_ENABLED", default=False)
+# Cross-modal explanation: co-present a structured reference (v1: table) + an image
+# in ONE Sonnet 4.5 call to interpret how they RELATE (a sibling prompt family of
+# grounding). Default OFF; enabled per-env. Same Sonnet grant/env — no new IAM.
+CROSS_MODAL_EXPLANATION_ENABLED = _flag("CROSS_MODAL_EXPLANATION_ENABLED", default=False)
 
 # --- Behavior-preserving optimizations (default OFF for a no-op deploy) --------
 # #5: cache query embeddings in the existing DynamoDB EmbeddingCache.

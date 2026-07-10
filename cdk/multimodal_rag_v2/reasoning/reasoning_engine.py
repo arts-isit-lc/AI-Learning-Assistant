@@ -17,6 +17,7 @@ from aws_lambda_powertools import Logger
 
 from ..models.data_models import (
     ComparisonType,
+    CrossModalFamily,
     ElementType,
     EquivalenceStatus,
     FormulaComparisonFacts,
@@ -34,6 +35,7 @@ from ..models.data_models import (
     VisionMode,
 )
 from ..flags import (
+    CROSS_MODAL_EXPLANATION_ENABLED,
     CROSS_MODAL_GROUNDING_ENABLED,
     RAG_RETURN_PASSAGES,
     STRICT_IMAGE_ESCALATION,
@@ -179,7 +181,11 @@ class ReasoningEngine:
         # precedence over plain image escalation. On any non-resolution it returns
         # None and we fall through to the existing escalation/text path (graceful
         # degrade: image-only -> escalation; reference-only/neither -> text).
+        # Cross-modal families run in precedence order (grounding first, then
+        # explanation); they are mutually exclusive by construction, but ordering
+        # keeps the fallthrough explicit. Each returns None on non-resolution.
         grounding_result = None
+        explanation_result = None
         if structured_comparison is None:
             grounding_result = self._handle_cross_modal_grounding(
                 query=query,
@@ -187,13 +193,23 @@ class ReasoningEngine:
                 query_intent=query_intent,
                 scope_filter=scope_filter,
             )
+            if grounding_result is None:
+                explanation_result = self._handle_cross_modal_explanation(
+                    query=query,
+                    ranked_results=ranked_results or [],
+                    query_intent=query_intent,
+                    scope_filter=scope_filter,
+                )
 
         # Step 1: Image escalation — skipped when a structured comparison OR a
-        # cross-modal grounding resolved (each replaces the vision path here).
+        # cross-modal (grounding/explanation) call resolved (each replaces the
+        # vision path here).
         if structured_comparison is not None:
             escalation_result = EscalationResult(escalation_used=False, image_analyses=[])
         elif grounding_result is not None:
             escalation_result = grounding_result
+        elif explanation_result is not None:
+            escalation_result = explanation_result
         else:
             escalation_result = self._handle_escalation(
                 query=query,
@@ -386,19 +402,54 @@ class ReasoningEngine:
         query_intent: QueryIntent | None,
         scope_filter: dict | None = None,
     ) -> EscalationResult | None:
-        """Run cross-modal grounding (structured reference + image) if requested.
+        """Grounding wrapper: gate on the grounding flag + intent, then delegate."""
+        requested = (
+            query_intent is not None
+            and getattr(query_intent, "requires_cross_modal_grounding", False)
+            and CROSS_MODAL_GROUNDING_ENABLED
+        )
+        return self._handle_cross_modal(
+            query, ranked_results, query_intent, scope_filter,
+            family=CrossModalFamily.GROUNDING, requested=requested,
+        )
+
+    def _handle_cross_modal_explanation(
+        self,
+        query: str,
+        ranked_results: list[RankedResult],
+        query_intent: QueryIntent | None,
+        scope_filter: dict | None = None,
+    ) -> EscalationResult | None:
+        """Explanation wrapper: gate on the explanation flag + intent, then delegate."""
+        requested = (
+            query_intent is not None
+            and getattr(query_intent, "requires_cross_modal_explanation", False)
+            and CROSS_MODAL_EXPLANATION_ENABLED
+        )
+        return self._handle_cross_modal(
+            query, ranked_results, query_intent, scope_filter,
+            family=CrossModalFamily.EXPLANATION, requested=requested,
+        )
+
+    def _handle_cross_modal(
+        self,
+        query: str,
+        ranked_results: list[RankedResult],
+        query_intent: QueryIntent | None,
+        scope_filter: dict | None,
+        *,
+        family: CrossModalFamily,
+        requested: bool,
+    ) -> EscalationResult | None:
+        """Shared cross-modal handler for one prompt family (grounding/explanation).
 
         Resolves ONE structured reference (v1: table) and delegates the image
-        resolution + single vision call to the escalation layer. Returns the
-        EscalationResult (carrying a CROSS_MODAL_GROUNDING VisionAnalysis) when
-        both resolve; otherwise None so the caller degrades gracefully. Gated by
-        ``CROSS_MODAL_GROUNDING_ENABLED``. Never raises.
+        resolution + single vision call to the escalation layer with ``family``.
+        Returns the EscalationResult (a CROSS_MODAL VisionAnalysis of that family)
+        when both resolve; otherwise None so the caller degrades gracefully. The
+        per-family flag + intent gate lives in the wrappers. Never raises.
         """
-        if query_intent is None or self.image_escalation is None:
-            return None
-        if not getattr(query_intent, "requires_cross_modal_grounding", False):
-            return None
-        if not CROSS_MODAL_GROUNDING_ENABLED:
+        if not requested or self.image_escalation is None:
             return None
         try:
             table_resolution = self._resolve_grounding_table(
@@ -406,20 +457,23 @@ class ReasoningEngine:
             )
             if table_resolution is None:
                 logger.info(
-                    "Cross-modal grounding: no structured reference resolved; "
-                    "falling through to existing paths"
+                    "Cross-modal call: no structured reference resolved; falling through",
+                    extra={"family": family.value},
                 )
                 return None
-            result = self.image_escalation.escalate_cross_modal_grounding(
+            result = self.image_escalation.escalate_cross_modal(
                 results=ranked_results,
                 query=query,
                 table_resolution=table_resolution,
+                family=family,
                 query_intent=query_intent,
                 scope_filter=scope_filter,
             )
             return result if result.escalation_used else None
         except Exception:
-            logger.exception("Cross-modal grounding failed, proceeding without")
+            logger.exception(
+                "Cross-modal call failed, proceeding without", extra={"family": family.value}
+            )
             return None
 
     def _resolve_grounding_table(
@@ -536,8 +590,8 @@ class ReasoningEngine:
         # or MULTI (>= 2 figures); branch on mode. The SINGLE-image section is unchanged.
         if escalation_result.vision_analysis is not None:
             va = escalation_result.vision_analysis
-            if va.mode == VisionMode.CROSS_MODAL_GROUNDING:
-                escalation_section = self._format_grounding_section(
+            if va.mode == VisionMode.CROSS_MODAL:
+                escalation_section = self._format_cross_modal_section(
                     va, query_intent=getattr(self, "_last_query_intent", None)
                 )
             else:
@@ -610,14 +664,16 @@ class ReasoningEngine:
             )
         return "\n".join(sections)
 
-    def _format_grounding_section(
+    def _format_cross_modal_section(
         self, vision_analysis: VisionAnalysis, query_intent=None
     ) -> str:
-        """Format a CROSS_MODAL_GROUNDING vision analysis into a prompt section.
+        """Format a CROSS_MODAL vision analysis into a prompt section.
 
-        Labels the structured reference AND the image, hedges when either resolved
-        with LOW confidence, and instructs the final generator to answer only from
-        the analysis + reference content + what is visible (no invented positions).
+        The heading is chosen by ``cross_modal_family`` (GROUNDING = "mapped onto",
+        EXPLANATION = "relationship between"). Labels the structured reference AND
+        the image, hedges when either resolved with LOW confidence, and instructs
+        the final generator to answer only from the analysis + reference content +
+        what is visible (no invented values/positions).
         """
         va = vision_analysis
         ref_label = (
@@ -628,8 +684,13 @@ class ReasoningEngine:
         fig_label = (
             va.reference_mapping[0].reference if va.reference_mapping else "the image"
         )
+        is_explanation = va.cross_modal_family == CrossModalFamily.EXPLANATION
+        if is_explanation:
+            heading = f"## Cross-Modal Explanation: relationship between {ref_label} and {fig_label}"
+        else:
+            heading = f"## Cross-Modal Grounding: {ref_label} mapped onto {fig_label}"
         lines: list[str] = [
-            f"## Cross-Modal Grounding: {ref_label} mapped onto {fig_label}",
+            heading,
             "",
             "The following analysis relates the reference's content to the image (produced by a "
             "vision model shown BOTH the reference and the image — treat its visible-content "
@@ -650,11 +711,18 @@ class ReasoningEngine:
 
         lines.append(va.analysis)
         lines.append("")
-        lines.append(
-            "Both the reference and the image are shown to the student below. Answer using ONLY "
-            "this analysis, the reference content, and what is visible in the image; do not assert "
-            "positions the image does not support."
-        )
+        if is_explanation:
+            lines.append(
+                "Both the reference and the image are shown to the student below. Answer using ONLY "
+                "this analysis, the reference content, and what is visible in the image; do not assert "
+                "values or visual details the sources do not support."
+            )
+        else:
+            lines.append(
+                "Both the reference and the image are shown to the student below. Answer using ONLY "
+                "this analysis, the reference content, and what is visible in the image; do not assert "
+                "positions the image does not support."
+            )
         return "\n".join(lines)
 
     def _format_multi_image_section(

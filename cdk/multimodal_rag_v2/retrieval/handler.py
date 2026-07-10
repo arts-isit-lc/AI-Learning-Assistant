@@ -393,17 +393,18 @@ def _resolved_results_for(reasoning_result, comparison_type) -> list:
 
 
 def _grounding_resolved_results(reasoning_result, element_type) -> list:
-    """RankedResults resolved by a CROSS_MODAL_GROUNDING call, for the given type.
+    """RankedResults resolved by a CROSS_MODAL call (grounding OR explanation).
 
-    Routes each grounded artifact by its ``artifact_type`` so a grounded table
+    Routes each resolved artifact by its ``artifact_type`` so a resolved table
     lands in table_results (and, when a future type is added, a formula in
-    formula_results). Returns [] unless a grounding call produced resolved
-    artifacts of that type. A grounded reference may have been resolved by a
-    direct DB lookup and thus be absent from ``final_results``, so surfacing it
-    here is what puts the grounded table block in front of the student.
+    formula_results). Returns [] unless a cross-modal call produced resolved
+    artifacts of that type. A resolved reference may have been fetched by a direct
+    DB lookup and thus be absent from ``final_results``, so surfacing it here is
+    what puts the resolved table block in front of the student. Both cross-modal
+    families share one VisionMode, so this fires for grounding and explanation alike.
     """
     va = getattr(reasoning_result, "vision_analysis", None)
-    if va is None or getattr(va, "mode", None) != VisionMode.CROSS_MODAL_GROUNDING:
+    if va is None or getattr(va, "mode", None) != VisionMode.CROSS_MODAL:
         return []
     return [
         res.ranked_result
@@ -754,6 +755,16 @@ def _handle_query(
             "escalation_used": reasoning_result.escalation_used,
             "source_count": len(reasoning_result.sources),
             "cost_estimate": _estimate_cost(query_intent, reasoning_result),
+            # Cross-modal observability (spec §9): which family ran + the relational
+            # cue that fired the explanation trigger (so a weak cue that over-fires
+            # is visible in telemetry).
+            "cross_modal_family": (
+                reasoning_result.vision_analysis.cross_modal_family.value
+                if getattr(reasoning_result, "vision_analysis", None) is not None
+                and reasoning_result.vision_analysis.cross_modal_family is not None
+                else None
+            ),
+            "explanation_trigger_cue": getattr(query_intent, "explanation_trigger_cue", None),
         },
     )
 

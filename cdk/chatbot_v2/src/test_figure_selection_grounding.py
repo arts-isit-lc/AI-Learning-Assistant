@@ -49,21 +49,26 @@ class TestGroundingAttachesBothBlocks:
         assert out[0]["headers"] == ["Region"]
 
 
-class TestBuildGroundingReinforcement:
+class TestBuildCrossModalReinforcement:
     _TABLE = [{"retrieval_id": "tbl32", "headers": ["Region"], "rows": [["N"]]}]
     _FIGS = ["fig4"]
+    _EXPLANATION_QUERY = "how does Table 3.2 relate to Figure 4"
 
-    def test_fires_when_both_blocks_and_placement_verb(self):
-        out = fs.build_grounding_reinforcement(self._TABLE, self._FIGS, _GROUNDING_QUERY)
-        assert "Cross-modal grounding" in out
-        assert "do not support" in out.lower() or "does not support" in out.lower()
+    def test_fires_for_placement_query_grounding(self):
+        out = fs.build_cross_modal_reinforcement(self._TABLE, self._FIGS, _GROUNDING_QUERY)
+        assert "Cross-modal analysis" in out
+        assert "do not support" in out.lower()
 
-    def test_empty_without_placement_verb(self):
-        # Both blocks present, but the query is a plain lookup (no placement verb).
-        assert fs.build_grounding_reinforcement(self._TABLE, self._FIGS, "show table 3.2 and figure 4") == ""
+    def test_fires_for_relational_query_explanation(self):
+        out = fs.build_cross_modal_reinforcement(self._TABLE, self._FIGS, self._EXPLANATION_QUERY)
+        assert "Cross-modal analysis" in out
+
+    def test_empty_without_placement_or_relational_cue(self):
+        # Both blocks present, but a plain lookup — neither placement nor relational.
+        assert fs.build_cross_modal_reinforcement(self._TABLE, self._FIGS, "show table 3.2 and figure 4") == ""
 
     def test_empty_without_table(self):
-        assert fs.build_grounding_reinforcement([], self._FIGS, _GROUNDING_QUERY) == ""
+        assert fs.build_cross_modal_reinforcement([], self._FIGS, _GROUNDING_QUERY) == ""
 
     def test_empty_without_figure(self):
-        assert fs.build_grounding_reinforcement(self._TABLE, [], _GROUNDING_QUERY) == ""
+        assert fs.build_cross_modal_reinforcement(self._TABLE, [], self._EXPLANATION_QUERY) == ""

@@ -16,6 +16,7 @@ from typing import Any
 from aws_lambda_powertools import Logger
 
 from ..models.data_models import (
+    CrossModalFamily,
     ElementType,
     GroundedArtifact,
     GroundingResolution,
@@ -837,38 +838,43 @@ class ImageEscalation:
             return "image/png"
 
     # -----------------------------------------------------------------------
-    # Cross-modal grounding (ONE structured reference + ONE image in ONE call)
+    # Cross-modal (ONE structured reference + ONE image in ONE call).
+    # ``family`` (GROUNDING / EXPLANATION) selects the prompt — the ONLY thing that
+    # differs; the execution mode (VisionMode.CROSS_MODAL) is shared.
     # -----------------------------------------------------------------------
 
-    def escalate_cross_modal_grounding(
+    def escalate_cross_modal(
         self,
         results: list[RankedResult],
         query: str,
         table_resolution: GroundingResolution,
+        family: CrossModalFamily,
         query_intent: Any = None,
         scope_filter: dict | None = None,
     ) -> EscalationResult:
         """Co-present ONE structured reference + ONE image in a single Sonnet 4.5 call.
 
-        The reference is already resolved (by the reasoning engine) into
-        ``table_resolution``; this resolves the IMAGE, fetches its bytes, and issues
-        one grounding vision call. The vision call itself receives only the PURE
-        ``GroundedArtifact`` (``table_resolution.artifact``) — retrieval state never
-        reaches the vision layer.
+        ``family`` selects the prompt family (GROUNDING = place the reference's
+        entries onto the image; EXPLANATION = interpret how they relate) — the ONLY
+        difference between the two; the execution mode (``VisionMode.CROSS_MODAL``)
+        and everything structural are shared. The reference is already resolved (by
+        the reasoning engine) into ``table_resolution``; this resolves the IMAGE,
+        fetches its bytes, and issues one vision call that receives only the PURE
+        ``GroundedArtifact`` — retrieval state never reaches the vision layer.
 
         Returns ``escalation_used=False`` (so the caller degrades gracefully to the
         normal escalation/text path) when no image resolves or the vision call
         fails. Never raises.
         """
-        grounding_start = time.time()
+        start = time.time()
         try:
             image, image_conf = self._resolve_grounding_image(
                 results, query_intent, scope_filter
             )
             if image is None or not image.image_s3_key:
                 logger.info(
-                    "Cross-modal grounding: no image resolved; caller falls back",
-                    extra={"artifact_label": table_resolution.artifact.label},
+                    "Cross-modal call: no image resolved; caller falls back",
+                    extra={"family": family.value, "artifact_label": table_resolution.artifact.label},
                 )
                 return EscalationResult(escalation_used=False)
 
@@ -881,11 +887,12 @@ class ImageEscalation:
                 or image_conf == ResolutionConfidence.LOW
             )
 
-            analysis_text, vision_confidence = self._invoke_vision_llm_grounding(
+            analysis_text, vision_confidence = self._invoke_vision_llm_cross_modal(
                 image_bytes,
                 image.image_s3_key,
                 table_resolution.artifact,
                 query,
+                family=family,
                 low_confidence=low_confidence,
             )
             if analysis_text is None:
@@ -898,30 +905,49 @@ class ImageEscalation:
                 confidence=image_conf,
             )
             logger.info(
-                "Cross-modal grounding complete",
+                "Cross-modal call complete",
                 extra={
+                    "family": family.value,
                     "artifact_label": table_resolution.artifact.label,
                     "artifact_type": table_resolution.artifact.artifact_type.value,
                     "image_retrieval_id": image.retrieval_id,
                     "low_confidence": low_confidence,
-                    "grounding_latency_ms": round((time.time() - grounding_start) * 1000, 2),
+                    "latency_ms": round((time.time() - start) * 1000, 2),
                 },
             )
             return EscalationResult(
                 escalation_used=True,
                 vision_analysis=VisionAnalysis(
-                    mode=VisionMode.CROSS_MODAL_GROUNDING,
+                    mode=VisionMode.CROSS_MODAL,
                     analysis=analysis_text,
                     confidence=vision_confidence,
                     resolved_images=[image],
                     reference_mapping=[image_ref],
-                    prompt_intent="ground",
+                    cross_modal_family=family,
                     resolved_artifacts=[table_resolution],
                 ),
             )
         except Exception:
-            logger.exception("Unexpected error during cross-modal grounding")
+            logger.exception("Unexpected error during cross-modal call")
             return EscalationResult(escalation_used=False)
+
+    def escalate_cross_modal_grounding(
+        self,
+        results: list[RankedResult],
+        query: str,
+        table_resolution: GroundingResolution,
+        query_intent: Any = None,
+        scope_filter: dict | None = None,
+    ) -> EscalationResult:
+        """Grounding wrapper over the generalized path (unchanged public API)."""
+        return self.escalate_cross_modal(
+            results,
+            query,
+            table_resolution,
+            family=CrossModalFamily.GROUNDING,
+            query_intent=query_intent,
+            scope_filter=scope_filter,
+        )
 
     def _resolve_grounding_image(
         self,
@@ -963,20 +989,21 @@ class ImageEscalation:
                 return f"{r.ref_type.title()} {r.number}"
         return "the image"
 
-    def _invoke_vision_llm_grounding(
+    def _invoke_vision_llm_cross_modal(
         self,
         image_bytes: bytes,
         image_s3_key: str,
         artifact: GroundedArtifact,
         query: str,
+        family: CrossModalFamily,
         low_confidence: bool = False,
     ) -> tuple[str | None, float]:
-        """Invoke the grounding vision model (Sonnet 4.5) with reference text + image.
+        """Invoke the cross-modal vision model (Sonnet 4.5) with reference text + image.
 
         Builds ONE message: a labeled text block carrying the rendered reference, then
-        the image block, then the grounding prompt. Consumes only the PURE
-        ``GroundedArtifact`` (principle 2.5). Returns ``(analysis_text, confidence)``;
-        ``(None, 0.0)`` on any failure (caller degrades gracefully).
+        the image block, then the family-selected prompt (``_cross_modal_prompt``).
+        Consumes only the PURE ``GroundedArtifact`` (principle 2.5). Returns
+        ``(analysis_text, confidence)``; ``(None, 0.0)`` on any failure.
         """
         try:
             import json
@@ -994,7 +1021,7 @@ class ImageEscalation:
                         "data": base64.b64encode(image_bytes).decode("utf-8"),
                     },
                 },
-                {"type": "text", "text": self._grounding_prompt(query, artifact, low_confidence)},
+                {"type": "text", "text": self._cross_modal_prompt(query, artifact, family, low_confidence)},
             ]
 
             response = self.bedrock_client.invoke_model(
@@ -1014,9 +1041,10 @@ class ImageEscalation:
             stop_reason = response_body.get("stop_reason", "end_turn")
             confidence = 0.9 if stop_reason == "end_turn" else 0.7
             logger.info(
-                "Cross-modal grounding vision analysis complete",
+                "Cross-modal vision analysis complete",
                 extra={
                     "model_id": COMPARISON_VISION_MODEL_ID,
+                    "family": family.value,
                     "artifact_type": artifact.artifact_type.value,
                     "analysis_length": len(analysis_text),
                 },
@@ -1024,10 +1052,19 @@ class ImageEscalation:
             return analysis_text, confidence
         except Exception:
             logger.exception(
-                "Failed to invoke grounding vision LLM",
+                "Failed to invoke cross-modal vision LLM",
                 extra={"image_s3_key": image_s3_key},
             )
             return None, 0.0
+
+    @staticmethod
+    def _cross_modal_prompt(
+        query: str, artifact: GroundedArtifact, family: CrossModalFamily, low_confidence: bool = False
+    ) -> str:
+        """Dispatch to the family's prompt. The ONE place the prompt family matters."""
+        if family == CrossModalFamily.EXPLANATION:
+            return ImageEscalation._explanation_prompt(query, artifact, low_confidence)
+        return ImageEscalation._grounding_prompt(query, artifact, low_confidence)
 
     @staticmethod
     def _grounding_prompt(query: str, artifact: GroundedArtifact, low_confidence: bool = False) -> str:
@@ -1062,6 +1099,48 @@ class ImageEscalation:
             "- If the image lacks the labels/legend/axes needed to place the data, state that rather "
             "than guessing.\n"
             "- The reference may be truncated (large tables); if so, ground only the entries shown."
+        )
+        note = ""
+        if low_confidence:
+            note = (
+                "\n- The reference or image may not be the one the student intended; note this and "
+                "invite them to confirm which they meant."
+            )
+        return header + body + note
+
+    @staticmethod
+    def _explanation_prompt(query: str, artifact: GroundedArtifact, low_confidence: bool = False) -> str:
+        """Build the EXPLANATION prompt — interpret how the reference and image relate.
+
+        Structured 4-part output (what the reference has / what the image shows / the
+        relationship / answer the question) for consistency, and faithfulness-hardened:
+        it forbids inventing numbers/labels/colors/curves and requires admitting when
+        the relationship cannot be determined — directly targeting the observed
+        hallucination failure.
+        """
+        type_word = artifact.artifact_type.value
+        header = (
+            "You are helping a student understand how a structured reference (such as a table) and an "
+            "image from their course materials RELATE to each other.\n"
+            f'Above you are given: (1) a structured reference (a {type_word}, "{artifact.label}"), and '
+            "(2) an image, each labeled.\n\n"
+            f'The student asked: "{query}"\n\n'
+        )
+        body = (
+            "Structure your answer:\n"
+            "1. What the reference contains — briefly (its columns/rows and what they measure).\n"
+            "2. What the image shows — briefly (axes, legend, labeled series/regions).\n"
+            "3. The relationship between them — how the reference's data corresponds to or is illustrated "
+            "by the image, and vice versa (trends, matches, what one measures about the other).\n"
+            "4. A direct answer to the student's specific question, teaching the connection.\n\n"
+            "Constraints:\n"
+            "- Use ONLY the values present in the reference and what is ACTUALLY visible in the image.\n"
+            "- Do NOT invent numbers, data points, axis labels, legends, colors, or curve shapes that are "
+            "not present.\n"
+            "- Do NOT state a numeric value unless it appears in the reference or is clearly visible in the image.\n"
+            "- If the relationship cannot be determined from the supplied reference and image, say so "
+            "explicitly rather than guessing.\n"
+            "- The reference may be truncated (large tables); reason only over the rows shown."
         )
         note = ""
         if low_confidence:

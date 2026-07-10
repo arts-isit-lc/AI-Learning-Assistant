@@ -63,11 +63,19 @@ _COMPARISON_VERB_PATTERN = re.compile(
 )
 # Formula-intent keyword for the comparison-grounding reinforcement.
 _FORMULA_KEYWORD_PATTERN = re.compile(r"\b(equation|eqn|eq|formula)\b", re.IGNORECASE)
-# Placement/mapping language for the cross-modal grounding reinforcement (mirrors
-# the retrieval query analyzer's grounding verbs). Used only to reinforce grounding
-# when a table + a figure are shown together for a "map X onto the image" query.
+# Cross-modal reinforcement fires for EITHER prompt family when a table + a figure
+# are shown together: placement language (grounding, "map X onto the image") OR
+# relational language (explanation, "how does X relate to the figure"). Mirrors the
+# retrieval query analyzer's cues (kept lightweight here — this only nudges the
+# generator; the real analysis arrives upstream in the retrieved context).
 _GROUNDING_VERB_PATTERN = re.compile(
     r"\b(map|plot|overlay|locate|mark|place|pinpoint|position|annotate|highlight)\b",
+    re.IGNORECASE,
+)
+_RELATIONAL_CUE_PATTERN = re.compile(
+    r"\b(relationship|relate|relates|correspond|corresponds|consistent|matches|aligns?\s+with|"
+    r"supports?|explains?|illustrates?|reflects?|compare|comparison|difference|connection|"
+    r"based\s+on|using)\b|\bhow\s+(do|does|is|are)\b|\bwhy\s+(do|does|is|are)\b",
     re.IGNORECASE,
 )
 
@@ -524,29 +532,30 @@ def build_formula_comparison_grounding(formula_blocks: list[dict] | None, query:
     )
 
 
-def build_grounding_reinforcement(
+def build_cross_modal_reinforcement(
     table_blocks: list[dict] | None, selected_figures: list[str] | None, query: str
 ) -> str:
-    """Reinforce that a table + an image are being GROUNDED together (cross-modal).
+    """Reinforce that a table + an image are being related cross-modally.
 
-    Parallel to build_comparison_grounding, but for the grounding prompt family:
-    fires only when the query uses placement/mapping language AND both a table
-    block and a figure are being shown. The actual cross-modal grounding analysis
-    is produced upstream (retrieval Lambda) and arrives in the retrieved context;
-    this only nudges the model to use it (if present) and not disclaim it. Wording
-    is conditional ("If a ... analysis appears") so it is safe even when grounding
-    did not run for this turn.
+    Covers BOTH cross-modal prompt families: grounding (placement language, "map X
+    onto the image") and explanation (relational language, "how does X relate to the
+    figure"). Fires only when both a table block and a figure are shown AND the query
+    uses placement or relational language. The actual cross-modal analysis is produced
+    upstream (retrieval Lambda) and arrives in the retrieved context; this only nudges
+    the model to use it (if present). Wording is conditional ("If a ... analysis
+    appears") so it is safe even when no cross-modal call ran this turn.
     """
     if not table_blocks or not selected_figures:
         return ""
-    if _GROUNDING_VERB_PATTERN.search(query or "") is None:
+    q = query or ""
+    if _GROUNDING_VERB_PATTERN.search(q) is None and _RELATIONAL_CUE_PATTERN.search(q) is None:
         return ""
     return (
-        "## Cross-modal grounding\n"
-        "The table and the figure shown below relate to each other for the student — the table's "
-        "data grounded onto the image. If a cross-modal grounding analysis appears in the retrieved "
-        "context above, use it to explain concretely where the table's entries map on the image. Do "
-        "NOT assert positions the image does not support, and do NOT say you cannot relate them."
+        "## Cross-modal analysis\n"
+        "The table and the figure shown below relate to each other for the student. If a cross-modal "
+        "analysis (grounding the table onto the image, or explaining their relationship) appears in the "
+        "retrieved context above, use it to explain concretely how they connect. Do NOT assert values "
+        "or positions the sources do not support, and do NOT say you cannot relate them."
     )
 
 

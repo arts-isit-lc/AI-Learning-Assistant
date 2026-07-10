@@ -8,6 +8,7 @@ in reasoning/image_escalation.py) is covered in the escalation tests.
 from __future__ import annotations
 
 from .data_models import (
+    CrossModalFamily,
     ElementType,
     GroundedArtifact,
     GroundingResolution,
@@ -37,7 +38,12 @@ class TestVisionEnums:
     def test_vision_mode_values(self) -> None:
         assert VisionMode.SINGLE.value == "single"
         assert VisionMode.MULTI.value == "multi"
-        assert VisionMode.CROSS_MODAL_GROUNDING.value == "cross_modal_grounding"
+        # One structural cross-modal mode (execution), not one per prompt family.
+        assert VisionMode.CROSS_MODAL.value == "cross_modal"
+
+    def test_cross_modal_family_values(self) -> None:
+        assert CrossModalFamily.GROUNDING.value == "grounding"
+        assert CrossModalFamily.EXPLANATION.value == "explanation"
 
     def test_resolution_confidence_values(self) -> None:
         assert {c.value for c in ResolutionConfidence} == {"high", "medium", "low"}
@@ -81,10 +87,19 @@ class TestVisionAnalysis:
         assert va.reference_mapping[0].reference == "Figure 2.1"
         assert va.prompt_intent == "compare"
 
-    def test_cross_modal_grounding_defaults_resolved_artifacts_empty(self) -> None:
-        # Additive field must default empty so SINGLE/MULTI construction is unaffected.
+    def test_cross_modal_defaults_empty(self) -> None:
+        # Additive fields must default so SINGLE/MULTI construction is unaffected.
         va = VisionAnalysis(mode=VisionMode.MULTI, analysis="t", confidence=0.9)
         assert va.resolved_artifacts == []
+        assert va.cross_modal_family is None
+
+    def test_cross_modal_family_set(self) -> None:
+        va = VisionAnalysis(
+            mode=VisionMode.CROSS_MODAL, analysis="t", confidence=0.9,
+            cross_modal_family=CrossModalFamily.EXPLANATION,
+        )
+        assert va.mode is VisionMode.CROSS_MODAL
+        assert va.cross_modal_family is CrossModalFamily.EXPLANATION
 
 
 class TestGroundedArtifact:

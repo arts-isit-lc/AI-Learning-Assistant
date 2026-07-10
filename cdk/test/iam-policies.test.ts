@@ -730,7 +730,7 @@ describe('IAM Policy Guardrails', () => {
    * existing Sonnet 4.5 grant/env — no new IAM/model — so only the feature-flag
    * env var is asserted here (testing-policy: CDK change → assertion test).
    */
-  test('ragRetrievalFunction enables CROSS_MODAL_GROUNDING_ENABLED', () => {
+  test('ragRetrievalFunction enables CROSS_MODAL_GROUNDING_ENABLED + CROSS_MODAL_EXPLANATION_ENABLED', () => {
     const json = ragTemplate.toJSON();
     const resources = json.Resources ?? {};
 
@@ -742,7 +742,13 @@ describe('IAM Policy Guardrails', () => {
       const env = props?.Environment as Record<string, unknown> | undefined;
       const vars = env?.Variables as Record<string, unknown> | undefined;
       // Scope to the retrieval function (it carries the vision-model env vars).
-      if (vars && vars.COMPARISON_VISION_MODEL_ID && vars.CROSS_MODAL_GROUNDING_ENABLED === 'true') {
+      // Both cross-modal families reuse the SAME Sonnet grant/env — no new IAM.
+      if (
+        vars &&
+        vars.COMPARISON_VISION_MODEL_ID &&
+        vars.CROSS_MODAL_GROUNDING_ENABLED === 'true' &&
+        vars.CROSS_MODAL_EXPLANATION_ENABLED === 'true'
+      ) {
         found = true;
         break;
       }

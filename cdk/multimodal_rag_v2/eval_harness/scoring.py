@@ -12,6 +12,7 @@ See .kiro/specs/chatbot-latency-optimization/findings.md (Step 0 metrics).
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -84,6 +85,31 @@ class ScoredItem:
     answer: str = ""
     rationale: str = ""
     reference_facts: list[str] = field(default_factory=list)
+
+
+_NUMBER_RE = re.compile(r"\d+(?:\.\d+)?")
+
+
+def _numbers_in(text: str) -> set[str]:
+    """Numeric tokens (integers/decimals) in a string, ignoring thousands-commas."""
+    return set(_NUMBER_RE.findall((text or "").replace(",", "")))
+
+
+def unsupported_numeric_values(answer: str, supplied_texts: list[str]) -> list[str]:
+    """Numeric tokens in ``answer`` that appear in NONE of the supplied artifacts.
+
+    The behavioral faithfulness check for cross-modal explanation (AC-3B / spec §11):
+    when the supplied image has no visible numeric labels, every number in the
+    answer must come from the supplied reference/image content. Any value returned
+    here is an invented number — the exact failure mode observed in the bad response
+    (fabricated latencies). Deterministic + pure: the eval harness runs the REAL
+    model to produce ``answer``, then asserts this list is empty. Thousands-commas
+    are normalized so "11,800" and "11800" match.
+    """
+    supplied: set[str] = set()
+    for text in supplied_texts:
+        supplied |= _numbers_in(text)
+    return sorted(n for n in _numbers_in(answer) if n not in supplied)
 
 
 def retrieval_precision(expected_figure_id: str, source_ids: list[str]) -> float:

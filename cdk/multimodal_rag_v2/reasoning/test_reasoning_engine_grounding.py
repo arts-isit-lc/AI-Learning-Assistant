@@ -1,8 +1,10 @@
-"""Tests for cross-modal grounding wiring in ReasoningEngine (T4/T5).
+"""Tests for cross-modal GROUNDING wiring in ReasoningEngine (T4/T5).
 
-Covers _handle_cross_modal_grounding (gate, table resolution incl. top-table
-fallback, delegation to escalation, graceful degrade), the precedence that lets
-grounding replace plain image escalation, and _format_grounding_section.
+Migrated to the generalized path: the reasoning engine now calls
+``image_escalation.escalate_cross_modal(family=...)``; grounding is the family
+GROUNDING and its behavior is functionally unchanged. Covers the handler gate,
+table resolution incl. top-table fallback, precedence over plain escalation, and
+_format_cross_modal_section's grounding heading.
 """
 
 from __future__ import annotations
@@ -10,6 +12,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from ..models.data_models import (
+    CrossModalFamily,
     ElementType,
     FigureReference,
     GroundedArtifact,
@@ -28,19 +31,12 @@ from .image_escalation import EscalationResult
 from .reasoning_engine import ReasoningEngine
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
 class _FakeContextBuilder:
     def format_for_prompt(self, context, module_context=None):
         return "BASE CONTEXT"
 
 
 class _FakeTableResolver:
-    """Returns preset referents regardless of input (deterministic)."""
-
     def __init__(self, referents):
         self._referents = referents
 
@@ -82,12 +78,12 @@ def _grounding_va(low=False) -> VisionAnalysis:
     )
     img = _image_ranked()
     return VisionAnalysis(
-        mode=VisionMode.CROSS_MODAL_GROUNDING,
+        mode=VisionMode.CROSS_MODAL,
         analysis="North maps to the top-left region of the map.",
         confidence=0.9,
         resolved_images=[img],
         reference_mapping=[ResolvedReference("Figure 4", img.retrieval_id, img.image_s3_key, ResolutionConfidence.HIGH)],
-        prompt_intent="ground",
+        cross_modal_family=CrossModalFamily.GROUNDING,
         resolved_artifacts=[res],
     )
 
@@ -95,7 +91,7 @@ def _grounding_va(low=False) -> VisionAnalysis:
 def _grounding_intent() -> QueryIntent:
     intent = QueryIntent()
     intent.requires_cross_modal_grounding = True
-    intent.requires_image = True  # a grounding query typically sets this too
+    intent.requires_image = True
     intent.figure_references = [FigureReference("table", "3.2"), FigureReference("figure", "4")]
     return intent
 
@@ -110,14 +106,10 @@ def _engine(image_escalation, table_resolver=None) -> ReasoningEngine:
 
 
 def _escalation_mock(result: EscalationResult) -> MagicMock:
+    # The reasoning engine calls the GENERALIZED escalate_cross_modal(family=...).
     m = MagicMock()
-    m.escalate_cross_modal_grounding.return_value = result
+    m.escalate_cross_modal.return_value = result
     return m
-
-
-# ---------------------------------------------------------------------------
-# _handle_cross_modal_grounding
-# ---------------------------------------------------------------------------
 
 
 class TestHandleCrossModalGrounding:
@@ -130,59 +122,48 @@ class TestHandleCrossModalGrounding:
         out = eng._handle_cross_modal_grounding("q", [_image_ranked()], _grounding_intent(), None)
 
         assert out is result
-        esc.escalate_cross_modal_grounding.assert_called_once()
-        passed = esc.escalate_cross_modal_grounding.call_args.kwargs["table_resolution"]
+        esc.escalate_cross_modal.assert_called_once()
+        kwargs = esc.escalate_cross_modal.call_args.kwargs
+        assert kwargs["family"] is CrossModalFamily.GROUNDING
+        passed = kwargs["table_resolution"]
         assert isinstance(passed, GroundingResolution)
         assert passed.artifact.artifact_type is ElementType.TABLE
         assert passed.artifact.label == "Table 3.2"
-        # The pure artifact must carry the resolver's structured content.
         assert passed.artifact.structured_content["headers"] == ["Region", "Pop"]
 
     def test_gate_flag_off_returns_none(self, monkeypatch):
         monkeypatch.setattr(re_mod, "CROSS_MODAL_GROUNDING_ENABLED", False)
         esc = _escalation_mock(EscalationResult(escalation_used=True, vision_analysis=_grounding_va()))
         eng = _engine(esc, table_resolver=_FakeTableResolver([_referent()]))
-
         out = eng._handle_cross_modal_grounding("q", [_image_ranked()], _grounding_intent(), None)
-
         assert out is None
-        esc.escalate_cross_modal_grounding.assert_not_called()
+        esc.escalate_cross_modal.assert_not_called()
 
     def test_not_requested_returns_none(self, monkeypatch):
         monkeypatch.setattr(re_mod, "CROSS_MODAL_GROUNDING_ENABLED", True)
         esc = _escalation_mock(EscalationResult(escalation_used=True, vision_analysis=_grounding_va()))
         eng = _engine(esc, table_resolver=_FakeTableResolver([_referent()]))
-
-        intent = QueryIntent()  # requires_cross_modal_grounding stays False
-        out = eng._handle_cross_modal_grounding("q", [_image_ranked()], intent, None)
-
+        out = eng._handle_cross_modal_grounding("q", [_image_ranked()], QueryIntent(), None)
         assert out is None
-        esc.escalate_cross_modal_grounding.assert_not_called()
+        esc.escalate_cross_modal.assert_not_called()
 
     def test_no_table_resolved_degrades_to_none(self, monkeypatch):
         monkeypatch.setattr(re_mod, "CROSS_MODAL_GROUNDING_ENABLED", True)
         esc = _escalation_mock(EscalationResult(escalation_used=True, vision_analysis=_grounding_va()))
-        # No table refs resolvable and NO table in ranked results.
         eng = _engine(esc, table_resolver=_FakeTableResolver([]))
-
         out = eng._handle_cross_modal_grounding("q", [_image_ranked()], _grounding_intent(), None)
-
         assert out is None
-        esc.escalate_cross_modal_grounding.assert_not_called()
+        esc.escalate_cross_modal.assert_not_called()
 
     def test_fallback_to_top_retrieved_table(self, monkeypatch):
         monkeypatch.setattr(re_mod, "CROSS_MODAL_GROUNDING_ENABLED", True)
         esc = _escalation_mock(EscalationResult(escalation_used=True, vision_analysis=_grounding_va()))
         eng = _engine(esc, table_resolver=None)  # no resolver -> fallback path
-
         intent = QueryIntent()
-        intent.requires_cross_modal_grounding = True  # no numbered table ref
-        out = eng._handle_cross_modal_grounding(
-            "q", [_image_ranked(), _table_ranked()], intent, None
-        )
-
+        intent.requires_cross_modal_grounding = True
+        out = eng._handle_cross_modal_grounding("q", [_image_ranked(), _table_ranked()], intent, None)
         assert out is not None
-        passed = esc.escalate_cross_modal_grounding.call_args.kwargs["table_resolution"]
+        passed = esc.escalate_cross_modal.call_args.kwargs["table_resolution"]
         assert passed.confidence is ResolutionConfidence.MEDIUM
         assert passed.artifact.structured_content["headers"] == ["Region", "Pop"]
 
@@ -190,21 +171,13 @@ class TestHandleCrossModalGrounding:
         monkeypatch.setattr(re_mod, "CROSS_MODAL_GROUNDING_ENABLED", True)
         esc = _escalation_mock(EscalationResult(escalation_used=False))
         eng = _engine(esc, table_resolver=_FakeTableResolver([_referent()]))
-
         out = eng._handle_cross_modal_grounding("q", [_image_ranked()], _grounding_intent(), None)
-
         assert out is None
-
-
-# ---------------------------------------------------------------------------
-# Precedence: grounding replaces plain image escalation
-# ---------------------------------------------------------------------------
 
 
 class TestPrecedence:
     def test_grounding_skips_image_escalation(self, monkeypatch):
         monkeypatch.setattr(re_mod, "CROSS_MODAL_GROUNDING_ENABLED", True)
-        # Return passages (skip the reasoning LLM) so no bedrock client is needed.
         monkeypatch.setattr(re_mod, "RAG_RETURN_PASSAGES", True)
         esc = _escalation_mock(EscalationResult(escalation_used=True, vision_analysis=_grounding_va()))
         eng = _engine(esc, table_resolver=_FakeTableResolver([_referent()]))
@@ -216,30 +189,23 @@ class TestPrecedence:
             query_intent=_grounding_intent(),
         )
 
-        # Grounding won -> normal single/multi escalation was NOT invoked.
-        esc.escalate.assert_not_called()
+        esc.escalate.assert_not_called()  # single/multi escalation not invoked
         assert result.vision_analysis is not None
-        assert result.vision_analysis.mode is VisionMode.CROSS_MODAL_GROUNDING
+        assert result.vision_analysis.mode is VisionMode.CROSS_MODAL
         assert "## Cross-Modal Grounding" in result.answer
 
 
-# ---------------------------------------------------------------------------
-# _format_grounding_section (T5)
-# ---------------------------------------------------------------------------
-
-
-class TestFormatGroundingSection:
+class TestFormatCrossModalSectionGrounding:
     def _engine(self):
         return ReasoningEngine(context_builder=_FakeContextBuilder())
 
     def test_labels_reference_and_figure(self):
-        section = self._engine()._format_grounding_section(_grounding_va())
+        section = self._engine()._format_cross_modal_section(_grounding_va())
         assert "## Cross-Modal Grounding: Table 3.2 mapped onto Figure 4" in section
         assert "North maps to the top-left region" in section
         assert "Answer using ONLY" in section
-        # No hedge when everything resolved with confidence.
         assert "low-confidence match" not in section
 
     def test_low_confidence_hedge(self):
-        section = self._engine()._format_grounding_section(_grounding_va(low=True))
+        section = self._engine()._format_cross_modal_section(_grounding_va(low=True))
         assert "low-confidence match" in section

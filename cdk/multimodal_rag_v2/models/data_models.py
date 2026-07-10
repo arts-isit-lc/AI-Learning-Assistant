@@ -38,16 +38,29 @@ class ElementType(Enum):
 
 
 class VisionMode(Enum):
-    """Structural mode of a VisionAnalysis.
+    """Structural (execution) mode of a VisionAnalysis — NOT the prompt family.
 
-    SINGLE = one image; MULTI = several images co-analyzed; CROSS_MODAL_GROUNDING =
-    one structured reference (rendered as text) co-presented with an image so the
-    vision model can ground the reference's entries onto the image.
+    SINGLE = one image; MULTI = several images co-analyzed; CROSS_MODAL = one
+    structured reference (rendered as text) co-presented with an image in one
+    vision call. Which cross-modal PROMPT is used (ground the reference onto the
+    image, explain their relationship, …) is a separate axis: ``CrossModalFamily``.
     """
 
     SINGLE = "single"
     MULTI = "multi"
-    CROSS_MODAL_GROUNDING = "cross_modal_grounding"
+    CROSS_MODAL = "cross_modal"
+
+
+class CrossModalFamily(Enum):
+    """Prompt family for a CROSS_MODAL vision call — the axis orthogonal to VisionMode.
+
+    All families share one execution mode (reference + image → one call); only the
+    prompt and section heading differ. VERIFICATION and COMPARISON are reserved for
+    future siblings.
+    """
+
+    GROUNDING = "grounding"      # place/map the reference's entries onto the image
+    EXPLANATION = "explanation"  # interpret how the reference and the image relate
 
 
 class ResolutionConfidence(Enum):
@@ -283,6 +296,14 @@ class QueryIntent:
     # different prompt family than comparison ("which is better"). Deliberately
     # conservative (precision over recall); see query_analyzer + spec §4.1.
     requires_cross_modal_grounding: bool = False
+    # Cross-modal explanation: a relational cue + both a reference signal AND an
+    # image signal, with NO placement verb (grounding owns those). Interpretation
+    # ("how does X relate to Y") is a different prompt family than grounding;
+    # grounding takes precedence when both would match. See query_analyzer + spec §4.1.
+    requires_cross_modal_explanation: bool = False
+    # The relational cue that fired the explanation trigger (e.g. "relationship",
+    # "using") — carried for telemetry so a weak cue that over-fires is visible.
+    explanation_trigger_cue: str | None = None
 
 
 @dataclass
@@ -446,11 +467,14 @@ class VisionAnalysis:
     confidence: float  # vision-model confidence in the analysis
     resolved_images: list[RankedResult] = field(default_factory=list)
     reference_mapping: list[ResolvedReference] = field(default_factory=list)
-    prompt_intent: str = "describe_each"  # "compare" | "describe_each" | "ground"
-    # CROSS_MODAL_GROUNDING: the structured reference(s) fused into the call, as
-    # resolution records (artifact + retrieval + confidence) for the display union
-    # and grounding label. Empty for SINGLE/MULTI.
+    prompt_intent: str = "describe_each"  # MULTI sub-intent: "compare" | "describe_each"
+    # CROSS_MODAL: the structured reference(s) fused into the call, as resolution
+    # records (artifact + retrieval + confidence) for the display union + label.
+    # Empty for SINGLE/MULTI.
     resolved_artifacts: list[GroundingResolution] = field(default_factory=list)
+    # CROSS_MODAL: which prompt family produced this analysis (GROUNDING vs
+    # EXPLANATION). None for SINGLE/MULTI.
+    cross_modal_family: CrossModalFamily | None = None
 
 
 # ---------------------------------------------------------------------------

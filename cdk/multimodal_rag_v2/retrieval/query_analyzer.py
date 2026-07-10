@@ -142,6 +142,30 @@ class QueryAnalyzer:
         re.IGNORECASE,
     )
 
+    # --- Cross-modal EXPLANATION detection ---------------------------------
+    # Explanation = "how does this reference RELATE to the image". Analytical verbs
+    # ("analyze"/"explain") are ubiquitous (unlike grounding's rare placement
+    # verbs), so the precision anchor is a RELATIONAL CUE, not a bare analytical
+    # verb. Cues are grouped (verbs / connectives / question forms) behind
+    # _relational_cue() so adding one later is a one-line edit, and the matched cue
+    # is returned for telemetry (a weak cue like "using" can be spotted + dropped).
+    _RELATIONAL_VERB_PATTERN = re.compile(
+        r"\b(?:relationship|relate|relates|related|correspond|corresponds|corresponding|"
+        r"consistent|matches|match|aligns?\s+with|supports?|explains?|illustrates?|"
+        r"reflects?|compare|compared|comparison|difference|differ|differs|connection|"
+        r"connects?)\b",
+        re.IGNORECASE,
+    )
+    _RELATIONAL_CONNECTIVE_PATTERN = re.compile(
+        # "using" is the WEAKEST cue (see spec §4.1) — kept but instrumented via telemetry.
+        r"\b(?:based\s+on|in\s+light\s+of|versus|vs\.?|using)\b",
+        re.IGNORECASE,
+    )
+    _RELATIONAL_QUESTION_PATTERN = re.compile(
+        r"\bhow\s+(?:do|does|is|are)\b|\bwhy\s+(?:do|does|is|are)\b|\bbetween\b.*\band\b",
+        re.IGNORECASE | re.DOTALL,
+    )
+
     # Max distinct references parsed per query (abuse guard + downstream cost bound).
     _MAX_PARSED_REFERENCES = 5
 
@@ -240,13 +264,65 @@ class QueryAnalyzer:
             and (len(formula_refs) >= 2 or intent.requires_formula)
         )
 
-        # Cross-modal grounding — INDEPENDENT of the comparison flags. Computed
+        # Cross-modal families — INDEPENDENT of the comparison flags. Computed
         # from the final intent (needs the image/table signals resolved above).
+        # Grounding first (placement), then explanation (interpretation); they are
+        # mutually exclusive by construction (explanation requires NO placement verb).
         intent.requires_cross_modal_grounding = self._detect_cross_modal_grounding(
             query, intent
         )
+        explanation_cue = self._cross_modal_explanation_cue(query, intent)
+        intent.requires_cross_modal_explanation = explanation_cue is not None
+        intent.explanation_trigger_cue = explanation_cue
 
         return intent
+
+    @classmethod
+    def _has_reference_signal(cls, query: str, intent: QueryIntent) -> bool:
+        """True when the query references a structured reference (v1: a table)."""
+        return (
+            intent.requires_table
+            or any(r.ref_type == "table" for r in (intent.figure_references or []))
+            or cls._GROUNDING_REFERENCE_NOUN_PATTERN.search(query) is not None
+        )
+
+    @classmethod
+    def _has_image_signal(cls, query: str, intent: QueryIntent) -> bool:
+        """True when the query references an image (figure/graph/map/…).
+
+        Deliberately does NOT use ``intent.requires_image``: a TABLE reference
+        ("table 2") flows through the figure-lookup path and sets requires_image=True,
+        which would be a false image signal. Instead rely on a figure-TYPE reference
+        or an image noun — and _GROUNDING_IMAGE_NOUN_PATTERN is a superset of the
+        RULES image keywords (figure/diagram/graph/chart/image/picture/visual), so
+        no genuine image signal is lost.
+        """
+        return (
+            (
+                intent.figure_reference is not None
+                and intent.figure_reference.ref_type == "figure"
+            )
+            or any(r.ref_type == "figure" for r in (intent.figure_references or []))
+            or cls._GROUNDING_IMAGE_NOUN_PATTERN.search(query) is not None
+        )
+
+    @classmethod
+    def _relational_cue(cls, query: str) -> str | None:
+        """Return the relational cue that fired (for telemetry), else None.
+
+        Grouped patterns (relational verbs / connectives / question forms) so the
+        cue set grows with one-line edits; the returned string identifies WHICH cue
+        matched, so telemetry can flag a weak cue (e.g. "using") that over-fires.
+        """
+        for pattern in (
+            cls._RELATIONAL_VERB_PATTERN,
+            cls._RELATIONAL_CONNECTIVE_PATTERN,
+            cls._RELATIONAL_QUESTION_PATTERN,
+        ):
+            match = pattern.search(query)
+            if match:
+                return match.group(0).strip().lower()
+        return None
 
     @classmethod
     def _detect_cross_modal_grounding(cls, query: str, intent: QueryIntent) -> bool:
@@ -260,21 +336,26 @@ class QueryAnalyzer:
         """
         if cls._GROUNDING_PATTERN.search(query) is None:
             return False
+        return cls._has_reference_signal(query, intent) and cls._has_image_signal(query, intent)
 
-        has_reference_signal = (
-            intent.requires_table
-            or any(r.ref_type == "table" for r in (intent.figure_references or []))
-            or cls._GROUNDING_REFERENCE_NOUN_PATTERN.search(query) is not None
-        )
-        has_image_signal = (
-            intent.requires_image
-            or (
-                intent.figure_reference is not None
-                and intent.figure_reference.ref_type == "figure"
-            )
-            or cls._GROUNDING_IMAGE_NOUN_PATTERN.search(query) is not None
-        )
-        return has_reference_signal and has_image_signal
+    @classmethod
+    def _cross_modal_explanation_cue(cls, query: str, intent: QueryIntent) -> str | None:
+        """Return the cue firing a "how does this reference RELATE to the image" query.
+
+        Requires a relational cue + BOTH a reference signal and an image signal, and
+        must NOT be a grounding (placement) query — so grounding and explanation are
+        mutually exclusive (grounding-first precedence). A bare analytical verb
+        ("analyze table 3") does NOT qualify. Returns the matched cue (for telemetry)
+        when the full trigger fires, else None. Never raises.
+        """
+        if cls._GROUNDING_PATTERN.search(query) is not None:
+            return None  # placement query -> grounding, not explanation
+        cue = cls._relational_cue(query)
+        if cue is None:
+            return None
+        if cls._has_reference_signal(query, intent) and cls._has_image_signal(query, intent):
+            return cue
+        return None
 
     def _haiku_fallback(self, query: str) -> QueryIntent:
         """Fall back to Claude 3 Haiku for query classification.

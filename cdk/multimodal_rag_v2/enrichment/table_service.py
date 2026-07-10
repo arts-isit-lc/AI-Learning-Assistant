@@ -97,10 +97,19 @@ class TableService:
     def _parse_table(self, content: str) -> list[list[str]]:
         """Parse table content, auto-detecting the delimiter format.
 
-        Supports:
+        Supports (in priority order):
         - Pipe-separated (Markdown tables)
         - Tab-separated (TSV)
+        - Whitespace-aligned (2+ spaces between columns) — common in text
+          extracted from PDFs/PPTX
         - Comma-separated (CSV)
+
+        For delimiter-less content we PREFER a whitespace (2+ space) split over
+        CSV: space-aligned tables have no commas, so CSV collapses each row to a
+        single cell (the "1 column" bug), and CSV shatters numeric cells with
+        thousands-separators ("49,995,000" -> "49","995","000"). CSV is used only
+        when a whitespace split does NOT yield a multi-column table (i.e. the
+        content really is comma-delimited).
 
         Args:
             content: Raw table content string.
@@ -120,8 +129,49 @@ class TableService:
         if "\t" in content:
             return self._parse_tsv(content)
 
-        # Default to CSV
-        return self._parse_csv(content)
+        # No unambiguous delimiter: choose between a whitespace-aligned parse and
+        # a CSV parse by which recovers more header columns. Whitespace wins ties
+        # only when it is strictly wider, so a space-aligned table with comma
+        # thousands-separators ("49,995,000") is kept intact, while genuine
+        # comma-delimited data (where CSV yields >= as many columns) still uses CSV.
+        whitespace_rows = self._parse_whitespace(content)
+        csv_rows = self._parse_csv(content)
+        ws_cols = len(whitespace_rows[0]) if whitespace_rows else 0
+        csv_cols = len(csv_rows[0]) if csv_rows else 0
+
+        if ws_cols >= 2 and ws_cols > csv_cols:
+            return whitespace_rows
+        if csv_cols >= 2:
+            return csv_rows
+        if ws_cols >= 2:
+            return whitespace_rows
+
+        # Neither recovered columns; return whichever is non-empty so the caller
+        # can still preserve the raw content (weak-parse fallback in embedding).
+        return whitespace_rows or csv_rows
+
+    def _parse_whitespace(self, content: str) -> list[list[str]]:
+        """Parse a whitespace-aligned table by splitting on runs of 2+ spaces.
+
+        Column boundaries in PDF/PPTX-extracted tables are typically 2+ spaces,
+        while values keep single spaces ("0.01 ms", "n log n", "~3 days"), so a
+        2+-space split recovers columns WITHOUT shattering multi-word cells.
+
+        Args:
+            content: Whitespace-aligned table content.
+
+        Returns:
+            Parsed rows as list of lists.
+        """
+        rows: list[list[str]] = []
+        for line in content.split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            cells = [c.strip() for c in re.split(r"\s{2,}", line) if c.strip()]
+            if cells:
+                rows.append(cells)
+        return rows
 
     def _parse_pipe_separated(self, content: str) -> list[list[str]]:
         """Parse Markdown-style pipe-separated tables.
@@ -198,6 +248,18 @@ class TableService:
         """
         num_rows = len(rows)
         num_cols = len(headers)
+
+        # Honesty guard: a single "column" whose header packs many whitespace
+        # tokens is almost certainly a mis-parsed multi-column table (delimiter
+        # not detected). Don't assert a misleading "1 columns" count — the raw
+        # table text is preserved in embedding_text instead.
+        lone_header = headers[0] if headers else ""
+        if num_cols <= 1 and num_rows > 2 and len(lone_header.split()) > 2:
+            return (
+                f"Table with {num_rows} rows; column structure could not be "
+                f"reliably parsed, so the raw table text is preserved."
+            )
+
         headers_str = ", ".join(headers[:5])
         if len(headers) > 5:
             headers_str += f", and {len(headers) - 5} more"
@@ -251,14 +313,11 @@ class TableService:
         ):
             caption = first_line
 
-        # If parsing produced a poor result (1 column for what's clearly multi-column),
-        # use the raw content directly as embedding_text
-        raw_lines = [l.strip() for l in lines if l.strip()]
-        raw_has_pipes = any("|" in l for l in raw_lines)
-        raw_has_tabs = any("\t" in l for l in raw_lines)
-
-        if len(headers) <= 1 and len(rows) > 2 and (raw_has_pipes or raw_has_tabs):
-            # Parser likely failed — use raw content which preserves the real structure
+        # If parsing produced a poor result (1 column for what's clearly
+        # multi-column), preserve the raw content as embedding_text so the real
+        # values stay searchable and available in context — regardless of the
+        # (missing) delimiter, rather than emitting a lossy single-column render.
+        if len(headers) <= 1 and len(rows) > 2:
             if caption:
                 return f"{caption}\n\n{raw_content}"
             return raw_content
