@@ -17,8 +17,11 @@ from aws_lambda_powertools import Logger
 
 from ..models.data_models import (
     ComparisonType,
+    ElementType,
     EquivalenceStatus,
     FormulaComparisonFacts,
+    GroundedArtifact,
+    GroundingResolution,
     ImageAnalysis,
     QueryIntent,
     RankedResult,
@@ -28,8 +31,13 @@ from ..models.data_models import (
     StructuredContext,
     TableComparisonFacts,
     VisionAnalysis,
+    VisionMode,
 )
-from ..flags import RAG_RETURN_PASSAGES, STRICT_IMAGE_ESCALATION
+from ..flags import (
+    CROSS_MODAL_GROUNDING_ENABLED,
+    RAG_RETURN_PASSAGES,
+    STRICT_IMAGE_ESCALATION,
+)
 from ..pricing import estimate_cost_usd
 from .context_builder import ContextBuilder
 from .image_escalation import EscalationResult, ImageEscalation
@@ -70,6 +78,7 @@ class ReasoningEngine:
         image_escalation: ImageEscalation | None = None,
         model_id: str = DEFAULT_MODEL_ID,
         comparison_engine: Any = None,
+        table_resolver: Any = None,
     ) -> None:
         """Initialize ReasoningEngine with dependencies.
 
@@ -81,12 +90,17 @@ class ReasoningEngine:
             comparison_engine: ComparisonEngine for deterministic structured
                 (table-native) comparison. When None, the comparison path is
                 skipped and behavior is unchanged.
+            table_resolver: TableReferenceResolver used by cross-modal grounding to
+                resolve a referenced table to its structured content. When None (or
+                when no numbered table reference is present) grounding falls back to
+                the top-scoring retrieved table.
         """
         self.bedrock_client = bedrock_client
         self.context_builder = context_builder or ContextBuilder()
         self.image_escalation = image_escalation
         self.model_id = model_id
         self.comparison_engine = comparison_engine
+        self.table_resolver = table_resolver
 
     def generate_answer(
         self,
@@ -160,10 +174,26 @@ class ReasoningEngine:
             scope_filter=scope_filter,
         )
 
-        # Step 1: Image escalation — skipped when a structured comparison resolved
-        # (the comparison replaces the vision path for this query).
+        # Step 0.5: Cross-modal grounding (structured reference + image in ONE
+        # vision call) — runs only when no structured comparison resolved. Takes
+        # precedence over plain image escalation. On any non-resolution it returns
+        # None and we fall through to the existing escalation/text path (graceful
+        # degrade: image-only -> escalation; reference-only/neither -> text).
+        grounding_result = None
+        if structured_comparison is None:
+            grounding_result = self._handle_cross_modal_grounding(
+                query=query,
+                ranked_results=ranked_results or [],
+                query_intent=query_intent,
+                scope_filter=scope_filter,
+            )
+
+        # Step 1: Image escalation — skipped when a structured comparison OR a
+        # cross-modal grounding resolved (each replaces the vision path here).
         if structured_comparison is not None:
             escalation_result = EscalationResult(escalation_used=False, image_analyses=[])
+        elif grounding_result is not None:
+            escalation_result = grounding_result
         else:
             escalation_result = self._handle_escalation(
                 query=query,
@@ -349,6 +379,116 @@ class ReasoningEngine:
             logger.exception("Structured comparison failed, proceeding without")
             return None
 
+    def _handle_cross_modal_grounding(
+        self,
+        query: str,
+        ranked_results: list[RankedResult],
+        query_intent: QueryIntent | None,
+        scope_filter: dict | None = None,
+    ) -> EscalationResult | None:
+        """Run cross-modal grounding (structured reference + image) if requested.
+
+        Resolves ONE structured reference (v1: table) and delegates the image
+        resolution + single vision call to the escalation layer. Returns the
+        EscalationResult (carrying a CROSS_MODAL_GROUNDING VisionAnalysis) when
+        both resolve; otherwise None so the caller degrades gracefully. Gated by
+        ``CROSS_MODAL_GROUNDING_ENABLED``. Never raises.
+        """
+        if query_intent is None or self.image_escalation is None:
+            return None
+        if not getattr(query_intent, "requires_cross_modal_grounding", False):
+            return None
+        if not CROSS_MODAL_GROUNDING_ENABLED:
+            return None
+        try:
+            table_resolution = self._resolve_grounding_table(
+                query_intent, ranked_results, scope_filter
+            )
+            if table_resolution is None:
+                logger.info(
+                    "Cross-modal grounding: no structured reference resolved; "
+                    "falling through to existing paths"
+                )
+                return None
+            result = self.image_escalation.escalate_cross_modal_grounding(
+                results=ranked_results,
+                query=query,
+                table_resolution=table_resolution,
+                query_intent=query_intent,
+                scope_filter=scope_filter,
+            )
+            return result if result.escalation_used else None
+        except Exception:
+            logger.exception("Cross-modal grounding failed, proceeding without")
+            return None
+
+    def _resolve_grounding_table(
+        self,
+        query_intent: QueryIntent,
+        ranked_results: list[RankedResult],
+        scope_filter: dict | None,
+    ) -> GroundingResolution | None:
+        """Resolve the structured reference (v1: table) for a grounding call.
+
+        1. A numbered TABLE reference -> the scoped, deterministic resolver (with
+           its confidence). 2. Fallback: the top-scoring TABLE already retrieved
+           for the query (a relevance pick -> MEDIUM). Returns None when no table
+           is available (caller then degrades to the text path).
+        """
+        table_refs = [
+            r
+            for r in (getattr(query_intent, "figure_references", None) or [])
+            if getattr(r, "ref_type", None) == "table"
+        ]
+        if table_refs and self.table_resolver is not None:
+            referents = self.table_resolver.resolve(
+                table_refs, ranked_results, scope_filter
+            )
+            if referents:
+                return self._referent_to_resolution(referents[0])
+
+        for r in ranked_results or []:
+            if getattr(r, "element_type", None) == ElementType.TABLE:
+                return self._ranked_table_to_resolution(r)
+        return None
+
+    @staticmethod
+    def _referent_to_resolution(referent) -> GroundingResolution:
+        """Normalize a resolver's ResolvedReferent into a GroundingResolution.
+
+        Only ``structured_content`` (pure) flows into the artifact; ``result``
+        (the RankedResult) stays on the resolution record for the display union.
+        """
+        return GroundingResolution(
+            artifact=GroundedArtifact(
+                artifact_type=ElementType.TABLE,
+                label=referent.reference,
+                structured_content=dict(referent.structured_content or {}),
+            ),
+            ranked_result=referent.result,
+            confidence=referent.confidence,
+        )
+
+    @staticmethod
+    def _ranked_table_to_resolution(result: RankedResult) -> GroundingResolution:
+        """Build a GroundingResolution from a top-scoring retrieved table (fallback)."""
+        md = result.metadata or {}
+        structured_content = {
+            "headers": md.get("table_headers", []) or [],
+            "rows": md.get("table_rows", []) or [],
+            "summary": md.get("table_summary") or "",
+            "content": result.content or "",
+        }
+        return GroundingResolution(
+            artifact=GroundedArtifact(
+                artifact_type=ElementType.TABLE,
+                label="Table",
+                structured_content=structured_content,
+            ),
+            ranked_result=result,
+            confidence=ResolutionConfidence.MEDIUM,
+        )
+
     def _format_context_with_escalation(
         self,
         context: StructuredContext,
@@ -392,13 +532,18 @@ class ReasoningEngine:
             return formatted
 
         # Inject escalation results if available — PREPEND so it's prioritized by the LLM.
-        # Multi-image (MULTI) takes precedence: one comparison/description over >= 2
-        # figures. The SINGLE-image section is unchanged.
+        # A VisionAnalysis product is either CROSS_MODAL_GROUNDING (reference + image)
+        # or MULTI (>= 2 figures); branch on mode. The SINGLE-image section is unchanged.
         if escalation_result.vision_analysis is not None:
-            escalation_section = self._format_multi_image_section(
-                escalation_result.vision_analysis,
-                query_intent=getattr(self, "_last_query_intent", None),
-            )
+            va = escalation_result.vision_analysis
+            if va.mode == VisionMode.CROSS_MODAL_GROUNDING:
+                escalation_section = self._format_grounding_section(
+                    va, query_intent=getattr(self, "_last_query_intent", None)
+                )
+            else:
+                escalation_section = self._format_multi_image_section(
+                    va, query_intent=getattr(self, "_last_query_intent", None)
+                )
             formatted = f"{escalation_section}\n\n{formatted}"
             logger.info(
                 "Multi-image analysis injected into context",
@@ -464,6 +609,53 @@ class ReasoningEngine:
                 f"{analysis.analysis}"
             )
         return "\n".join(sections)
+
+    def _format_grounding_section(
+        self, vision_analysis: VisionAnalysis, query_intent=None
+    ) -> str:
+        """Format a CROSS_MODAL_GROUNDING vision analysis into a prompt section.
+
+        Labels the structured reference AND the image, hedges when either resolved
+        with LOW confidence, and instructs the final generator to answer only from
+        the analysis + reference content + what is visible (no invented positions).
+        """
+        va = vision_analysis
+        ref_label = (
+            va.resolved_artifacts[0].artifact.label
+            if va.resolved_artifacts
+            else "the reference"
+        )
+        fig_label = (
+            va.reference_mapping[0].reference if va.reference_mapping else "the image"
+        )
+        lines: list[str] = [
+            f"## Cross-Modal Grounding: {ref_label} mapped onto {fig_label}",
+            "",
+            "The following analysis relates the reference's content to the image (produced by a "
+            "vision model shown BOTH the reference and the image — treat its visible-content "
+            "claims as observed):",
+            "",
+        ]
+
+        low_confidence = any(
+            r.confidence == ResolutionConfidence.LOW for r in va.resolved_artifacts
+        ) or any(rr.confidence == ResolutionConfidence.LOW for rr in va.reference_mapping)
+        if low_confidence:
+            lines.append(
+                "Note: the reference or image may not be the one the student intended "
+                "(low-confidence match). If the wrong item appears, invite the student to "
+                "confirm which they meant."
+            )
+            lines.append("")
+
+        lines.append(va.analysis)
+        lines.append("")
+        lines.append(
+            "Both the reference and the image are shown to the student below. Answer using ONLY "
+            "this analysis, the reference content, and what is visible in the image; do not assert "
+            "positions the image does not support."
+        )
+        return "\n".join(lines)
 
     def _format_multi_image_section(
         self, vision_analysis: VisionAnalysis, query_intent=None

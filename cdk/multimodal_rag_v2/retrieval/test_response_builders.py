@@ -290,3 +290,90 @@ class TestHandlerFormulaEngineWiring:
         assert len(sc.referents) == 2
         # No checker in tests -> equivalence stays UNKNOWN (lexical Tier 1 only).
         assert sc.facts.equivalence.status is EquivalenceStatus.UNKNOWN
+
+
+# ---------------------------------------------------------------------------
+# T6: cross-modal grounding response assembly
+# ---------------------------------------------------------------------------
+
+from ..models.data_models import (  # noqa: E402
+    GroundedArtifact,
+    GroundingResolution,
+    ResolutionConfidence,
+    VisionMode,
+)
+
+
+def _grounding_reasoning_result(resolved_table=None, resolved_image=None):
+    """A reasoning_result stub carrying a CROSS_MODAL_GROUNDING vision_analysis."""
+    resolved_artifacts = []
+    if resolved_table is not None:
+        resolved_artifacts.append(
+            GroundingResolution(
+                artifact=GroundedArtifact(ElementType.TABLE, "Table 3.2", {"headers": ["R"]}),
+                ranked_result=resolved_table,
+                confidence=ResolutionConfidence.HIGH,
+            )
+        )
+    va = SimpleNamespace(
+        mode=VisionMode.CROSS_MODAL_GROUNDING,
+        resolved_images=[resolved_image] if resolved_image is not None else [],
+        resolved_artifacts=resolved_artifacts,
+        confidence=0.9,
+    )
+    return SimpleNamespace(structured_comparison=None, vision_analysis=va, image_analyses=[])
+
+
+class TestTableResultsWithGrounding:
+    """_table_results_with_comparison also unions a grounded table (routed by type)."""
+
+    def test_grounded_table_absent_from_finals_is_surfaced(self):
+        # The grounded table was resolved by DB lookup -> not in final_results.
+        finals = [_result(ElementType.TEXT, "x", "txt", 0.5, {}, "t")]
+        grounded = _result(
+            ElementType.TABLE, "g-tbl", "tbl-g", 1.0,
+            {"table_headers": ["Region"], "table_rows": [["N"]], "table_summary": "s"},
+            "Table 3.2",
+        )
+        rr = _grounding_reasoning_result(resolved_table=grounded)
+        out = handler._table_results_with_comparison(rr, finals)
+        assert [b["retrieval_id"] for b in out] == ["g-tbl"]
+        assert out[0]["headers"] == ["Region"]
+
+    def test_grounded_table_deduped_against_finals_by_parent(self):
+        grounded = _result(ElementType.TABLE, "g-tbl", "tbl-g", 1.0, {"table_headers": ["R"]}, "resolved")
+        final_same = _result(ElementType.TABLE, "f-tbl", "tbl-g", 0.8, {"table_headers": ["R"]}, "final")
+        rr = _grounding_reasoning_result(resolved_table=grounded)
+        out = handler._table_results_with_comparison(rr, [final_same])
+        assert len(out) == 1
+        assert out[0]["retrieval_id"] == "g-tbl"  # prepended resolved wins
+
+    def test_no_grounding_matches_plain_builder(self):
+        finals = [
+            _result(ElementType.TABLE, "t1", "tbl-1", 0.9,
+                    {"table_headers": ["a"], "table_rows": [["1"]], "table_summary": "s"}, "x")
+        ]
+        rr = SimpleNamespace(structured_comparison=None, vision_analysis=None)
+        assert handler._table_results_with_comparison(rr, finals) == handler._build_table_results(finals)
+
+
+class TestImageResponsePartsGrounding:
+    """A grounded image is unioned into image_results (mode-agnostic vision path)."""
+
+    def test_grounded_image_surfaced_and_wire_derived(self):
+        db_img = _result(
+            ElementType.IMAGE, "g-img", "p", 1.0,
+            {"provenance_page_num": 4}, "A map", "s3://b/fig4.png",
+        )
+        rr = _grounding_reasoning_result(resolved_image=db_img)
+        wire, image_results = handler._image_response_parts(rr, [])
+        assert [r["retrieval_id"] for r in image_results] == ["g-img"]
+        assert wire == [{"image_s3_key": "s3://b/fig4.png", "analysis": "", "confidence": 0.9}]
+
+
+class TestReasoningEngineTableResolverWired:
+    """The retrieval handler must inject a table_resolver so grounding can resolve
+    a numbered table reference (not only the top-retrieved fallback)."""
+
+    def test_table_resolver_injected(self):
+        assert handler._reasoning_engine.table_resolver is not None

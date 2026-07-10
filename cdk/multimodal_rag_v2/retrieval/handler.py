@@ -40,7 +40,14 @@ from aws_lambda_powertools import Logger
 
 from ..cache.embedding_cache import EmbeddingCache
 from ..flags import QUERY_EMBEDDING_CACHE
-from ..models.data_models import ComparisonType, EMBEDDING_VERSION, QueryIntent, TypeCaps
+from ..models.data_models import (
+    ComparisonType,
+    EMBEDDING_VERSION,
+    ElementType,
+    QueryIntent,
+    TypeCaps,
+    VisionMode,
+)
 from ..pricing import estimate_cost_usd
 from ..reasoning.comparison.comparison_engine import ComparisonEngine
 from ..reasoning.comparison.table_comparator import TableComparator
@@ -151,6 +158,9 @@ _reasoning_engine = ReasoningEngine(
     context_builder=_context_builder,
     image_escalation=_image_escalation,
     comparison_engine=_comparison_engine,
+    # Cross-modal grounding resolves a referenced table to its structured content
+    # (falls back to the top retrieved table when no numbered reference is given).
+    table_resolver=TableReferenceResolver(db_connection_factory=_get_db_connection),
 )
 
 
@@ -382,15 +392,37 @@ def _resolved_results_for(reasoning_result, comparison_type) -> list:
     return list(getattr(sc, "resolved_results", []) or [])
 
 
+def _grounding_resolved_results(reasoning_result, element_type) -> list:
+    """RankedResults resolved by a CROSS_MODAL_GROUNDING call, for the given type.
+
+    Routes each grounded artifact by its ``artifact_type`` so a grounded table
+    lands in table_results (and, when a future type is added, a formula in
+    formula_results). Returns [] unless a grounding call produced resolved
+    artifacts of that type. A grounded reference may have been resolved by a
+    direct DB lookup and thus be absent from ``final_results``, so surfacing it
+    here is what puts the grounded table block in front of the student.
+    """
+    va = getattr(reasoning_result, "vision_analysis", None)
+    if va is None or getattr(va, "mode", None) != VisionMode.CROSS_MODAL_GROUNDING:
+        return []
+    return [
+        res.ranked_result
+        for res in (getattr(va, "resolved_artifacts", None) or [])
+        if res.artifact.artifact_type == element_type and res.ranked_result is not None
+    ]
+
+
 def _table_results_with_comparison(reasoning_result, final_results: list) -> list[dict[str, Any]]:
-    """Build table_results, unioning any tables resolved by a table comparison.
+    """Build table_results, unioning tables resolved by a comparison OR grounding.
 
     A referent may be resolved by a direct DB lookup and thus absent from
-    ``final_results``. Prepend resolved tables (authoritative) so BOTH compared
-    tables are surfaced. ``_build_table_results`` dedupes by ``parent_element_id``
-    (first wins), so a resolved table already in final_results is not duplicated.
+    ``final_results``. Prepend resolved tables (authoritative) so BOTH a compared
+    pair and a grounded table are surfaced. ``_build_table_results`` dedupes by
+    ``parent_element_id`` (first wins), so a resolved table already in
+    final_results is not duplicated.
     """
     resolved = _resolved_results_for(reasoning_result, ComparisonType.TABLE)
+    resolved += _grounding_resolved_results(reasoning_result, ElementType.TABLE)
     if resolved:
         return _build_table_results(resolved + list(final_results))
     return _build_table_results(final_results)

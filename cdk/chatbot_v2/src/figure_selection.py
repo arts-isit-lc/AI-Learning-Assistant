@@ -63,6 +63,13 @@ _COMPARISON_VERB_PATTERN = re.compile(
 )
 # Formula-intent keyword for the comparison-grounding reinforcement.
 _FORMULA_KEYWORD_PATTERN = re.compile(r"\b(equation|eqn|eq|formula)\b", re.IGNORECASE)
+# Placement/mapping language for the cross-modal grounding reinforcement (mirrors
+# the retrieval query analyzer's grounding verbs). Used only to reinforce grounding
+# when a table + a figure are shown together for a "map X onto the image" query.
+_GROUNDING_VERB_PATTERN = re.compile(
+    r"\b(map|plot|overlay|locate|mark|place|pinpoint|position|annotate|highlight)\b",
+    re.IGNORECASE,
+)
 
 
 def _log_candidate_scores(block_type: str, candidates: list | None) -> None:
@@ -514,6 +521,32 @@ def build_formula_comparison_grounding(formula_blocks: list[dict] | None, query:
         "formulas differ. Do NOT invent symbols, and do NOT assert mathematical equivalence "
         "beyond what the context states (if it says equivalence was not determined, do not "
         "claim the formulas are equal or unequal)."
+    )
+
+
+def build_grounding_reinforcement(
+    table_blocks: list[dict] | None, selected_figures: list[str] | None, query: str
+) -> str:
+    """Reinforce that a table + an image are being GROUNDED together (cross-modal).
+
+    Parallel to build_comparison_grounding, but for the grounding prompt family:
+    fires only when the query uses placement/mapping language AND both a table
+    block and a figure are being shown. The actual cross-modal grounding analysis
+    is produced upstream (retrieval Lambda) and arrives in the retrieved context;
+    this only nudges the model to use it (if present) and not disclaim it. Wording
+    is conditional ("If a ... analysis appears") so it is safe even when grounding
+    did not run for this turn.
+    """
+    if not table_blocks or not selected_figures:
+        return ""
+    if _GROUNDING_VERB_PATTERN.search(query or "") is None:
+        return ""
+    return (
+        "## Cross-modal grounding\n"
+        "The table and the figure shown below relate to each other for the student — the table's "
+        "data grounded onto the image. If a cross-modal grounding analysis appears in the retrieved "
+        "context above, use it to explain concretely where the table's entries map on the image. Do "
+        "NOT assert positions the image does not support, and do NOT say you cannot relate them."
     )
 
 

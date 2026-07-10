@@ -16,6 +16,9 @@ from typing import Any
 from aws_lambda_powertools import Logger
 
 from ..models.data_models import (
+    ElementType,
+    GroundedArtifact,
+    GroundingResolution,
     ImageAnalysis,
     RankedResult,
     ResolutionConfidence,
@@ -43,6 +46,75 @@ COMPARISON_VISION_MODEL_ID = os.environ.get(
 # (see _analyze_images), so 2 images cost ~the wall time of 1 rather than double.
 # Env-tunable: set to 1 to disable the second call.
 _MAX_ESCALATION_IMAGES = int(os.environ.get("ESCALATION_MAX_IMAGES", "2"))
+
+# Cross-modal grounding co-presents ONE structured reference + ONE image in a
+# single vision call. v1 caps the image side at 1 (the model is N-way-ready).
+_MAX_GROUNDING_IMAGES = 1
+# Character budget for a rendered structured reference in a grounding call — keeps
+# the vision payload bounded (table rows are already capped at 50 in metadata).
+_GROUNDING_RENDER_CHAR_BUDGET = int(os.environ.get("GROUNDING_RENDER_CHAR_BUDGET", "6000"))
+_GROUNDING_MAX_ROWS = 50
+
+
+def render_artifact(artifact: GroundedArtifact) -> str:
+    """Render a GroundedArtifact's ``structured_content`` into vision-call text.
+
+    This is the ONE place artifact type matters (the vision layer's message
+    builder + prompt never branch on type). v1 has a production TABLE branch; all
+    other types fall to a PLUMBING-ONLY generic dump that exists purely so a
+    not-yet-specialized type can traverse the pipeline (the abstraction test). A
+    type is "supported" only once it has a real branch here — do NOT conclude a
+    type works because it renders via the fallback.
+    """
+    if artifact.artifact_type == ElementType.TABLE:
+        return _render_table_block(artifact.structured_content or {})
+    return _render_generic_fallback(artifact.structured_content or {})
+
+
+def _render_table_block(content: dict) -> str:
+    """Render a table's {headers, rows, summary, content} as bounded readable text."""
+    headers = content.get("headers") or []
+    rows = content.get("rows") or []
+    summary = content.get("summary") or ""
+
+    parts: list[str] = []
+    if summary:
+        parts.append(str(summary))
+    truncated = False
+    if headers:
+        header_line = " | ".join(str(h) for h in headers)
+        parts.append(header_line)
+        parts.append("-" * min(len(header_line), 80))
+    shown_rows = rows[:_GROUNDING_MAX_ROWS]
+    if len(rows) > _GROUNDING_MAX_ROWS:
+        truncated = True
+    for row in shown_rows:
+        parts.append(" | ".join("" if cell is None else str(cell) for cell in row))
+
+    text = "\n".join(parts).strip()
+    if not text:
+        # No parsed headers/rows/summary — fall back to any raw table text.
+        text = str(content.get("content") or "")
+
+    if len(text) > _GROUNDING_RENDER_CHAR_BUDGET:
+        text = text[:_GROUNDING_RENDER_CHAR_BUDGET].rstrip()
+        truncated = True
+    if truncated:
+        text += "\n[table truncated — ground only the rows shown above]"
+    return text
+
+
+def _render_generic_fallback(content: dict) -> str:
+    """PLUMBING-ONLY renderer (NOT production quality).
+
+    A readable key/value dump so a not-yet-specialized artifact type can flow
+    through the grounding pipeline for the abstraction test. Never ship a type on
+    this — give it a real branch in ``render_artifact`` first.
+    """
+    text = "\n".join(f"{k}: {v}" for k, v in (content or {}).items())
+    if len(text) > _GROUNDING_RENDER_CHAR_BUDGET:
+        text = text[:_GROUNDING_RENDER_CHAR_BUDGET].rstrip()
+    return text
 
 
 @dataclass
@@ -763,6 +835,241 @@ class ImageEscalation:
         else:
             # Default to png for unknown extensions
             return "image/png"
+
+    # -----------------------------------------------------------------------
+    # Cross-modal grounding (ONE structured reference + ONE image in ONE call)
+    # -----------------------------------------------------------------------
+
+    def escalate_cross_modal_grounding(
+        self,
+        results: list[RankedResult],
+        query: str,
+        table_resolution: GroundingResolution,
+        query_intent: Any = None,
+        scope_filter: dict | None = None,
+    ) -> EscalationResult:
+        """Co-present ONE structured reference + ONE image in a single Sonnet 4.5 call.
+
+        The reference is already resolved (by the reasoning engine) into
+        ``table_resolution``; this resolves the IMAGE, fetches its bytes, and issues
+        one grounding vision call. The vision call itself receives only the PURE
+        ``GroundedArtifact`` (``table_resolution.artifact``) — retrieval state never
+        reaches the vision layer.
+
+        Returns ``escalation_used=False`` (so the caller degrades gracefully to the
+        normal escalation/text path) when no image resolves or the vision call
+        fails. Never raises.
+        """
+        grounding_start = time.time()
+        try:
+            image, image_conf = self._resolve_grounding_image(
+                results, query_intent, scope_filter
+            )
+            if image is None or not image.image_s3_key:
+                logger.info(
+                    "Cross-modal grounding: no image resolved; caller falls back",
+                    extra={"artifact_label": table_resolution.artifact.label},
+                )
+                return EscalationResult(escalation_used=False)
+
+            image_bytes = self._fetch_image(image.image_s3_key)
+            if image_bytes is None:
+                return EscalationResult(escalation_used=False)
+
+            low_confidence = (
+                table_resolution.confidence == ResolutionConfidence.LOW
+                or image_conf == ResolutionConfidence.LOW
+            )
+
+            analysis_text, vision_confidence = self._invoke_vision_llm_grounding(
+                image_bytes,
+                image.image_s3_key,
+                table_resolution.artifact,
+                query,
+                low_confidence=low_confidence,
+            )
+            if analysis_text is None:
+                return EscalationResult(escalation_used=False)
+
+            image_ref = ResolvedReference(
+                reference=self._grounding_image_label(query_intent),
+                retrieval_id=image.retrieval_id,
+                image_s3_key=image.image_s3_key,
+                confidence=image_conf,
+            )
+            logger.info(
+                "Cross-modal grounding complete",
+                extra={
+                    "artifact_label": table_resolution.artifact.label,
+                    "artifact_type": table_resolution.artifact.artifact_type.value,
+                    "image_retrieval_id": image.retrieval_id,
+                    "low_confidence": low_confidence,
+                    "grounding_latency_ms": round((time.time() - grounding_start) * 1000, 2),
+                },
+            )
+            return EscalationResult(
+                escalation_used=True,
+                vision_analysis=VisionAnalysis(
+                    mode=VisionMode.CROSS_MODAL_GROUNDING,
+                    analysis=analysis_text,
+                    confidence=vision_confidence,
+                    resolved_images=[image],
+                    reference_mapping=[image_ref],
+                    prompt_intent="ground",
+                    resolved_artifacts=[table_resolution],
+                ),
+            )
+        except Exception:
+            logger.exception("Unexpected error during cross-modal grounding")
+            return EscalationResult(escalation_used=False)
+
+    def _resolve_grounding_image(
+        self,
+        results: list[RankedResult],
+        query_intent: Any,
+        scope_filter: dict | None,
+    ) -> tuple[RankedResult | None, ResolutionConfidence]:
+        """Resolve the single image for a grounding call.
+
+        Prefers a resolved FIGURE reference (scoped, deterministic, + confidence,
+        reusing ``_resolve_figure_image``); otherwise falls back to the top-scoring
+        image already retrieved for the query (a relevance pick -> MEDIUM). Table
+        references in ``figure_references`` are ignored here — they are the reference
+        side, not the image.
+        """
+        figure_refs = [
+            r
+            for r in (getattr(query_intent, "figure_references", None) or [])
+            if getattr(r, "ref_type", None) == "figure"
+        ]
+        for ref in figure_refs[:_MAX_GROUNDING_IMAGES]:
+            image, confidence = self._resolve_figure_image(
+                ref, results, scope_filter=scope_filter
+            )
+            if image is not None and image.image_s3_key:
+                return image, confidence
+
+        image_results = [r for r in results if r.image_s3_key is not None]
+        if image_results:
+            top = sorted(image_results, key=lambda r: r.score, reverse=True)[0]
+            return top, ResolutionConfidence.MEDIUM
+        return None, ResolutionConfidence.LOW
+
+    @staticmethod
+    def _grounding_image_label(query_intent: Any) -> str:
+        """Human label for the grounded image (a figure ref if named, else generic)."""
+        for r in getattr(query_intent, "figure_references", None) or []:
+            if getattr(r, "ref_type", None) == "figure":
+                return f"{r.ref_type.title()} {r.number}"
+        return "the image"
+
+    def _invoke_vision_llm_grounding(
+        self,
+        image_bytes: bytes,
+        image_s3_key: str,
+        artifact: GroundedArtifact,
+        query: str,
+        low_confidence: bool = False,
+    ) -> tuple[str | None, float]:
+        """Invoke the grounding vision model (Sonnet 4.5) with reference text + image.
+
+        Builds ONE message: a labeled text block carrying the rendered reference, then
+        the image block, then the grounding prompt. Consumes only the PURE
+        ``GroundedArtifact`` (principle 2.5). Returns ``(analysis_text, confidence)``;
+        ``(None, 0.0)`` on any failure (caller degrades gracefully).
+        """
+        try:
+            import json
+
+            artifact_label = artifact.label or artifact.artifact_type.value.title()
+            content: list[dict] = [
+                {"type": "text", "text": f"{artifact.artifact_type.value.upper()} — {artifact_label}:"},
+                {"type": "text", "text": render_artifact(artifact)},
+                {"type": "text", "text": "Image:"},
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": self._get_media_type(image_s3_key),
+                        "data": base64.b64encode(image_bytes).decode("utf-8"),
+                    },
+                },
+                {"type": "text", "text": self._grounding_prompt(query, artifact, low_confidence)},
+            ]
+
+            response = self.bedrock_client.invoke_model(
+                modelId=COMPARISON_VISION_MODEL_ID,
+                contentType="application/json",
+                accept="application/json",
+                body=json.dumps(
+                    {
+                        "anthropic_version": "bedrock-2023-05-31",
+                        "max_tokens": 1500,
+                        "messages": [{"role": "user", "content": content}],
+                    }
+                ),
+            )
+            response_body = json.loads(response["body"].read())
+            analysis_text = response_body["content"][0]["text"]
+            stop_reason = response_body.get("stop_reason", "end_turn")
+            confidence = 0.9 if stop_reason == "end_turn" else 0.7
+            logger.info(
+                "Cross-modal grounding vision analysis complete",
+                extra={
+                    "model_id": COMPARISON_VISION_MODEL_ID,
+                    "artifact_type": artifact.artifact_type.value,
+                    "analysis_length": len(analysis_text),
+                },
+            )
+            return analysis_text, confidence
+        except Exception:
+            logger.exception(
+                "Failed to invoke grounding vision LLM",
+                extra={"image_s3_key": image_s3_key},
+            )
+            return None, 0.0
+
+    @staticmethod
+    def _grounding_prompt(query: str, artifact: GroundedArtifact, low_confidence: bool = False) -> str:
+        """Build the trailing grounding instruction (reference-generic, example-led).
+
+        Leads with a concrete example ("such as a table") so the model grounds the
+        abstraction, then constrains it to visible content only (no invented
+        coordinates) and to declaring un-locatable entries rather than guessing.
+        """
+        type_word = artifact.artifact_type.value
+        header = (
+            "You are helping a student use a structured reference (such as a table) together with an "
+            "image from their course materials.\n"
+            f'Above you are given: (1) a structured reference (a {type_word}, "{artifact.label}"), and '
+            "(2) an image, each labeled.\n\n"
+            f'The student asked: "{query}"\n\n'
+        )
+        body = (
+            "Ground the reference onto the image:\n"
+            "1. Briefly state what the image shows (axes, legend, labeled regions/points) and what the "
+            "reference contains.\n"
+            "2. For each relevant entry in the reference (e.g. each table row), identify where it maps on "
+            "the image — a region, marker, axis position, or label — using ONLY what is visibly present "
+            "in the image and the reference's content.\n"
+            "3. If an entry cannot be located on the image (no matching label/legend/axis), say so "
+            "explicitly for that entry.\n"
+            "4. Give a direct, justified answer to the student's question, based only on the reference "
+            "content and visible image content.\n\n"
+            "Constraints:\n"
+            "- Use ONLY the provided reference content and what is actually visible in the image.\n"
+            "- Do NOT invent coordinates, positions, or labels the image does not show.\n"
+            "- If the image lacks the labels/legend/axes needed to place the data, state that rather "
+            "than guessing.\n"
+            "- The reference may be truncated (large tables); if so, ground only the entries shown."
+        )
+        note = ""
+        if low_confidence:
+            note = (
+                "\n- The reference or image may not be the one the student intended; note this and "
+                "invite them to confirm which they meant."
+            )
+        return header + body + note
 
     # -----------------------------------------------------------------------
     # Multi-image reasoning (>= 2 referenced figures co-presented in ONE call)

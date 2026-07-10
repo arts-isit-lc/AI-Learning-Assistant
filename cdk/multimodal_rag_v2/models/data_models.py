@@ -38,10 +38,16 @@ class ElementType(Enum):
 
 
 class VisionMode(Enum):
-    """Structural mode of a VisionAnalysis: one image vs. several co-analyzed."""
+    """Structural mode of a VisionAnalysis.
+
+    SINGLE = one image; MULTI = several images co-analyzed; CROSS_MODAL_GROUNDING =
+    one structured reference (rendered as text) co-presented with an image so the
+    vision model can ground the reference's entries onto the image.
+    """
 
     SINGLE = "single"
     MULTI = "multi"
+    CROSS_MODAL_GROUNDING = "cross_modal_grounding"
 
 
 class ResolutionConfidence(Enum):
@@ -271,6 +277,12 @@ class QueryIntent:
     # which formulas are actually compared.
     formula_references: list[FormulaReference] = field(default_factory=list)
     requires_formula_comparison: bool = False
+    # Cross-modal grounding: placement/relationship language AND both a
+    # structured-reference signal (v1: table) AND an image signal. Independent of
+    # the comparison flags — grounding ("map/place X onto the image") is a
+    # different prompt family than comparison ("which is better"). Deliberately
+    # conservative (precision over recall); see query_analyzer + spec §4.1.
+    requires_cross_modal_grounding: bool = False
 
 
 @dataclass
@@ -382,12 +394,51 @@ class ResolvedReference:
 
 
 @dataclass
-class VisionAnalysis:
-    """Product of a multi-image (MULTI) vision call over >= 2 co-presented figures.
+class GroundedArtifact:
+    """A structured reference NORMALIZED for the vision pipeline.
 
-    v1 uses this for the MULTI path only; the single-image path continues to return
-    ImageAnalysis (see EscalationResult). SINGLE is reserved for a later migration
-    that unifies both paths onto this model.
+    Pure and retrieval-agnostic: it carries ONLY what the renderer + message
+    builder need. It intentionally does NOT hold a RankedResult — retrieval
+    metadata lives on ``GroundingResolution`` — so the vision layer cannot reach
+    resolver/retrieval state. This is the invariant that keeps the grounding
+    pipeline generic, enforced by the type boundary rather than by convention.
+
+    ``artifact_type`` REUSES ``ElementType`` (the repo's structured-content
+    taxonomy), so FORMULA/CODE later are new ``ElementType`` values + a render
+    branch, not a new type here. v1 only ever constructs ``ElementType.TABLE``.
+    """
+
+    artifact_type: ElementType
+    label: str  # e.g. "Table 3.2"
+    structured_content: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class GroundingResolution:
+    """Resolution record: a normalized artifact + the retrieval object + confidence.
+
+    Consumed by orchestration, the display union, and observability — NEVER by the
+    vision pipeline (which sees only ``artifact``). Keeps "normalized artifact" and
+    "retrieval metadata" as separate concerns (mirrors ResolvedReferent's split of
+    structured_content vs. result).
+    """
+
+    artifact: GroundedArtifact
+    ranked_result: RankedResult | None = None
+    confidence: ResolutionConfidence = ResolutionConfidence.LOW
+
+
+@dataclass
+class VisionAnalysis:
+    """Product of a vision call over co-presented visual/structured content.
+
+    - MULTI: >= 2 co-presented figures (multi-image reasoning).
+    - CROSS_MODAL_GROUNDING: one structured reference (``resolved_artifacts``) +
+      an image (``resolved_images``), grounded together.
+
+    v1 uses this for the MULTI and CROSS_MODAL_GROUNDING paths; the single-image
+    path continues to return ImageAnalysis (see EscalationResult). SINGLE is
+    reserved for a later migration that unifies both paths onto this model.
     """
 
     mode: VisionMode
@@ -395,7 +446,11 @@ class VisionAnalysis:
     confidence: float  # vision-model confidence in the analysis
     resolved_images: list[RankedResult] = field(default_factory=list)
     reference_mapping: list[ResolvedReference] = field(default_factory=list)
-    prompt_intent: str = "describe_each"  # "compare" | "describe_each"
+    prompt_intent: str = "describe_each"  # "compare" | "describe_each" | "ground"
+    # CROSS_MODAL_GROUNDING: the structured reference(s) fused into the call, as
+    # resolution records (artifact + retrieval + confidence) for the display union
+    # and grounding label. Empty for SINGLE/MULTI.
+    resolved_artifacts: list[GroundingResolution] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

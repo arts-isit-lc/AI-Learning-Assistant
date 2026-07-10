@@ -450,6 +450,11 @@ export class MultimodalRagStack extends cdk.Stack {
           QUERY_EMBEDDING_CACHE: "true", // #5: behavior-preserving (cached embeddings)
           RAG_RETURN_PASSAGES: "true", // #1: return passages + skip reasoning LLM (eliminates double generation)
           STRICT_IMAGE_ESCALATION: "true", // #9: gate vision escalation to explicit figure references
+          // Cross-modal grounding: co-present a structured reference (table) + an
+          // image in ONE Sonnet 4.5 vision call. Reuses the existing Sonnet grant/
+          // env — no new IAM/model. Kill-switch: set "false" (or repoint
+          // COMPARISON_VISION_MODEL_ID to Haiku 4.5) + redeploy.
+          CROSS_MODAL_GROUNDING_ENABLED: "true",
           // Tier-2 formula comparison: invoke math_compute for symbolic
           // equivalence. Absent/empty => formula comparison uses lexical Tier 1 only.
           MATH_COMPUTE_FUNCTION_NAME: `${id}-mathComputeFunction`,

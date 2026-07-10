@@ -112,6 +112,36 @@ class QueryAnalyzer:
         re.IGNORECASE,
     )
 
+    # --- Cross-modal grounding detection -----------------------------------
+    # Grounding = "place/map the structured reference onto the image". Requires a
+    # placement/relationship verb AND both a structured-reference signal AND an
+    # image signal (see _detect_cross_modal_grounding). Deliberately CONSERVATIVE
+    # (precision over recall): natural phrasings without a placement verb
+    # ("which points correspond to Table 3.2?") are intentionally missed and get
+    # existing paths — broaden only from production telemetry. This is a distinct
+    # prompt family from comparison ("which is better") and interpretation
+    # ("explain the diagram using table 2"), so it has its own flag.
+    _GROUNDING_PATTERN = re.compile(
+        r"\b(?:map|plot|overlay|locate|mark|place|pinpoint|position|annotate|highlight)\b"
+        r".*\b(?:on|onto|in|over|against)\b"
+        r"|\b(?:on|onto|in|over)\s+the\s+(?:map|figure|diagram|image|chart|graph|plot|scatter)\b",
+        re.IGNORECASE | re.DOTALL,
+    )
+    # Image-target nouns for grounding. Superset of the requires_image RULES: adds
+    # map/plot/scatter, which are intentionally NOT global requires_image keywords
+    # (too broad there) but are the canonical grounding targets. Scoped to grounding
+    # detection only, where the placement-verb + reference-signal gate contains the
+    # false-positive risk.
+    _GROUNDING_IMAGE_NOUN_PATTERN = re.compile(
+        r"\b(?:map|plot|scatter|graph|chart|diagram|figure|image|picture|visual)\b",
+        re.IGNORECASE,
+    )
+    # Structured-reference (v1: table/data) nouns for grounding.
+    _GROUNDING_REFERENCE_NOUN_PATTERN = re.compile(
+        r"\b(?:table|dataset|data\s?set|data\s+points?|the\s+data|results?)\b",
+        re.IGNORECASE,
+    )
+
     # Max distinct references parsed per query (abuse guard + downstream cost bound).
     _MAX_PARSED_REFERENCES = 5
 
@@ -210,7 +240,41 @@ class QueryAnalyzer:
             and (len(formula_refs) >= 2 or intent.requires_formula)
         )
 
+        # Cross-modal grounding — INDEPENDENT of the comparison flags. Computed
+        # from the final intent (needs the image/table signals resolved above).
+        intent.requires_cross_modal_grounding = self._detect_cross_modal_grounding(
+            query, intent
+        )
+
         return intent
+
+    @classmethod
+    def _detect_cross_modal_grounding(cls, query: str, intent: QueryIntent) -> bool:
+        """Detect a "place/map this structured reference onto the image" query.
+
+        Fires only when ALL hold: (1) placement/relationship language, (2) a
+        structured-reference signal (v1: table), and (3) an image signal. The
+        two-signal AND-gate keeps the placement pattern from over-triggering on
+        non-cross-modal queries ("highlight the key points in the summary").
+        Conservative by design (see _GROUNDING_PATTERN). Never raises.
+        """
+        if cls._GROUNDING_PATTERN.search(query) is None:
+            return False
+
+        has_reference_signal = (
+            intent.requires_table
+            or any(r.ref_type == "table" for r in (intent.figure_references or []))
+            or cls._GROUNDING_REFERENCE_NOUN_PATTERN.search(query) is not None
+        )
+        has_image_signal = (
+            intent.requires_image
+            or (
+                intent.figure_reference is not None
+                and intent.figure_reference.ref_type == "figure"
+            )
+            or cls._GROUNDING_IMAGE_NOUN_PATTERN.search(query) is not None
+        )
+        return has_reference_signal and has_image_signal
 
     def _haiku_fallback(self, query: str) -> QueryIntent:
         """Fall back to Claude 3 Haiku for query classification.

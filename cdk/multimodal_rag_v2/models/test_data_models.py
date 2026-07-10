@@ -9,6 +9,9 @@ from __future__ import annotations
 
 from .data_models import (
     ElementType,
+    GroundedArtifact,
+    GroundingResolution,
+    QueryIntent,
     RankedResult,
     ResolutionConfidence,
     ResolvedReference,
@@ -34,6 +37,7 @@ class TestVisionEnums:
     def test_vision_mode_values(self) -> None:
         assert VisionMode.SINGLE.value == "single"
         assert VisionMode.MULTI.value == "multi"
+        assert VisionMode.CROSS_MODAL_GROUNDING.value == "cross_modal_grounding"
 
     def test_resolution_confidence_values(self) -> None:
         assert {c.value for c in ResolutionConfidence} == {"high", "medium", "low"}
@@ -76,3 +80,55 @@ class TestVisionAnalysis:
         assert va.resolved_images[0].retrieval_id == "r1"
         assert va.reference_mapping[0].reference == "Figure 2.1"
         assert va.prompt_intent == "compare"
+
+    def test_cross_modal_grounding_defaults_resolved_artifacts_empty(self) -> None:
+        # Additive field must default empty so SINGLE/MULTI construction is unaffected.
+        va = VisionAnalysis(mode=VisionMode.MULTI, analysis="t", confidence=0.9)
+        assert va.resolved_artifacts == []
+
+
+class TestGroundedArtifact:
+    def test_is_pure_no_retrieval_field(self) -> None:
+        # The vision-facing artifact must NOT carry a RankedResult (layering
+        # invariant: the vision pipeline cannot reach retrieval state).
+        art = GroundedArtifact(
+            artifact_type=ElementType.TABLE,
+            label="Table 3.2",
+            structured_content={"headers": ["a"], "rows": [["1"]]},
+        )
+        field_names = set(vars(art).keys())
+        assert field_names == {"artifact_type", "label", "structured_content"}
+        assert "result" not in field_names and "ranked_result" not in field_names
+        assert art.artifact_type is ElementType.TABLE
+
+    def test_structured_content_defaults_empty(self) -> None:
+        art = GroundedArtifact(artifact_type=ElementType.TABLE, label="Table 1")
+        assert art.structured_content == {}
+
+
+class TestGroundingResolution:
+    def test_wraps_artifact_and_retrieval(self) -> None:
+        table = RankedResult(
+            retrieval_id="t1",
+            parent_element_id="p1",
+            content="Table 3.2 ...",
+            element_type=ElementType.TABLE,
+            score=0.9,
+            cross_encoder_score=0.0,
+            metadata_boost=0.0,
+        )
+        art = GroundedArtifact(ElementType.TABLE, "Table 3.2", {"rows": []})
+        res = GroundingResolution(artifact=art, ranked_result=table, confidence=ResolutionConfidence.HIGH)
+        assert res.artifact is art
+        assert res.ranked_result.retrieval_id == "t1"
+        assert res.confidence is ResolutionConfidence.HIGH
+
+    def test_defaults(self) -> None:
+        res = GroundingResolution(artifact=GroundedArtifact(ElementType.TABLE, "Table 1"))
+        assert res.ranked_result is None
+        assert res.confidence is ResolutionConfidence.LOW
+
+
+class TestQueryIntentGrounding:
+    def test_requires_cross_modal_grounding_defaults_false(self) -> None:
+        assert QueryIntent().requires_cross_modal_grounding is False

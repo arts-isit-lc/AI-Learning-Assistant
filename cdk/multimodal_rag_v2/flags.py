@@ -44,6 +44,11 @@ def _flag(name: str, default: bool) -> bool:
 RAG_RETURN_PASSAGES = _flag("RAG_RETURN_PASSAGES", default=False)
 # #9: require an explicit figure reference (not a bare keyword) to run vision.
 STRICT_IMAGE_ESCALATION = _flag("STRICT_IMAGE_ESCALATION", default=False)
+# Cross-modal grounding: co-present a structured reference (v1: table) + an image
+# in ONE Sonnet 4.5 vision call so the model can ground the reference's entries
+# onto the image. Default OFF (safety contract) — enabled per-env via the
+# retrieval Lambda; the COMPARISON_VISION_MODEL_ID kill-switch also covers it.
+CROSS_MODAL_GROUNDING_ENABLED = _flag("CROSS_MODAL_GROUNDING_ENABLED", default=False)
 
 # --- Behavior-preserving optimizations (default OFF for a no-op deploy) --------
 # #5: cache query embeddings in the existing DynamoDB EmbeddingCache.

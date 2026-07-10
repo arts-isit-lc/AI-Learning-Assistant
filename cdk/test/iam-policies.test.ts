@@ -725,6 +725,32 @@ describe('IAM Policy Guardrails', () => {
   });
 
   /**
+   * Validates: cross-modal grounding (structured reference + image in one Sonnet
+   * 4.5 vision call) is enabled on the retrieval Lambda via env. It reuses the
+   * existing Sonnet 4.5 grant/env — no new IAM/model — so only the feature-flag
+   * env var is asserted here (testing-policy: CDK change → assertion test).
+   */
+  test('ragRetrievalFunction enables CROSS_MODAL_GROUNDING_ENABLED', () => {
+    const json = ragTemplate.toJSON();
+    const resources = json.Resources ?? {};
+
+    let found = false;
+    for (const [, resource] of Object.entries(resources)) {
+      const res = resource as Record<string, unknown>;
+      if (res.Type !== 'AWS::Lambda::Function') continue;
+      const props = res.Properties as Record<string, unknown> | undefined;
+      const env = props?.Environment as Record<string, unknown> | undefined;
+      const vars = env?.Variables as Record<string, unknown> | undefined;
+      // Scope to the retrieval function (it carries the vision-model env vars).
+      if (vars && vars.COMPARISON_VISION_MODEL_ID && vars.CROSS_MODAL_GROUNDING_ENABLED === 'true') {
+        found = true;
+        break;
+      }
+    }
+    expect(found).toBe(true);
+  });
+
+  /**
    * Regression guard: the retired Claude 3 model ids must not appear in ANY IAM
    * policy across the API, DB, DBFlow, or RAG stacks after the 4.5 migration.
    */

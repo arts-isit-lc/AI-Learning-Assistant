@@ -715,6 +715,7 @@ def handler(event, context):
                 select_figures as select_figs, select_tables, select_formulas,
                 build_figure_grounding, build_table_grounding, build_formula_grounding,
                 build_comparison_grounding, build_formula_comparison_grounding,
+                build_grounding_reinforcement,
             )
             selected_figures = select_figs(retrieval_result, retrieval_query)
             table_blocks = select_tables(retrieval_result, retrieval_query)
@@ -723,6 +724,7 @@ def handler(event, context):
                 build_figure_grounding(retrieval_result, selected_figures),
                 build_table_grounding(table_blocks),
                 build_comparison_grounding(table_blocks, retrieval_query),
+                build_grounding_reinforcement(table_blocks, selected_figures, retrieval_query),
                 build_formula_grounding(formula_blocks),
                 build_formula_comparison_grounding(formula_blocks, retrieval_query),
             ) if g)
