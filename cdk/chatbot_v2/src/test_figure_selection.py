@@ -101,12 +101,21 @@ class TestSelectFigures:
         rr = _rr(image_results=[{"retrieval_id": "i1", "score": 0.55}])
         assert fs.select_figures(rr, "show me figure 2") == ["i1"]
 
-    def test_generic_ref_surfaces_top_image_regardless_of_score(self):
-        # "the diagram" is a generic figure reference (no number). Reference-and
-        # -rank-based (M1): the top image is surfaced by rank; the RRF-scale
-        # score (0.3 here) is NOT an absolute gate. This is the fix for the
-        # "figure never shows because scores are ~0.03" class of bug.
+    def test_generic_keyword_without_escalation_attaches_nothing(self):
+        # Option A (tightened gate): a bare visual keyword with no number and no
+        # escalation is NOT a trustworthy signal. With no cross-encoder the
+        # RRF-scale score (0.3 here) cannot pick the right image, so nothing is
+        # attached rather than guessing at "top image by rank".
         rr = _rr(image_results=[{"retrieval_id": "i1", "score": 0.3}])
+        assert fs.select_figures(rr, "show me the diagram") == []
+
+    def test_generic_keyword_with_escalation_attaches(self):
+        # The SAME generic query still attaches once the retriever escalated:
+        # escalation_used is the trustworthy "wants to look at an image" signal
+        # (gated by STRICT_IMAGE_ESCALATION on the retrieval side), and the
+        # escalated images are the ones actually analysed/grounded. In production
+        # "show me the diagram" escalates, so this is the live behaviour.
+        rr = _rr(escalation_used=True, image_results=[{"retrieval_id": "i1", "score": 0.3}])
         assert fs.select_figures(rr, "show me the diagram") == ["i1"]
 
     def test_no_ref_no_escalation_attaches_nothing(self):

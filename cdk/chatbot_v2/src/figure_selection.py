@@ -135,8 +135,10 @@ def select_figures(
     absolute gate. So:
       - specific reference ("figure 4.1")  -> the escalated (analysed) image, or
         a single best image at/above score_threshold when nothing escalated;
-      - generic reference ("the diagram") or escalation -> top images by rank;
-      - no reference and no escalation      -> nothing (never guess a figure).
+      - escalation ran (explicit visual intent / figure reference, gated by
+        STRICT_IMAGE_ESCALATION on the retrieval side) -> top images by rank;
+      - a bare visual keyword with no number and no escalation -> nothing. The
+        RRF score is not a reliable gate, so never guess a figure.
 
     Args:
         retrieval_result: RetrievalResult from invoke_retrieval().
@@ -210,28 +212,23 @@ def select_figures(
         _log_selected(selected, has_figure_ref, specific_ref, retrieval_result.escalation_used)
         return selected[:max_figures]
 
-    # Generic figure/diagram query (no specific number) — may surface several.
-    # Priority 1: escalated figures attach regardless of score.
+    # Generic (non-numbered) path: attach figures ONLY when the retriever
+    # escalated — i.e. it ran a deliberate vision analysis because the query
+    # showed explicit visual intent ("show me", "look at", "in the figure") or a
+    # figure reference. STRICT_IMAGE_ESCALATION gates that on the retrieval side,
+    # so escalation_used is a trustworthy "the student wants to look at an image"
+    # signal, and the escalated images are the ones actually analysed/grounded.
+    #
+    # A bare visual keyword ("diagram", "graph", "chart") with NO number and NO
+    # escalation is deliberately NOT enough (M1): with no cross-encoder the ranker
+    # score is RRF-scale (~0.03), so "top image by rank" would be an unreliable
+    # guess that risks surfacing an unrelated page. Show figures only when there
+    # is a trustworthy signal; otherwise attach nothing.
     if retrieval_result.escalation_used:
         for img in image_results:
             if len(selected) >= max_figures:
                 break
             _take(img.get("retrieval_id"))
-
-    # Priority 2: when the query references figures at all (or escalation ran),
-    # show the top images. Reference-and-rank-based (M1): no cross-encoder is
-    # configured, so the ranker score is RRF-scale (~0.03) and absolute
-    # thresholds never fire — rely on the figure reference + retrieval rank
-    # (image_results is already score-ordered) instead of an absolute gate.
-    if has_figure_ref or retrieval_result.escalation_used:
-        for img in image_results:
-            if len(selected) >= max_figures:
-                break
-            _take(img.get("retrieval_id"))
-
-    # No figure reference and no escalation → do NOT auto-attach an image.
-    # The RRF score is not a reliable absolute gate, so surfacing an unreferenced
-    # figure risks showing something irrelevant. Show figures only when asked.
 
     _log_selected(selected, has_figure_ref, specific_ref, retrieval_result.escalation_used)
     return selected
