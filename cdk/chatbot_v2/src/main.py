@@ -27,7 +27,7 @@ from state_machine import (create_default_state, serialize_state, deserialize_st
 from evaluation import evaluate_answer
 from concept_tracker import introduce_concepts, discuss_concepts, demonstrate_concepts, record_misunderstandings
 from mode_selector import select_mode
-from prompt_builder import build_system_prompt
+from prompt_builder import build_system_prompt, build_tutor_system_prompt
 from retrieval_client import invoke_retrieval, get_bounded_history as get_retrieval_history
 from streaming import stream_response, send_final
 from guardrails import load_guardrail_config, wrap_user_message, handle_guardrail_error, GUARDRAIL_SERVICE_ERROR_MESSAGE
@@ -527,7 +527,7 @@ def handler(event, context):
                 # turn, so we skip the tags (they'd otherwise reach Claude as
                 # literal text).
                 guardrail_tags = "" if USE_CONVERSE_STREAMING else (wrap_user_message(message_content) if message_content else "")
-                system_prompt = f"{tutor_prompt}\n\n{guardrail_tags}"
+                system_prompt = build_tutor_system_prompt(tutor_prompt, guardrail_tags)
 
                 prompt_history = get_bounded_history(chat_history, MAX_PROMPT_TURNS)
                 model_kwargs = {"max_tokens": RESPONSE_MAX_TOKENS, "guardrail_id": guardrail_id, "guardrail_version": guardrail_version}

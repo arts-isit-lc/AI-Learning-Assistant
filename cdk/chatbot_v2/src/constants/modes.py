@@ -1,7 +1,7 @@
 """Mode template strings for the chatbot response generation."""
 
 MODE_TEMPLATES = {
-    "greet": "Greet the student warmly. Ask an opening question about {topic} to gauge their prior knowledge.",
+    "greet": "Greet the student warmly and, in the SAME single paragraph, ask an opening question about {topic} to gauge their prior knowledge. Keep the greeting and the opening question together as one continuous paragraph — do NOT put the greeting on its own separate line or in its own paragraph.",
     "assess": "Ask ONE question at the {difficulty} level about: {concept}. Do not explain yet.",
     "hint_nudge": "The student's answer was partially correct. Give a gentle nudge toward {missing_concept} without revealing the answer.",
     "hint_scaffold": "Break down {concept} into smaller steps. Ask about the first sub-step.",

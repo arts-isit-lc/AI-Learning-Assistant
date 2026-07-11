@@ -19,6 +19,16 @@ BASE_INSTRUCTOR_IDENTITY = (
 )
 
 
+# Global output-style rule applied to every response-model (Claude Sonnet 4.5)
+# prompt, across all modes AND the math-tutor path. Kept as a single shared
+# constant so the normal path (build_system_prompt), the tutor path
+# (build_tutor_system_prompt), and the evaluation prompt cannot drift apart.
+NO_EMOJI_RULE = (
+    "FORMATTING RULE: Do not use emojis, emoticons, or decorative Unicode symbols "
+    "anywhere in your response. Write in plain text using standard punctuation only."
+)
+
+
 class _DefaultDict(dict):
     """A dict subclass that returns '{key}' for missing keys.
 
@@ -41,10 +51,11 @@ def build_system_prompt(
 
     Output structure:
     1. Base instructor identity
-    2. Mode-specific instruction (from MODE_TEMPLATES with variable substitution)
-    3. Topic context
-    4. Retrieved RAG context
-    5. Guardrail boundary tags
+    2. Global output-style rules (no emojis)
+    3. Mode-specific instruction (from MODE_TEMPLATES with variable substitution)
+    4. Topic context
+    5. Retrieved RAG context
+    6. Guardrail boundary tags
 
     Uses str.format_map with a defaulting dict so missing vars don't crash.
 
@@ -67,9 +78,10 @@ def build_system_prompt(
     template = MODE_TEMPLATES.get(mode, "")
     mode_instruction = template.format_map(substitution)
 
-    # Assemble all five sections
+    # Assemble all sections
     sections = [
         BASE_INSTRUCTOR_IDENTITY,
+        NO_EMOJI_RULE,
         mode_instruction,
         f"Topic: {topic}",
         rag_context,
@@ -77,3 +89,23 @@ def build_system_prompt(
     ]
 
     return "\n".join(sections)
+
+
+def build_tutor_system_prompt(tutor_prompt: str, guardrail_tags: str) -> str:
+    """Assemble the system prompt for an active math-tutor turn.
+
+    The tutor path builds its instruction from tutor_integration (step/hint/
+    completion prompts) rather than MODE_TEMPLATES, so it bypasses
+    build_system_prompt and would not otherwise inherit the global output-style
+    rules. Prepend NO_EMOJI_RULE here so tutor replies — rendered by the same
+    response model — stay emoji-free and consistent with every other turn.
+
+    Args:
+        tutor_prompt: The tutor step/hint/completion instruction.
+        guardrail_tags: Bedrock Guardrail boundary tags (may be empty on the
+            ConverseStream path).
+
+    Returns:
+        The assembled tutor system prompt string.
+    """
+    return f"{NO_EMOJI_RULE}\n\n{tutor_prompt}\n\n{guardrail_tags}"

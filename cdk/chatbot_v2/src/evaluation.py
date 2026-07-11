@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from aws_lambda_powertools import Logger
 
 from constants.models import EVAL_MAX_TOKENS, EVAL_MODEL_ID
+from prompt_builder import NO_EMOJI_RULE
 
 logger = Logger(service="chatbot-v2")
 
@@ -116,7 +117,8 @@ Rules:
 - concepts_misunderstood: concepts the student showed confusion about
 - A partially correct answer can have both demonstrated and misunderstood concepts
 - IMPORTANT: concepts_demonstrated and concepts_misunderstood MUST only contain identifiers from the module concept vocabulary list above. Discard any concept not in that list.
-"""
+
+""" + NO_EMOJI_RULE + "\n"
 
 
 def evaluate_answer(

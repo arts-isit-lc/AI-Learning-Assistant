@@ -161,7 +161,7 @@ const AIMessage = ({ blocks, message }) => {
         <div className="shrink-0 p-1 rounded-full bg-primary/10">
           <Bot className="w-6 h-6 text-primary" aria-hidden="true" />
         </div>
-        <div className="text-start text-foreground min-w-0 max-w-prose break-words">
+        <div className="text-start text-foreground min-w-0 break-words">
           {renderBlocks.map((block, i) => {
             switch (block.type) {
               case "text":
