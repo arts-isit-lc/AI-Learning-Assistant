@@ -194,6 +194,45 @@ def test_no_figure_reference_attaches_no_figure(wire):
     assert all(b.get("type") != "figure" for b in body["blocks"])
 
 
+def test_greet_turn_attaches_no_visual_blocks_even_when_escalated(wire):
+    # First message of a new chat = greet mode (interactions == 0). There is no
+    # student query, so retrieval runs on an auto-generated topic-overview query
+    # and the retriever may escalate on image hits — which, on any other turn,
+    # would attach the top images with no figure reference. The greeting must
+    # stay text-only: no PDF pages dumped under the opening message.
+    wire.state.interactions = 0
+    wire.retrieval = _retrieval(
+        escalation_used=True,
+        image_results=[
+            {"retrieval_id": "img-1", "score": 0.03, "page_num": 3, "description": "a PDF page"},
+            {"retrieval_id": "img-2", "score": 0.02, "page_num": 4, "description": "another PDF page"},
+        ],
+    )
+    resp = main.handler(_event(message_content=""), _Ctx())
+    body = json.loads(resp["body"])
+
+    # No visual blocks of any kind ride along with the greeting.
+    assert all(b.get("type") not in ("figure", "table", "formula") for b in body["blocks"])
+    # But retrieval text still grounds the greeting's opening question.
+    system_prompt = wire.stream.call_args.kwargs["system_prompt"]
+    assert "RAG context about recursion." in system_prompt
+
+
+def test_non_greet_turn_still_attaches_escalated_figures(wire):
+    # Guard against over-suppression: the greet-only gate must not regress normal
+    # turns. An escalated figure on a real Q&A turn is still shown.
+    wire.state.interactions = 2
+    wire.retrieval = _retrieval(
+        escalation_used=True,
+        image_results=[
+            {"retrieval_id": "img-1", "score": 0.03, "page_num": 41, "description": "a chart"},
+        ],
+    )
+    resp = main.handler(_event(message_content="tell me about the chart"), _Ctx())
+    body = json.loads(resp["body"])
+    assert {"type": "figure", "id": "img-1"} in body["blocks"]
+
+
 # ---------------------------------------------------------------------------
 # Tutor path persists blocks + keeps schema parity (M5/M6)
 # ---------------------------------------------------------------------------

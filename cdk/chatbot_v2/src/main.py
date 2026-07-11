@@ -710,27 +710,41 @@ def handler(event, context):
         # ground the response text (H6/M1). Without this the response LLM only
         # sees the retrieval answer and disclaims ("couldn't find that in the
         # retrieved materials") a block the display path simultaneously shows.
-        try:
-            from figure_selection import (
-                select_figures as select_figs, select_tables, select_formulas,
-                build_figure_grounding, build_table_grounding, build_formula_grounding,
-                build_comparison_grounding, build_formula_comparison_grounding,
-                build_cross_modal_reinforcement,
-            )
-            selected_figures = select_figs(retrieval_result, retrieval_query)
-            table_blocks = select_tables(retrieval_result, retrieval_query)
-            formula_blocks = select_formulas(retrieval_result, retrieval_query)
-            grounding = "\n\n".join(g for g in (
-                build_figure_grounding(retrieval_result, selected_figures),
-                build_table_grounding(table_blocks),
-                build_comparison_grounding(table_blocks, retrieval_query),
-                build_cross_modal_reinforcement(table_blocks, selected_figures, retrieval_query),
-                build_formula_grounding(formula_blocks),
-                build_formula_comparison_grounding(formula_blocks, retrieval_query),
-            ) if g)
-        except Exception:
-            logger.exception("Block selection/grounding failed (pre-generation)")
+        #
+        # EXCEPTION — the auto-generated greeting (the "greet" turn with no
+        # student message) has no query, so retrieval runs on a synthesized
+        # topic-overview query. Attaching whatever figures/tables/formulas
+        # surface for that query dumps PDF pages under the greeting (e.g. whenever
+        # the retriever escalated on image hits, select_figures attaches the top
+        # images even with no figure reference in the query). Keep that opening
+        # message purely conversational: skip the visual blocks AND their
+        # grounding, but keep rag_context so the opening question stays grounded
+        # in text. A first turn that DOES carry a student message (so it could
+        # reference a figure) is left on the normal path and still shows visuals.
+        if mode == "greet" and not message_content:
             selected_figures, table_blocks, formula_blocks, grounding = [], [], [], ""
+        else:
+            try:
+                from figure_selection import (
+                    select_figures as select_figs, select_tables, select_formulas,
+                    build_figure_grounding, build_table_grounding, build_formula_grounding,
+                    build_comparison_grounding, build_formula_comparison_grounding,
+                    build_cross_modal_reinforcement,
+                )
+                selected_figures = select_figs(retrieval_result, retrieval_query)
+                table_blocks = select_tables(retrieval_result, retrieval_query)
+                formula_blocks = select_formulas(retrieval_result, retrieval_query)
+                grounding = "\n\n".join(g for g in (
+                    build_figure_grounding(retrieval_result, selected_figures),
+                    build_table_grounding(table_blocks),
+                    build_comparison_grounding(table_blocks, retrieval_query),
+                    build_cross_modal_reinforcement(table_blocks, selected_figures, retrieval_query),
+                    build_formula_grounding(formula_blocks),
+                    build_formula_comparison_grounding(formula_blocks, retrieval_query),
+                ) if g)
+            except Exception:
+                logger.exception("Block selection/grounding failed (pre-generation)")
+                selected_figures, table_blocks, formula_blocks, grounding = [], [], [], ""
         if grounding:
             rag_context = f"{rag_context}\n\n{grounding}" if rag_context else grounding
 
