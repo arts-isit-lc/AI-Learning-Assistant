@@ -617,6 +617,19 @@ export class ApiGatewayStack extends cdk.Stack {
       })
     );
 
+    // Read-only access to the chatbot_v2 session-state DynamoDB table so
+    // studentFunction can assemble a student's course-wide progress
+    // (GET /student/course_progress). Scoped to the one table ARN — no wildcard,
+    // no management actions (read by key only). Shared dbLambdaRole means
+    // instructorFunction also gains this read (acceptable: read-only, same table).
+    dbLambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ["dynamodb:GetItem", "dynamodb:BatchGetItem"],
+        resources: [ragStack.sessionStateTable.tableArn],
+      })
+    );
+
     const lambdaStudentFunction = new lambda.Function(this, `${id}-studentFunction`, {
       runtime: lambda.Runtime.NODEJS_22_X,
       code: lambda.Code.fromAsset("lambda/lib"),
@@ -628,6 +641,8 @@ export class ApiGatewayStack extends cdk.Stack {
       environment: {
         SM_DB_CREDENTIALS: db.secretPathUser.secretName,
         RDS_PROXY_ENDPOINT: db.rdsProxyEndpoint,
+        // Read-only: chatbot_v2 session-state table, for GET /student/course_progress.
+        SESSION_STATE_TABLE: ragStack.sessionStateTable.tableName,
       },
       functionName: `${id}-studentFunction`,
       memorySize: 256,

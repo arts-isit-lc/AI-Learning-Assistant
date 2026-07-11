@@ -12,6 +12,7 @@ import TypingIndicator from "./TypingIndicator";
 import useChatSession from "./useChatSession";
 import useFileViewer from "./useFileViewer";
 import useModuleProgress from "./useModuleProgress";
+import useCourseProgress from "./useCourseProgress";
 import { getModuleStatus } from "../../utils/moduleStatus";
 
 const StudentChat = ({ course, module, setModule, setCourse }) => {
@@ -21,6 +22,7 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
   const chat = useChatSession(course, module);
   const files = useFileViewer(course, module);
   const progress = useModuleProgress(course, module);
+  const courseProgress = useCourseProgress(course);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -202,7 +204,10 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
             <button
               type="button"
               className="flex items-center gap-2 bg-gray-800 text-white px-4 py-2 rounded hover:bg-gray-700 transition duration-200"
-              onClick={progress.handleFetchProgress}
+              onClick={() => {
+                progress.handleFetchProgress();
+                courseProgress.handleLogCourseProgress();
+              }}
             >
               <TrendingUp className="w-4 h-4" />
               <span className="hidden sm:inline">Progress</span>

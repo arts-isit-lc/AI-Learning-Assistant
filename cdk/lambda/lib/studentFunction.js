@@ -7,6 +7,7 @@
  *   GET    /student/course_page
  *   GET    /student/module
  *   GET    /student/module_progress
+ *   GET    /student/course_progress
  *   POST   /student/create_session
  *   DELETE /student/delete_session
  *   GET    /student/get_messages
@@ -22,10 +23,89 @@ const { initializeConnection } = require("./lib.js");
 const { verifyStudentAccess, verifyStudentOwnsSession } = require("./accessControl.js");
 const { S3Client, GetObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
+const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+const { DynamoDBDocumentClient, BatchGetCommand } = require("@aws-sdk/lib-dynamodb");
 
-let { SM_DB_CREDENTIALS, RDS_PROXY_ENDPOINT, BUCKET, REGION } = process.env;
+let { SM_DB_CREDENTIALS, RDS_PROXY_ENDPOINT, BUCKET, REGION, SESSION_STATE_TABLE } = process.env;
 
 const s3Client = new S3Client({ region: REGION });
+// DynamoDB document client for reading chatbot_v2 session state (course_progress).
+// Region resolves from the ambient AWS_REGION the Lambda runtime provides.
+const ddbDocClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+
+// ─── course_progress aggregation helpers ──────────────────────────────────
+// Bounded batch read for the debug course-progress view.
+const COURSE_PROGRESS_MAX_SESSIONS = 200;
+// Orderings mirrored from chatbot_v2 state_machine.py (ConceptLevel / Stage).
+const CONCEPT_LEVEL_ORDER = ["introduced", "discussed", "demonstrated", "mastery"];
+const STAGE_ORDER = ["prior_knowledge", "comprehension", "application", "mastery"];
+
+/**
+ * Summarize a module's chatbot_v2 SessionState items into a derived view.
+ *
+ * READ-ONLY MIRROR of state_machine.py::calculate_mastery_profile /
+ * calculate_coverage (+ the level/stage orderings). The Python implementation
+ * remains the single source of truth for mastery; this is a convenience summary
+ * for the course-progress debug view. Concept progress is SUMMED across the
+ * module's sessions (never overwritten).
+ */
+function summarizeModuleSessions(sessions) {
+  const conceptMastery = {};
+  const discussed = new Set();
+  const demonstrated = new Set();
+  let stageIdx = 0;
+  let engagementMax = 0;
+  let interactionsTotal = 0;
+  let moduleConcepts = [];
+
+  for (const s of sessions) {
+    const si = STAGE_ORDER.indexOf(s.stage);
+    if (si > stageIdx) stageIdx = si;
+
+    const eng = parseFloat(s.engagement_score);
+    if (!Number.isNaN(eng) && eng > engagementMax) engagementMax = eng;
+
+    interactionsTotal += Number(s.interactions) || 0;
+
+    for (const c of s.concepts_discussed || []) discussed.add(c);
+    for (const c of s.concepts_demonstrated || []) demonstrated.add(c);
+
+    if (Array.isArray(s.module_concepts) && s.module_concepts.length > moduleConcepts.length) {
+      moduleConcepts = s.module_concepts;
+    }
+
+    const cp = s.concept_progress || {};
+    for (const concept of Object.keys(cp)) {
+      const prog = cp[concept] || {};
+      const acc = conceptMastery[concept] || {
+        exposures: 0,
+        demonstrations: 0,
+        level: "introduced",
+      };
+      acc.exposures += Number(prog.exposures) || 0;
+      acc.demonstrations += Number(prog.demonstrations) || 0;
+      const li = CONCEPT_LEVEL_ORDER.indexOf(prog.level);
+      if (li > CONCEPT_LEVEL_ORDER.indexOf(acc.level)) {
+        acc.level = CONCEPT_LEVEL_ORDER[li];
+      }
+      conceptMastery[concept] = acc;
+    }
+  }
+
+  for (const concept of Object.keys(conceptMastery)) {
+    const acc = conceptMastery[concept];
+    acc.mastery_ratio = acc.exposures > 0 ? acc.demonstrations / acc.exposures : 0;
+  }
+
+  return {
+    stage_max: STAGE_ORDER[stageIdx],
+    engagement_max: engagementMax,
+    interactions_total: interactionsTotal,
+    coverage: moduleConcepts.length > 0 ? discussed.size / moduleConcepts.length : 0,
+    concepts_demonstrated: Array.from(demonstrated),
+    concept_mastery: conceptMastery,
+  };
+}
 
 // SQL conneciton from global variable at lib.js
 let sqlConnection = global.sqlConnection;
@@ -312,6 +392,201 @@ exports.handler = async (event) => {
         } else {
           response.statusCode = 400;
           response.body = "Invalid value";
+        }
+        break;
+      case "GET /student/course_progress":
+        if (
+          event.queryStringParameters != null &&
+          event.queryStringParameters.email &&
+          event.queryStringParameters.course_id
+        ) {
+          const studentEmail = event.queryStringParameters.email;
+          const courseId = event.queryStringParameters.course_id;
+
+          try {
+            // Resolve the user first (matches the sibling routes' convention).
+            const userResult = await sqlConnection`
+                SELECT user_id FROM "Users" WHERE user_email = ${studentEmail};
+              `;
+
+            if (userResult.length === 0) {
+              response.statusCode = 404;
+              response.body = JSON.stringify({ error: "User not found" });
+              break;
+            }
+
+            const userId = userResult[0].user_id;
+
+            // One course-scoped, READ-ONLY join: every active module + its sessions.
+            // Enrolment is enforced by the INNER JOIN on "Enrolments"; the course is
+            // reached via concept (Course_Modules has no course_id), so the join to
+            // "Course_Concepts" supplies both concept_name and the course guard. The
+            // LEFT JOIN on "Sessions" keeps modules with zero chat sessions.
+            const rows = await sqlConnection`
+                SELECT
+                  cm.module_id, cm.module_name, cm.module_number, cm.generated_topics,
+                  cc.concept_name,
+                  sm.student_module_id, sm.module_score, sm.last_accessed,
+                  s.session_id, s.session_name
+                FROM "Enrolments" e
+                JOIN "Student_Modules" sm ON sm.enrolment_id = e.enrolment_id
+                JOIN "Course_Modules"  cm ON cm.module_id    = sm.course_module_id
+                JOIN "Course_Concepts" cc ON cc.concept_id   = cm.concept_id
+                LEFT JOIN "Sessions"   s  ON s.student_module_id = sm.student_module_id
+                WHERE e.user_id = ${userId}
+                  AND e.course_id = ${courseId}
+                  AND cc.course_id = ${courseId}
+                  AND cm.status = 'active'
+                ORDER BY cm.module_number, s.last_accessed;
+              `;
+
+            if (rows.length === 0) {
+              response.statusCode = 404;
+              response.body = JSON.stringify({ error: "No course progress found" });
+              break;
+            }
+
+            // Group rows by module; collect the (capped) set of session_ids to read.
+            const moduleOrder = [];
+            const moduleById = {};
+            const sessionIds = [];
+            let totalSessions = 0;
+
+            for (const row of rows) {
+              if (!moduleById[row.module_id]) {
+                moduleById[row.module_id] = {
+                  module_id: row.module_id,
+                  module_name: row.module_name,
+                  module_number: row.module_number,
+                  concept_name: row.concept_name,
+                  module_score: row.module_score,
+                  last_accessed: row.last_accessed,
+                  status:
+                    row.module_score === 100
+                      ? "complete"
+                      : row.last_accessed
+                      ? "in_progress"
+                      : "incomplete",
+                  topics: row.generated_topics,
+                  session_count: 0,
+                  sessionIds: [],
+                };
+                moduleOrder.push(row.module_id);
+              }
+
+              if (row.session_id) {
+                const m = moduleById[row.module_id];
+                m.session_count += 1;
+                m.sessionIds.push(row.session_id);
+                totalSessions += 1;
+                if (sessionIds.length < COURSE_PROGRESS_MAX_SESSIONS) {
+                  sessionIds.push(row.session_id);
+                }
+              }
+            }
+
+            const truncated = totalSessions > sessionIds.length;
+
+            // Batch-read session state from DynamoDB (READ-ONLY, keyed ONLY by the
+            // session_ids the scoped join returned — no IDOR). A missing item is a
+            // session that never persisted state (normal); only a hard failure sets
+            // state_read_error and degrades to the Postgres-only structure.
+            const stateBySession = {};
+            let stateReadError = false;
+
+            if (SESSION_STATE_TABLE && sessionIds.length > 0) {
+              try {
+                for (let i = 0; i < sessionIds.length; i += 100) {
+                  let keys = sessionIds
+                    .slice(i, i + 100)
+                    .map((id) => ({ session_id: id }));
+                  let attempts = 0;
+                  while (keys.length > 0 && attempts < 4) {
+                    const ddbResp = await ddbDocClient.send(
+                      new BatchGetCommand({
+                        RequestItems: { [SESSION_STATE_TABLE]: { Keys: keys } },
+                      })
+                    );
+                    const items =
+                      (ddbResp.Responses && ddbResp.Responses[SESSION_STATE_TABLE]) || [];
+                    for (const item of items) {
+                      stateBySession[item.session_id] = item;
+                    }
+                    const unprocessed =
+                      ddbResp.UnprocessedKeys &&
+                      ddbResp.UnprocessedKeys[SESSION_STATE_TABLE];
+                    keys = unprocessed && unprocessed.Keys ? unprocessed.Keys : [];
+                    attempts += 1;
+                  }
+                }
+              } catch (ddbErr) {
+                console.error("course_progress DynamoDB read failed:", ddbErr);
+                stateReadError = true;
+              }
+            }
+
+            // Assemble modules + derived_summary; count returned sessions.
+            let returnedSessions = 0;
+            const modules = moduleOrder.map((moduleId) => {
+              const m = moduleById[moduleId];
+              const sessions = [];
+              for (const sid of m.sessionIds) {
+                const item = stateBySession[sid];
+                if (item) {
+                  sessions.push(item);
+                  returnedSessions += 1;
+                }
+              }
+              return {
+                module_id: m.module_id,
+                module_name: m.module_name,
+                module_number: m.module_number,
+                concept_name: m.concept_name,
+                module_score: m.module_score,
+                last_accessed: m.last_accessed,
+                status: m.status,
+                topics: m.topics,
+                session_count: m.session_count,
+                missing_sessions: m.session_count - sessions.length,
+                sessions,
+                derived_summary: summarizeModuleSessions(sessions),
+              };
+            });
+
+            const modulesComplete = modules.filter(
+              (m) => m.module_score === 100
+            ).length;
+            const averageModuleScore = modules.length
+              ? Math.round(
+                  modules.reduce((acc, m) => acc + (m.module_score || 0), 0) /
+                    modules.length
+                )
+              : 0;
+
+            response.body = JSON.stringify({
+              course_id: courseId,
+              email: studentEmail,
+              generated_at: new Date().toISOString(),
+              truncated,
+              summary: {
+                modules_total: modules.length,
+                modules_complete: modulesComplete,
+                average_module_score: averageModuleScore,
+                requested_sessions: sessionIds.length,
+                returned_sessions: returnedSessions,
+                missing_sessions: sessionIds.length - returnedSessions,
+                state_read_error: stateReadError,
+              },
+              modules,
+            });
+          } catch (err) {
+            console.error(err);
+            response.statusCode = 500;
+            response.body = JSON.stringify({ error: "Internal server error" });
+          }
+        } else {
+          response.statusCode = 400;
+          response.body = JSON.stringify({ error: "Invalid value" });
         }
         break;
       case "GET /student/module_progress":

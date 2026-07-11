@@ -250,6 +250,44 @@ const allTemplates = () => [
 
 describe('IAM Policy Guardrails', () => {
   /**
+   * course_progress (student-course-progress spec): studentFunction's shared
+   * dbLambdaRole must grant ONLY read actions (GetItem/BatchGetItem), scoped to
+   * the chatbot_v2 session-state table ARN — no dynamodb:* and no Resource "*".
+   */
+  test('dbLambdaRole grants read-only DynamoDB access scoped to the session-state table', () => {
+    const statements = collectPolicyStatements(apiTemplate);
+    const ddbReadStatements = statements.filter(
+      ({ statement }) =>
+        statementHasAction(statement, 'dynamodb:GetItem') ||
+        statementHasAction(statement, 'dynamodb:BatchGetItem')
+    );
+
+    // The grant exists.
+    expect(ddbReadStatements.length).toBeGreaterThan(0);
+
+    for (const { statement } of ddbReadStatements) {
+      const actions = Array.isArray(statement.Action)
+        ? (statement.Action as string[])
+        : [statement.Action as string];
+
+      // Read-only: only GetItem/BatchGetItem — never a wildcard or a write action.
+      for (const action of actions) {
+        expect(['dynamodb:GetItem', 'dynamodb:BatchGetItem']).toContain(action);
+      }
+
+      // Scoped resource — never "*" or a table/* wildcard; references the
+      // session-state table via its cross-stack import.
+      const resource = statement.Resource;
+      const resourceStr = JSON.stringify(resource);
+      expect(resource).not.toBe('*');
+      expect(resourceStr).not.toContain('table/*');
+      expect(
+        resourceStr.includes('sessionStateTable') || resourceStr.includes('MultimodalRagStack')
+      ).toBe(true);
+    }
+  });
+
+  /**
    * Validates: Requirements 21.1
    * No policy should grant secretsmanager:GetSecretValue on a wildcard secret resource.
    */
