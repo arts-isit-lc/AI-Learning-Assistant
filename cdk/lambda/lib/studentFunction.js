@@ -6,6 +6,7 @@
  *   GET    /student/course
  *   GET    /student/course_page
  *   GET    /student/module
+ *   GET    /student/module_progress
  *   POST   /student/create_session
  *   DELETE /student/delete_session
  *   GET    /student/get_messages
@@ -311,6 +312,80 @@ exports.handler = async (event) => {
         } else {
           response.statusCode = 400;
           response.body = "Invalid value";
+        }
+        break;
+      case "GET /student/module_progress":
+        if (
+          event.queryStringParameters != null &&
+          event.queryStringParameters.email &&
+          event.queryStringParameters.course_id &&
+          event.queryStringParameters.module_id
+        ) {
+          const studentEmail = event.queryStringParameters.email;
+          const courseId = event.queryStringParameters.course_id;
+          const moduleId = event.queryStringParameters.module_id;
+
+          try {
+            // Resolve the user first (matches the sibling routes' convention).
+            const userResult = await sqlConnection`
+                SELECT user_id FROM "Users" WHERE user_email = ${studentEmail};
+              `;
+
+            if (userResult.length === 0) {
+              response.statusCode = 404;
+              response.body = JSON.stringify({ error: "User not found" });
+              break;
+            }
+
+            const userId = userResult[0].user_id;
+
+            // Single course-scoped, READ-ONLY query. Enrolment is enforced by the
+            // INNER JOIN on "Enrolments" (a module from another course, an
+            // inactive module, or a non-enrolled student all yield no row -> 404).
+            // The LEFT JOIN on "Student_Modules" lets an enrolled student with no
+            // progress row yet still return the module (null score/last_accessed,
+            // which the UI renders as "Incomplete"). module_context_embedding is
+            // intentionally excluded (heavy, unused here); no writes are performed.
+            data = await sqlConnection`
+                SELECT
+                  "Course_Modules".module_id,
+                  "Course_Modules".module_name,
+                  "Course_Modules".module_number,
+                  "Course_Concepts".concept_id,
+                  "Course_Concepts".concept_name,
+                  "Student_Modules".student_module_id,
+                  "Student_Modules".module_score,
+                  "Student_Modules".last_accessed
+                FROM "Course_Modules"
+                JOIN "Course_Concepts"
+                  ON "Course_Modules".concept_id = "Course_Concepts".concept_id
+                JOIN "Enrolments"
+                  ON "Enrolments".course_id = "Course_Concepts".course_id
+                  AND "Enrolments".user_id = ${userId}
+                LEFT JOIN "Student_Modules"
+                  ON "Student_Modules".course_module_id = "Course_Modules".module_id
+                  AND "Student_Modules".enrolment_id = "Enrolments".enrolment_id
+                WHERE "Course_Modules".module_id = ${moduleId}
+                  AND "Course_Concepts".course_id = ${courseId}
+                  AND "Course_Modules".status = 'active'
+                LIMIT 1;
+              `;
+
+            if (data.length === 0) {
+              response.statusCode = 404;
+              response.body = JSON.stringify({ error: "Module progress not found" });
+              break;
+            }
+
+            response.body = JSON.stringify(data[0]);
+          } catch (err) {
+            console.error(err);
+            response.statusCode = 500;
+            response.body = JSON.stringify({ error: "Internal server error" });
+          }
+        } else {
+          response.statusCode = 400;
+          response.body = JSON.stringify({ error: "Invalid value" });
         }
         break;
       case "GET /student/module":

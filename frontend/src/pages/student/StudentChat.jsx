@@ -5,12 +5,14 @@ import StudentMessage from "../../components/StudentMessage";
 import FileViewerPanel from "../../components/FileViewerPanel";
 import { useNavigate } from "react-router-dom";
 import ArrowCircleLeftRoundedIcon from "@mui/icons-material/ArrowCircleLeftRounded";
-import { FileText } from "lucide-react";
+import { FileText, TrendingUp } from "lucide-react";
 import { titleCase } from "../../utils/formatters";
 import { handleSignOut } from "../../utils/auth";
 import TypingIndicator from "./TypingIndicator";
 import useChatSession from "./useChatSession";
 import useFileViewer from "./useFileViewer";
+import useModuleProgress from "./useModuleProgress";
+import { getModuleStatus } from "../../utils/moduleStatus";
 
 const StudentChat = ({ course, module, setModule, setCourse }) => {
   const messagesEndRef = useRef(null);
@@ -18,6 +20,7 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
 
   const chat = useChatSession(course, module);
   const files = useFileViewer(course, module);
+  const progress = useModuleProgress(course, module);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -189,6 +192,82 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
                     <div className="p-4 text-center">
                       <p className="text-sm text-gray-500">No materials available</p>
                     </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="relative">
+            <button
+              type="button"
+              className="flex items-center gap-2 bg-gray-800 text-white px-4 py-2 rounded hover:bg-gray-700 transition duration-200"
+              onClick={progress.handleFetchProgress}
+            >
+              <TrendingUp className="w-4 h-4" />
+              <span className="hidden sm:inline">Progress</span>
+            </button>
+
+            {/* Progress popover */}
+            {progress.progressPopoverOpen && (
+              <div className="absolute right-0 top-12 z-40 w-64 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                <div className="flex items-center justify-between p-3 border-b border-gray-200">
+                  <span className="text-sm font-medium text-gray-900">Module Progress</span>
+                  <button
+                    onClick={() => progress.setProgressPopoverOpen(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                    aria-label="Close progress"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="p-4">
+                  {progress.progressLoading ? (
+                    <div className="space-y-2">
+                      <div className="h-6 bg-gray-100 rounded animate-pulse" />
+                      <div className="h-4 bg-gray-100 rounded animate-pulse" />
+                    </div>
+                  ) : progress.progressError ? (
+                    <p className="text-sm text-gray-500">{progress.progressError}</p>
+                  ) : progress.progress ? (
+                    (() => {
+                      const status = getModuleStatus(progress.progress);
+                      const badge = {
+                        complete: { label: "Complete", className: "bg-[#2E7D32]" },
+                        in_progress: { label: "In Progress", className: "bg-[#FFA726]" },
+                        incomplete: { label: "Incomplete", className: "bg-[#E53E3E]" },
+                      }[status];
+                      return (
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-700">Status</span>
+                            <span
+                              className={`text-white text-xs rounded px-2 py-1 ${badge.className}`}
+                            >
+                              {badge.label}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-700">Score</span>
+                            <span className="text-sm font-medium text-gray-900">
+                              {progress.progress.module_score ?? 0}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-700">Last accessed</span>
+                            <span className="text-sm text-gray-900">
+                              {progress.progress.last_accessed
+                                ? new Date(
+                                    progress.progress.last_accessed
+                                  ).toLocaleDateString()
+                                : "Not started"}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })()
+                  ) : (
+                    <p className="text-sm text-gray-500">Progress unavailable</p>
                   )}
                 </div>
               </div>
