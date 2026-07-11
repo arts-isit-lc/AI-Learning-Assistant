@@ -5,6 +5,7 @@ functions for creating, serializing, and deserializing session state for
 DynamoDB persistence with optimistic concurrency control.
 """
 
+import math
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -171,7 +172,7 @@ def deserialize_state(item: dict) -> SessionState:
 
 from constants.models import (
     MIN_INTERACTIONS_FOR_COMPLETION,
-    MIN_CONCEPTS_DISCUSSED_FOR_COMPLETION,
+    CONCEPTS_DISCUSSED_COMPLETION_RATIO,
     MIN_ENGAGEMENT_SCORE_FOR_COMPLETION,
     ENGAGEMENT_CORRECT_INCREMENT,
     ENGAGEMENT_PARTIAL_WITH_CONCEPTS_INCREMENT,
@@ -255,12 +256,33 @@ def check_stage_advancement(state: SessionState) -> Stage:
     return state.stage
 
 
+def required_concepts_discussed(total_concepts: int) -> int:
+    """Number of distinct concepts a student must discuss to complete a module.
+
+    Scales with module size: ceil(total * CONCEPTS_DISCUSSED_COMPLETION_RATIO),
+    floored at 1. So 50% of the module's topics (rounded up), but always at
+    least 1 — a single-topic module needs 1. The floor also keeps a module with
+    zero topics incompletable, since concepts_discussed can never reach 1 when
+    there are no concepts to discuss (preserving the prior "never trivially
+    completes" behavior).
+
+    Args:
+        total_concepts: The number of topics in the module (len(module_concepts)).
+
+    Returns:
+        The minimum concepts_discussed count required (>= 1).
+    """
+    return max(1, math.ceil(total_concepts * CONCEPTS_DISCUSSED_COMPLETION_RATIO))
+
+
 def check_module_completion(state: SessionState) -> bool:
     """Determine if the module is complete based on engagement metrics.
 
     Completion requires ALL of:
     - interactions >= MIN_INTERACTIONS_FOR_COMPLETION (5)
-    - len(concepts_discussed) >= MIN_CONCEPTS_DISCUSSED_FOR_COMPLETION (3)
+    - concepts_discussed covers at least 50% of the module's topics, rounded up,
+      with a floor of 1 (see required_concepts_discussed): a 1-topic module
+      needs 1, a 2-topic module needs 1, a 3- or 4-topic module needs 2, etc.
     - engagement_score >= MIN_ENGAGEMENT_SCORE_FOR_COMPLETION (0.5)
 
     This function does NOT reference stage, correct_count,
@@ -274,7 +296,7 @@ def check_module_completion(state: SessionState) -> bool:
     """
     return (
         state.interactions >= MIN_INTERACTIONS_FOR_COMPLETION
-        and len(state.concepts_discussed) >= MIN_CONCEPTS_DISCUSSED_FOR_COMPLETION
+        and len(state.concepts_discussed) >= required_concepts_discussed(len(state.module_concepts))
         and state.engagement_score >= MIN_ENGAGEMENT_SCORE_FOR_COMPLETION
     )
 

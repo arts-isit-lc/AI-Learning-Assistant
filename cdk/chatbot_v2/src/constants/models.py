@@ -13,7 +13,11 @@ EVAL_MAX_TOKENS = 500
 
 # Completion thresholds (configurable)
 MIN_INTERACTIONS_FOR_COMPLETION = 5
-MIN_CONCEPTS_DISCUSSED_FOR_COMPLETION = 3
+# Fraction of a module's topics a student must have discussed to complete it.
+# The required count is ceil(total_topics * ratio) with a floor of 1: a
+# single-topic module requires 1 discussed, a 3-topic module requires 2, and an
+# empty-topic module stays incompletable (0 topics can never reach the floor).
+CONCEPTS_DISCUSSED_COMPLETION_RATIO = 0.5
 MIN_ENGAGEMENT_SCORE_FOR_COMPLETION = 0.5
 
 # Engagement score increments
