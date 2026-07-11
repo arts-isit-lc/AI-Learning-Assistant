@@ -28,6 +28,11 @@ export default function useModuleProgress(course, module) {
         course_id: course.course_id,
         module_id: module.module_id,
       });
+      // TEMP DEBUG (per request): log the full progress payload so the module's
+      // score/status and topic vocabulary (generated_topics) are inspectable.
+      // NOTE: per-topic mastery is NOT in this payload — it lives in the
+      // chatbot_v2 per-session SessionState (DynamoDB). Remove before shipping.
+      console.log("[module_progress] payload for current module:", data);
       setProgress(data);
     } catch (error) {
       console.error("Error fetching module progress:", error.message);

@@ -148,6 +148,7 @@ describe("studentFunction — GET /student/module_progress", () => {
           module_id: "module-1",
           module_name: "Intro",
           module_number: 1,
+          generated_topics: ["binary search", "recursion"],
           concept_id: "c1",
           concept_name: "Basics",
           student_module_id: "sm1",
@@ -172,6 +173,10 @@ describe("studentFunction — GET /student/module_progress", () => {
     expect(mainSql).toContain('"Enrolments"');
     expect(mainSql).toContain('"Course_Concepts".course_id');
     expect(mainSql).not.toContain("module_context_embedding");
+
+    // The module's topic vocabulary is included for the progress view.
+    expect(mainSql).toContain("generated_topics");
+    expect(body.generated_topics).toEqual(["binary search", "recursion"]);
 
     // Read-only: no writes anywhere.
     const allSql = mockSql.calls.join(" ; ").toUpperCase();

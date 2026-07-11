@@ -346,11 +346,18 @@ exports.handler = async (event) => {
             // progress row yet still return the module (null score/last_accessed,
             // which the UI renders as "Incomplete"). module_context_embedding is
             // intentionally excluded (heavy, unused here); no writes are performed.
+            //
+            // generated_topics is the module's topic/concept vocabulary (same
+            // column main.py::_load_module_concepts loads). It gives the list of
+            // topics for the module; NOTE it does NOT carry per-topic mastery for
+            // the student — that lives in the chatbot_v2 per-session SessionState
+            // (DynamoDB), not in this table. May be JSON-string/double-encoded.
             data = await sqlConnection`
                 SELECT
                   "Course_Modules".module_id,
                   "Course_Modules".module_name,
                   "Course_Modules".module_number,
+                  "Course_Modules".generated_topics,
                   "Course_Concepts".concept_id,
                   "Course_Concepts".concept_name,
                   "Student_Modules".student_module_id,
