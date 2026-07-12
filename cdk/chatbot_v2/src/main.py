@@ -23,7 +23,8 @@ except Exception as e:
 
 from state_machine import (create_default_state, serialize_state, deserialize_state,
     update_state, check_stage_advancement, check_module_completion,
-    calculate_mastery_profile, calculate_coverage)
+    calculate_mastery_profile, calculate_coverage,
+    required_concepts_discussed, completion_missing_requirements)
 from evaluation import evaluate_answer
 from concept_tracker import introduce_concepts, discuss_concepts, demonstrate_concepts, record_misunderstandings
 from mode_selector import select_mode
@@ -667,6 +668,25 @@ def handler(event, context):
         # Step 6: Check module completion
         if not state.module_complete:
             state.module_complete = check_module_completion(state)
+
+        # Diagnostic probe (spec: module-completion-evidence, Phase 1). NON-behavioral.
+        # Surfaces every completion-gate input plus the evaluator's RAW vs
+        # canonical-filtered demonstrated concepts, so we can measure how much the
+        # exact-string filter discards. `missing_requirements` names which gate
+        # inputs aren't satisfied yet ([] == complete; mirrors the real gate).
+        logger.info("module_completion_probe", extra={
+            "module_concepts_count": len(state.module_concepts),
+            "concepts_exposed": state.concepts_exposed,
+            "concepts_discussed": state.concepts_discussed,
+            "concepts_demonstrated": state.concepts_demonstrated,
+            "eval_raw_demonstrated": evaluation.raw_concepts_demonstrated if evaluation is not None else [],
+            "eval_kept_demonstrated": evaluation.concepts_demonstrated if evaluation is not None else [],
+            "interactions": state.interactions,
+            "engagement_score": state.engagement_score,
+            "required_concepts": required_concepts_discussed(len(state.module_concepts)),
+            "module_complete": state.module_complete,
+            "missing_requirements": completion_missing_requirements(state),
+        })
 
         # Step 7: Check stage advancement
         previous_stage = state.stage

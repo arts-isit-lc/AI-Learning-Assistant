@@ -149,4 +149,27 @@ assert result.partial == DEFAULT_EVALUATION.partial
 print("Test 12 passed: Non-iterable concepts_demonstrated returns DEFAULT_EVALUATION")
 
 
+# Test 13: raw (pre-filter) concepts are preserved alongside canonical-filtered ones
+module_concepts = ["recursion", "loops"]
+response = json.dumps({
+    "correct": True,
+    "partial": False,
+    "confidence": 0.9,
+    "concepts_demonstrated": ["recursion", "unknown_concept"],
+    "concepts_misunderstood": ["loops", "nonexistent"]
+})
+result = parse_evaluation_response(response, module_concepts)
+assert result.concepts_demonstrated == ["recursion"]                          # canonical-filtered
+assert result.raw_concepts_demonstrated == ["recursion", "unknown_concept"]   # raw (diagnostic)
+assert result.concepts_misunderstood == ["loops"]
+assert result.raw_concepts_misunderstood == ["loops", "nonexistent"]
+print("Test 13 passed: raw evaluator concepts preserved alongside filtered")
+
+
+# Test 14: DEFAULT_EVALUATION has empty raw fields
+assert DEFAULT_EVALUATION.raw_concepts_demonstrated == []
+assert DEFAULT_EVALUATION.raw_concepts_misunderstood == []
+print("Test 14 passed: DEFAULT_EVALUATION raw fields empty")
+
+
 print("\nAll evaluation parsing tests passed!")

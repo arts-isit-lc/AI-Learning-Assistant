@@ -301,6 +301,33 @@ def check_module_completion(state: SessionState) -> bool:
     )
 
 
+def completion_missing_requirements(state: SessionState) -> list[str]:
+    """Which completion requirements are not yet met — a diagnostic mirror of
+    check_module_completion.
+
+    Named neutrally: a non-empty list is normal in-progress, not an error. Uses
+    the SAME gate inputs as check_module_completion so the probe never disagrees
+    with the real gate. Phase 1 counts concepts_discussed (the current gate);
+    when the gate moves to concepts_demonstrated (spec §4.3), update both in
+    lockstep.
+
+    Args:
+        state: The current session state (read-only access).
+
+    Returns:
+        A subset of ["interactions", "concept_coverage", "engagement"];
+        an empty list means every requirement is met.
+    """
+    missing: list[str] = []
+    if state.interactions < MIN_INTERACTIONS_FOR_COMPLETION:
+        missing.append("interactions")
+    if len(state.concepts_discussed) < required_concepts_discussed(len(state.module_concepts)):
+        missing.append("concept_coverage")
+    if state.engagement_score < MIN_ENGAGEMENT_SCORE_FOR_COMPLETION:
+        missing.append("engagement")
+    return missing
+
+
 def calculate_mastery_profile(state: SessionState) -> dict[str, float]:
     """Calculate per-concept mastery ratios as a pure analytics function.
 

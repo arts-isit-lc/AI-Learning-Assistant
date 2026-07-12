@@ -37,6 +37,12 @@ class EvaluationResult:
     confidence: float = 0.5
     concepts_demonstrated: list[str] = field(default_factory=list)
     concepts_misunderstood: list[str] = field(default_factory=list)
+    # Diagnostic (module-completion-evidence Phase 1): the evaluator's concepts
+    # BEFORE the canonical module_concepts filter, so the module_completion_probe
+    # can measure how much the exact-string filter discards. Not read by any
+    # behavior; DEFAULT_EVALUATION leaves these empty.
+    raw_concepts_demonstrated: list[str] = field(default_factory=list)
+    raw_concepts_misunderstood: list[str] = field(default_factory=list)
 
 
 DEFAULT_EVALUATION = EvaluationResult()
@@ -89,6 +95,8 @@ def parse_evaluation_response(response_text: str, module_concepts: list[str]) ->
             confidence=confidence,
             concepts_demonstrated=concepts_demonstrated,
             concepts_misunderstood=concepts_misunderstood,
+            raw_concepts_demonstrated=list(raw_demonstrated),
+            raw_concepts_misunderstood=list(raw_misunderstood),
         )
     except (json.JSONDecodeError, KeyError, TypeError, ValueError, AttributeError):
         return DEFAULT_EVALUATION

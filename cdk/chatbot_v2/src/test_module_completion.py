@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from state_machine import (  # noqa: E402
     check_module_completion,
+    completion_missing_requirements,
     create_default_state,
     required_concepts_discussed,
 )
@@ -111,3 +112,44 @@ class TestOtherGatesStillApply:
         state = _completable_state(total_topics=2, discussed=1)
         state.engagement_score = MIN_ENGAGEMENT_SCORE_FOR_COMPLETION - 0.01
         assert check_module_completion(state) is False
+
+
+class TestCompletionMissingRequirements:
+    """completion_missing_requirements mirrors check_module_completion: it is
+    empty iff the gate passes, otherwise it names each unmet requirement.
+    """
+
+    def test_all_met_returns_empty(self):
+        state = _completable_state(total_topics=2, discussed=1)
+        assert completion_missing_requirements(state) == []
+        assert check_module_completion(state) is True
+
+    def test_interactions_unmet(self):
+        state = _completable_state(total_topics=2, discussed=1)
+        state.interactions = MIN_INTERACTIONS_FOR_COMPLETION - 1
+        assert completion_missing_requirements(state) == ["interactions"]
+
+    def test_concept_coverage_unmet(self):
+        state = _completable_state(total_topics=2, discussed=0)  # required 1
+        assert completion_missing_requirements(state) == ["concept_coverage"]
+
+    def test_engagement_unmet(self):
+        state = _completable_state(total_topics=2, discussed=1)
+        state.engagement_score = MIN_ENGAGEMENT_SCORE_FOR_COMPLETION - 0.01
+        assert completion_missing_requirements(state) == ["engagement"]
+
+    def test_multiple_unmet_in_stable_order(self):
+        state = _completable_state(total_topics=2, discussed=0)
+        state.interactions = 0
+        state.engagement_score = 0.0
+        assert completion_missing_requirements(state) == [
+            "interactions",
+            "concept_coverage",
+            "engagement",
+        ]
+
+    def test_empty_iff_gate_passes(self):
+        complete = _completable_state(total_topics=4, discussed=2)
+        incomplete = _completable_state(total_topics=4, discussed=1)
+        assert (completion_missing_requirements(complete) == []) == check_module_completion(complete)
+        assert (completion_missing_requirements(incomplete) == []) == check_module_completion(incomplete)
