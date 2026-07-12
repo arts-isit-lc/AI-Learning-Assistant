@@ -20,6 +20,7 @@ const AdminHomepage = lazy(() => import("./pages/admin/AdminHomepage"));
 const InstructorHomepage = lazy(() => import("./pages/instructor/InstructorHomepage"));
 const CourseView = lazy(() => import("./pages/student/CourseView"));
 import { NotificationProvider } from "./context/NotificationContext";
+import ErrorBoundary from "./components/ErrorBoundary";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -104,39 +105,58 @@ function App() {
       <UserContext.Provider
         value={{ isInstructorAsStudent, setIsInstructorAsStudent }}
       >
-        <Router>
-          <Suspense fallback={<div>Loading...</div>}>
-            <Routes>
-              <Route
-                path="/"
-                element={user ? <Navigate to="/home" /> : <Login />}
-              />
-              <Route
-                path="/student_chat/*"
-                element={
-                  <StudentChat
-                    course={course}
-                    module={module}
-                    setModule={setModule}
-                    setCourse={setCourse}
-                  />
-                }
-              />
-              <Route
-                path="/student_course/*"
-                element={
-                  <CourseView
-                    course={course}
-                    setModule={setModule}
-                    setCourse={setCourse}
-                  />
-                }
-              />
-              <Route path="/home/*" element={getHomePage()} />
-              <Route path="/course/*" element={<InstructorHomepage />} />
-            </Routes>
-          </Suspense>
-        </Router>
+        <ErrorBoundary
+          fallbackRender={() => (
+            <div className="flex flex-col items-center justify-center min-h-screen gap-4 p-8 text-center">
+              <p className="text-lg font-medium text-foreground">
+                Something went wrong.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                The page hit an unexpected error. Reloading usually fixes it.
+              </p>
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 rounded bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition"
+              >
+                Reload
+              </button>
+            </div>
+          )}
+        >
+          <Router>
+            <Suspense fallback={<div>Loading...</div>}>
+              <Routes>
+                <Route
+                  path="/"
+                  element={user ? <Navigate to="/home" /> : <Login />}
+                />
+                <Route
+                  path="/student_chat/*"
+                  element={
+                    <StudentChat
+                      course={course}
+                      module={module}
+                      setModule={setModule}
+                      setCourse={setCourse}
+                    />
+                  }
+                />
+                <Route
+                  path="/student_course/*"
+                  element={
+                    <CourseView
+                      course={course}
+                      setModule={setModule}
+                      setCourse={setCourse}
+                    />
+                  }
+                />
+                <Route path="/home/*" element={getHomePage()} />
+                <Route path="/course/*" element={<InstructorHomepage />} />
+              </Routes>
+            </Suspense>
+          </Router>
+        </ErrorBoundary>
       </UserContext.Provider>
     </NotificationProvider>
   );

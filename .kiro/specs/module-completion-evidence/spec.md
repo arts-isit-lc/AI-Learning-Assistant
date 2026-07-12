@@ -1,6 +1,6 @@
 # Evidence-Based Module Completion — Spec
 
-**Status:** Proposed — awaiting go-ahead. Diagnoses and fixes why `Student_Modules.module_score` stays `0`, and makes module completion driven by **demonstrated-concept evidence** rather than raw student-message substring matching. Keeps `module_score` **binary** (0 = not complete, 100 = complete) — a gradual score is explicitly out of scope.
+**Status:** Phase 1 (diagnostic probe) **shipped to dev and measured** — see *Phase 1 Outcome* below. **Behavioral Phase 2 is on hold.** The one captured session did **not** reproduce the hypothesized canonical-matching starvation (`eval_kept == eval_raw` every turn); the binding constraint was **concept coverage** (2/5 demonstrated), so `module_score = 0` there is *consistent with the completion policy, not a defect*. §4.2 (index-based evaluator contract) is retained as an **optional future robustness** improvement, not an urgent fix. Keeps `module_score` **binary** (0 = not complete, 100 = complete) — a gradual score is out of scope.
 **Area:** `cdk/chatbot_v2` only — `evaluation.py` (canonical-concept identification — the real unblocker), `state_machine.py` (`check_module_completion`), `main.py` (concept-tracking step + diagnostic logging). No DB migration, no API change, no frontend change, no IAM change.
 **Refined via** `planning-refinement.md`. Built on a verified read of the completion pipeline (§2), which **corrects the original diagnosis**: `concepts_discussed` already includes `concepts_demonstrated`, so the field swap alone cannot loosen the gate (§3).
 
@@ -29,6 +29,43 @@ Two things to fix:
   - *Not yet validated:* **semantic correctness**. The evaluator can overclaim — student says *"I don't understand Big O"*, evaluator returns `["Big O …"]` → the system records a demonstration that didn't happen. This is the correct signal *source*; Phase 1/2 validate its extraction quality (it is not a reason to avoid the signal, but a reason not to call it "reliable" before measuring).
 - **The fragile link** is fact 2's filter: `c in module_concepts` is **exact string membership** against `generated_topics`, which are long descriptive phrases (e.g. *"Big O Notation and Algorithmic Complexity Analysis"*). Any evaluator output that isn't an exact match is silently dropped — starving `concepts_demonstrated` (and therefore `concepts_discussed`).
 - **Evaluation doesn't run on turn 1** — `eval_should_run = state.interactions > 0 and message_content`; `interactions` increments at end of turn. So demonstrations accrue from turn 2 onward (fine — completion needs `interactions >= 5`).
+
+---
+
+## Phase 1 Outcome — measured (2026-07-12, n=1)
+
+The probe shipped to **dev** and one real session was captured (`session f5a245a5`, module "Week 2 Algorithms", 5 topics, `required_concepts = 3`), read in the §4.1 priority order:
+
+| turn | interactions | demonstrated (accum.) | RAW → KEPT (this turn) | engagement | missing_requirements |
+|---|---|---|---|---|---|
+| 1 | 0 | 0 | `[]` → `[]` | 0.0 | interactions, concept_coverage, engagement |
+| 2 | 1 | 1 | `[Bubble]` → `[Bubble]` | 0.1 | interactions, concept_coverage, engagement |
+| 3 | 2 | 2 | `[BigO]` → `[BigO]` | 0.3 | interactions, concept_coverage, engagement |
+| 4 | 3 | 2 | `[BigO,Bubble]` → `[BigO,Bubble]` | 0.5 | interactions, concept_coverage |
+| 5 | 4 | 2 | `[Bubble,BigO]` → `[Bubble,BigO]` | 0.7 | interactions, concept_coverage |
+| 6 | 5 | 2 | `[BigO,Bubble]` → `[BigO,Bubble]` | 0.9 | **concept_coverage** |
+
+**Findings (§4.1 order):** (1) **Extraction ✓** — the evaluator emitted demonstrated concepts every evaluated turn. (2) **Canonicalization loss ✗ — NOT reproduced** — `eval_kept == eval_raw` on *every* turn; the evaluator returned the exact canonical phrases, so the `c in module_concepts` filter dropped nothing. (3) **Binding constraint = `concept_coverage`** — the student demonstrated **2 of 5** topics (needs 3); `interactions` and `engagement` cleared on their own.
+
+**Conclusion (deliberately cautious):** for the observed session, `module_score = 0` is **consistent with the current completion policy and does not indicate a defect** — the student genuinely covered 2/5 topics. One session does **not** prove the 50% threshold is pedagogically right, that most students can realistically reach it, that evaluator behavior is reliable at scale, or that the completion *rate* is acceptable — those remain product/UX questions. In short: this looks like a **completion-expectation mismatch, not a correctness bug**, and the original *canonical-matching-starvation* hypothesis was **not supported by the data**.
+
+### Revised priorities (this replaces the P0=fix framing)
+- **P0 — Keep the probe telemetry.** Non-behavioral; it already did its job (invalidated the starvation hypothesis) and is now ongoing completion-health data.
+- **P1 — Observe completion behavior at scale** before any behavioral change (honoring §2.1 "measure before changing behavior").
+- **P2 — Index-based evaluator contract (§4.2): optional future robustness** — justification is "reduce future evaluator drift," *not* "fix today's bug."
+- **P3 — Tune the completion policy only if product data warrants** (see below).
+
+### The two-dimensional model is validated
+The data confirms two **distinct** questions, correctly kept separate — do not collapse them into one number:
+- **Progress** — `course_progress.concept_mastery` (per-topic, e.g. Big O 100% · Bubble 80% · Quick Sort 0%).
+- **Completion** — `Student_Modules.module_score` (binary: *has the learner met the module's completion criteria?*).
+
+### Before touching thresholds — collect, don't guess
+Do **not** change `CONCEPTS_DISCUSSED_COMPLETION_RATIO = 0.5` yet. First gather, across many sessions: completed vs. incomplete counts, and the distribution of concepts-demonstrated at session end. Decision rule:
+- *Healthy* (most students reach 3–5 topics, reasonable completion rate) → leave `0.5`; the observed `0` was just an in-progress student.
+- *Too strict* (most students plateau at ~2, completion rate very low) → open a threshold discussion.
+
+Revisit the index-based contract (§4.2) only if `eval_kept < eval_raw` appears in future sessions.
 
 ---
 
@@ -96,11 +133,13 @@ if state.engagement_score < MIN_ENGAGEMENT_SCORE_FOR_COMPLETION: missing.append(
 
 `missing_requirements` names which of #3/#4 bind. This order isolates the failure to extraction (evaluator), data contract (canonicalization), coverage, or thresholds — and selects the Phase 2 emphasis. (`concepts_discussed ⊇ concepts_demonstrated` always holds, but both can legitimately be `[]` early; the load-bearing question is #1 → #2.)
 
-### Phase 2 — Fix identification first, then the gate
+### Phase 2 — Fix identification, then the gate · STATUS: DEFERRED (see *Phase 1 Outcome*)
+
+> **Deferred after Phase 1 (n=1).** The measured session did not reproduce canonicalization loss (`eval_kept == eval_raw`) and the binding constraint was coverage, not matching — so Phase 2 is **not an urgent remediation**. §4.2 is retained below as an **optional future robustness** improvement (justification: reduce future evaluator drift, *not* fix today's bug); §4.3 waits on scale data + a product decision on the threshold. Kept in full for when the data warrants.
 
 Order matters: once concept identification is trustworthy (4.2), the gate change (4.3) is almost trivial and observably correct.
 
-**4.2 Fix canonical concept identification (the real unblocker).** The bottleneck is `evaluation.py`'s `c in module_concepts` exact-string filter dropping the evaluator's output against long `generated_topics`. The right fix is to **change the evaluator's data contract to emit canonical concept INDEXES instead of free-text strings** — eliminating string matching (and its ambiguity) entirely, rather than adding matching intelligence to compensate for a bad contract.
+**4.2 Fix canonical concept identification — FUTURE ROBUSTNESS (not an urgent fix; see *Phase 1 Outcome*).** *Originally hypothesized as the real unblocker; the one measured session did not support that — `eval_kept == eval_raw`, no canonicalization loss.* It remains a sound investment: **change the evaluator's data contract to emit canonical concept INDEXES instead of free-text strings** — eliminating string matching (and its ambiguity) entirely, rather than adding matching intelligence to compensate for a bad contract. Justification is now *reduce future evaluator drift risk*, not *fix today's bug*; pursue it only if the probe shows `eval_kept < eval_raw` at scale.
 
 **Target implementation — index-based output (do this directly).** Number the vocabulary in the eval prompt and have the model return **indexes**:
 ```text
@@ -210,9 +249,10 @@ This is a mechanical rename touching `state_machine.py` (field + `serialize_stat
 - **Restructure:** kept the proposal's intent (evidence-based gate, binary score, log-first, tests, rename) but reframed the swap as a *correctness* change that must ship with an upstream fix, and made Phase 1 diagnostics the gating first step so the Phase 2 fix is data-selected.
 - **Reviewer round 1:** rejected containment matching (ambiguous — misattributes evidence); introduced index-based evaluator output; **reordered Phase 2** to fix identification (§4.2) *before* the gate change (§4.3); added the derived probe field; reframed the gate change as *lexical → semantic* (stricter, not a loosening); reinforced keeping `module_score` binary (keep mastery in `course_progress`).
 - **Reviewer round 2:** made **index-based output the definitive implementation** (not co-equal with normalized-exact); demoted normalized-exact to an optional transitional fallback (avoid a permanent dual-parse path); added the **immutable `module_concepts` ordering invariant** that index-based output depends on; softened "reliable signal" → "intended semantic signal, extraction validated by Phase 1/2" (evaluator can overclaim); reordered the Phase 1 diagnosis to extraction → canonicalization-loss → coverage → thresholds; renamed `completion_blockers` → **`missing_requirements`** (neutral — in-progress isn't an error).
+- **Phase 1 outcome (measured, n=1, 2026-07-12):** probe shipped to dev; one session showed `eval_kept == eval_raw` every turn (no canonicalization loss) with `concept_coverage` the sole remaining blocker (2/5 demonstrated < 3 required). **The canonical-matching-starvation hypothesis was NOT reproduced** — reframed as a likely completion-expectation question, not a correctness bug. Priorities reordered (P0 keep probe telemetry → P1 observe at scale → P2 index contract as optional robustness → P3 threshold tuning only if product data warrants); behavioral Phase 2 held; two-dimensional model (binary completion vs. granular mastery) validated. Recorded as ADR-007 in `engineering-log.md`.
 
 ## 13. Residual Risks / Open Items (honest notes)
-- **The gate change won't fix stuck-at-0 on its own** (§3). The **identification fix (§4.2)** is what unblocks it; if Phase 1 shows a different binding constraint (thresholds/engagement), the fix changes accordingly. **Internalize this before implementation.**
+- **The hypothesized unblocker was tested and NOT reproduced (measured, n=1).** Phase 1 showed the binding constraint was `concept_coverage`, not canonicalization loss (`eval_kept == eval_raw`). So neither the gate change (§4.3) nor the identification fix (§4.2) is a stuck-at-0 remedy on current evidence — §4.2 is optional future robustness; revisit only if `eval_kept < eval_raw` appears at scale. See *Phase 1 Outcome*. **(n=1 — directional, not conclusive.)**
 - **Index-based output depends on stable ordering.** It's unambiguous by construction, but its one requirement is the **immutable `module_concepts` ordering per session** (§4.2 invariant): if a session's vocabulary were ever reordered mid-life, stored indexes would mismap. Verified stable today (loaded once, persisted); a `module_concept_version` would harden it against topic regenerations later. Covered by T4 tests.
 - **Semantic change, not a loosening.** The gate moves from *lexical* evidence (typed a topic name) to *semantic* evidence (LLM judged it demonstrated) — semantically stricter, with likely **fewer false positives**. Completions rise only where §4.2 lets **valid** demonstrations through. It still changes what `module_score=100` means in practice, so a product sign-off is worthwhile — especially if thresholds are tuned (T6).
 - **LLM evaluator variance** — demonstrations depend on a model call; `DEFAULT_EVALUATION` (on failure) records nothing, so a flaky eval slows completion. Acceptable; the probe makes it visible.

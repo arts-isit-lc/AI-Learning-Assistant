@@ -6,6 +6,7 @@ import rehypeKatex from "rehype-katex";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { dracula } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import FigureImage from "./FigureImage";
+import ErrorBoundary from "./ErrorBoundary";
 
 // Custom renderer for markdown content (supports LaTeX via $...$ and $$...$$)
 const MarkdownRender = ({ content }) => {
@@ -163,18 +164,45 @@ const AIMessage = ({ blocks, message }) => {
         </div>
         <div className="text-start text-foreground min-w-0 break-words">
           {renderBlocks.map((block, i) => {
+            let node;
             switch (block.type) {
               case "text":
-                return <MarkdownRender key={i} content={block.content} />;
+                node = <MarkdownRender content={block.content} />;
+                break;
               case "figure":
-                return <FigureImage key={i} figureId={block.id} />;
+                node = <FigureImage figureId={block.id} />;
+                break;
               case "table":
-                return <TableBlock key={i} block={block} />;
+                node = <TableBlock block={block} />;
+                break;
               case "formula":
-                return <FormulaBlock key={i} block={block} />;
+                node = <FormulaBlock block={block} />;
+                break;
               default:
                 return null;
             }
+
+            // Raw text shown if rendering throws. For a text block streaming in
+            // token-by-token this is the accumulated message itself, so a
+            // transiently malformed chunk shows as plain text (and re-renders
+            // formatted once the content is well-formed) instead of blanking
+            // the whole app.
+            const raw =
+              block.content ?? block.latex ?? block.markdown ?? block.summary ?? "";
+
+            return (
+              <ErrorBoundary
+                key={i}
+                resetKeys={[block.type, raw, block.id]}
+                fallback={
+                  raw ? (
+                    <div className="whitespace-pre-wrap break-words">{raw}</div>
+                  ) : null
+                }
+              >
+                {node}
+              </ErrorBoundary>
+            );
           })}
         </div>
       </div>
