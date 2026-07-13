@@ -31,6 +31,7 @@ export default function useChatSession(course, module) {
   const [streamingText, setStreamingText] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [retryError, setRetryError] = useState(null);
+  const [historyError, setHistoryError] = useState(false);
   const wsRef = useRef(null);
   const watchdogRef = useRef(null);
   const accumulatedTextRef = useRef("");
@@ -286,6 +287,7 @@ export default function useChatSession(course, module) {
   }, [session?.session_id]);
 
   const getMessages = async () => {
+    setHistoryError(false);
     try {
       const data = await apiClient.get("student/get_messages", {
         session_id: session.session_id,
@@ -299,9 +301,16 @@ export default function useChatSession(course, module) {
         }))
       );
     } catch (error) {
+      // Don't blank the thread on a failed history load — keep whatever is
+      // already rendered and surface an inline, retryable error instead.
       console.error("Error fetching session:", error.message);
-      setMessages([]);
+      setHistoryError(true);
     }
+  };
+
+  // Retry a failed history load for the current session (inline "Retry" button).
+  const handleReloadHistory = () => {
+    if (session?.session_id) getMessages();
   };
 
   // --- Handlers ---
@@ -557,9 +566,11 @@ export default function useChatSession(course, module) {
     streamingText,
     isStreaming,
     retryError,
+    historyError,
     currentSessionId,
     handleSubmit,
     handleRetry,
+    handleReloadHistory,
     handleNewChat,
     handleDeleteSession,
     handleDeleteMessage,

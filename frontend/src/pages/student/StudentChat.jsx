@@ -306,6 +306,18 @@ const StudentChat = ({ course, module, setModule, setCourse }) => {
 
         {/* Message thread */}
         <div className="flex-grow overflow-y-auto p-4 h-full">
+          {/* History load error — the thread is preserved (never blanked); offer a retry */}
+          {chat.historyError && (
+            <div className="flex items-center justify-center mb-4 gap-3">
+              <span className="text-sm text-red-600">Could not load this conversation.</span>
+              <button
+                onClick={chat.handleReloadHistory}
+                className="text-sm font-medium text-white bg-red-500 hover:bg-red-600 px-3 py-1 rounded transition duration-200"
+              >
+                Retry
+              </button>
+            </div>
+          )}
           {chat.messages.map((message, index) =>
             message.student_sent ? (
               <StudentMessage
