@@ -106,15 +106,11 @@ def _compute_expression_operation(parse_result: ParseResult) -> ComputeResult:
             error_message=f"Could not parse expression '{expr_str}': {e}",
         )
 
-    # Find the variable (first free symbol alphabetically)
+    # Find the variable (first free symbol alphabetically). A constant
+    # expression (no free symbols) is still a valid target: d/dx(5) = 0 and
+    # ∫5 dx = 5x. Default to `x` in that case, matching the step generator.
     free_vars = sorted(expr.free_symbols, key=str)
-    if not free_vars:
-        return ComputeResult(
-            success=False,
-            failure_reason="validation_failed",
-            error_message="Expression has no variables to operate on.",
-        )
-    var = free_vars[0]
+    var = free_vars[0] if free_vars else sympy.Symbol("x")
 
     operation = parse_result.operation
 
@@ -153,27 +149,53 @@ def _build_sympy_matrix(parse_result: ParseResult) -> Matrix:
     return Matrix(sympy_rows)
 
 
+def _format_eigenvalue(val):
+    """Return a float for (nearly) real eigenvalues, else the symbolic string.
+
+    Symbolic eigenvalues (e.g. ``a + 1``) cannot be converted to a number, so
+    we fall back to their string representation instead of raising.
+    """
+    try:
+        numeric_val = complex(val.evalf())
+    except (TypeError, ValueError):
+        return str(val)
+    if abs(numeric_val.imag) < 1e-10:
+        return float(numeric_val.real)
+    return str(val)
+
+
+def _eigenvalue_sort_key(val):
+    """Deterministic sort key for numeric and symbolic eigenvalues.
+
+    Numeric eigenvalues sort by their real part; symbolic eigenvalues (which
+    cannot be converted to a float) sort by their string form and are grouped
+    after the numeric ones. The leading tag keeps the two groups from being
+    compared against each other (which would raise a TypeError).
+    """
+    try:
+        return (0, complex(val.evalf()).real)
+    except (TypeError, ValueError):
+        return (1, str(val))
+
+
 def _compute_eigenvalues(matrix: Matrix) -> ComputeResult:
     """Compute eigenvalues and eigenvectors."""
     eigenvals = matrix.eigenvals()  # {eigenvalue: multiplicity}
     eigenvects = matrix.eigenvects()  # [(eigenval, multiplicity, [eigenvectors])]
 
-    # Format eigenvalues as list (sorted for determinism)
+    # Format eigenvalues as a list, expanded by algebraic multiplicity and
+    # sorted for determinism (e.g. the 2x2 identity has eigenvalue 1 twice).
     eigenvalue_list = []
-    for val, mult in sorted(eigenvals.items(), key=lambda x: complex(x[0]).real, reverse=True):
-        # Try to get numeric value for display
-        numeric_val = complex(val.evalf())
-        if abs(numeric_val.imag) < 1e-10:
-            eigenvalue_list.append(float(numeric_val.real))
-        else:
-            eigenvalue_list.append(str(val))
+    for val, mult in sorted(eigenvals.items(), key=lambda kv: _eigenvalue_sort_key(kv[0]), reverse=True):
+        display = _format_eigenvalue(val)
+        eigenvalue_list.extend([display] * mult)
 
     # Format eigenvectors
     eigenvector_list = []
     for val, mult, vects in eigenvects:
         for v in vects:
             eigenvector_list.append({
-                "eigenvalue": float(complex(val.evalf()).real) if abs(complex(val.evalf()).imag) < 1e-10 else str(val),
+                "eigenvalue": _format_eigenvalue(val),
                 "vector": [str(x) for x in v],
                 "multiplicity": mult,
             })

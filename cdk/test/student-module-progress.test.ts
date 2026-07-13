@@ -112,6 +112,25 @@ jest.mock(
   () => ({ getSignedUrl: jest.fn() }),
   { virtual: true }
 );
+// studentFunction.js is shared with GET /student/course_progress, whose code
+// path imports the DynamoDB SDK at module load. Mock those too (virtual — the
+// runtime provides them) so the module resolves; module_progress never calls them.
+jest.mock("@aws-sdk/client-dynamodb", () => ({ DynamoDBClient: class {} }), {
+  virtual: true,
+});
+jest.mock(
+  "@aws-sdk/lib-dynamodb",
+  () => ({
+    DynamoDBDocumentClient: { from: () => ({ send: jest.fn() }) },
+    BatchGetCommand: class {
+      input: any;
+      constructor(input: any) {
+        this.input = input;
+      }
+    },
+  }),
+  { virtual: true }
+);
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { handler } = require("../lambda/lib/studentFunction.js");

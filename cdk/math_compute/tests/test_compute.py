@@ -53,14 +53,19 @@ class TestEigenvalues:
         assert sorted(r.answer["eigenvalues"]) == [1.0, 2.0, 3.0]
 
     def test_3x3_symmetric(self):
-        """[[1,2,0],[2,3,1],[0,1,4]] — the original failing test case."""
+        """[[1,2,0],[2,3,1],[0,1,4]] — eigenvalues 5 and (3±√13)/2.
+
+        Characteristic polynomial: λ³ - 8λ² + 14λ + 5 = (λ - 5)(λ² - 3λ - 1),
+        giving roots (3-√13)/2 ≈ -0.302776, (3+√13)/2 ≈ 3.302776, and 5.
+        Cross-check: sum = 8 (trace), product = -5 (determinant).
+        """
         r = execute_computation(self._make_parse([["1", "2", "0"], ["2", "3", "1"], ["0", "1", "4"]]))
         assert r.success
         eigenvalues = sorted(r.answer["eigenvalues"])
-        # True eigenvalues approximately: -0.068, 2.722, 5.346
-        assert abs(eigenvalues[0] - (-0.068)) < 0.01
-        assert abs(eigenvalues[1] - 2.722) < 0.01
-        assert abs(eigenvalues[2] - 5.346) < 0.01
+        # True eigenvalues: (3-√13)/2 ≈ -0.302776, (3+√13)/2 ≈ 3.302776, 5.0
+        assert abs(eigenvalues[0] - (-0.302776)) < 0.01
+        assert abs(eigenvalues[1] - 3.302776) < 0.01
+        assert abs(eigenvalues[2] - 5.0) < 0.01
 
     def test_2x2_negative_eigenvalues(self):
         """[[-1,0],[0,-2]] has eigenvalues -1 and -2."""

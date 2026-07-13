@@ -70,9 +70,25 @@ def validate_step(previous_output_str: str, student_step_str: str, expected_outp
     Returns:
         (is_valid, feedback_message)
     """
+    # Fast path: whitespace-normalized exact match. This accepts the canonical
+    # answer directly and, crucially, handles step outputs that SymPy cannot
+    # parse as scalar expressions — matrices like "[[2-lambda, 1], [1, 2-lambda]]"
+    # (invalid Python: `lambda` is a keyword) and comma-separated eigenvalue
+    # lists like "3, 1" (which parse to a tuple, not an Expr).
+    if _normalize_ws(student_step_str) == _normalize_ws(expected_output_str):
+        return True, "Correct!"
+
     try:
         student = parse_expr(student_step_str)
         expected = parse_expr(expected_output_str)
+
+        # Structured outputs (matrices, vectors, comma-separated tuples) can't
+        # be compared with scalar subtraction. The fast path above already
+        # accepts exact matches; compare any others element-wise.
+        if _is_structured(student) or _is_structured(expected):
+            if _structured_equal(student, expected):
+                return True, "Correct!"
+            return False, f"Not quite. The expected result for this step is: {expected_output_str}"
 
         # Check 1: Does it match the expected output?
         if simplify(student - expected) == 0:
@@ -81,7 +97,7 @@ def validate_step(previous_output_str: str, student_step_str: str, expected_outp
         # Check 2: Is it a valid algebraic rewrite of the previous state?
         if previous_output_str:
             previous = parse_expr(previous_output_str)
-            if _is_valid_rewrite(previous, student):
+            if not _is_structured(previous) and _is_valid_rewrite(previous, student):
                 return True, "Valid transformation! (Different form but algebraically equivalent.)"
 
         # Check 3: Is it equivalent to expected under different simplifications?
@@ -92,6 +108,33 @@ def validate_step(previous_output_str: str, student_step_str: str, expected_outp
 
     except Exception as e:
         return False, f"Could not parse your step. Please check the format. (Error: {e})"
+
+
+def _normalize_ws(text: str) -> str:
+    """Collapse all whitespace so equivalent formatting compares equal."""
+    return "".join(str(text).split())
+
+
+def _is_structured(obj) -> bool:
+    """True for non-scalar parse results (matrices, vectors, tuples/lists)."""
+    return isinstance(obj, (list, tuple, sympy.MatrixBase))
+
+
+def _structured_equal(a, b) -> bool:
+    """Element-wise algebraic equality for structured results.
+
+    Lists/tuples are coerced to a SymPy Matrix so nested matrices and
+    comma-separated tuples can be compared uniformly. Returns False (rather
+    than raising) for shape mismatches or uncoercible inputs.
+    """
+    try:
+        ma = a if isinstance(a, sympy.MatrixBase) else sympy.Matrix(a)
+        mb = b if isinstance(b, sympy.MatrixBase) else sympy.Matrix(b)
+    except Exception:
+        return False
+    if ma.shape != mb.shape:
+        return False
+    return all(simplify(x - y) == 0 for x, y in zip(ma, mb))
 
 
 def _is_valid_rewrite(source: sympy.Expr, target: sympy.Expr) -> bool:

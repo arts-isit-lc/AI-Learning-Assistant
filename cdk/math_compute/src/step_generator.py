@@ -34,6 +34,19 @@ class SolutionStep:
         }
 
 
+def _eigenvalue_sort_key(val):
+    """Deterministic sort key for numeric and symbolic eigenvalues.
+
+    Numeric eigenvalues sort by real part; symbolic eigenvalues (which cannot
+    be converted to a float, e.g. ``a - 1``) sort by their string form and are
+    grouped after the numeric ones.
+    """
+    try:
+        return (0, complex(val.evalf()).real)
+    except (TypeError, ValueError):
+        return (1, str(val))
+
+
 def generate_steps(operation: str, parse_result: Any, compute_result: Any) -> list[SolutionStep]:
     """Generate canonical solution steps for an operation.
 
@@ -96,7 +109,9 @@ def _steps_eigenvalues(parse_result: Any, compute_result: Any) -> list[SolutionS
 
     # Step 4: Solve for eigenvalues
     eigenvalues = solve(char_det, lam)
-    eigenvalues_str = ", ".join(str(ev) for ev in sorted(eigenvalues, key=lambda x: complex(x.evalf()).real, reverse=True))
+    eigenvalues_str = ", ".join(
+        str(ev) for ev in sorted(eigenvalues, key=_eigenvalue_sort_key, reverse=True)
+    )
 
     steps = [
         SolutionStep(

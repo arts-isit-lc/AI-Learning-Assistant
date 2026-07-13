@@ -256,11 +256,21 @@ describe('IAM Policy Guardrails', () => {
    */
   test('dbLambdaRole grants read-only DynamoDB access scoped to the session-state table', () => {
     const statements = collectPolicyStatements(apiTemplate);
-    const ddbReadStatements = statements.filter(
-      ({ statement }) =>
+    // Scope to the session-state table grant specifically. Other roles in this
+    // stack (e.g. the text-generation function) legitimately hold GetItem +
+    // PutItem + UpdateItem on the *conversation* table under the two-statement
+    // DynamoDB data-ops pattern; those are out of scope for this session-state
+    // read-only guardrail, so exclude them by resource before asserting.
+    const ddbReadStatements = statements.filter(({ statement }) => {
+      const hasRead =
         statementHasAction(statement, 'dynamodb:GetItem') ||
-        statementHasAction(statement, 'dynamodb:BatchGetItem')
-    );
+        statementHasAction(statement, 'dynamodb:BatchGetItem');
+      if (!hasRead) return false;
+      const resourceStr = JSON.stringify(statement.Resource);
+      return (
+        resourceStr.includes('sessionStateTable') || resourceStr.includes('MultimodalRagStack')
+      );
+    });
 
     // The grant exists.
     expect(ddbReadStatements.length).toBeGreaterThan(0);
