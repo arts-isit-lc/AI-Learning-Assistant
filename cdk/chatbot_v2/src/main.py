@@ -696,6 +696,10 @@ def handler(event, context):
         # Step 8: Select mode
         mode = select_mode(state, evaluation, advanced)
         logger.info("Mode selected", extra={"mode": mode, "stage": state.stage})
+        # Persist the selected mode so the course-progress debug view can surface
+        # the (otherwise transient) Socratic hint escalation. Only set here on the
+        # Socratic path — tutor turns return earlier and keep the prior value.
+        state.last_mode = mode
 
         # Advance hint escalation when a hint mode is chosen (M7). Without this,
         # hint_level never rises, so `hint_scaffold` is unreachable and escalation

@@ -165,8 +165,8 @@ const JOIN_ROWS = [
 ];
 
 const STATE_ITEMS = [
-  { session_id: "sA1", stage: "comprehension", engagement_score: "0.4", interactions: 3, concepts_discussed: ["recursion"], concepts_demonstrated: ["recursion"], module_concepts: ["recursion", "trees"], concept_progress: { recursion: { level: "discussed", exposures: 3, demonstrations: 1 } } },
-  { session_id: "sA2", stage: "application", engagement_score: "0.6", interactions: 2, concepts_discussed: ["trees"], concepts_demonstrated: [], module_concepts: ["recursion", "trees"], concept_progress: { recursion: { level: "demonstrated", exposures: 2, demonstrations: 2 } } },
+  { session_id: "sA1", stage: "comprehension", engagement_score: "0.4", interactions: 3, concepts_discussed: ["recursion"], concepts_demonstrated: ["recursion"], module_concepts: ["recursion", "trees"], concept_progress: { recursion: { level: "discussed", exposures: 3, demonstrations: 1 } }, hint_level: 2, hint_count: 3, last_mode: "hint_scaffold" },
+  { session_id: "sA2", stage: "application", engagement_score: "0.6", interactions: 2, concepts_discussed: ["trees"], concepts_demonstrated: [], module_concepts: ["recursion", "trees"], concept_progress: { recursion: { level: "demonstrated", exposures: 2, demonstrations: 2 } }, hint_level: 1, hint_count: 1, last_mode: "assess" },
 ];
 
 describe("studentFunction — GET /student/course_progress", () => {
@@ -205,12 +205,21 @@ describe("studentFunction — GET /student/course_progress", () => {
     expect(alpha.derived_summary.interactions_total).toBe(5);
     expect(alpha.derived_summary.concepts_demonstrated).toEqual(["recursion"]);
 
+    // Socratic hint escalation (debug view): cumulative count, peak level, and
+    // the most-recently-accessed session's mode (sA2 is the later session).
+    expect(alpha.derived_summary.hint_count_total).toBe(4);
+    expect(alpha.derived_summary.hint_level_max).toBe(2);
+    expect(alpha.derived_summary.last_mode).toBe("assess");
+
     // Module with no sessions: present, empty derived summary.
     expect(beta.session_count).toBe(0);
     expect(beta.sessions).toEqual([]);
     expect(beta.derived_summary.concept_mastery).toEqual({});
     expect(beta.derived_summary.coverage).toBe(0);
     expect(beta.derived_summary.stage_max).toBe("prior_knowledge");
+    expect(beta.derived_summary.hint_count_total).toBe(0);
+    expect(beta.derived_summary.hint_level_max).toBe(0);
+    expect(beta.derived_summary.last_mode).toBe("");
 
     // Course summary + read accounting.
     expect(body.summary.modules_total).toBe(2);

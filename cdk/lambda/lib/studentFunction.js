@@ -48,6 +48,14 @@ const STAGE_ORDER = ["prior_knowledge", "comprehension", "application", "mastery
  * remains the single source of truth for mastery; this is a convenience summary
  * for the course-progress debug view. Concept progress is SUMMED across the
  * module's sessions (never overwritten).
+ *
+ * Socratic hint escalation is also surfaced here for the debug view:
+ * hint_count_total (cumulative hint turns across sessions — the reliable count),
+ * hint_level_max (highest CURRENT hint_level across sessions; hint_level resets
+ * to 0 on stage advancement, so this is a coarse indicator, not a true peak),
+ * and last_mode (the mode of the most recently accessed session that has one).
+ * hint_level/hint_count/last_mode are read straight from the persisted
+ * SessionState items; last_mode is only present because chatbot_v2 now persists it.
  */
 function summarizeModuleSessions(sessions) {
   const conceptMastery = {};
@@ -57,6 +65,9 @@ function summarizeModuleSessions(sessions) {
   let engagementMax = 0;
   let interactionsTotal = 0;
   let moduleConcepts = [];
+  let hintCountTotal = 0;
+  let hintLevelMax = 0;
+  let lastMode = "";
 
   for (const s of sessions) {
     const si = STAGE_ORDER.indexOf(s.stage);
@@ -66,6 +77,13 @@ function summarizeModuleSessions(sessions) {
     if (!Number.isNaN(eng) && eng > engagementMax) engagementMax = eng;
 
     interactionsTotal += Number(s.interactions) || 0;
+
+    hintCountTotal += Number(s.hint_count) || 0;
+    const hl = Number(s.hint_level) || 0;
+    if (hl > hintLevelMax) hintLevelMax = hl;
+    // sessions arrive ordered by last_accessed asc, so the final non-empty
+    // last_mode is the most recently accessed session's mode.
+    if (s.last_mode) lastMode = s.last_mode;
 
     for (const c of s.concepts_discussed || []) discussed.add(c);
     for (const c of s.concepts_demonstrated || []) demonstrated.add(c);
@@ -104,6 +122,9 @@ function summarizeModuleSessions(sessions) {
     coverage: moduleConcepts.length > 0 ? discussed.size / moduleConcepts.length : 0,
     concepts_demonstrated: Array.from(demonstrated),
     concept_mastery: conceptMastery,
+    hint_count_total: hintCountTotal,
+    hint_level_max: hintLevelMax,
+    last_mode: lastMode,
   };
 }
 

@@ -134,6 +134,16 @@ def test_interactions_increments_and_is_persisted_each_turn(wire):
     assert saved.interactions == 4  # incremented once for this processed turn
 
 
+def test_selected_mode_is_persisted(wire):
+    # last_mode is persisted so the course-progress debug view can surface the
+    # (otherwise transient) Socratic response mode. A correct answer on a
+    # bootstrapped turn with no stage advance selects "assess".
+    wire.state.interactions = 1
+    main.handler(_event(), _Ctx())
+    saved = wire.persist_state.call_args.args[0]
+    assert saved.last_mode == "assess"
+
+
 # ---------------------------------------------------------------------------
 # Response-shape parity across exits (M6)
 # ---------------------------------------------------------------------------

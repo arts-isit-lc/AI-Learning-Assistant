@@ -52,6 +52,11 @@ class SessionState:
     consecutive_correct: int = 0
     hint_level: int = 0
     hint_count: int = 0
+    # Last Socratic response mode chosen by select_mode() this session (e.g.
+    # "hint_nudge"/"hint_scaffold"). Persisted purely so the course-progress
+    # debug view can surface it — it is otherwise transient (recomputed each
+    # turn) and NOT part of the client-facing per-turn response.
+    last_mode: str = ""
     state_version: int = 0
     tutor_state: dict = field(default_factory=dict)  # V2: math tutoring state (step progression)
     # Static-per-module metadata, cached lazily when CACHE_MODULE_METADATA is on
@@ -117,6 +122,7 @@ def serialize_state(state: SessionState) -> dict:
         "consecutive_correct": state.consecutive_correct,
         "hint_level": state.hint_level,
         "hint_count": state.hint_count,
+        "last_mode": state.last_mode,
         "state_version": state.state_version,
         "module_name": state.module_name,
         "allowed_file_ids": state.allowed_file_ids,
@@ -164,6 +170,7 @@ def deserialize_state(item: dict) -> SessionState:
         consecutive_correct=int(item.get("consecutive_correct", 0)),
         hint_level=int(item.get("hint_level", 0)),
         hint_count=int(item.get("hint_count", 0)),
+        last_mode=item.get("last_mode", ""),
         state_version=int(item.get("state_version", 0)),
         module_name=item.get("module_name", ""),
         allowed_file_ids=item.get("allowed_file_ids", []),
