@@ -1,4 +1,5 @@
-import os, json
+import os
+import json
 import boto3
 import psycopg2
 from botocore.config import Config
@@ -48,7 +49,7 @@ def connect_to_db():
             connection_string = " ".join([f"{key}={value}" for key, value in connection_params.items()])
             connection = psycopg2.connect(connection_string)
             logger.info("Connected to the database!")
-        except Exception as e:
+        except Exception:
             logger.exception("Failed to connect to database")
             if connection:
                 connection.rollback()
@@ -232,7 +233,7 @@ def lambda_handler(event, context):
             "body": json.dumps(response_body),
         }
 
-    except Exception as e:
+    except Exception:
         logger.exception("Error generating presigned URL")
         return {
             'statusCode': 500,

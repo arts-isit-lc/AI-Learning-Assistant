@@ -144,15 +144,19 @@ def main(argv: list[str] | None = None) -> int:
         print("--generate-only: skipping arms/judge (SME-prep pass complete).")
         return 0
 
-    answer_op = lambda system, user: _bedrock_text(br, SONNET, system, user)
+    def answer_op(system, user):
+        return _bedrock_text(br, SONNET, system, user)
 
     def a_provider(item):  # live, query-aware (proxy for current escalation)
         raw, mt = image_cache[item.image_s3_key]
         text, call = _bedrock_vision(br, HAIKU, raw, mt, perception_prompt_a(item))
         return text, [call]
 
-    b_provider = lambda item: (precomp[item.image_s3_key]["short"], [])
-    rich_provider = lambda item: (precomp[item.image_s3_key]["rich"], [])
+    def b_provider(item):
+        return (precomp[item.image_s3_key]["short"], [])
+
+    def rich_provider(item):
+        return (precomp[item.image_s3_key]["rich"], [])
 
     arms = {
         "A_live": build_answer_arm(a_provider, ANSWER_SYSTEM_BASELINE, answer_op),

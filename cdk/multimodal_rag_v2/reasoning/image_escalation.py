@@ -403,7 +403,6 @@ class ImageEscalation:
                 for sid in text_result.sibling_ids:
                     # Find the image s3 key from any result's metadata that references this sibling
                     # As a last resort, construct from the text result's page info
-                    from ..models.data_models import RankedResult as RR
                     # We know the sibling exists in DB — create a minimal result with its s3_key
                     # The _analyze_image method only needs image_s3_key to fetch from S3
                     page_num = text_result.metadata.get("provenance_page_num", 0)

@@ -476,7 +476,7 @@ def handler(event, context):
             _t = time.perf_counter()
             state = _load_session_state(session_id)
             _timings["state_load_ms"] = round((time.perf_counter() - _t) * 1000, 2)
-        except (botocore.exceptions.ClientError, botocore.exceptions.EndpointConnectionError) as e:
+        except (botocore.exceptions.ClientError, botocore.exceptions.EndpointConnectionError):
             logger.exception("Session_State_Table read failure")
             _stream_final(session_id, error=True)
             return {"statusCode": 503, "headers": CORS_HEADERS, "body": json.dumps("Service temporarily unavailable")}
@@ -492,7 +492,7 @@ def handler(event, context):
                 if CACHE_MODULE_METADATA:
                     state.module_name = module_name
                 logger.info("Loaded module_concepts", extra={"count": len(state.module_concepts), "module_name": module_name})
-            except (psycopg2.OperationalError, psycopg2.InterfaceError, botocore.exceptions.ClientError) as e:
+            except (psycopg2.OperationalError, psycopg2.InterfaceError, botocore.exceptions.ClientError):
                 logger.exception("DB connection failure during module context retrieval")
                 _stream_final(session_id, error=True)
                 return {"statusCode": 503, "headers": CORS_HEADERS, "body": json.dumps("Service temporarily unavailable")}

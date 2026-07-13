@@ -13,7 +13,7 @@ Key definitions:
 
 from dataclasses import replace
 
-from state_machine import ConceptProgress, SessionState, ConceptLevel
+from state_machine import ConceptProgress, SessionState
 from constants.models import MASTERY_DEMONSTRATION_RATIO
 
 # Level ordering for advancement — strictly linear, never regresses

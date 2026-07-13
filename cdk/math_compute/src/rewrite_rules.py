@@ -199,9 +199,6 @@ def _check_equivalence_forms(student: sympy.Expr, expected: sympy.Expr) -> bool:
 
 def _generate_step_feedback(student: sympy.Expr, expected: sympy.Expr) -> str:
     """Generate targeted feedback for an incorrect step."""
-    student_expanded = expand(student)
-    expected_expanded = expand(expected)
-
     # Check if it's a sign error
     if simplify(student + expected) == 0:
         return "Check your signs — your answer has the opposite sign of what's expected."

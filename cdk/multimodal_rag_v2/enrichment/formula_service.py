@@ -7,7 +7,7 @@ For RASTER-ONLY formulas (content is bytes): delegates to VisionService for fall
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from aws_lambda_powertools import Logger
 

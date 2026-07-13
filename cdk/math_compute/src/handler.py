@@ -12,11 +12,11 @@ from typing import Any
 
 from aws_lambda_powertools import Logger
 
-from parser import parse_math_input, ParseResult
-from ambiguity_gate import check_ambiguity, AmbiguityResult
-from validator import validate_input, ValidationResult
-from compute import execute_computation, ComputeResult
-from verifier import verify_result, VerificationResult
+from parser import parse_math_input
+from ambiguity_gate import check_ambiguity
+from validator import validate_input
+from compute import execute_computation
+from verifier import verify_result
 from step_generator import generate_steps
 from compare import compare_expressions
 

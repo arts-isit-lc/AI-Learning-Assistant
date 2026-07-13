@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import sympy
-from sympy import Matrix, simplify, nsimplify
+from sympy import Matrix, simplify
 from sympy.parsing.sympy_parser import parse_expr
 
 from parser import ParseResult

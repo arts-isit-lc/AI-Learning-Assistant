@@ -7,7 +7,7 @@ verifiable against SymPy.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import sympy
@@ -116,7 +116,7 @@ def _steps_eigenvalues(parse_result: Any, compute_result: Any) -> list[SolutionS
     steps = [
         SolutionStep(
             step_id=1,
-            description=f"Form the matrix A - λI (subtract λ from each diagonal entry)",
+            description="Form the matrix A - λI (subtract λ from each diagonal entry)",
             expected_output=a_minus_li_str,
             transformation_type="matrix_subtraction",
             hint=f"Subtract λ from each diagonal entry of the {n}x{n} matrix. Off-diagonal entries stay the same.",
@@ -191,7 +191,7 @@ def _steps_determinant(parse_result: Any, compute_result: Any) -> list[SolutionS
         return [
             SolutionStep(
                 step_id=1,
-                description=f"Choose a row or column for cofactor expansion (row 1 recommended)",
+                description="Choose a row or column for cofactor expansion (row 1 recommended)",
                 expected_output=f"Expand along row 1: entries {[str(matrix[0, j]) for j in range(n)]}",
                 transformation_type="cofactor_setup",
                 hint="Pick the row with the most zeros to minimize computation.",

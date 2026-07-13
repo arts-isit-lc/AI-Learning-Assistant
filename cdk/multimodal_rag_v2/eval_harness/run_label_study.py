@@ -95,15 +95,19 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     print(f"{len(dataset)} label-lookup questions across {len(keys)} figures")
 
-    answer_op = lambda system, user: _bedrock_text(br, SONNET, system, user)
+    def answer_op(system, user):
+        return _bedrock_text(br, SONNET, system, user)
 
     def a_provider(item):
         raw, mt = image_cache[item.image_s3_key]
         text, call = _bedrock_vision(br, HAIKU, raw, mt, perception_prompt_a(item))
         return text, [call]
 
-    c_current = lambda item: (precomp[item.image_s3_key]["rich"], [])
-    c_trans = lambda item: (precomp[item.image_s3_key]["transcription"], [])
+    def c_current(item):
+        return (precomp[item.image_s3_key]["rich"], [])
+
+    def c_trans(item):
+        return (precomp[item.image_s3_key]["transcription"], [])
 
     arms = {
         "A_live": build_answer_arm(a_provider, ANSWER_SYSTEM_BASELINE, answer_op),

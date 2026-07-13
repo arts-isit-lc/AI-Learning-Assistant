@@ -7,8 +7,8 @@ from langchain_aws import BedrockEmbeddings
 from aws_lambda_powertools import Logger
 
 from helpers.vectorstore import get_vectorstore_retriever
-from helpers.chat import get_bedrock_llm, get_initial_student_query, get_student_query, create_dynamodb_history_table, get_response_streaming, wrap_user_message_with_guardrail_tags
-from constants.llm_models import DEFAULT_LLM_MODEL_ID, is_valid_model_id
+from helpers.chat import get_bedrock_llm, get_initial_student_query, get_student_query, create_dynamodb_history_table, get_response_streaming
+from constants.llm_models import is_valid_model_id
 
 # Structured logging via Powertools
 logger = Logger(service="text-generation")
@@ -96,7 +96,7 @@ def get_secret(secret_name, expect_json=True):
             db_secret = json.loads(response) if expect_json else response
         except json.JSONDecodeError as e:
             logger.error(f"Failed to decode JSON for secret: {e}")
-            raise ValueError(f"Secret is not properly formatted as JSON.")
+            raise ValueError("Secret is not properly formatted as JSON.")
         except Exception as e:
             logger.error(f"Error fetching secret: {e}")
             raise
@@ -236,7 +236,7 @@ def get_module_context(course_id, module_id):
         )
         return context
 
-    except Exception as e:
+    except Exception:
         logger.exception(
             "Error fetching module context",
             extra={"course_id": course_id, "module_id": module_id},
@@ -272,7 +272,7 @@ def get_allowed_file_ids(module_id):
         if str(module_id) not in collection_names:
             collection_names.append(str(module_id))
         return file_ids, collection_names
-    except Exception as e:
+    except Exception:
         logger.exception(
             "Error fetching allowed_file_ids",
             extra={"module_id": module_id},

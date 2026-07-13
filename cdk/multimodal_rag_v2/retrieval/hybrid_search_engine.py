@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Protocol
+from concurrent.futures import ThreadPoolExecutor
+from typing import Protocol
 
 from aws_lambda_powertools import Logger
 

@@ -175,7 +175,7 @@ def _generate_heuristic_summary(text_content: str, file_key: str) -> dict[str, A
         overview = f"This document covers content from {title}."
 
     # Simple learning objectives
-    learning_objectives = [f"Understand the key concepts in this document"]
+    learning_objectives = ["Understand the key concepts in this document"]
     if len(sentences) > 3:
         learning_objectives.append("Review the main topics presented")
 
@@ -224,7 +224,6 @@ class DocumentSummaryGenerator:
         """
         file_key = document_ir.file_metadata.file_key
         file_id = document_ir.file_metadata.file_id
-        module_id = document_ir.file_metadata.module_id
 
         # Collect text content for summary generation
         text_content = _collect_text_content(document_ir)

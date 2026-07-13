@@ -10,7 +10,6 @@ Handles:
 from __future__ import annotations
 
 import json
-from typing import Any
 
 from aws_lambda_powertools import Logger
 

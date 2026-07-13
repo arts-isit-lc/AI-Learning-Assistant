@@ -26,7 +26,6 @@ from ..models.data_models import (
     EMBEDDING_VERSION,
     ElementType,
     EnrichedElement,
-    Provenance,
     RetrievalUnit,
 )
 

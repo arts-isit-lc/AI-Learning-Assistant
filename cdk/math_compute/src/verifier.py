@@ -7,7 +7,6 @@ Best verifications are substitution-based (plug answer back into original).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 import sympy
 from sympy import Matrix

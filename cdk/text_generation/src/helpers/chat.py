@@ -1,4 +1,8 @@
-import boto3, json, re, secrets, string
+import boto3
+import json
+import re
+import secrets
+import string
 from langchain_aws import ChatBedrock
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_classic.chains.combine_documents import create_stuff_documents_chain
@@ -127,7 +131,7 @@ def get_other_module_names(course_id: str, current_module_id: str, connection) -
         )
         return other_modules
 
-    except Exception as e:
+    except Exception:
         if cur:
             cur.close()
         connection.rollback()
@@ -413,7 +417,7 @@ def get_llm_output(
     # competion_sentence = " Congratulations! You have achieved competency over this module! Please try other modules to continue your learning journey! :)"
     
     # New completion phrase to detect
-    full_completion_phrase = "Thank you for chatting with me about this topic, you are ready to go discuss this with your class.";
+    full_completion_phrase = "Thank you for chatting with me about this topic, you are ready to go discuss this with your class."
     completion_phrase = "you are ready to go discuss this with your class"
     response_lower = response.lower()
     

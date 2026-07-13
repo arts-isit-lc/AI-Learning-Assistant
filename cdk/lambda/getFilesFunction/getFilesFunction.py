@@ -36,7 +36,7 @@ def get_secret(secret_name):
             db_secret = json.loads(response)
         except json.JSONDecodeError as e:
             logger.error(f"Failed to decode JSON for secret: {e}")
-            raise ValueError(f"Secret is not properly formatted as JSON.")
+            raise ValueError("Secret is not properly formatted as JSON.")
         except Exception as e:
             logger.error(f"Error fetching secret: {e}")
             raise

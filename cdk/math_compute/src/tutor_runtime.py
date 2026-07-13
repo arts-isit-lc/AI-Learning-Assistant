@@ -7,10 +7,9 @@ All state updates are deterministic (not LLM-driven).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
 
 from step_generator import SolutionStep
-from rewrite_rules import validate_final_answer, validate_step
+from rewrite_rules import validate_step
 
 
 MAX_STUCK_COUNT = 2  # reveal step after this many failed attempts

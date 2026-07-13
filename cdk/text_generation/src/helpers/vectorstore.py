@@ -17,7 +17,6 @@ import os
 import time
 from typing import Dict, List, Optional
 
-import psycopg2
 from langchain_core.documents import Document
 from langchain_core.runnables import RunnableLambda
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder

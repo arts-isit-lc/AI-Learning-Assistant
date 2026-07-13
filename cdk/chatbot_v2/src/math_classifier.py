@@ -11,8 +11,7 @@ rule-based ceiling is hit.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
 from aws_lambda_powertools import Logger
 

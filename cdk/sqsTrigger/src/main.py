@@ -6,7 +6,6 @@ import csv
 import httpx
 import time
 from datetime import datetime
-from botocore.exceptions import ClientError
 from aws_lambda_powertools import Logger
 
 # Structured logging via Powertools
