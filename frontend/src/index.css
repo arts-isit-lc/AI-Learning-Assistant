@@ -107,3 +107,14 @@ button:focus-visible {
 .animate-indeterminate-progress {
   animation: indeterminate-progress 1.5s ease-in-out infinite;
 }
+
+/* KaTeX overflow safety net: keep wide (or mis-parsed) math from stretching the
+   page. Block math scrolls within its own box; inline overflow is contained by
+   the message container's overflow-x-auto. The currency-$ parsing fix lives in
+   MarkdownRender (AIMessage.jsx); this is the defensive layer for genuinely
+   wide expressions (long equations, large matrices). */
+.katex-display {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}

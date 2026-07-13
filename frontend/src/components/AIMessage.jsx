@@ -8,8 +8,43 @@ import { dracula } from "react-syntax-highlighter/dist/cjs/styles/prism";
 import FigureImage from "./FigureImage";
 import ErrorBoundary from "./ErrorBoundary";
 
+/**
+ * The chat model writes currency as plain text ("$18", "$42"). With single-$
+ * inline math enabled, remark-math pairs two such dollar signs and renders the
+ * text between them (e.g. "18 versus ") as a wide, non-wrapping KaTeX span that
+ * overflows the page. Escape currency-style dollar signs — a "$" immediately
+ * before a digit — so they render literally, while leaving real math ("$x$",
+ * "$$...$$") and code ("$1" in a shell snippet) untouched.
+ *
+ * Deliberately avoids regex lookbehind: it throws a SyntaxError at parse time on
+ * older Safari, which would take down the whole module (an error a boundary
+ * cannot catch). A private-use sentinel (\uE000) is used to stash code so it
+ * never trips ESLint's no-control-regex.
+ */
+const escapeCurrencyDollars = (markdown) => {
+  if (!markdown || markdown.indexOf("$") === -1) return markdown;
+
+  // Stash code (fenced first, then inline) so we never escape a "$" inside it.
+  const stashed = [];
+  const stash = (segment) => {
+    stashed.push(segment);
+    return `\uE000${stashed.length - 1}\uE000`;
+  };
+  const withoutCode = markdown
+    .replace(/```[\s\S]*?```/g, stash)
+    .replace(/~~~[\s\S]*?~~~/g, stash)
+    .replace(/(`+)[\s\S]*?\1/g, stash);
+
+  // Escape an unescaped "$" that directly precedes a digit (currency).
+  const escaped = withoutCode.replace(/(^|[^\\])\$(?=\d)/g, "$1\\$");
+
+  // Restore the stashed code segments.
+  return escaped.replace(/\uE000(\d+)\uE000/g, (_, i) => stashed[Number(i)]);
+};
+
 // Custom renderer for markdown content (supports LaTeX via $...$ and $$...$$)
 const MarkdownRender = ({ content }) => {
+  const safeContent = escapeCurrencyDollars(content);
   return (
     <ReactMarkdown
       remarkPlugins={[remarkMath]}
@@ -35,7 +70,7 @@ const MarkdownRender = ({ content }) => {
         },
       }}
     >
-      {content}
+      {safeContent}
     </ReactMarkdown>
   );
 };
@@ -162,7 +197,7 @@ const AIMessage = ({ blocks, message }) => {
         <div className="shrink-0 p-1 rounded-full bg-primary/10">
           <Bot className="w-6 h-6 text-primary" aria-hidden="true" />
         </div>
-        <div className="text-start text-foreground min-w-0 break-words">
+        <div className="relative text-start text-foreground min-w-0 break-words overflow-x-auto">
           {renderBlocks.map((block, i) => {
             let node;
             switch (block.type) {
