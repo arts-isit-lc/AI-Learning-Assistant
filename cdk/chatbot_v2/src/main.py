@@ -550,10 +550,18 @@ def handler(event, context):
                         persist_message_to_rds(conn, session_id, llm_output["message"], student_sent=False, time_sent=_utc_now_iso())
                     except Exception:
                         logger.exception("RDS projection failed on guardrail block (best-effort)")
+                    blocked_blocks = [{"type": "text", "content": llm_output["message"]}]
+                    # Authoritative delivery over the stream (mirrors the normal
+                    # path): a guardrail redirect is a shown message, not a
+                    # failure — no error flag. Without this terminal message the
+                    # tutor turn streamed nothing final and the client hung until
+                    # its watchdog fired.
+                    _stream_final(session_id, llm_output=llm_output["message"], blocks=blocked_blocks,
+                                  session_name=session_name, llm_verdict=state.module_complete)
                     return {"statusCode": 200, "headers": CORS_HEADERS, "body": json.dumps({
                         "session_name": session_name,
                         "llm_output": llm_output["message"],
-                        "blocks": [{"type": "text", "content": llm_output["message"]}],
+                        "blocks": blocked_blocks,
                         "llm_verdict": state.module_complete,
                         "session_state": _session_state_view(state),
                     })}
@@ -567,6 +575,12 @@ def handler(event, context):
                               user_time_sent=turn_started_at, ai_time_sent=_utc_now_iso())
                 state.interactions += 1
                 _persist_session_state(state)
+
+                # Authoritative delivery: emit the single terminal stream message
+                # so a slow tutor turn (past API Gateway's 29s cap) still renders
+                # on the client instead of hanging until its watchdog fires.
+                _stream_final(session_id, llm_output=llm_output, blocks=tutor_blocks,
+                              session_name=session_name, llm_verdict=state.module_complete)
 
                 return {
                     "statusCode": 200,
