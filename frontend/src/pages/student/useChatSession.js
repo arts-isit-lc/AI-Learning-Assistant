@@ -37,6 +37,10 @@ export default function useChatSession(course, module) {
   const turnCtxRef = useRef(null);
   const finalizedRef = useRef(false);
   const textareaRef = useRef(null);
+  // When true, the next session-identity change skips the history refetch. Set
+  // when we create a brand-new chat (it has no persisted history yet, and its
+  // streamed greeting must not be clobbered by an empty DB read).
+  const skipHistoryFetchRef = useRef(false);
 
   // --- Stream-authoritative turn completion ---
 
@@ -265,11 +269,21 @@ export default function useChatSession(course, module) {
     fetchModule();
   }, [course, module]);
 
+  // Load persisted history only when the SESSION IDENTITY changes — i.e. the
+  // user switches sessions or the module loads its initial session. Keying on
+  // the whole `session` object used to re-fire this whenever finalizeTurn
+  // spread a new object to auto-rename the session (same session_id), firing a
+  // full-history REST refetch mid-turn that replaced the freshly streamed
+  // answer with stale/empty DB data (or [] on fetch error) — blanking the chat
+  // while a response was returning.
   useEffect(() => {
-    if (session) {
-      getMessages();
+    if (!session?.session_id) return;
+    if (skipHistoryFetchRef.current) {
+      skipHistoryFetchRef.current = false;
+      return;
     }
-  }, [session]);
+    getMessages();
+  }, [session?.session_id]);
 
   const getMessages = async () => {
     try {
@@ -432,6 +446,11 @@ export default function useChatSession(course, module) {
         sessionData = data[0];
         setCurrentSessionId(sessionData.session_id);
         setSessions((prevItems) => [...prevItems, sessionData]);
+        // A brand-new session has no persisted history: clear the thread now and
+        // skip the auto history-refetch so the streamed greeting isn't clobbered
+        // by an empty DB read racing the optimistic append.
+        setMessages([]);
+        skipHistoryFetchRef.current = true;
         setSession(sessionData);
         setCreatingSession(false);
 
