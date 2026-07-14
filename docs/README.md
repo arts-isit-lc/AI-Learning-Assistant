@@ -17,8 +17,11 @@ docs/
 |------|---------|
 | `architecture-overview.md` | Full system architecture (all 7 CDK stacks, V1 + V2 paths) |
 | `multimodal-rag-pipeline.md` | 4-layer RAG pipeline (Ingestion → Enrichment → Retrieval → Reasoning) |
-| `multimodal-rag-v2-explained.md` | Non-technical explanation of the V2 system |
-| `chatbot-v2-flow.md` | Structured learning engine (state machine, modes, evaluation) |
+| `multimodal-rag-v2-explained.md` | Non-technical explanation of the V2 RAG system |
+| `data-ingestion-pipeline.md` | Ingestion deep-dive — all file-type adapters, the Document IR data model, and how parsed data is structured and saved |
+| `data-ingestion-explained.md` | Non-technical explanation of how uploaded files are read, structured, and stored |
+| `chatbot-v2-flow.md` | Structured learning engine — full technical deep-dive (pipeline, state, hint systems, math tutor, completion, streaming, persistence) |
+| `chatbot-v2-explained.md` | Non-technical explanation of the learning chatbot (how a lesson, hints, and completion work) |
 | `data-flow.md` | End-to-end data journey from file upload to student answer |
 | `v1-vs-v2-data-comparison.md` | V1 vs V2 data formats and migration rationale |
 
