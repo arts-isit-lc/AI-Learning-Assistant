@@ -55,7 +55,6 @@ export const AdminInstructors = ({ setSelectedInstructor }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(5);
-  const [instructors, setInstructors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
 
@@ -67,33 +66,21 @@ export const AdminInstructors = ({ setSelectedInstructor }) => {
     setOpen(false);
   };
 
-  useEffect(() => {
-    const loadInstructors = async () => {
-      try {
-        const data = await fetchInstructors();
-        setInstructors(data);
-      } catch (error) {
-        console.log("error loading data");
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Single source of truth: always load the instructor list from the backend
+  // so the table reflects what is actually persisted, not local-only state.
+  const loadInstructors = async () => {
+    try {
+      const data = await fetchInstructors();
+      setRows(getInstructorInfo(data));
+    } catch (error) {
+      console.error("Error loading instructors:", error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     loadInstructors();
-  }, []);
-
-  useEffect(() => {
-    const fetchInstructors = async () => {
-      try {
-        const data = await apiClient.get("admin/instructors", { instructor_email: "replace" });
-        setRows(getInstructorInfo(data));
-        setLoading(false);
-      } catch (error) {
-        console.error("Error fetching instructors:", error.message);
-      }
-    };
-
-    fetchInstructors();
   }, []);
 
   const handleSearchChange = (event) => {
@@ -121,34 +108,21 @@ export const AdminInstructors = ({ setSelectedInstructor }) => {
   };
 
   const handleAddInstructor = async (email) => {
-    try {
-      const existingInstructor = rows.find((row) => row.email === email);
-      if (existingInstructor) {
-        toast.error(`Instructor with email ${email} already exists.`);
-        return;
-      }
-      const data = await apiClient.post("admin/elevate_instructor", { email });
-      setInstructors((prevInstructors) => [
-        ...prevInstructors,
-        {
-          first_name: "Waiting for user to sign up",
-          last_name: "Waiting for user to sign up",
-          user_email: email,
-        },
-      ]);
+    const existingInstructor = rows.find((row) => row.email === email);
+    if (existingInstructor) {
+      toast.error(`Instructor with email ${email} already exists.`);
+      return;
+    }
 
-      // Optionally, you can also update the rows state if needed
-      setRows((prevRows) => [
-        ...prevRows,
-        {
-          user: "Waiting for user to sign up",
-          last: "Waiting for user to sign up",
-          email: email,
-        },
-      ]);
+    try {
+      await apiClient.post("admin/elevate_instructor", { email });
       toast.success(`Instructor with email ${email} elevated`);
+      // Close the dialog and re-fetch so the table shows the persisted row.
+      handleClose();
+      await loadInstructors();
     } catch (error) {
       console.error("Error elevating instructor", error.message);
+      toast.error("Failed to add instructor. Please try again.");
     }
   };
 
