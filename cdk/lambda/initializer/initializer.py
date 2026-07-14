@@ -232,6 +232,25 @@ def handler(event, context):
             -- tables/formulas) so chat-history reload can reconstruct them.
             ALTER TABLE "Messages" ADD COLUMN IF NOT EXISTS message_blocks jsonb;
 
+            -- Idempotent migration: the module-lifecycle columns (status /
+            -- created_at / updated_at) and the status CHECK are declared in the
+            -- CREATE TABLE for "Course_Modules" above, but `CREATE TABLE IF NOT
+            -- EXISTS` is a no-op on a database provisioned before they were added,
+            -- so they must be added explicitly here. Without this, the partial
+            -- index idx_course_modules_status_created (ON status, created_at —
+            -- further below) fails on a pre-existing table with
+            -- `column "status" does not exist`. Existing rows backfill to the
+            -- CREATE TABLE default 'active' (a live module) and NOW(); re-running
+            -- is a no-op once applied. Add the column BEFORE the CHECK so the
+            -- constraint validates against the backfilled 'active' rows.
+            ALTER TABLE "Course_Modules" ADD COLUMN IF NOT EXISTS "status" varchar(10) NOT NULL DEFAULT 'active';
+            ALTER TABLE "Course_Modules" ADD COLUMN IF NOT EXISTS "created_at" timestamptz NOT NULL DEFAULT NOW();
+            ALTER TABLE "Course_Modules" ADD COLUMN IF NOT EXISTS "updated_at" timestamptz NOT NULL DEFAULT NOW();
+            DO $$ BEGIN
+                ALTER TABLE "Course_Modules" ADD CONSTRAINT chk_course_modules_status
+                    CHECK (status IN ('draft', 'active', 'deleting'));
+            EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
             -- Idempotent migration (2026-07): retire Claude 3 Sonnet as the
             -- per-course model. Set the column default (used by new courses) to
             -- the Claude Sonnet 4.5 Geo-US inference profile, and remap existing
