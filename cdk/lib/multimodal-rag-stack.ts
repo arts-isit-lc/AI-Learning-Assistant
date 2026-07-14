@@ -47,8 +47,20 @@ export class MultimodalRagStack extends cdk.Stack {
       : logs.RetentionDays.ONE_MONTH;
 
     // ─── S3: IR Persistence Bucket ────────────────────────────────────────────
+    // S3 bucket names are GLOBALLY unique across every AWS account. dev and prod
+    // share the same StackPrefix and deploy to different accounts, so an
+    // un-namespaced name collides — prod cannot create a bucket dev already owns
+    // (BucketAlreadyExists). Namespace the name by environment. `dev` keeps its
+    // historical un-suffixed name because that bucket already exists with RETAINed
+    // IR data (renaming would orphan it); every other environment is suffixed.
+    // (The stack's other buckets sidestep this by not setting an explicit name;
+    // this one is explicit, so it must carry the environment itself.)
+    const irBucketName =
+      environment === "dev"
+        ? `${id}-ir-bucket`
+        : `${id}-ir-bucket-${environment}`;
     this.irBucket = new s3.Bucket(this, `${id}-irBucket`, {
-      bucketName: `${id}-ir-bucket`.toLowerCase(),
+      bucketName: irBucketName.toLowerCase(),
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
