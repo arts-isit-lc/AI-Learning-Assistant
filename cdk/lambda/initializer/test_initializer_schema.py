@@ -140,3 +140,122 @@ class TestCourseModulesLifecycleColumns:
     def test_partial_index_present_and_idempotent(self):
         src = _source()
         assert "CREATE INDEX IF NOT EXISTS idx_course_modules_status_created" in src
+
+
+class TestFeatureColumnBackfillMigrations:
+    """Long-lived databases (prod) miss every column added to a CREATE TABLE after
+    they were first provisioned, because CREATE TABLE IF NOT EXISTS never alters an
+    existing table. Each such column needs an explicit idempotent
+    ALTER ... ADD COLUMN IF NOT EXISTS. These were confirmed missing on the prod
+    schema dump (2026-07-13); the guards keep the backfill from regressing.
+    """
+
+    def test_courses_validation_columns_migrated(self):
+        src = _source()
+        assert 'ALTER TABLE "Courses" ADD COLUMN IF NOT EXISTS "conflict_metadata"' in src
+        assert 'ALTER TABLE "Courses" ADD COLUMN IF NOT EXISTS "validation_hash"' in src
+        assert 'ALTER TABLE "Courses" ADD COLUMN IF NOT EXISTS "validation_cached_report"' in src
+
+    def test_course_modules_feature_columns_migrated(self):
+        src = _source()
+        for col in (
+            "conflict_metadata",
+            "generated_topics",
+            "validation_hash",
+            "validation_cached_report",
+            "key_topics",
+        ):
+            assert (
+                f'ALTER TABLE "Course_Modules" ADD COLUMN IF NOT EXISTS "{col}"' in src
+            ), f"missing idempotent migration for Course_Modules.{col}"
+
+    def test_module_files_processing_columns_migrated(self):
+        src = _source()
+        for col in ("content_hash", "processing_status", "last_processed_at", "chunk_count"):
+            assert (
+                f'ALTER TABLE "Module_Files" ADD COLUMN IF NOT EXISTS "{col}"' in src
+            ), f"missing idempotent migration for Module_Files.{col}"
+
+    def test_backfilled_columns_are_nullable_or_defaulted(self):
+        # Adding a NOT NULL column without a default to a populated table fails, so
+        # every backfilled column must be nullable or carry a DEFAULT. Guard the
+        # only defaulted one explicitly; the rest are declared without NOT NULL.
+        src = _source()
+        assert (
+            'ALTER TABLE "Module_Files" ADD COLUMN IF NOT EXISTS "processing_status" text DEFAULT \'pending\''
+            in src
+        )
+        # None of the backfilled ADD COLUMN statements may be NOT NULL.
+        for line in src.splitlines():
+            if "ADD COLUMN IF NOT EXISTS" in line and (
+                '"conflict_metadata"' in line
+                or '"validation_hash"' in line
+                or '"validation_cached_report"' in line
+                or '"generated_topics"' in line
+                or '"key_topics"' in line
+                or '"content_hash"' in line
+                or '"last_processed_at"' in line
+                or '"chunk_count"' in line
+            ):
+                assert "NOT NULL" not in line, f"backfilled column must be nullable: {line.strip()}"
+
+
+class TestForeignKeysAreNamed:
+    """FKs must be added with EXPLICIT constraint names. An unnamed
+    `ADD FOREIGN KEY` gets a fresh server-generated name on every run, so the
+    `EXCEPTION WHEN duplicate_object` guard never catches it and the FK is
+    re-added on each deploy (prod had grown ~7 copies of each). Naming the
+    constraint makes the guard idempotent; the paired DROP of the old auto-name
+    keeps pre-existing databases at exactly one FK per relationship.
+    """
+
+    _EXPECTED_FKS = (
+        "fk_course_concepts_course_id",
+        "fk_course_modules_concept_id",
+        "fk_enrolments_course_id",
+        "fk_enrolments_user_id",
+        "fk_module_files_module_id",
+        "fk_module_file_references_source_module_id",
+        "fk_module_file_references_referenced_file_id",
+        "fk_student_modules_course_module_id",
+        "fk_student_modules_enrolment_id",
+        "fk_sessions_student_module_id",
+        "fk_messages_session_id",
+        "fk_user_engagement_log_enrolment_id",
+        "fk_user_engagement_log_user_id",
+        "fk_user_engagement_log_course_id",
+        "fk_user_engagement_log_module_id",
+        "fk_chatlogs_notifications_course_id",
+        "fk_chatlogs_notifications_instructor_email",
+    )
+
+    def test_no_unnamed_foreign_keys(self):
+        # The bug: bare "ADD FOREIGN KEY" (no constraint name). Strip SQL comment
+        # lines first — the explanatory comment above the FKs names the anti-pattern.
+        sql = "\n".join(
+            line for line in _source().splitlines() if not line.strip().startswith("--")
+        )
+        assert "ADD FOREIGN KEY" not in sql, (
+            "unnamed ADD FOREIGN KEY re-duplicates on every deploy — use "
+            "ADD CONSTRAINT <name> FOREIGN KEY"
+        )
+
+    def test_every_fk_is_named_and_guarded(self):
+        src = _source()
+        for name in self._EXPECTED_FKS:
+            # "<name>" and "FOREIGN KEY" may wrap across lines, so assert the named add.
+            assert f"ADD CONSTRAINT {name}" in src, f"missing named FK {name}"
+        # Each named add stays wrapped so re-running is a no-op once the FK exists.
+        assert src.count("EXCEPTION WHEN duplicate_object THEN NULL") >= len(self._EXPECTED_FKS)
+
+    def test_legacy_autonamed_fks_are_dropped(self):
+        # Pre-existing DBs carry the old server-generated "<Table>_<col>_fkey"
+        # names; drop them so the relationship ends with only the named FK.
+        src = _source()
+        for auto in (
+            '"Course_Concepts_course_id_fkey"',
+            '"Module_File_References_referenced_file_id_fkey"',
+            '"User_Engagement_Log_module_id_fkey"',
+            '"chatlogs_notifications_instructor_email_fkey"',
+        ):
+            assert f"DROP CONSTRAINT IF EXISTS {auto}" in src, f"missing legacy drop for {auto}"

@@ -251,6 +251,29 @@ def handler(event, context):
                     CHECK (status IN ('draft', 'active', 'deleting'));
             EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+            -- Idempotent backfill for feature columns that were added to the
+            -- CREATE TABLE definitions above AFTER the initial tables were
+            -- provisioned. `CREATE TABLE IF NOT EXISTS` never alters an existing
+            -- table, so a long-lived database (prod) is missing every column
+            -- introduced since it was first created. Confirmed missing on the prod
+            -- schema dump (2026-07-13). All columns are nullable or defaulted, so
+            -- adding them is safe on populated tables and a no-op once present.
+            -- (metadata's text->jsonb drift is intentionally NOT auto-converted
+            -- here — an invalid-JSON row would fail the whole init; handle it
+            -- manually after checking `metadata IS JSON`.)
+            ALTER TABLE "Courses" ADD COLUMN IF NOT EXISTS "conflict_metadata" jsonb DEFAULT NULL;
+            ALTER TABLE "Courses" ADD COLUMN IF NOT EXISTS "validation_hash" text;
+            ALTER TABLE "Courses" ADD COLUMN IF NOT EXISTS "validation_cached_report" jsonb;
+            ALTER TABLE "Course_Modules" ADD COLUMN IF NOT EXISTS "conflict_metadata" jsonb DEFAULT NULL;
+            ALTER TABLE "Course_Modules" ADD COLUMN IF NOT EXISTS "generated_topics" jsonb DEFAULT NULL;
+            ALTER TABLE "Course_Modules" ADD COLUMN IF NOT EXISTS "validation_hash" text;
+            ALTER TABLE "Course_Modules" ADD COLUMN IF NOT EXISTS "validation_cached_report" jsonb;
+            ALTER TABLE "Course_Modules" ADD COLUMN IF NOT EXISTS "key_topics" jsonb;
+            ALTER TABLE "Module_Files" ADD COLUMN IF NOT EXISTS "content_hash" text;
+            ALTER TABLE "Module_Files" ADD COLUMN IF NOT EXISTS "processing_status" text DEFAULT 'pending';
+            ALTER TABLE "Module_Files" ADD COLUMN IF NOT EXISTS "last_processed_at" timestamptz;
+            ALTER TABLE "Module_Files" ADD COLUMN IF NOT EXISTS "chunk_count" integer;
+
             -- Idempotent migration (2026-07): retire Claude 3 Sonnet as the
             -- per-course model. Set the column default (used by new courses) to
             -- the Claude Sonnet 4.5 Geo-US inference profile, and remap existing
@@ -285,90 +308,134 @@ def handler(event, context):
             END $$;
 
             -- ─── Foreign Keys ─────────────────────────────────────────────────────
+            -- Each FK is added with an EXPLICIT constraint name so the
+            -- `duplicate_object` guard actually catches a re-add. An UNNAMED
+            -- `ADD FOREIGN KEY` gets a fresh server-generated name every run, so it
+            -- never trips the guard and silently duplicated every FK on each deploy
+            -- (prod had grown ~7 copies of each). The paired
+            -- `DROP CONSTRAINT IF EXISTS "<Table>_<col>_fkey"` removes the old
+            -- auto-named FK on databases provisioned before this change (a no-op on
+            -- a fresh DB or once already migrated), so each relationship ends with
+            -- exactly one named FK. The drop-then-add revalidates the FK once; cheap
+            -- on these tables (and free on an empty DB).
 
+            ALTER TABLE "Course_Concepts" DROP CONSTRAINT IF EXISTS "Course_Concepts_course_id_fkey";
             DO $$ BEGIN
-                ALTER TABLE "Course_Concepts" ADD FOREIGN KEY ("course_id")
-                    REFERENCES "Courses" ("course_id") ON DELETE CASCADE ON UPDATE CASCADE;
+                ALTER TABLE "Course_Concepts" ADD CONSTRAINT fk_course_concepts_course_id
+                    FOREIGN KEY ("course_id") REFERENCES "Courses" ("course_id")
+                    ON DELETE CASCADE ON UPDATE CASCADE;
             EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+            ALTER TABLE "Course_Modules" DROP CONSTRAINT IF EXISTS "Course_Modules_concept_id_fkey";
             DO $$ BEGIN
-                ALTER TABLE "Course_Modules" ADD FOREIGN KEY ("concept_id")
-                    REFERENCES "Course_Concepts" ("concept_id") ON DELETE CASCADE ON UPDATE CASCADE;
+                ALTER TABLE "Course_Modules" ADD CONSTRAINT fk_course_modules_concept_id
+                    FOREIGN KEY ("concept_id") REFERENCES "Course_Concepts" ("concept_id")
+                    ON DELETE CASCADE ON UPDATE CASCADE;
             EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+            ALTER TABLE "Enrolments" DROP CONSTRAINT IF EXISTS "Enrolments_course_id_fkey";
             DO $$ BEGIN
-                ALTER TABLE "Enrolments" ADD FOREIGN KEY ("course_id")
-                    REFERENCES "Courses" ("course_id") ON DELETE CASCADE ON UPDATE CASCADE;
+                ALTER TABLE "Enrolments" ADD CONSTRAINT fk_enrolments_course_id
+                    FOREIGN KEY ("course_id") REFERENCES "Courses" ("course_id")
+                    ON DELETE CASCADE ON UPDATE CASCADE;
             EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+            ALTER TABLE "Enrolments" DROP CONSTRAINT IF EXISTS "Enrolments_user_id_fkey";
             DO $$ BEGIN
-                ALTER TABLE "Enrolments" ADD FOREIGN KEY ("user_id")
-                    REFERENCES "Users" ("user_id") ON DELETE CASCADE ON UPDATE CASCADE;
+                ALTER TABLE "Enrolments" ADD CONSTRAINT fk_enrolments_user_id
+                    FOREIGN KEY ("user_id") REFERENCES "Users" ("user_id")
+                    ON DELETE CASCADE ON UPDATE CASCADE;
             EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+            ALTER TABLE "Module_Files" DROP CONSTRAINT IF EXISTS "Module_Files_module_id_fkey";
             DO $$ BEGIN
-                ALTER TABLE "Module_Files" ADD FOREIGN KEY ("module_id")
-                    REFERENCES "Course_Modules" ("module_id") ON DELETE CASCADE ON UPDATE CASCADE;
+                ALTER TABLE "Module_Files" ADD CONSTRAINT fk_module_files_module_id
+                    FOREIGN KEY ("module_id") REFERENCES "Course_Modules" ("module_id")
+                    ON DELETE CASCADE ON UPDATE CASCADE;
             EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+            ALTER TABLE "Module_File_References" DROP CONSTRAINT IF EXISTS "Module_File_References_source_module_id_fkey";
             DO $$ BEGIN
-                ALTER TABLE "Module_File_References" ADD FOREIGN KEY (source_module_id)
-                    REFERENCES "Course_Modules" (module_id) ON DELETE CASCADE;
+                ALTER TABLE "Module_File_References" ADD CONSTRAINT fk_module_file_references_source_module_id
+                    FOREIGN KEY (source_module_id) REFERENCES "Course_Modules" (module_id)
+                    ON DELETE CASCADE;
             EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+            ALTER TABLE "Module_File_References" DROP CONSTRAINT IF EXISTS "Module_File_References_referenced_file_id_fkey";
             DO $$ BEGIN
-                ALTER TABLE "Module_File_References" ADD FOREIGN KEY (referenced_file_id)
-                    REFERENCES "Module_Files" (file_id) ON DELETE CASCADE;
+                ALTER TABLE "Module_File_References" ADD CONSTRAINT fk_module_file_references_referenced_file_id
+                    FOREIGN KEY (referenced_file_id) REFERENCES "Module_Files" (file_id)
+                    ON DELETE CASCADE;
             EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+            ALTER TABLE "Student_Modules" DROP CONSTRAINT IF EXISTS "Student_Modules_course_module_id_fkey";
             DO $$ BEGIN
-                ALTER TABLE "Student_Modules" ADD FOREIGN KEY ("course_module_id")
-                    REFERENCES "Course_Modules" ("module_id") ON DELETE CASCADE ON UPDATE CASCADE;
+                ALTER TABLE "Student_Modules" ADD CONSTRAINT fk_student_modules_course_module_id
+                    FOREIGN KEY ("course_module_id") REFERENCES "Course_Modules" ("module_id")
+                    ON DELETE CASCADE ON UPDATE CASCADE;
             EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+            ALTER TABLE "Student_Modules" DROP CONSTRAINT IF EXISTS "Student_Modules_enrolment_id_fkey";
             DO $$ BEGIN
-                ALTER TABLE "Student_Modules" ADD FOREIGN KEY ("enrolment_id")
-                    REFERENCES "Enrolments" ("enrolment_id") ON DELETE CASCADE ON UPDATE CASCADE;
+                ALTER TABLE "Student_Modules" ADD CONSTRAINT fk_student_modules_enrolment_id
+                    FOREIGN KEY ("enrolment_id") REFERENCES "Enrolments" ("enrolment_id")
+                    ON DELETE CASCADE ON UPDATE CASCADE;
             EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+            ALTER TABLE "Sessions" DROP CONSTRAINT IF EXISTS "Sessions_student_module_id_fkey";
             DO $$ BEGIN
-                ALTER TABLE "Sessions" ADD FOREIGN KEY ("student_module_id")
-                    REFERENCES "Student_Modules" ("student_module_id") ON DELETE CASCADE ON UPDATE CASCADE;
+                ALTER TABLE "Sessions" ADD CONSTRAINT fk_sessions_student_module_id
+                    FOREIGN KEY ("student_module_id") REFERENCES "Student_Modules" ("student_module_id")
+                    ON DELETE CASCADE ON UPDATE CASCADE;
             EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+            ALTER TABLE "Messages" DROP CONSTRAINT IF EXISTS "Messages_session_id_fkey";
             DO $$ BEGIN
-                ALTER TABLE "Messages" ADD FOREIGN KEY ("session_id")
-                    REFERENCES "Sessions" ("session_id") ON DELETE CASCADE ON UPDATE CASCADE;
+                ALTER TABLE "Messages" ADD CONSTRAINT fk_messages_session_id
+                    FOREIGN KEY ("session_id") REFERENCES "Sessions" ("session_id")
+                    ON DELETE CASCADE ON UPDATE CASCADE;
             EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+            ALTER TABLE "User_Engagement_Log" DROP CONSTRAINT IF EXISTS "User_Engagement_Log_enrolment_id_fkey";
             DO $$ BEGIN
-                ALTER TABLE "User_Engagement_Log" ADD FOREIGN KEY ("enrolment_id")
-                    REFERENCES "Enrolments" ("enrolment_id") ON DELETE CASCADE ON UPDATE CASCADE;
+                ALTER TABLE "User_Engagement_Log" ADD CONSTRAINT fk_user_engagement_log_enrolment_id
+                    FOREIGN KEY ("enrolment_id") REFERENCES "Enrolments" ("enrolment_id")
+                    ON DELETE CASCADE ON UPDATE CASCADE;
             EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+            ALTER TABLE "User_Engagement_Log" DROP CONSTRAINT IF EXISTS "User_Engagement_Log_user_id_fkey";
             DO $$ BEGIN
-                ALTER TABLE "User_Engagement_Log" ADD FOREIGN KEY ("user_id")
-                    REFERENCES "Users" ("user_id") ON DELETE CASCADE ON UPDATE CASCADE;
+                ALTER TABLE "User_Engagement_Log" ADD CONSTRAINT fk_user_engagement_log_user_id
+                    FOREIGN KEY ("user_id") REFERENCES "Users" ("user_id")
+                    ON DELETE CASCADE ON UPDATE CASCADE;
             EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+            ALTER TABLE "User_Engagement_Log" DROP CONSTRAINT IF EXISTS "User_Engagement_Log_course_id_fkey";
             DO $$ BEGIN
-                ALTER TABLE "User_Engagement_Log" ADD FOREIGN KEY ("course_id")
-                    REFERENCES "Courses" ("course_id") ON DELETE CASCADE ON UPDATE CASCADE;
+                ALTER TABLE "User_Engagement_Log" ADD CONSTRAINT fk_user_engagement_log_course_id
+                    FOREIGN KEY ("course_id") REFERENCES "Courses" ("course_id")
+                    ON DELETE CASCADE ON UPDATE CASCADE;
             EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+            ALTER TABLE "User_Engagement_Log" DROP CONSTRAINT IF EXISTS "User_Engagement_Log_module_id_fkey";
             DO $$ BEGIN
-                ALTER TABLE "User_Engagement_Log" ADD FOREIGN KEY ("module_id")
-                    REFERENCES "Course_Modules" ("module_id") ON DELETE CASCADE ON UPDATE CASCADE;
+                ALTER TABLE "User_Engagement_Log" ADD CONSTRAINT fk_user_engagement_log_module_id
+                    FOREIGN KEY ("module_id") REFERENCES "Course_Modules" ("module_id")
+                    ON DELETE CASCADE ON UPDATE CASCADE;
             EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+            ALTER TABLE "chatlogs_notifications" DROP CONSTRAINT IF EXISTS "chatlogs_notifications_course_id_fkey";
             DO $$ BEGIN
-                ALTER TABLE "chatlogs_notifications" ADD FOREIGN KEY ("course_id")
-                    REFERENCES "Courses" ("course_id") ON DELETE CASCADE ON UPDATE CASCADE;
+                ALTER TABLE "chatlogs_notifications" ADD CONSTRAINT fk_chatlogs_notifications_course_id
+                    FOREIGN KEY ("course_id") REFERENCES "Courses" ("course_id")
+                    ON DELETE CASCADE ON UPDATE CASCADE;
             EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+            ALTER TABLE "chatlogs_notifications" DROP CONSTRAINT IF EXISTS "chatlogs_notifications_instructor_email_fkey";
             DO $$ BEGIN
-                ALTER TABLE "chatlogs_notifications" ADD FOREIGN KEY ("instructor_email")
-                    REFERENCES "Users" ("user_email") ON DELETE CASCADE ON UPDATE CASCADE;
+                ALTER TABLE "chatlogs_notifications" ADD CONSTRAINT fk_chatlogs_notifications_instructor_email
+                    FOREIGN KEY ("instructor_email") REFERENCES "Users" ("user_email")
+                    ON DELETE CASCADE ON UPDATE CASCADE;
             EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
             -- ─── Indexes ──────────────────────────────────────────────────────────
