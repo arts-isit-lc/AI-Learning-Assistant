@@ -115,8 +115,8 @@ export const AdminInstructors = ({ setSelectedInstructor }) => {
     }
 
     try {
-      await apiClient.post("admin/elevate_instructor", { email });
-      toast.success(`Instructor with email ${email} elevated`);
+      const result = await apiClient.post("admin/elevate_instructor", { email });
+      toast.success(result?.message || `Instructor with email ${email} elevated`);
       // Close the dialog and re-fetch so the table shows the persisted row.
       handleClose();
       await loadInstructors();

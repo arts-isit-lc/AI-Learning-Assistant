@@ -14,6 +14,10 @@
  *   POST   /admin/lower_instructor
  */
 const { initializeConnection } = require("./libadmin.js");
+const {
+  computeRolesAfterElevation,
+  computeRolesAfterDemotion,
+} = require("./roleHelpers.js");
 
 let { SM_DB_CREDENTIALS, RDS_PROXY_ENDPOINT } = process.env;
 
@@ -423,37 +427,30 @@ exports.handler = async (event) => {
             if (existingUser.length > 0) {
               const userRoles = existingUser[0].roles;
 
-              // Check if the role is already 'instructor' or 'admin'
-              if (
-                userRoles.includes("instructor") ||
-                userRoles.includes("admin")
-              ) {
+              // Add the instructor role additively: an admin keeps admin and
+              // also becomes an instructor; a student is converted; an existing
+              // instructor is a no-op.
+              const newRoles = computeRolesAfterElevation(userRoles);
+
+              if (newRoles === null) {
                 response.statusCode = 200;
                 response.body = JSON.stringify({
-                  message:
-                    "No changes made. User is already an instructor or admin.",
+                  message: "No changes made. User is already an instructor.",
                 });
                 break;
               }
 
-              // If the role is 'student', elevate to 'instructor'
-              if (userRoles.includes("student")) {
-                const newRoles = userRoles.map((role) =>
-                  role === "student" ? "instructor" : role
-                );
+              await sqlConnectionTableCreator`
+                              UPDATE "Users"
+                              SET roles = ${newRoles}
+                              WHERE user_email = ${instructorEmail};
+                          `;
 
-                await sqlConnectionTableCreator`
-                                UPDATE "Users"
-                                SET roles = ${newRoles}
-                                WHERE user_email = ${instructorEmail};
-                            `;
-
-                response.statusCode = 200;
-                response.body = JSON.stringify({
-                  message: "User role updated to instructor.",
-                });
-                break;
-              }
+              response.statusCode = 200;
+              response.body = JSON.stringify({
+                message: "User role updated to instructor.",
+              });
+              break;
             } else {
               // Create a new user with the role 'instructor'
               await sqlConnectionTableCreator`
@@ -502,10 +499,10 @@ exports.handler = async (event) => {
               break;
             }
 
-            // Replace 'instructor' with 'student'
-            const updatedRoles = userRoles
-              .filter((role) => role !== "instructor")
-              .concat("student");
+            // Remove the instructor role while preserving any other roles
+            // (an admin stays an admin); fall back to student only if that
+            // would otherwise leave the user with no roles.
+            const updatedRoles = computeRolesAfterDemotion(userRoles);
 
             // Update the roles in the database
             await sqlConnectionTableCreator`
@@ -522,7 +519,7 @@ exports.handler = async (event) => {
 
             response.statusCode = 200;
             response.body = JSON.stringify({
-              message: `User role updated to student for ${userEmail} and all instructor enrolments deleted.`,
+              message: `Instructor role removed for ${userEmail} and all instructor enrolments deleted.`,
             });
           } catch (err) {
             console.log(err);
