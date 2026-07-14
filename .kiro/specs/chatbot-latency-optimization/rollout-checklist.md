@@ -8,16 +8,16 @@ Dev: profile `vincent.adm-dev2`, region `ca-central-1`. Deploy from `cdk/` via `
 
 ## Rollout 1 — Async guardrail (`USE_CONVERSE_STREAMING`) — NEAR-TERM, INDEPENDENT
 
-Shippable now; does not depend on the perception work. Measured TTFT ~8s → ~1.5s. Currently dev=ON, prod=OFF.
+Shippable now; does not depend on the perception work. Measured TTFT ~8s → ~1.5s. Code now ON in all envs (prod gate flipped 2026-07-13); prod deploy pending.
 
 **Pre-deployment (dev validation)**
 - [ ] Run several dev chatbot turns in `converse` mode; confirm TTFT ~1.3–1.7s (see `async-guardrail-validation.md`).
 - [ ] Run a **blocked-topic** prompt; confirm the guardrail still intervenes (`stopReason="guardrail_intervened"`) in async mode.
 - [ ] Confirm no output-block regression is user-visible beyond the accepted async tradeoff (a few chunks may precede an output-side block; guardrail does no PII masking).
-- [ ] Explicit user go-ahead to enable in prod.
+- [x] Explicit user go-ahead to enable in prod. (2026-07-13)
 
 **Deployment**
-- [ ] Set `USE_CONVERSE_STREAMING` ON for prod in `cdk/lib/multimodal-rag-stack.ts` (flip the `isProd` gate); confirm `STREAM_GUARDRAIL_DISABLED` stays OFF in prod.
+- [x] Set `USE_CONVERSE_STREAMING` ON for prod in `cdk/lib/multimodal-rag-stack.ts` (now `"true"` in all envs, `isProd` gate removed); `STREAM_GUARDRAIL_DISABLED` stays OFF in prod (still `!isProd`-gated). Test updated. (2026-07-13)
 - [ ] `npm run deploy` (predeploy tests pass).
 - [ ] Monitor prod `stream_latency` (`streaming_mode=converse`) TTFT for one active window.
 - [ ] Spot-check a blocked-topic prompt in prod.

@@ -5,7 +5,7 @@ Operational tracker for shipping the ConverseStream async-guardrail migration (`
 ## Status
 
 - **Implemented & deployed to dev.** `chatbot_v2/src/streaming.py` routes generation through Bedrock `ConverseStream` with `guardrailConfig.streamProcessingMode="async"`, behind `USE_CONVERSE_STREAMING`. Commits `17386b4`, `2fac502` on `dev`.
-- **Flag state:** dev = ON, prod = OFF (`isProd ? "false" : "true"` in `cdk/lib/multimodal-rag-stack.ts`). Confirmed on the live dev Lambda config (2026-07-03): `USE_CONVERSE_STREAMING=true`, `STREAM_GUARDRAIL_DISABLED=false`. The diagnostic must never be ON in prod.
+- **Flag state:** ON in **all** environments as of 2026-07-13 — the prod gate was flipped (`USE_CONVERSE_STREAMING: "true"` in `cdk/lib/multimodal-rag-stack.ts`, no longer `isProd`-gated) after the user go-ahead. **Code change committed; prod deploy still pending** (`npm run deploy`). Earlier live dev Lambda config (2026-07-03): `USE_CONVERSE_STREAMING=true`, `STREAM_GUARDRAIL_DISABLED=false`. `STREAM_GUARDRAIL_DISABLED` remains hard-gated OFF in prod (`!isProd`) — the diagnostic must never be ON in prod.
 - **Measured — pre-ship A/B:** TTFT guardrail-ON ~8.1s avg / 7.8s median (n=12) vs OFF ~1.3s avg (n=3).
 - **Measured — deployed-code A/B (dev logs, 2026-07-03 pull; current `streaming.py`, `stream_response:279`):**
   - `converse` mode: TTFT **min 1335 / median ~1657 / max 1662 ms** (n=4, all 2026-07-02 21:45–21:46).
@@ -52,9 +52,9 @@ aws --profile vincent.adm-dev2 --region ca-central-1 logs filter-log-events \
 
 ## Ship steps (gated)
 
-Gate = (1) dev TTFT confirmed [DONE], (2) blocked-topic intervenes cleanly in async mode [DONE — 2026-07-03, with the accepted partial-flash caveat], (3) explicit user go-ahead [OPEN]. Also confirm the reordering fix (`f7b430a`) behaves in dev (a blocked turn stays in order). **Do not flip prod until (3):**
+Gate = (1) dev TTFT confirmed [DONE], (2) blocked-topic intervenes cleanly in async mode [DONE — 2026-07-03, with the accepted partial-flash caveat], (3) explicit user go-ahead [DONE — 2026-07-13]. Also confirm the reordering fix (`f7b430a`) behaves in dev (a blocked turn stays in order).
 
-1. Flip the prod gate for `USE_CONVERSE_STREAMING` in `cdk/lib/multimodal-rag-stack.ts`; keep `STREAM_GUARDRAIL_DISABLED` OFF.
-2. From `cdk/`: `npm run deploy` (predeploy `npm test` must pass).
-3. Monitor prod `stream_latency` (`streaming_mode=converse`) for one active window; spot-check a blocked-topic prompt in prod.
+1. [DONE — 2026-07-13] Flipped the prod gate for `USE_CONVERSE_STREAMING` in `cdk/lib/multimodal-rag-stack.ts` (now `"true"` in all envs); `STREAM_GUARDRAIL_DISABLED` kept OFF (still `!isProd`-gated). Updated `cdk/test/converse-streaming-flag.test.ts` (prod now asserts `"true"`).
+2. [PENDING] From `cdk/`: `npm run deploy` (predeploy `npm test` must pass — requires Docker).
+3. [PENDING] Monitor prod `stream_latency` (`streaming_mode=converse`) for one active window; spot-check a blocked-topic prompt in prod.
 4. **Rollback if needed:** set the flag OFF → redeploy. Reverts to `InvokeModel` + synchronous guardrail (known-good), instant, no data migration.

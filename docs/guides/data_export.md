@@ -184,6 +184,63 @@ SELECT * FROM "Course_Modules" LIMIT 10;         -- Browse data
 
 ---
 
+## Full Database Export (pg_dump)
+
+`\COPY` only exports one query at a time. To download the **entire** `aila` database (schema + data + constraints) as a single file, use `pg_dump`. It ships with the same `libpq` formula from [Prerequisites](#prerequisites-install-once), so it already lives next to `psql`. Run these in **Terminal 2** while the tunnel from Terminal 1 is still up.
+
+The `-W` flag makes `pg_dump` prompt for the database password (from Secrets Manager) instead of taking it inline — this keeps it out of your shell history and avoids shell-escaping issues with special characters. Input is hidden.
+
+### Custom format (recommended — compressed, restorable)
+
+```bash
+cd ~/Downloads
+
+/opt/homebrew/opt/libpq/bin/pg_dump \
+  -h localhost -p 5432 -U AILASecrets -d aila -W \
+  -Fc -f "aila_$(date +%Y%m%d).dump"
+```
+
+Writes `aila_YYYYMMDD.dump` to `~/Downloads` (wherever you `cd`'d to). Restore it with `pg_restore` (see below).
+
+### Plain SQL (human-readable, replayable)
+
+```bash
+/opt/homebrew/opt/libpq/bin/pg_dump \
+  -h localhost -p 5432 -U AILASecrets -d aila -W \
+  -f "aila_$(date +%Y%m%d).sql"
+```
+
+### Common variants
+
+```bash
+# Schema only (no data)
+pg_dump ... --schema-only -f aila_schema.sql
+
+# Data only (no DDL)
+pg_dump ... --data-only -f aila_data.sql
+
+# Specific tables (note the quoting for case-sensitive names)
+pg_dump ... -t '"Course_Modules"' -t '"Users"' -f subset.dump
+```
+
+### Restore into a database
+
+```bash
+# Custom-format (.dump) -> target database
+/opt/homebrew/opt/libpq/bin/pg_restore \
+  -h localhost -p 5432 -U AILASecrets -d aila_restore -W --clean --if-exists "aila_YYYYMMDD.dump"
+
+# Plain SQL (.sql) -> target database
+/opt/homebrew/opt/libpq/bin/psql \
+  -h localhost -p 5432 -U AILASecrets -d aila_restore -W -f "aila_YYYYMMDD.sql"
+```
+
+> **Prompt vs. inline:** `-W` prompts for the password. For non-interactive/scripted runs, drop `-W` and prefix the command with `PGPASSWORD="<password>"` instead.
+>
+> **Prod:** use the prod profile/tunnel from the [Production Environment](#production-environment) section. If you're running prod on `15432` (simultaneous connections), swap `-p 5432` for `-p 15432` in every command above.
+
+---
+
 ## Troubleshooting
 
 | Issue | Fix |
@@ -193,6 +250,7 @@ SELECT * FROM "Course_Modules" LIMIT 10;         -- Browse data
 | pgAdmin can't connect | Verify tunnel terminal shows "Waiting for connections..." Check host=localhost, port=5432, SSL=Require. |
 | "Connection refused" on 5432 | Tunnel isn't running. Restart the tunnel command. |
 | SSO token expired | Re-run `aws sso login --profile ...` and re-export credentials. |
+| `pg_dump`: "server version mismatch" / "aborting because of server version mismatch" | Your local `pg_dump` is older than the RDS server. Run `brew upgrade libpq` to get a newer client (client version must be ≥ server version). |
 | Port 5432 in use | Use `localPortNumber:["15432"]` in tunnel and connect to that port. |
 | Forgot to terminate bastion | Find and kill: `aws ec2 describe-instances --region ca-central-1 --filters "Name=tag:Name,Values=AILA-DataExport-Bastion" "Name=instance-state-name,Values=running" --query 'Reservations[].Instances[].InstanceId' --output text` |
 

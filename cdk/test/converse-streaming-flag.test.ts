@@ -9,9 +9,10 @@ import { createTestStacks } from './helpers/stack-setup';
  * USE_CONVERSE_STREAMING routes chatbotV2 generation through ConverseStream with
  * the guardrail in async mode (cuts the measured guardrail TTFT overhead).
  *
- * Rollout state: dev-first — ON in dev (validating the win), OFF in prod until
- * validated. These tests lock that in, especially that prod is NOT flipped on
- * by accident (async lets a few chunks stream before an output block lands).
+ * Rollout state: dev-first rollout COMPLETE — validated in dev and promoted to
+ * prod (2026-07-13), so the flag is now "true" in every environment. These tests
+ * lock in that it is ON in both dev and prod. (Reverting is a deliberate flip to
+ * "false" + redeploy — back to InvokeModel + synchronous guardrail.)
  */
 function prodRagTemplate(): Template {
   const app = new cdk.App({ context: { StackPrefix: 'TestProd', environment: 'prod' } });
@@ -22,16 +23,16 @@ function prodRagTemplate(): Template {
   return Template.fromStack(rag);
 }
 
-describe('USE_CONVERSE_STREAMING rollout flag (dev-first)', () => {
+describe('USE_CONVERSE_STREAMING rollout flag (promoted to prod)', () => {
   test('chatbotV2Function has USE_CONVERSE_STREAMING "true" in dev', () => {
     createTestStacks().ragTemplate.hasResourceProperties('AWS::Lambda::Function', {
       Environment: { Variables: Match.objectLike({ USE_CONVERSE_STREAMING: 'true' }) },
     });
   });
 
-  test('chatbotV2Function stays "false" in prod until validated', () => {
+  test('chatbotV2Function has USE_CONVERSE_STREAMING "true" in prod (rollout complete)', () => {
     prodRagTemplate().hasResourceProperties('AWS::Lambda::Function', {
-      Environment: { Variables: Match.objectLike({ USE_CONVERSE_STREAMING: 'false' }) },
+      Environment: { Variables: Match.objectLike({ USE_CONVERSE_STREAMING: 'true' }) },
     });
   });
 });
