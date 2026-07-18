@@ -8,7 +8,7 @@ RAG chatbot for personalized education. Roles: Admin, Instructor, Student. LangC
 
 ## Repo Structure
 ```
-frontend/              # React 18 SPA (Vite + Tailwind + MUI v9)
+frontend/              # React 18 SPA (Vite + Tailwind + shadcn/ui; migrating off MUI v9 — OCELIA rebuild)
 cdk/
 ├── bin/cdk.ts         # CDK app entrypoint
 ├── lib/               # 7 CDK stacks
@@ -41,11 +41,13 @@ npx tsc --noEmit     # type-check only (no Docker)
 npm run dev          # Vite dev server
 npm run build        # production build
 npm run lint         # ESLint
+npm run test         # Vitest unit/component (added in OCELIA rebuild Phase 1)
+npm run test:e2e     # Playwright E2E smoke (added in OCELIA rebuild Phase 1)
 ```
 
 ## Hard Constraints
 - Docker required for CDK tests/synth (5 container images -> 7 Lambda functions)
-- No frontend test framework — ESLint only
+- Frontend is no longer ESLint-only: Vitest + RTL + Playwright per `testing-policy` (harness lands in OCELIA rebuild Phase 1)
 - `predeploy` hook runs `npm test` before every deploy; never bypass
 
 ## Engineering Log

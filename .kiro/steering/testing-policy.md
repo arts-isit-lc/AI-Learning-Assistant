@@ -12,7 +12,7 @@ Every implementation change must include tests. Non-negotiable.
 - Refactor → verify existing tests pass; add coverage if untested
 - CDK change → add/update assertion tests
 
-## Exempt: doc/comment changes, steering/hook edits, frontend (no test framework — ESLint only)
+## Exempt: doc/comment changes, steering/hook edits
 
 ## Frameworks
 | Area | Framework | Location | Command |
@@ -21,6 +21,10 @@ Every implementation change must include tests. Non-negotiable.
 | multimodal_rag_v2 | pytest | Colocated `test_*.py` | `cd cdk && python -m pytest multimodal_rag_v2/ -v` |
 | chatbot_v2 | pytest | Colocated `test_*.py` | `cd cdk && python -m pytest chatbot_v2/ -v` |
 | math_compute | pytest | `cdk/math_compute/tests/` | `cd cdk && python -m pytest math_compute/ -v` |
+| Frontend (unit/component) | Vitest + React Testing Library | Colocated `*.test.jsx` | `cd frontend && npm run test` |
+| Frontend (E2E smoke) | Playwright | `frontend/e2e/*.spec.js` | `cd frontend && npm run test:e2e` |
+
+> **Frontend testing** is being established in the OCELIA rebuild (Phase 1); the `test` / `test:e2e` scripts land then. The bar is **≥1 automated test per critical flow** (login/role routing, course join, student chat + streaming, module create/edit, prompt save + conflict, admin CRUD) — not a coverage percentage. The Quality Rules below apply to frontend tests too.
 
 ## Quality Rules
 - Deterministic: no network, no real AWS creds, no unseeded randomness
