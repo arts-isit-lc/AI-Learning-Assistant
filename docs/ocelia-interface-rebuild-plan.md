@@ -1,6 +1,6 @@
 # OCELIA Interface Rebuild — Plan
 
-**Status:** Approved for Phase 0 (Design Audit) · **Last updated:** 2026-07-14
+**Status:** Phase 0 (Design Audit) complete — ready for Phase 1 · **Last updated:** 2026-07-17
 **Scope:** Full frontend rebuild of the `frontend/` React SPA against the new "OCELIA" Figma designs.
 **Backend:** Unchanged except for a small, greenlit gap-closing track (see [Backend track](#backend-track-parallel)).
 
@@ -95,7 +95,7 @@ The only backend work in this project is the minimal, greenlit gap track in [§1
 
 ## 6. Dependencies & rationale
 
-Five libraries are introduced. Each has a single, non-overlapping responsibility and replaces a
+Six libraries are introduced. Each has a single, non-overlapping responsibility and replaces a
 hand-rolled pattern — cohesive, not over-engineered.
 
 | Library | Replaces | Responsibility |
@@ -105,8 +105,15 @@ hand-rolled pattern — cohesive, not over-engineered.
 | Zod | handwritten validation + untyped API payloads | Schema validation + runtime API contracts |
 | Vitest + RTL | no frontend tests | Unit/component testing |
 | Playwright | manual regression testing | End-to-end smoke validation |
+| @dnd-kit | hand-rolled drag-and-drop | Accessible (keyboard + pointer) drag-and-drop reorder of the Configuration Concept/Module tree |
 
 Styling responsibility stays with **Tailwind + shadcn/ui**. No library overlaps another's job.
+
+> **Server-side dependency (not a frontend library).** The greenlit chat-logs export (backend track **B5**,
+> [§12](#12-api-gap-analysis)) adds a **Python xlsx writer** (e.g. `openpyxl` / `xlsxwriter`) to the chat-log
+> Lambda so Excel (`.xlsx`) is generated **server-side**. This is deliberate: it keeps the frontend bundle
+> lean (no client-side SheetJS), consistent with the −30% bundle target ([§16](#16-performance--success-metrics)).
+> CSV is unchanged; the frontend only renders the table and links to the CSV/xlsx artifacts.
 
 ---
 
@@ -119,7 +126,7 @@ Styling responsibility stays with **Tailwind + shadcn/ui**. No library overlaps 
 1. **Student views** — Home (course grid), Course view (concepts, collapse/expand), Module chat (intro, mid-conversation, and a reference-doc panel variant).
 2. **Admin views** — Instructor management (list + detail) and Course management (list + detail).
 3. **Instructor views** — Courses list + a tabbed course area: Configuration, Insights, Settings, Chat History, Students.
-4. **Module wizard** — Create (4 steps: name/concept → attach/upload references → prompt + key topics → review), **Edit** (`Modal/EditModule`), and **View** (the expanded read-only accordion — `Configuration/Module` variant, in-place on the Configuration screen).
+4. **Module wizard** — Create (4 steps: name/concept → attach/upload references → prompt + key topics → review) and **Edit** (`Modal/EditModule` — a **single-page, all-fields** form). **Viewing** a module = expanding it in the Configuration tree (read-only summary + Edit/Delete).
 
 Plus a shared **component library** (Header per role, Buttons UI/CTA families, Card/Course, List rows,
 Profile headers, Tags, Toggle, Searchbar, Language-model dropdown, Alert, Table, Modal shell, Wizard
@@ -127,9 +134,10 @@ stepper, file-upload states) and the **CRUD/confirmation modals** (join course, 
 add/remove/delete instructor, delete/remove course, save changes, discard).
 
 ### Module flow model
+- **Tree** → Configuration shows a **Concept (1) → Modules (many)** tree; concepts support **inline edit** (row pencil), **add**, and **delete** — **deleting a concept also deletes its modules**; concepts + modules are **drag-and-drop reorderable** (`@dnd-kit`).
 - **Create** → 4-step wizard.
-- **View** → expanded read-only accordion (`Configuration/Module` expanded variant, in-place).
-- **Edit** → `Modal/EditModule`.
+- **Expand (view)** → expanding a module shows a **read-only summary** + **Edit** / **Delete module**.
+- **Edit** → **Edit** opens `Modal/EditModule` — a **single-page** form with **all** module fields editable (the wizard's fields, not stepped).
 
 ---
 
@@ -143,12 +151,14 @@ from the current MUI theme (`#5536DA`, Roboto).
 |---|---|
 | Primary (Faculty of Arts purple) | `#6829C2` |
 | UBC navy | `#002145` |
-| Accent cyan | `#6EC4E8` |
+| Accent cyan (info / in-progress) | `#6EC4E8` |
 | Success (green) | `#11A26F` |
 | Destructive (red) | `#E40000` |
+| Destructive-muted (subtle red bg) | `#FFE6E6` |
+| Warning (yellow) | `#A88F00` |
 | Neutrals | `#000000` · `#404040` · `#808080` · `#BFBFBF` · `#FFFFFF` |
 
-Mapped to semantic tokens: `background`, `foreground`, `primary`, `secondary`, `muted`, `border`, `ring`, `destructive`, `success`.
+Mapped to semantic tokens: `background`, `foreground`, `primary`, `secondary`, `muted`, `border`, `ring`, `destructive`, `destructive-muted`, `success`, `warning`, `info`.
 
 ### Typography
 - Family: **Whitney** (H2 34/46, H4 18/28 semibold, Body 18/28 book; weights ~325 book / ~375 semibold).
@@ -175,6 +185,7 @@ Whitney is a commercial (Hoefler&Co) typeface and is **assumed unavailable** for
 
 - Typography routes through a single `--font-sans` CSS variable (and Tailwind `fontFamily.sans`).
 - Current value: `Inter, ui-sans-serif, system-ui, sans-serif` (a close humanist sans).
+- **Weight mapping** (Whitney has no Inter equivalent for 325/375): Whitney **Book → Inter 400**, **Semibold → Inter 600** (400 reads better than 300 at 18px body). Revisit when real Whitney is licensed.
 - **Swap point:** when a UBC web-embedding license is confirmed, add one `@font-face` for Whitney and change the `--font-sans` value — no component changes required.
 - Documented in `frontend/src/index.css` (token block) and a steering note.
 
@@ -285,18 +296,23 @@ endpoints are called inline in pages.
 
 **Already supported** (no backend work): prompt versioning (`previous_prompts`), prompt conflict detection
 (`validate_prompt` + stored `conflict_metadata`), auto-suggested key topics (`generate_topics`), module
-create/edit/view, file upload + references, chat logs, roster, course access codes, student
-enrollment/progress/sessions/file viewing, per-module message-count analytics.
+create/edit/view, file upload + references, chat-log **CSV generation** (async job → presigned S3 URLs),
+roster, course access codes, student enrollment/progress/sessions/file viewing, per-module message-count analytics.
 
 ### Gaps (greenlit backend track)
 | Gap | Status | Resolution |
 |---|---|---|
-| Insights "engagement over time" | per-module only, no time buckets | Add a time-series analytics query |
-| Insights "content reach" + "clear data" | reach approximated by `access_count`; no reset route | Add a reach metric + clear-data route |
+| Insights "engagement over time" | per-module only, no time buckets | **Deferred (B1, team finalization)** — time-series query, later; Insights ships the current chart |
+| Insights "content reach" + "clear data" | reach approximated by `access_count`; no reset route | **Deferred (B1, team finalization)** — reach metric + clear-data route, later |
 | Course **duplicate** | create/delete exist, no clone | Add a `duplicate_course` route |
 | Student join code | design says "6-digit"; backend emits 16-char grouped | **Keep 16-char code, change mockup copy** (6-digit numeric is brute-forceable — security) |
+| Instructor **OCELIA access** toggle | course-level `course_student_access` exists; **no per-instructor access flag** on `Enrolments` | Course toggle → existing flag; per-instructor toggle → **new `Enrolments.access_enabled`** column + route (B4) |
+| Chat-logs **in-app table + Excel** | today: async job writes a **CSV** to S3 (presigned URLs); no row data, no `.xlsx` | Return chat-log **rows as JSON** for the in-app Chat History table **and** add **server-side `.xlsx`** export (extend the `course_messages` job); CSV unchanged |
+| Concept-delete **cascade cleanup** | DB `ON DELETE CASCADE` deletes concept→module→file/session/progress **rows**, but **S3 objects + pgvector embeddings are orphaned** (rows are hard-deleted, so `orphanCleanup` never catches them) | **Mark-and-sweep:** `delete_concept` marks its modules `status='deleting'` + triggers async cleanup (embeddings + S3 + rows via `cleanup_module`) and returns immediately; the concept row is removed only after its modules are swept (so the cascade can't hard-delete them first). `orphanCleanup` stays as the scheduled backstop; the same path fixes `delete_module` / `delete_course` orphaning |
 
 The frontend rebuild does **not** depend on these to ship most screens; they run as a small parallel track.
+The chat-logs table (Chat History tab) is the one screen that **does** depend on its gap (B5) for full function —
+it degrades to the existing CSV-download links until B5 lands.
 
 ---
 
@@ -367,8 +383,8 @@ Home, Course, Module chat (streaming), join-by-code.
 Tabbed course area + wizard + settings + insights + chat history + roster.
 
 **Exit when:**
-- Configuration (tree + read-only accordion), create/edit wizard, Settings (model/prompts/conflict UI), Chat History (virtualized), Students all implemented.
-- Insights renders supported metrics now; time-series/reach wired behind the backend track.
+- Configuration (Concept→Module tree + drag-and-drop reorder; expand → read-only summary + Edit modal), create/edit wizard, Settings (model/prompts; **conflict-check-on-save** with override-via-confirm), Chat History (virtualized table + CSV/Excel export), Students all implemented.
+- Insights **ports the current analytics chart** (messages/module + per-module stats); the metric switcher, tag filters, Clear data, and Export are out for now — engagement/reach/clear-data (**B1**) deferred pending team finalization.
 - Feature-area tests + a11y DoD met.
 
 ### Phase 7 — Admin
@@ -387,10 +403,12 @@ Instructor + course management + CRUD/confirmation modals.
 - WCAG-AA audit passed (or documented exceptions).
 
 ### Backend track (parallel)
-- **B1** analytics time-series + content-reach + clear-data.
+- **B1** *(deferred — team finalization)* analytics time-series + content-reach + clear-data. **Not in the initial rebuild** — the Insights tab ships the current `instructor/analytics` chart only (metric switcher / tag filters / Clear data / Export removed for now).
 - **B2** course duplicate route.
 - **B3** join-code copy reconciliation (keep 16-char).
-- **B4** confirm instructor "OCELIA access" toggle mapping (existing course-access flag vs. new field).
+- **B4** OCELIA-access toggles: **course Active/Inactive** → existing `Courses.course_student_access` (no change); **per-instructor "OCELIA access"** → **new `Enrolments.access_enabled` column** + read/write route. Consumed by Phase 6/7.
+- **B5** chat-logs: return rows-as-JSON for the in-app Chat History table + **server-side `.xlsx`** export (extends the `course_messages` job; CSV unchanged). Consumed by Phase 6.
+- **B6** concept-delete cascade cleanup (**mark-and-sweep**): `delete_concept` marks its child modules `status='deleting'` and triggers async cleanup (pgvector embeddings + S3 objects + rows, reusing `orphanCleanup.cleanup_module`), returning immediately; the concept row is deleted once its modules are swept, so the DB row-cascade never hard-deletes modules before their S3/vectors are cleaned. `orphanCleanup` remains the scheduled backstop. Consumed by Phase 6.
 
 **Exit when:** each route implemented with CDK Jest assertions + Lambda/pytest per `testing-policy`, and consumed by the relevant frontend phase.
 
@@ -419,7 +437,7 @@ P6  Instructor        P7  Admin        (P6 and P7 are parallel after P5)
                |
 P8  Cleanup / rebrand / performance / a11y audit
 
-Backend track (B1-B4): runs in parallel from P3 onward; consumed by P6/P7.
+Backend track (B2-B6; B1 deferred): runs in parallel from P3 onward; consumed by P6/P7.
 ```
 
 P6 and P7 can proceed in parallel once P5 has validated the stack end-to-end. Everything from P4 onward
@@ -536,3 +554,14 @@ decisions made while shaping this plan.
 | 2026-07-14 | Icons must be tree-shakeable per-icon SVGs (no icon web-font, no `@mui/icons-material`). Routing reworked into a coherent, deep-linkable route map: resource IDs in the URL, no dead ends, 404 + legacy redirects. |
 | 2026-07-14 | All interactive elements must implement a consistent, token-driven state set (default/hover/focus/active/disabled/loading/selected/error) matching the mockups; audited in Phase 0, enforced in Phase 4 + the a11y DoD. |
 | 2026-07-14 | Every user wait shows a loading/progress state (data → skeletons; saves → button spinner + disable; wizard steps + long jobs → progress/polling; chat → streaming); no static/ambiguous waits — for a smooth, intuitive feel. Implemented even where mockups omit it. |
+| 2026-07-17 | Phase 0 audit: chat-logs live in the **Chat History** tab as an in-app table + **CSV and Excel** download. Excel is **server-side `.xlsx`** (new backend track **B5**; Python `openpyxl`/`xlsxwriter` in the chat-log Lambda), not client-side — keeps the frontend bundle lean. CSV generation unchanged. |
+| 2026-07-17 | Phase 0 audit: Configuration = **Concept (1) → Modules (many)** tree; concepts support **inline edit** (row pencil) + add + delete, and **concept delete cascade-deletes its modules**; concepts + modules **drag-and-drop reorderable** (adds **@dnd-kit**). Module **view = expand** (read-only summary + Edit/Delete); **module Edit = `Modal/EditModule`**, a single-page all-fields form (wizard fields, not stepped) — modules have no inline tree editing. |
+| 2026-07-17 | Phase 0 backend check: DB **already cascades** concept→module→files/sessions/progress rows (`ON DELETE CASCADE`), but **S3 objects + pgvector embeddings are not cleaned up** on concept/module/course delete → orphans (`orphanCleanup` only catches draft/deleting rows, not hard-deleted ones). Added **B6** (concept-delete runs full per-module cleanup via `orphanCleanup.cleanup_module`), using **mark-and-sweep** (mark child modules `deleting` + async cleanup; concept row deleted after sweep; API returns fast; `orphanCleanup` is the backstop). |
+| 2026-07-17 | Phase 0 audit (Settings/prompt): **remove the `Check for conflicts` button** — run `validate_prompt` **on Save**. On conflict, **block + show conflicts** (Save stays enabled); **re-clicking Save with conflicts unaddressed → warning confirm modal → save anyway (override)**; editing the prompt re-checks on the next Save. Frontend orchestration only — no backend gap. The Settings-tab **dot flags an unresolved prompt conflict** (from stored `conflict_metadata`), persisting after override-save until the prompt is edited conflict-free — **not** an unsaved-changes indicator. |
+| 2026-07-17 | Phase 0 audit: instructor top-nav **Global Analytics** + **Global Chats** kept as nav items but wired to **placeholder stub pages** ("coming soon") for now (not designed/scoped features). The header **`Quicklink?`** button is **omitted** from the initial build until its action/target is defined. |
+| 2026-07-17 | Phase 0 audit (Phase-1 tokens): **add** `warning` (`#A88F00`), `destructive-muted` (`#FFE6E6`), and `info`/`in-progress` (cyan `#6EC4E8`) semantic tokens. **Define the full type scale** as tokens (H2 34/46 · H4 18/28 semibold · Body 18/28 book + caption/label). **Whitney→Inter weight map:** Book → 400, Semibold → 600. |
+| 2026-07-17 | Phase 0 audit (student slice): **OQ-10** course-wide "student files" area **cut** (placeholder dropped). **OQ-12** Learning Journey drawer = **progress tracker**, reuse existing course/module progress (`useCourseProgress`/`useModuleProgress`), design largely unchanged. **OQ-13** canonical module-chat states confirmed: intro · mid-conversation · expanded · slide-in materials drawer · reference-doc. |
+| 2026-07-17 | Phase 0 audit: **approved** reconciling the component registry + `frontend-conventions` nav to the **top-nav model** (retire the `AppSidebar` assumption) and adding the ~15 missing primitives/composed components — done in **Phase 1**, before Phase 4. **Join code:** confirmed **keep the 16-char** access code; reword the "6-digit" mockup copy (B3). |
+| 2026-07-17 | Phase 0 audit (Insights): scope cut — Insights **ports the current `instructor/analytics` chart** (messages/module + per-module stats), restyled. **Removed** the Messages/Student-Engagement/Content-Metrics switcher, tag filters, **Clear data**, and **Export**. Engagement-over-time + content-reach + clear-data (**B1**) **deferred** for team finalization. |
+| 2026-07-17 | Phase 0 audit (OQ-7 access toggles): two distinct concepts — course **Active/Inactive** → existing `Courses.course_student_access` (no backend change); **per-instructor "OCELIA access"** → **new `Enrolments.access_enabled`** column + route (**B4**, in scope). |
+| 2026-07-17 | **Phase 0 closed.** Admin subtitle canonical = "Add and remove instructors, manage access, and create or duplicate new courses." (drop Instructor/D variant). All 15 audit open questions + registry/nav reconciliation (§9-A) resolved; **B1** analytics + `Quicklink?` deferred for team finalization. Ready for Phase 1. |
