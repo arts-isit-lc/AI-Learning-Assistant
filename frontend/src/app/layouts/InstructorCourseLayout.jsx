@@ -1,21 +1,21 @@
 import { NavLink, Outlet, useParams } from "react-router-dom"
 import { cn } from "@/lib/utils"
 import { useInstructorCourses, useCoursePrompt } from "@/services/queries"
-import { Breadcrumb } from "@/components/composed/Breadcrumb"
+import { Badge } from "@/components/ui/badge"
 
 // Sub-tabs of the instructor course workspace (audit §7). Paths are relative to
 // /instructor/courses/:courseId.
 const TABS = [
   { to: "configuration", label: "Configuration" },
   { to: "insights", label: "Insights" },
-  { to: "chat-history", label: "Chat History" },
+  { to: "chat-history", label: "Chat history" },
   { to: "settings", label: "Settings" },
   { to: "students", label: "Students" },
 ]
 
 const tabClass = ({ isActive }) =>
   cn(
-    "-mb-px border-b-2 px-4 py-2 text-caption font-semibold transition-colors duration-fast",
+    "-mb-px border-b-2 px-1 pb-2 text-caption font-semibold transition-colors duration-fast",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
     isActive
       ? "border-primary text-primary"
@@ -23,11 +23,17 @@ const tabClass = ({ isActive }) =>
   )
 
 /**
- * Layout for the instructor's in-course area: a course header + breadcrumb and
- * the five sub-tabs, with the active tab rendered via `<Outlet>`. Course meta is
- * derived from the instructor course list (find-by-courseId); the Settings tab
- * shows a dot when there's an unresolved prompt conflict (from stored
- * `conflict_metadata`). Resilient to loading/error — never blocks the tabs.
+ * Right detail pane of the instructor course workspace (`SplitLayout` detail —
+ * the persistent course list is the left pane). Renders the course header
+ * (code + status + title), the five section sub-tabs (with a conflict dot on
+ * Settings when the stored prompt has unresolved conflicts), and the active tab
+ * via `<Outlet>`. Course meta is derived from the instructor course list
+ * (find-by-courseId); resilient to loading/error — never blocks the tabs.
+ *
+ * NOTE (Phase 2 fidelity): the Active/Inactive toggle, Access Code line, and the
+ * Delete course · Undo · Save changes footer from the frame are deferred — they
+ * need course-update mutations + cross-tab save coordination that don't exist
+ * yet. Status shows read-only for now.
  */
 export default function InstructorCourseLayout() {
   const { courseId } = useParams()
@@ -37,23 +43,25 @@ export default function InstructorCourseLayout() {
   const course = courses.find((c) => c.course_id === courseId)
   const dept = course ? String(course.course_department ?? "").toUpperCase() : ""
   const code = course ? `${dept} ${course.course_number ?? ""}`.trim() : "Course"
+  const active = course ? course.course_student_access !== false : true
   const hasConflict = Boolean(prompt?.conflict_metadata?.has_conflicts)
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-6">
-      <Breadcrumb
-        items={[{ label: "Your courses", to: "/instructor/courses" }, { label: code }]}
-        className="mb-4"
-      />
-      <div className="mb-4 border-b border-border pb-4">
-        <p className="text-caption uppercase text-muted-foreground">Course</p>
-        <h1 className="text-h4 font-semibold text-navy">
-          {code}
-          {course?.course_name ? ` — ${course.course_name}` : ""}
-        </h1>
+    <div className="flex flex-col">
+      <div className="border-b border-border pb-4">
+        <div className="flex items-start justify-between gap-4">
+          <h1 className="text-h2 font-semibold text-foreground">{code}</h1>
+          {course && (
+            <Badge variant={active ? "success" : "secondary"}>{active ? "Active" : "Inactive"}</Badge>
+          )}
+        </div>
+        {course?.course_name && (
+          <p className="mt-1 text-body text-muted-foreground">{course.course_name}</p>
+        )}
       </div>
+
       <nav
-        className="mb-6 flex gap-1 overflow-x-auto border-b border-border"
+        className="mt-4 flex gap-6 overflow-x-auto border-b border-border"
         aria-label="Course sections"
       >
         {TABS.map((tab) => (
@@ -71,7 +79,10 @@ export default function InstructorCourseLayout() {
           </NavLink>
         ))}
       </nav>
-      <Outlet />
+
+      <div className="mt-6">
+        <Outlet />
+      </div>
     </div>
   )
 }

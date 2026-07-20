@@ -28,8 +28,8 @@ const StudentChat = lazy(() =>
   import("@/features/student/StudentChat").then((m) => ({ default: m.StudentChat }))
 )
 // Instructor slice (Phase 6)
-const InstructorCourses = lazy(() =>
-  import("@/features/instructor/InstructorCourses").then((m) => ({ default: m.InstructorCourses }))
+const InstructorCourseList = lazy(() =>
+  import("@/features/instructor/InstructorCourseList").then((m) => ({ default: m.InstructorCourseList }))
 )
 const InsightsTab = lazy(() =>
   import("@/features/instructor/InsightsTab").then((m) => ({ default: m.InsightsTab }))
@@ -103,21 +103,29 @@ export default function AppRoutes() {
           </Route>
         </Route>
 
-        {/* INSTRUCTOR */}
+        {/* INSTRUCTOR — master-detail: persistent course list (left) + detail (right) */}
         <Route element={<RequireRole allow={["instructor"]} />}>
           <Route path="/instructor" element={<InstructorLayout />}>
             <Route index element={<Navigate to="courses" replace />} />
-            <Route path="courses" element={<InstructorCourses />} />
-            <Route path="courses/:courseId" element={<InstructorCourseLayout />}>
-              <Route index element={<Navigate to="configuration" replace />} />
-              <Route path="configuration" element={<ConfigurationTab />} />
-              <Route path="insights" element={<InsightsTab />} />
-              <Route path="chat-history" element={<ChatHistoryTab />} />
-
-              <Route path="settings" element={<SettingsTab />} />
-              <Route path="students" element={<StudentsTab />} />
-              <Route path="modules/new" element={<CourseWizard />} />
-              <Route path="modules/:moduleId/edit" element={<EditModule />} />
+            <Route path="courses" element={<SplitLayout list={<InstructorCourseList />} />}>
+              <Route
+                index
+                element={
+                  <div className="grid place-items-center p-8 text-center text-caption text-muted-foreground">
+                    Select a course to manage its content, settings, and students.
+                  </div>
+                }
+              />
+              <Route path=":courseId" element={<InstructorCourseLayout />}>
+                <Route index element={<Navigate to="configuration" replace />} />
+                <Route path="configuration" element={<ConfigurationTab />} />
+                <Route path="insights" element={<InsightsTab />} />
+                <Route path="chat-history" element={<ChatHistoryTab />} />
+                <Route path="settings" element={<SettingsTab />} />
+                <Route path="students" element={<StudentsTab />} />
+                <Route path="modules/new" element={<CourseWizard />} />
+                <Route path="modules/:moduleId/edit" element={<EditModule />} />
+              </Route>
             </Route>
             <Route
               path="analytics"

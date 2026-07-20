@@ -19,8 +19,8 @@ vi.mock("@/features/student/StudentHome", () => ({ StudentHome: () => <div>stude
 vi.mock("@/features/student/CourseView", () => ({ CourseView: () => <div>course view</div> }))
 vi.mock("@/features/student/StudentChat", () => ({ StudentChat: () => <div>module chat</div> }))
 // Instructor feature screens (named exports, loaded lazily by AppRoutes).
-vi.mock("@/features/instructor/InstructorCourses", () => ({
-  InstructorCourses: () => <div>instructor courses</div>,
+vi.mock("@/features/instructor/InstructorCourseList", () => ({
+  InstructorCourseList: () => <div>instructor course list</div>,
 }))
 vi.mock("@/features/instructor/ConfigurationTab", () => ({
   ConfigurationTab: () => <div>configuration tab</div>,
@@ -77,10 +77,12 @@ describe("AppRoutes — role guards", () => {
     expect(await screen.findByText("student home")).toBeInTheDocument()
   })
 
-  it("defaults the instructor course area to the Configuration tab", async () => {
+  it("defaults the instructor course area to the Configuration tab, list pane persisting", async () => {
     authState = { ...authState, role: "instructor" }
     renderAt("/instructor/courses/c1")
     expect(await screen.findByText("configuration tab")).toBeInTheDocument()
+    // master-detail: the course list pane stays mounted alongside the detail
+    expect(screen.getByText("instructor course list")).toBeInTheDocument()
   })
 
   it("lets an admin reach a deep-linked instructor detail (master-detail)", async () => {
@@ -106,7 +108,7 @@ describe("AppRoutes — 404 + legacy redirects", () => {
   it("redirects the legacy /course route to the instructor courses list", async () => {
     authState = { ...authState, role: "instructor" }
     renderAt("/course/anything")
-    expect(await screen.findByText("instructor courses")).toBeInTheDocument()
+    expect(await screen.findByText("instructor course list")).toBeInTheDocument()
   })
 })
 

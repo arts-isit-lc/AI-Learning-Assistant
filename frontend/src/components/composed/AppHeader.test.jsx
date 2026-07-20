@@ -1,14 +1,17 @@
-import { describe, it, expect, vi } from "vitest"
+import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
 import { AppHeader } from "./AppHeader"
 
+const { signOut, setAsStudent } = vi.hoisted(() => ({
+  signOut: vi.fn(),
+  setAsStudent: vi.fn(),
+}))
+
+let authState
 vi.mock("@/context/AuthContext", () => ({
-  useAuth: () => ({
-    signOut: vi.fn(),
-    isInstructorAsStudent: false,
-    setIsInstructorAsStudent: vi.fn(),
-  }),
+  useAuth: () => authState,
 }))
 
 function renderHeader(role) {
@@ -19,37 +22,58 @@ function renderHeader(role) {
   )
 }
 
+beforeEach(() => {
+  authState = {
+    user: { email: "instructor@ubc.ca" },
+    signOut,
+    isInstructorAsStudent: false,
+    setIsInstructorAsStudent: setAsStudent,
+  }
+  signOut.mockClear()
+  setAsStudent.mockClear()
+})
+
 describe("AppHeader", () => {
-  it("shows the OCELIA brand and sign out for every role", () => {
+  it("shows the OCELIA brand + UBC crest linking home, for every role", () => {
     renderHeader("student")
     expect(screen.getByText("OCELIA")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /sign out/i })).toBeInTheDocument()
-  })
-
-  it("renders the UBC crest in the brand lockup, linking home", () => {
-    renderHeader("student")
     const logo = screen.getByRole("img", { name: /university of british columbia/i })
-    expect(logo).toBeInTheDocument()
-    // brand lockup (crest + wordmark) is the home link
     expect(logo.closest("a")).toHaveAttribute("href", "/")
   })
 
-  it("renders instructor top-nav items including the global stubs + as-student toggle", () => {
+  it("shows the account label in the banner", () => {
     renderHeader("instructor")
-    expect(screen.getByRole("link", { name: "Courses" })).toBeInTheDocument()
-    expect(screen.getByRole("link", { name: "Global Analytics" })).toBeInTheDocument()
-    expect(screen.getByRole("link", { name: "Global Chats" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /view as student/i })).toBeInTheDocument()
+    expect(screen.getByText("instructor@ubc.ca")).toBeInTheDocument()
   })
 
-  it("renders admin nav items", () => {
-    renderHeader("admin")
-    expect(screen.getByRole("link", { name: "Instructors" })).toBeInTheDocument()
-    expect(screen.getByRole("link", { name: "Courses" })).toBeInTheDocument()
-  })
-
-  it("renders no primary nav for a student (breadcrumb-driven)", () => {
-    renderHeader("student")
+  it("keeps role navigation OUT of the banner (no Courses/Analytics/Chats links)", () => {
+    renderHeader("instructor")
     expect(screen.queryByRole("link", { name: "Courses" })).toBeNull()
+    expect(screen.queryByRole("link", { name: "Global Analytics" })).toBeNull()
+    expect(screen.queryByRole("link", { name: "Global Chats" })).toBeNull()
+  })
+
+  it("opens the account menu and signs out", async () => {
+    const user = userEvent.setup()
+    renderHeader("student")
+    await user.click(screen.getByRole("button", { name: /account menu/i }))
+    const signOutItem = await screen.findByRole("menuitem", { name: /sign out/i })
+    await user.click(signOutItem)
+    expect(signOut).toHaveBeenCalledTimes(1)
+  })
+
+  it("offers 'view as student' in the menu only for instructors", async () => {
+    const user = userEvent.setup()
+    renderHeader("instructor")
+    await user.click(screen.getByRole("button", { name: /account menu/i }))
+    expect(await screen.findByRole("menuitem", { name: /view as student/i })).toBeInTheDocument()
+  })
+
+  it("does not offer 'view as student' for students", async () => {
+    const user = userEvent.setup()
+    renderHeader("student")
+    await user.click(screen.getByRole("button", { name: /account menu/i }))
+    expect(await screen.findByRole("menuitem", { name: /sign out/i })).toBeInTheDocument()
+    expect(screen.queryByRole("menuitem", { name: /view as student/i })).toBeNull()
   })
 })

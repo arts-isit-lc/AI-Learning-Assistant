@@ -33,9 +33,10 @@ beforeEach(() => {
 })
 
 describe("InstructorCourseLayout", () => {
-  it("shows the course code + name derived from the instructor course list", () => {
+  it("shows the course code (heading) + name derived from the instructor course list", () => {
     renderLayout()
-    expect(screen.getByRole("heading", { name: /GEOG 250 — Intro/ })).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "GEOG 250" })).toBeInTheDocument()
+    expect(screen.getByText("Intro")).toBeInTheDocument()
     // the active tab renders through the Outlet
     expect(screen.getByText("settings tab")).toBeInTheDocument()
   })
