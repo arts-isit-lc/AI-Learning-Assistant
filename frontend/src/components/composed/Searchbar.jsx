@@ -23,18 +23,18 @@ export function Searchbar({ value = "", onChange, placeholder = "Search", deboun
 
   return (
     <div className={cn("relative", className)}>
-      <Icon
-        icon={MdSearch}
-        size={18}
-        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-      />
       <Input
         type="search"
         aria-label={placeholder}
         value={text}
         onChange={handleChange}
         placeholder={placeholder}
-        className="pl-9"
+        className="pr-9"
+      />
+      <Icon
+        icon={MdSearch}
+        size={18}
+        className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
       />
     </div>
   )

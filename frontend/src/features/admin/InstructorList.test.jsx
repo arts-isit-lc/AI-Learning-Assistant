@@ -3,12 +3,10 @@ import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
 let instructorsResult
-const elevate = { mutate: vi.fn(), isPending: false }
 const navigate = vi.fn()
 
 vi.mock("@/services/queries", () => ({
   useAdminInstructors: () => instructorsResult,
-  useElevateInstructor: () => elevate,
 }))
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal()
@@ -24,7 +22,6 @@ const INSTRUCTORS = [
 
 beforeEach(() => {
   instructorsResult = { data: INSTRUCTORS, isLoading: false }
-  elevate.mutate.mockClear()
   navigate.mockClear()
 })
 
@@ -52,13 +49,5 @@ describe("InstructorList", () => {
     render(<InstructorList />)
     await userEvent.type(screen.getByRole("searchbox", { name: "Search instructors" }), "pending")
     await waitFor(() => expect(screen.queryByText("Ada Lovelace")).not.toBeInTheDocument())
-  })
-
-  it("adds an instructor from the dialog", async () => {
-    render(<InstructorList />)
-    await userEvent.click(screen.getByRole("button", { name: "Add" }))
-    await userEvent.type(screen.getByLabelText("Email"), "new@x.com")
-    await userEvent.click(screen.getByRole("button", { name: "Add instructor" }))
-    expect(elevate.mutate).toHaveBeenCalledWith("new@x.com", expect.any(Object))
   })
 })

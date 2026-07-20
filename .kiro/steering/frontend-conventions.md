@@ -48,7 +48,7 @@ Google Material icons as **tree-shakeable per-icon SVG components** behind a thi
 ## Routing
 `BrowserRouter` + nested layout routes + role guards (replacing the old `getHomePage()` switch). **Resource IDs live in the URL** (e.g. `/courses/:courseId/modules/:moduleId`) so every screen is deep-linkable and refresh-safe — not held in `App.jsx` state. No dead ends (every screen has a back/breadcrumb path); 404 route + redirects for legacy/invalid paths; Amplify SPA rewrite replaces the old `#/` hash routing.
 
-**Navigation shell = top-nav `AppHeader` per role** (student/instructor/admin), **not** a left sidebar — the old `AppSidebar` assumption is retired (Phase 0). Instructor top-nav keeps Global Analytics + Global Chats as items wired to placeholder "coming soon" stubs; the header `Quicklink?` button is omitted until its target is defined. See `ui-component-registry.md`.
+**Navigation shell = top-nav `AppHeader` per role** (student/instructor/admin), **not** a left sidebar — the old `AppSidebar` assumption is retired (Phase 0). Instructor top-nav keeps Global Analytics + Global Chats as items wired to placeholder "coming soon" stubs; the header `Quicklink?` placeholder is dropped (no defined target). See `ui-component-registry.md`.
 
 ## Component Structure (three tiers)
 ```

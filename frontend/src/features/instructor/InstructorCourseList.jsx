@@ -14,7 +14,8 @@ export function courseCode(course) {
 /**
  * Instructor course list — the persistent master pane of the instructor course
  * workspace (`SplitLayout` `list`). Search + select a course to open its detail
- * on the right. Mirrors the admin `CourseList` pattern; navigates to
+ * on the right. Mirrors the admin `CourseList` row (code + status badge over the
+ * course name, flush divider rows, selected row filled); navigates to
  * /instructor/courses/:courseId.
  */
 export function InstructorCourseList() {
@@ -30,14 +31,18 @@ export function InstructorCourseList() {
   }, [courses, query])
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
       <Searchbar value={query} onChange={setQuery} placeholder="Search" />
 
-      <div className="flex max-h-[calc(100vh-16rem)] flex-col gap-2 overflow-y-auto">
+      <div className="flex max-h-[calc(100vh-18rem)] flex-col overflow-y-auto">
         {isLoading ? (
-          [0, 1, 2].map((i) => <Skeleton key={i} className="h-16 w-full" />)
+          <div className="flex flex-col gap-2">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-16 w-full" />
+            ))}
+          </div>
         ) : filtered.length === 0 ? (
-          <p className="px-1 text-caption text-muted-foreground">No courses found.</p>
+          <p className="px-1 py-3 text-caption text-muted-foreground">No courses found.</p>
         ) : (
           filtered.map((course) => {
             const active = course.course_student_access !== false
@@ -52,12 +57,12 @@ export function InstructorCourseList() {
                     <span className="truncate text-caption font-semibold text-foreground group-aria-[current=true]:text-primary-foreground">
                       {courseCode(course)}
                     </span>
-                    <Badge variant={active ? "success" : "secondary"}>
+                    <Badge variant={active ? "success" : "secondary"} className="shrink-0 uppercase">
                       {active ? "Active" : "Inactive"}
                     </Badge>
                   </div>
                   {course.course_name && (
-                    <span className="truncate text-caption text-muted-foreground group-aria-[current=true]:text-primary-foreground/80">
+                    <span className="truncate text-caption text-muted-foreground group-aria-[current=true]:text-primary-foreground/90">
                       {course.course_name}
                     </span>
                   )}

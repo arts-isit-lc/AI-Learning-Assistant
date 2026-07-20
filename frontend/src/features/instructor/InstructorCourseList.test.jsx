@@ -5,13 +5,13 @@ import userEvent from "@testing-library/user-event"
 let coursesResult
 const navigate = vi.fn()
 
-vi.mock("@/services/queries", () => ({ useAdminCourses: () => coursesResult }))
+vi.mock("@/services/queries", () => ({ useInstructorCourses: () => coursesResult }))
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal()
   return { ...actual, useNavigate: () => navigate, useParams: () => ({}) }
 })
 
-import { CourseList, courseCode } from "./CourseList"
+import { InstructorCourseList, courseCode } from "./InstructorCourseList"
 
 const COURSES = [
   { course_id: "c1", course_department: "geog", course_number: "250", course_name: "Intro Geography", course_student_access: true },
@@ -29,23 +29,24 @@ describe("courseCode", () => {
   })
 })
 
-describe("CourseList", () => {
-  it("renders courses and marks inactive ones", () => {
-    render(<CourseList />)
+describe("InstructorCourseList", () => {
+  it("renders courses with their active/inactive status", () => {
+    render(<InstructorCourseList />)
     expect(screen.getByText("GEOG 250")).toBeInTheDocument()
     expect(screen.getByText("PHYS 100")).toBeInTheDocument()
-    expect(screen.getByText("Inactive")).toBeInTheDocument() // c2 inactive
+    expect(screen.getByText("Active")).toBeInTheDocument()
+    expect(screen.getByText("Inactive")).toBeInTheDocument()
   })
 
-  it("navigates to a course detail on click", async () => {
-    render(<CourseList />)
+  it("navigates to the course workspace on click", async () => {
+    render(<InstructorCourseList />)
     await userEvent.click(screen.getByText("GEOG 250"))
-    expect(navigate).toHaveBeenCalledWith("/admin/courses/c1")
+    expect(navigate).toHaveBeenCalledWith("/instructor/courses/c1")
   })
 
   it("filters by the debounced search", async () => {
-    render(<CourseList />)
-    await userEvent.type(screen.getByRole("searchbox", { name: "Search courses" }), "mechanics")
+    render(<InstructorCourseList />)
+    await userEvent.type(screen.getByRole("searchbox", { name: "Search" }), "mechanics")
     await waitFor(() => expect(screen.queryByText("GEOG 250")).not.toBeInTheDocument())
   })
 })

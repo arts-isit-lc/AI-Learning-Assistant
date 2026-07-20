@@ -70,7 +70,7 @@ inclusion: manual
 ### Navigation
 | Component | Props | Notes |
 |---|---|---|
-| `AppHeader` | `role`, `items?` | **Top-nav** app header per role (student/instructor/admin) — replaces the retired `AppSidebar`. Instructor: Global Analytics + Global Chats items → placeholder "coming soon" stubs; `Quicklink?` omitted |
+| `AppHeader` | `role`, `items?` | **Top-nav** app header per role (student/instructor/admin) — replaces the retired `AppSidebar`. Instructor: Global Analytics + Global Chats items → placeholder "coming soon" stubs; `Quicklink?` placeholder dropped |
 | `Breadcrumb` | `items` | Breadcrumb trail for deep routes (supports the no-dead-ends rule) |
 | `PageHeader` | `title`, `actions?` | Top-of-page title with optional action buttons |
 | `BackButton` | `onClick` | Standardised back navigation |

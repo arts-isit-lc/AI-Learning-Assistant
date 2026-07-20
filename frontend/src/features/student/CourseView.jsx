@@ -140,7 +140,7 @@ export function CourseView() {
                   </span>
                 </AccordionTrigger>
                 <AccordionContent>
-                  <div className="flex flex-col gap-2 pb-2">
+                  <div className="flex flex-col pb-2">
                     {concept.modules.map((module) => {
                       const status = STATUS_BADGE[getModuleStatus(module)]
                       return (

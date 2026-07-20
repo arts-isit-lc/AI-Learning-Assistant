@@ -33,10 +33,11 @@ const tabClass = ({ isActive }) =>
  * via `<Outlet>`. Course meta is derived from the instructor course list
  * (find-by-courseId); resilient to loading/error — never blocks the tabs.
  *
- * NOTE (Phase 2 fidelity): the Active/Inactive toggle, Access Code line, and the
- * Delete course · Undo · Save changes footer from the frame are deferred — they
- * need course-update mutations + cross-tab save coordination that don't exist
- * yet. Status shows read-only for now.
+ * NOTE (Phase 2 fidelity): the Active/Inactive course toggle and the
+ * Delete course · Save changes footer from the frame are deferred — they need
+ * course-update mutations + cross-tab save coordination that don't exist yet;
+ * status shows read-only for now. (The frame's `Undo` button is dropped by
+ * decision — the footer is save-only.)
  */
 export default function InstructorCourseLayout() {
   const { courseId } = useParams()

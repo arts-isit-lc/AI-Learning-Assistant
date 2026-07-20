@@ -34,8 +34,8 @@ const toggleClass =
  *  - Collapsed (Variant2, ~28px): just the tab row + an Expand toggle.
  *
  * Auto-collapses when a course is open (the course workspace needs the vertical
- * space); the toggle overrides until the next navigation. `Quicklink?` is
- * intentionally omitted until its target is defined (Phase 0 audit OQ-5).
+ * space); the toggle overrides until the next navigation. The `Quicklink?`
+ * button from the frame is dropped — it was a placeholder with no defined target.
  */
 export function InstructorTabBar() {
   const inCourse = Boolean(useMatch("/instructor/courses/:courseId/*"))
