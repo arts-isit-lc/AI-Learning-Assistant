@@ -10,6 +10,9 @@ export const AdminInstructorSchema = z
     user_email: z.string(),
     first_name: z.string().nullable().optional(),
     last_name: z.string().nullable().optional(),
+    // Present on GET admin/courseInstructors (per-instructor OCELIA access, B4);
+    // absent on GET admin/instructors (the full instructor roster).
+    access_enabled: z.boolean().nullable().optional(),
   })
   .passthrough()
 export const AdminInstructorsSchema = z.array(AdminInstructorSchema)
@@ -35,6 +38,9 @@ export const InstructorCourseSchema = z
     course_name: z.string().nullable().optional(),
     course_department: z.string().nullable().optional(),
     course_number: z.union([z.string(), z.number()]).nullable().optional(),
+    // Per-instructor OCELIA access flag for this enrolment (GET
+    // admin/instructorCourses, B4).
+    access_enabled: z.boolean().nullable().optional(),
   })
   .passthrough()
 export const InstructorCoursesSchema = z.array(InstructorCourseSchema)

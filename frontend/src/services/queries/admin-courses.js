@@ -113,3 +113,104 @@ export function useSetCourseInstructors(courseId) {
       qc.invalidateQueries({ queryKey: queryKeys.admin.courseInstructors(courseId) }),
   })
 }
+
+/**
+ * Enroll a single instructor in a course (POST admin/enroll_instructor). Used by
+ * the detail-pane Add action; additive (ON CONFLICT server-side) so it never
+ * disturbs other enrolments or their per-instructor access flags. Variables:
+ * `{ courseId, instructorEmail }`.
+ */
+export function useEnrollInstructor() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ courseId, instructorEmail }) =>
+      http.post("admin/enroll_instructor", {
+        course_id: courseId,
+        instructor_email: instructorEmail,
+      }),
+    onSuccess: (_data, { courseId, instructorEmail }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.admin.courseInstructors(courseId) })
+      qc.invalidateQueries({ queryKey: queryKeys.admin.instructorCourses(instructorEmail) })
+    },
+  })
+}
+
+/**
+ * Remove a single instructor from a course (DELETE admin/unenroll_instructor).
+ * Single-pair removal — leaves other instructors' enrolments (and their access
+ * flags) untouched, unlike the delete-all-then-re-enroll set mutation. Variables:
+ * `{ courseId, instructorEmail }`.
+ */
+export function useUnenrollInstructor() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ courseId, instructorEmail }) =>
+      http.del("admin/unenroll_instructor", {
+        course_id: courseId,
+        instructor_email: instructorEmail,
+      }),
+    onSuccess: (_data, { courseId, instructorEmail }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.admin.courseInstructors(courseId) })
+      qc.invalidateQueries({ queryKey: queryKeys.admin.instructorCourses(instructorEmail) })
+    },
+  })
+}
+
+/**
+ * Set the per-instructor OCELIA access flag on a course enrolment (POST
+ * admin/updateInstructorAccess, backend track B4). Invalidates both the
+ * course→instructors and instructor→courses reads (both carry `access_enabled`).
+ * Variables: `{ courseId, instructorEmail, access: boolean }`.
+ */
+export function useUpdateInstructorAccess() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ courseId, instructorEmail, access }) =>
+      http.post("admin/updateInstructorAccess", {
+        course_id: courseId,
+        instructor_email: instructorEmail,
+        access,
+      }),
+    onSuccess: (_data, { courseId, instructorEmail }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.admin.courseInstructors(courseId) })
+      qc.invalidateQueries({ queryKey: queryKeys.admin.instructorCourses(instructorEmail) })
+    },
+  })
+}
+
+/**
+ * Duplicate a course (POST admin/duplicate_course, backend track B2). Clones the
+ * course row + the concept/module outline server-side; NOT files, embeddings,
+ * enrolments, or student data. `active` is sent as-is (apiClient stringifies it
+ * to "true"/"false"). Returns the new `{ course_id }`. Variables:
+ * `{ sourceCourseId, courseName, department, number, accessCode, active, systemPrompt }`.
+ */
+export function useDuplicateCourse() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      sourceCourseId,
+      courseName,
+      department,
+      number,
+      accessCode,
+      active,
+      systemPrompt,
+    }) => {
+      const created = await http.post(
+        "admin/duplicate_course",
+        {
+          source_course_id: sourceCourseId,
+          course_name: courseName,
+          course_department: department,
+          course_number: number,
+          course_access_code: accessCode,
+          course_student_access: active,
+        },
+        { system_prompt: systemPrompt }
+      )
+      return parseWith(CreatedCourseSchema, created, "duplicated course")
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.admin.courses }),
+  })
+}

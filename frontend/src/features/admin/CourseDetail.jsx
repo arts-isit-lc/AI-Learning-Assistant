@@ -1,28 +1,58 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { toast } from "react-toastify"
+import { MdAdd, MdContentCopy } from "react-icons/md"
 import {
   useAdminCourses,
   useAdminInstructors,
   useCourseInstructors,
-  useSetCourseInstructors,
   useUpdateCourseAccess,
+  useUpdateInstructorAccess,
+  useEnrollInstructor,
+  useUnenrollInstructor,
   useDeleteCourse,
 } from "@/services/queries"
+import { cn } from "@/lib/utils"
 import { instructorLabel } from "./InstructorList"
 import { courseCode } from "./CourseList"
+import { DuplicateCourseDialog } from "./DuplicateCourseDialog"
 import { ConfirmDialog } from "@/components/composed/ConfirmDialog"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
 import { Toggle } from "@/components/ui/toggle"
+import { Icon } from "@/components/ui/icon"
 import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog"
+
+/** Off/On access toggle with labels (mockup: "Off [switch] On"). */
+function AccessToggle({ checked, onCheckedChange, label }) {
+  return (
+    <div className="flex shrink-0 items-center gap-2">
+      <span className={cn("text-caption", checked ? "text-muted-foreground" : "font-semibold text-foreground")}>
+        Off
+      </span>
+      <Toggle checked={checked} onCheckedChange={onCheckedChange} aria-label={label} />
+      <span className={cn("text-caption", checked ? "font-semibold text-foreground" : "text-muted-foreground")}>
+        On
+      </span>
+    </div>
+  )
+}
 
 /**
- * Course detail (right pane of /admin/courses). Toggle student access
- * (persists immediately), assign instructors via a checklist (Save replaces the
- * set), view the access code, or delete the course. The record + access code
- * come from the already-loaded course list.
+ * Course detail (right pane of /admin/courses). Matches the OCELIA frame: the
+ * course header carries the Active/Inactive toggle (course-wide student access,
+ * persisted immediately) and the access code; the instructor list shows each
+ * assigned instructor with a Remove link and a per-instructor OCELIA access
+ * toggle (backend track B4); the footer has Delete course + Duplicate (B2).
+ *
+ * Per-row toggles are optimistic (override the server value on click, then drop
+ * the override once the refetch reflects it — or on error).
  */
 export function CourseDetail() {
   const { courseId } = useParams()
@@ -31,47 +61,94 @@ export function CourseDetail() {
   const { data: courses = [] } = useAdminCourses()
   const { data: assigned = [], isLoading } = useCourseInstructors(courseId)
   const { data: allInstructors = [] } = useAdminInstructors()
-  const setInstructors = useSetCourseInstructors(courseId)
-  const updateAccess = useUpdateCourseAccess()
+  const updateCourseAccess = useUpdateCourseAccess()
+  const updateInstructorAccess = useUpdateInstructorAccess()
+  const enroll = useEnrollInstructor()
+  const unenroll = useUnenrollInstructor()
   const del = useDeleteCourse()
 
   const course = courses.find((c) => c.course_id === courseId)
-  const [selected, setSelected] = useState(() => new Set())
-  const [active, setActive] = useState(true)
+
+  const [activeOverride, setActiveOverride] = useState(null)
+  const [accessOverrides, setAccessOverrides] = useState({})
+  const [addOpen, setAddOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const seededRef = useRef(false)
-  const activeSeededRef = useRef(false)
 
+  const active = activeOverride ?? (course?.course_student_access !== false)
+
+  // Drop the course-active override once the refetched course reflects it.
   useEffect(() => {
-    if (!isLoading && !seededRef.current) {
-      seededRef.current = true
-      setSelected(new Set(assigned.map((i) => i.user_email)))
+    if (activeOverride != null && course && (course.course_student_access !== false) === activeOverride) {
+      setActiveOverride(null)
     }
-  }, [isLoading, assigned])
+  }, [course, activeOverride])
 
+  // Drop each per-instructor override once the refetch reflects it.
   useEffect(() => {
-    if (course && !activeSeededRef.current) {
-      activeSeededRef.current = true
-      setActive(course.course_student_access !== false)
-    }
-  }, [course])
-
-  const toggleInstructor = (email) =>
-    setSelected((prev) => {
-      const next = new Set(prev)
-      if (next.has(email)) next.delete(email)
-      else next.add(email)
-      return next
+    setAccessOverrides((prev) => {
+      if (Object.keys(prev).length === 0) return prev
+      const next = { ...prev }
+      let changed = false
+      for (const inst of assigned) {
+        if (inst.user_email in next && (inst.access_enabled !== false) === next[inst.user_email]) {
+          delete next[inst.user_email]
+          changed = true
+        }
+      }
+      return changed ? next : prev
     })
+  }, [assigned])
 
-  const handleSaveInstructors = () =>
-    setInstructors.mutate([...selected], { onSuccess: () => toast.success("Instructors updated") })
+  const unassigned = useMemo(() => {
+    const assignedEmails = new Set(assigned.map((i) => i.user_email))
+    return allInstructors.filter((i) => !assignedEmails.has(i.user_email))
+  }, [assigned, allInstructors])
+
+  const accessOn = (inst) => accessOverrides[inst.user_email] ?? (inst.access_enabled !== false)
 
   const handleToggleActive = (value) => {
-    setActive(value)
-    updateAccess.mutate(
+    setActiveOverride(value)
+    updateCourseAccess.mutate(
       { courseId, access: value },
-      { onSuccess: () => toast.success(value ? "Course activated" : "Course deactivated") }
+      {
+        onSuccess: () => toast.success(value ? "Course activated" : "Course deactivated"),
+        onError: () => setActiveOverride(null),
+      }
+    )
+  }
+
+  const handleToggleAccess = (email, value) => {
+    setAccessOverrides((o) => ({ ...o, [email]: value }))
+    updateInstructorAccess.mutate(
+      { courseId, instructorEmail: email, access: value },
+      {
+        onSuccess: () => toast.success(value ? "Access enabled" : "Access disabled"),
+        onError: () =>
+          setAccessOverrides((o) => {
+            const next = { ...o }
+            delete next[email]
+            return next
+          }),
+      }
+    )
+  }
+
+  const handleAdd = (email) => {
+    enroll.mutate(
+      { courseId, instructorEmail: email },
+      {
+        onSuccess: () => {
+          setAddOpen(false)
+          toast.success("Instructor added")
+        },
+      }
+    )
+  }
+
+  const handleRemove = (email) => {
+    unenroll.mutate(
+      { courseId, instructorEmail: email },
+      { onSuccess: () => toast.success("Instructor removed") }
     )
   }
 
@@ -91,67 +168,136 @@ export function CourseDetail() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-start justify-between gap-4 border-b border-border pb-4">
-        <div>
-          <h1 className="text-h4 font-semibold text-navy">{courseCode(course)}</h1>
-          <p className="text-caption text-muted-foreground">{course.course_name}</p>
+      {/* Header: code + name + Active/Inactive toggle, then the access code. */}
+      <div className="flex flex-col gap-3 border-b border-border pb-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-h4 font-semibold text-navy">{courseCode(course)}</h1>
+            {course.course_name && (
+              <p className="text-caption text-muted-foreground">{course.course_name}</p>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <span className={cn("text-caption", active ? "text-muted-foreground" : "font-semibold text-foreground")}>
+              Inactive
+            </span>
+            <Toggle checked={active} onCheckedChange={handleToggleActive} aria-label="Course student access" />
+            <span className={cn("text-caption", active ? "font-semibold text-foreground" : "text-muted-foreground")}>
+              Active
+            </span>
+          </div>
         </div>
-        <Button variant="danger" onClick={() => setDeleteOpen(true)} disabled={del.isPending}>
-          Delete course
-        </Button>
+        {course.course_access_code && (
+          <div className="flex items-center gap-2 text-caption text-muted-foreground">
+            <span>
+              Access Code: <span className="font-mono text-foreground">{course.course_access_code}</span>
+            </span>
+            <button
+              type="button"
+              onClick={copyCode}
+              aria-label="Copy access code"
+              className="rounded p-1 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Icon icon={MdContentCopy} size={16} />
+            </button>
+          </div>
+        )}
       </div>
 
-      <Card>
-        <CardContent className="flex flex-wrap items-center justify-between gap-4 p-6">
-          <div className="flex items-center gap-2">
-            <Toggle id="course-active" checked={active} onCheckedChange={handleToggleActive} />
-            <Label htmlFor="course-active">
-              {active ? "Active — students can access" : "Inactive — students can't access"}
-            </Label>
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="text-caption text-muted-foreground">Access code</span>
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-caption text-navy">{course.course_access_code || "—"}</span>
-              <Button size="sm" variant="outline" onClick={copyCode} disabled={!course.course_access_code}>
-                Copy
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Instructors</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {isLoading ? (
-            <Skeleton className="h-24 w-full" />
-          ) : allInstructors.length === 0 ? (
-            <p className="text-caption text-muted-foreground">No instructors exist yet.</p>
-          ) : (
-            <fieldset className="flex flex-col gap-2">
-              <legend className="sr-only">Instructors</legend>
-              {allInstructors.map((instructor) => (
-                <label key={instructor.user_email} className="flex items-center gap-2 text-caption">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(instructor.user_email)}
-                    onChange={() => toggleInstructor(instructor.user_email)}
-                  />
-                  <span className="truncate">{instructorLabel(instructor)}</span>
-                </label>
-              ))}
-            </fieldset>
-          )}
-          <div>
-            <Button onClick={handleSaveInstructors} loading={setInstructors.isPending}>
-              Save instructors
+      {/* Instructors: assigned list with Remove + per-instructor OCELIA access. */}
+      <div>
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-1">
+            <h2 className="text-caption font-semibold text-foreground">Instructor(s)</h2>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => setAddOpen(true)}
+              aria-label="Add instructor"
+            >
+              <Icon icon={MdAdd} size={18} />
             </Button>
           </div>
-        </CardContent>
-      </Card>
+          <span className="text-caption font-semibold text-foreground">OCELIA access</span>
+        </div>
+
+        <div className="mt-2 flex flex-col">
+          {isLoading ? (
+            <Skeleton className="h-16 w-full" />
+          ) : assigned.length === 0 ? (
+            <p className="py-3 text-caption text-muted-foreground">No instructors assigned yet.</p>
+          ) : (
+            assigned.map((inst) => (
+              <div
+                key={inst.user_email}
+                className="flex items-center justify-between gap-4 border-b border-border py-3"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-caption font-medium text-foreground">
+                    {instructorLabel(inst)}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => handleRemove(inst.user_email)}
+                    className="text-caption text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    Remove
+                  </button>
+                </div>
+                <AccessToggle
+                  checked={accessOn(inst)}
+                  onCheckedChange={(v) => handleToggleAccess(inst.user_email, v)}
+                  label={`OCELIA access for ${instructorLabel(inst)}`}
+                />
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Footer: Delete course + Duplicate. */}
+      <div className="flex items-center gap-4 border-t border-border pt-4">
+        <Button
+          variant="link"
+          className="text-destructive"
+          onClick={() => setDeleteOpen(true)}
+          disabled={del.isPending}
+        >
+          Delete course
+        </Button>
+        <DuplicateCourseDialog course={course} />
+      </div>
+
+      {/* Add-instructor picker. */}
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add an instructor</DialogTitle>
+            <DialogDescription>Give an instructor access to this course.</DialogDescription>
+          </DialogHeader>
+          <div className="my-2 flex max-h-72 flex-col overflow-y-auto">
+            {unassigned.length === 0 ? (
+              <p className="py-3 text-caption text-muted-foreground">
+                All instructors are already assigned.
+              </p>
+            ) : (
+              unassigned.map((inst) => (
+                <button
+                  key={inst.user_email}
+                  type="button"
+                  onClick={() => handleAdd(inst.user_email)}
+                  disabled={enroll.isPending}
+                  className="flex items-center justify-between gap-3 border-b border-border px-1 py-3 text-left text-caption transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:opacity-50"
+                >
+                  <span className="truncate font-medium text-foreground">{instructorLabel(inst)}</span>
+                  <span className="shrink-0 text-muted-foreground">{inst.user_email}</span>
+                </button>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
         open={deleteOpen}

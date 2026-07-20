@@ -3,9 +3,12 @@ import { render, screen, within, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
 let instructorsAssigned
-const setInstructors = { mutate: vi.fn(), isPending: false }
-const updateAccess = { mutate: vi.fn(), isPending: false }
+const updateCourseAccess = { mutate: vi.fn(), isPending: false }
+const updateInstructorAccess = { mutate: vi.fn(), isPending: false }
+const enroll = { mutate: vi.fn(), isPending: false }
+const unenroll = { mutate: vi.fn(), isPending: false }
 const del = { mutate: vi.fn(), isPending: false }
+const duplicate = { mutate: vi.fn(), isPending: false }
 const navigate = vi.fn()
 
 const COURSE = {
@@ -15,6 +18,7 @@ const COURSE = {
   course_name: "Intro Geography",
   course_access_code: "ABCD-EFGH-IJKL-MNOP",
   course_student_access: true,
+  system_prompt: "You are a tutor.",
 }
 
 vi.mock("@/services/queries", () => ({
@@ -26,9 +30,12 @@ vi.mock("@/services/queries", () => ({
       { user_email: "alan@x.com", first_name: "alan", last_name: "turing" },
     ],
   }),
-  useSetCourseInstructors: () => setInstructors,
-  useUpdateCourseAccess: () => updateAccess,
+  useUpdateCourseAccess: () => updateCourseAccess,
+  useUpdateInstructorAccess: () => updateInstructorAccess,
+  useEnrollInstructor: () => enroll,
+  useUnenrollInstructor: () => unenroll,
   useDeleteCourse: () => del,
+  useDuplicateCourse: () => duplicate,
 }))
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal()
@@ -39,35 +46,63 @@ vi.mock("react-toastify", () => ({ toast: { success: vi.fn(), error: vi.fn() } }
 import { CourseDetail } from "./CourseDetail"
 
 beforeEach(() => {
-  instructorsAssigned = { data: [{ user_email: "ada@x.com", first_name: "ada", last_name: "lovelace" }], isLoading: false }
-  setInstructors.mutate.mockClear()
-  updateAccess.mutate.mockClear()
+  instructorsAssigned = {
+    data: [{ user_email: "ada@x.com", first_name: "ada", last_name: "lovelace", access_enabled: true }],
+    isLoading: false,
+  }
+  updateCourseAccess.mutate.mockClear()
+  updateInstructorAccess.mutate.mockClear()
+  enroll.mutate.mockClear()
+  unenroll.mutate.mockClear()
   del.mutate.mockClear()
+  duplicate.mutate.mockClear()
   navigate.mockClear()
 })
 
 describe("CourseDetail", () => {
-  it("renders the course, access code, and seeds the instructor checklist", () => {
+  it("renders the course header, access code, and assigned instructors", () => {
     render(<CourseDetail />)
     expect(screen.getByRole("heading", { name: "GEOG 250" })).toBeInTheDocument()
     expect(screen.getByText("ABCD-EFGH-IJKL-MNOP")).toBeInTheDocument()
-    expect(screen.getByRole("checkbox", { name: /Ada Lovelace/ })).toBeChecked()
-    expect(screen.getByRole("checkbox", { name: /Alan Turing/ })).not.toBeChecked()
+    expect(screen.getByRole("switch", { name: "Course student access" })).toBeInTheDocument()
+    expect(screen.getByText("Ada Lovelace")).toBeInTheDocument()
+    expect(screen.getByRole("switch", { name: "OCELIA access for Ada Lovelace" })).toBeInTheDocument()
   })
 
-  it("saves the updated instructor set", async () => {
+  it("persists the course active toggle immediately", async () => {
     render(<CourseDetail />)
-    await userEvent.click(screen.getByRole("checkbox", { name: /Alan Turing/ }))
-    await userEvent.click(screen.getByRole("button", { name: "Save instructors" }))
-    const [emails] = setInstructors.mutate.mock.calls[0]
-    expect(emails).toEqual(expect.arrayContaining(["ada@x.com", "alan@x.com"]))
-  })
-
-  it("persists an access toggle immediately", async () => {
-    render(<CourseDetail />)
-    await userEvent.click(screen.getByRole("switch"))
-    expect(updateAccess.mutate).toHaveBeenCalledWith(
+    await userEvent.click(screen.getByRole("switch", { name: "Course student access" }))
+    expect(updateCourseAccess.mutate).toHaveBeenCalledWith(
       { courseId: "c1", access: false },
+      expect.any(Object)
+    )
+  })
+
+  it("toggles a per-instructor OCELIA access flag (B4)", async () => {
+    render(<CourseDetail />)
+    await userEvent.click(screen.getByRole("switch", { name: "OCELIA access for Ada Lovelace" }))
+    expect(updateInstructorAccess.mutate).toHaveBeenCalledWith(
+      { courseId: "c1", instructorEmail: "ada@x.com", access: false },
+      expect.any(Object)
+    )
+  })
+
+  it("removes an instructor from the course", async () => {
+    render(<CourseDetail />)
+    await userEvent.click(screen.getByRole("button", { name: "Remove" }))
+    expect(unenroll.mutate).toHaveBeenCalledWith(
+      { courseId: "c1", instructorEmail: "ada@x.com" },
+      expect.any(Object)
+    )
+  })
+
+  it("adds an unassigned instructor from the picker", async () => {
+    render(<CourseDetail />)
+    await userEvent.click(screen.getByRole("button", { name: "Add instructor" }))
+    const dialog = await screen.findByRole("dialog")
+    await userEvent.click(within(dialog).getByRole("button", { name: /Alan Turing/ }))
+    expect(enroll.mutate).toHaveBeenCalledWith(
+      { courseId: "c1", instructorEmail: "alan@x.com" },
       expect.any(Object)
     )
   })

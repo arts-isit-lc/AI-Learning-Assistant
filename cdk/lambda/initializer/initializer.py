@@ -116,6 +116,7 @@ def handler(event, context):
                 "course_completion_percentage" integer,
                 "time_spent" integer,
                 "time_enroled" timestamp,
+                "access_enabled" boolean NOT NULL DEFAULT true,
                 CONSTRAINT unique_course_user UNIQUE (course_id, user_id)
             );
 
@@ -273,6 +274,12 @@ def handler(event, context):
             ALTER TABLE "Module_Files" ADD COLUMN IF NOT EXISTS "processing_status" text DEFAULT 'pending';
             ALTER TABLE "Module_Files" ADD COLUMN IF NOT EXISTS "last_processed_at" timestamptz;
             ALTER TABLE "Module_Files" ADD COLUMN IF NOT EXISTS "chunk_count" integer;
+            -- Per-instructor OCELIA access flag (backend track B4). Gates an
+            -- instructor's access to a course independently of the course-wide
+            -- course_student_access flag. Defaults TRUE so existing instructor
+            -- enrolments keep access; NOT NULL is safe because the default
+            -- backfills every existing row.
+            ALTER TABLE "Enrolments" ADD COLUMN IF NOT EXISTS "access_enabled" boolean NOT NULL DEFAULT true;
 
             -- Idempotent migration (2026-07): retire Claude 3 Sonnet as the
             -- per-course model. Set the column default (used by new courses) to

@@ -4811,6 +4811,223 @@ paths:
         passthroughBehavior: "when_no_match"
         httpMethod: "POST"
         type: "aws_proxy"
+  /admin/updateInstructorAccess:
+    options:
+      summary: CORS support
+      description: Enable CORS by returning correct headers
+      responses:
+        200:
+          $ref: "#/components/responses/Success"
+      x-amazon-apigateway-integration:
+        type: mock
+        requestTemplates:
+          application/json: |
+            {
+              "statusCode" : 200
+            }
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
+              method.response.header.Access-Control-Allow-Methods: "'*'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            responseTemplates:
+              application/json: |
+                {}
+    post:
+      tags:
+        - Admin
+      summary: Set the per-instructor OCELIA access flag on a course enrolment
+      operationId: admin_update_instructor_access_POST
+      parameters:
+        - in: query
+          name: course_id
+          required: true
+          schema:
+            type: string
+          description: ID of the course
+        - in: query
+          name: instructor_email
+          required: true
+          schema:
+            type: string
+          description: Email of the instructor
+        - in: query
+          name: access
+          required: true
+          schema:
+            type: boolean
+          description: Whether the instructor has OCELIA access for this course
+      responses:
+        "200":
+          description: Instructor access updated successfully
+        "400":
+          description: Bad Request
+        "404":
+          description: Instructor or enrolment not found
+        "500":
+          description: Internal Server Error
+      security:
+        - adminAuthorizer: []
+      x-amazon-apigateway-integration:
+        uri:
+          Fn::Sub: "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${adminFunction.Arn}/invocations"
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /admin/duplicate_course:
+    options:
+      summary: CORS support
+      description: Enable CORS by returning correct headers
+      responses:
+        200:
+          $ref: "#/components/responses/Success"
+      x-amazon-apigateway-integration:
+        type: mock
+        requestTemplates:
+          application/json: |
+            {
+              "statusCode" : 200
+            }
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
+              method.response.header.Access-Control-Allow-Methods: "'*'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            responseTemplates:
+              application/json: |
+                {}
+    post:
+      tags:
+        - Admin
+      summary: Duplicate a course (clones the course + concept/module outline; not files or student data)
+      operationId: admin_duplicate_course_POST
+      parameters:
+        - in: query
+          name: source_course_id
+          required: true
+          schema:
+            type: string
+          description: ID of the course to duplicate
+        - in: query
+          name: course_name
+          required: true
+          schema:
+            type: string
+          description: Name of the new course
+        - in: query
+          name: course_department
+          required: true
+          schema:
+            type: string
+          description: Department of the new course
+        - in: query
+          name: course_number
+          required: true
+          schema:
+            type: string
+          description: Number of the new course
+        - in: query
+          name: course_access_code
+          required: true
+          schema:
+            type: string
+          description: Access code for the new course
+        - in: query
+          name: course_student_access
+          required: true
+          schema:
+            type: boolean
+          description: Whether students can access the new course
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                system_prompt:
+                  type: string
+                  description: System prompt for the new course
+      responses:
+        "200":
+          description: Course duplicated successfully
+        "400":
+          description: Bad Request
+        "404":
+          description: Source course not found
+        "500":
+          description: Internal Server Error
+      security:
+        - adminAuthorizer: []
+      x-amazon-apigateway-integration:
+        uri:
+          Fn::Sub: "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${adminFunction.Arn}/invocations"
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
+  /admin/unenroll_instructor:
+    options:
+      summary: CORS support
+      description: Enable CORS by returning correct headers
+      responses:
+        200:
+          $ref: "#/components/responses/Success"
+      x-amazon-apigateway-integration:
+        type: mock
+        requestTemplates:
+          application/json: |
+            {
+              "statusCode" : 200
+            }
+        responses:
+          default:
+            statusCode: "200"
+            responseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
+              method.response.header.Access-Control-Allow-Methods: "'*'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            responseTemplates:
+              application/json: |
+                {}
+    delete:
+      tags:
+        - Admin
+      summary: Remove a single instructor's enrolment from a course
+      operationId: admin_unenroll_instructor_DELETE
+      parameters:
+        - in: query
+          name: course_id
+          required: true
+          schema:
+            type: string
+          description: ID of the course
+        - in: query
+          name: instructor_email
+          required: true
+          schema:
+            type: string
+          description: Email of the instructor to unenroll
+      responses:
+        "200":
+          description: Instructor unenrolled successfully
+        "400":
+          description: Bad Request
+        "404":
+          description: Instructor not found
+        "500":
+          description: Internal Server Error
+      security:
+        - adminAuthorizer: []
+      x-amazon-apigateway-integration:
+        uri:
+          Fn::Sub: "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${adminFunction.Arn}/invocations"
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST"
+        type: "aws_proxy"
   /admin/delete_instructor_enrolments:
     options:
       summary: CORS support
