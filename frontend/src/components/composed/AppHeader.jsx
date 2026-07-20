@@ -3,6 +3,7 @@ import { MdLogout } from "react-icons/md"
 import { useAuth } from "@/context/AuthContext"
 import { Icon } from "@/components/ui/icon"
 import { cn } from "@/lib/utils"
+import ubcLogo from "@/assets/ubc-logo.svg"
 
 const NAV_ITEMS = {
   student: [],
@@ -42,8 +43,16 @@ export function AppHeader({ role }) {
     <header className="sticky top-0 z-sticky border-b border-border bg-background">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
         <div className="flex items-center gap-8">
-          <Link to="/" className="text-h4 font-semibold text-navy">
-            OCELIA
+          <Link
+            to="/"
+            className="flex items-center gap-2.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            <img
+              src={ubcLogo}
+              alt="University of British Columbia"
+              className="h-10 w-auto shrink-0"
+            />
+            <span className="text-h4 font-semibold text-navy">OCELIA</span>
           </Link>
           {items.length > 0 && (
             <nav className="flex items-center gap-1" aria-label={`${role} navigation`}>

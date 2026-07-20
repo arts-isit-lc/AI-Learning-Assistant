@@ -26,6 +26,14 @@ describe("AppHeader", () => {
     expect(screen.getByRole("button", { name: /sign out/i })).toBeInTheDocument()
   })
 
+  it("renders the UBC crest in the brand lockup, linking home", () => {
+    renderHeader("student")
+    const logo = screen.getByRole("img", { name: /university of british columbia/i })
+    expect(logo).toBeInTheDocument()
+    // brand lockup (crest + wordmark) is the home link
+    expect(logo.closest("a")).toHaveAttribute("href", "/")
+  })
+
   it("renders instructor top-nav items including the global stubs + as-student toggle", () => {
     renderHeader("instructor")
     expect(screen.getByRole("link", { name: "Courses" })).toBeInTheDocument()
