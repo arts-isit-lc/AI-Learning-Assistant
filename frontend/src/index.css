@@ -1,118 +1,136 @@
-@import url("https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100;0,300;0,400;0,500;0,700;0,900;1,100;1,300;1,400;1,500;1,700;1,900&display=swap");
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap");
+/* Roboto is legacy-only (the MUI Theme.jsx typeface); removed with MUI in Phase 8. */
+@import url("https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100;0,300;0,400;0,500;0,700;0,900;1,100;1,300;1,400;1,500;1,700;1,900&display=swap");
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ==========================================================================
+   OCELIA design tokens — single source of truth (Phase 1).
+   UBC / Faculty of Arts brand. All seven token categories (colour, typography,
+   spacing, radius, shadow, motion, z-index) live here as CSS variables and are
+   surfaced to Tailwind in tailwind.config.js; breakpoints live in the Tailwind
+   `screens` config. Never hardcode hex/spacing in components — use the semantic
+   token classes (bg-background, text-foreground, p-md, rounded-lg, ...).
+   Colours are stored as HSL channels ("H S% L%") so hsl(var(--token)) works and
+   alpha modifiers (bg-primary/10) compose.
+   ========================================================================== */
 @layer base {
   :root {
+    /* --- Typography -------------------------------------------------------
+       Whitney (brand) is a commercial Hoefler&Co face and is ASSUMED
+       UNAVAILABLE. Everything routes through --font-sans, so switching to
+       Whitney later is a one-line change here plus a single @font-face — no
+       component edits. Whitney -> Inter weight map: Book -> 400, Semibold -> 600
+       (400 reads better than 300 at 18px body). Revisit when a UBC web-embedding
+       license is confirmed. */
+    --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+      Roboto, Helvetica, Arial, sans-serif;
+    --font-weight-book: 400;
+    --font-weight-semibold: 600;
+    /* Type scale (size / line-height) from the Figma variables. */
+    --text-h2: 2.125rem; /* 34px */
+    --text-h2-lh: 2.875rem; /* 46px */
+    --text-h4: 1.125rem; /* 18px, semibold */
+    --text-h4-lh: 1.75rem; /* 28px */
+    --text-body: 1.125rem; /* 18px, book */
+    --text-body-lh: 1.75rem; /* 28px */
+    --text-caption: 0.875rem; /* 14px */
+    --text-caption-lh: 1.25rem; /* 20px */
+
+    /* --- Colour: brand palette (raw) ------------------------------------ */
+    --brand-purple: 265 65% 46%; /* #6829C2 Faculty of Arts primary */
+    --brand-navy: 211 100% 14%; /* #002145 UBC navy */
+    --brand-cyan: 198 73% 67%; /* #6EC4E8 accent / in-progress */
+    --neutral-0: 0 0% 100%; /* #FFFFFF */
+    --neutral-300: 0 0% 75%; /* #BFBFBF */
+    --neutral-500: 0 0% 50%; /* #808080 */
+    --neutral-700: 0 0% 25%; /* #404040 */
+    --neutral-900: 0 0% 0%; /* #000000 */
+
+    /* --- Colour: semantic tokens (light) -------------------------------- */
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-    --radius: 0.5rem;
+    --foreground: 0 0% 25%; /* #404040 body text (10.4:1 on white) */
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 25%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 25%;
+    --primary: 265 65% 46%; /* #6829C2 */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 96%; /* light neutral surface (systematic fill) */
+    --secondary-foreground: 0 0% 25%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 43%; /* subdued text, kept AA (5:1) on white */
+    --accent: 0 0% 96%; /* hover/subtle surface for primitives */
+    --accent-foreground: 0 0% 25%;
+    --navy: 211 100% 14%; /* #002145 */
+    --navy-foreground: 0 0% 100%;
+    --destructive: 0 100% 45%; /* #E40000 */
+    --destructive-foreground: 0 0% 100%;
+    --destructive-muted: 0 100% 95%; /* #FFE6E6 subtle red bg */
+    --destructive-muted-foreground: 0 74% 32%; /* dark red text on the muted bg */
+    --success: 159 81% 35%; /* #11A26F */
+    --success-foreground: 0 0% 100%;
+    --warning: 51 100% 33%; /* #A88F00 */
+    --warning-foreground: 0 0% 12%; /* dark text keeps AA on the mustard */
+    --info: 198 73% 67%; /* #6EC4E8 info / in-progress */
+    --info-foreground: 211 100% 14%; /* navy text on cyan (8:1) */
+    --border: 0 0% 75%; /* #BFBFBF */
+    --input: 0 0% 75%;
+    --ring: 265 65% 46%; /* brand-purple focus ring (visible focus) */
+
+    /* --- Radius ---------------------------------------------------------- */
+    --radius-sm: 0.375rem; /* 6px */
+    --radius-md: 0.5rem; /* 8px */
+    --radius-lg: 0.75rem; /* 12px */
+    --radius: 0.5rem; /* shadcn compat alias = md */
+
+    /* --- Spacing (4pt grid) --------------------------------------------- */
+    --space-xs: 0.25rem; /* 4px */
+    --space-sm: 0.5rem; /* 8px */
+    --space-md: 1rem; /* 16px */
+    --space-lg: 1.5rem; /* 24px */
+    --space-xl: 2rem; /* 32px */
+
+    /* --- Shadow ---------------------------------------------------------- */
+    --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.05), 0 1px 3px 0 rgb(0 0 0 / 0.1);
+    --shadow-dropdown: 0 4px 6px -1px rgb(0 0 0 / 0.1),
+      0 2px 4px -2px rgb(0 0 0 / 0.1);
+    --shadow-modal: 0 10px 15px -3px rgb(0 0 0 / 0.1),
+      0 4px 6px -4px rgb(0 0 0 / 0.1);
+
+    /* --- Motion ---------------------------------------------------------- */
+    --transition-fast: 150ms;
+    --transition-normal: 250ms;
+    --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* --- Z-index --------------------------------------------------------- */
+    --z-base: 0;
+    --z-dropdown: 1000;
+    --z-sticky: 1100;
+    --z-overlay: 1200;
+    --z-modal: 1300;
+    --z-toast: 1400;
   }
-}
 
-:root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
-}
-
-body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
-}
-
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
-}
-
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
+  * {
+    @apply border-border;
   }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
-}
 
-@keyframes indeterminate-progress {
-  0% {
-    transform: translateX(-100%) scaleX(0.3);
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    min-height: 100vh;
+    font-weight: var(--font-weight-book);
+    text-rendering: optimizeLegibility;
   }
-  50% {
-    transform: translateX(0%) scaleX(0.3);
-  }
-  100% {
-    transform: translateX(100%) scaleX(0.3);
-  }
-}
-
-.animate-indeterminate-progress {
-  animation: indeterminate-progress 1.5s ease-in-out infinite;
 }
 
 /* KaTeX overflow safety net: keep wide (or mis-parsed) math from stretching the
    page. Block math scrolls within its own box; inline overflow is contained by
    the message container's overflow-x-auto. The currency-$ parsing fix lives in
-   MarkdownRender (AIMessage.jsx); this is the defensive layer for genuinely
-   wide expressions (long equations, large matrices). */
+   MarkdownRender (AIMessage.jsx); this is the defensive layer for genuinely wide
+   expressions (long equations, large matrices). */
 .katex-display {
   max-width: 100%;
   overflow-x: auto;

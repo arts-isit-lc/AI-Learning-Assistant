@@ -24,7 +24,7 @@ Every implementation change must include tests. Non-negotiable.
 | Frontend (unit/component) | Vitest + React Testing Library | Colocated `*.test.jsx` | `cd frontend && npm run test` |
 | Frontend (E2E smoke) | Playwright | `frontend/e2e/*.spec.js` | `cd frontend && npm run test:e2e` |
 
-> **Frontend testing** is being established in the OCELIA rebuild (Phase 1); the `test` / `test:e2e` scripts land then. The bar is **≥1 automated test per critical flow** (login/role routing, course join, student chat + streaming, module create/edit, prompt save + conflict, admin CRUD) — not a coverage percentage. The Quality Rules below apply to frontend tests too.
+> **Frontend testing** harness **landed in OCELIA rebuild Phase 1** — **Vitest + RTL** (`npm run test`, jsdom env, `src/test/setup.js`) and **Playwright** (`npm run test:e2e`) are configured and green. The bar is **≥1 automated test per critical flow** (login/role routing, course join, student chat + streaming, module create/edit, prompt save + conflict, admin CRUD) — not a coverage percentage. The Quality Rules below apply to frontend tests too. (Playwright browsers install on first run: `npx playwright install`; real critical-flow smokes are authored from Phase 5.)
 
 ## Quality Rules
 - Deterministic: no network, no real AWS creds, no unseeded randomness

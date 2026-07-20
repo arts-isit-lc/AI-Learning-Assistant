@@ -19,6 +19,13 @@ const StudentChat = lazy(() => import("./pages/student/StudentChat"));
 const AdminHomepage = lazy(() => import("./pages/admin/AdminHomepage"));
 const InstructorHomepage = lazy(() => import("./pages/instructor/InstructorHomepage"));
 const CourseView = lazy(() => import("./pages/student/CourseView"));
+// P-1 (OCELIA rebuild): dev-only design-token gallery, public (no auth guard).
+const StyleGuide = lazy(() => import("./pages/dev/StyleGuide"));
+// P-4 (OCELIA rebuild): dev-only component gallery, public (no auth guard).
+const Gallery = lazy(() => import("./pages/dev/Gallery"));
+// P-2 (OCELIA rebuild): the new Tailwind/shadcn app shell, gated by VITE_UI_V2.
+// Lazy so legacy mode never loads it; the whole flag + branch is removed in Phase 8.
+const AppV2 = lazy(() => import("./app/AppV2"));
 import { NotificationProvider } from "./context/NotificationContext";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ToastContainer } from "react-toastify";
@@ -44,7 +51,7 @@ Amplify.configure({
   },
 });
 
-function App() {
+function LegacyApp() {
   const [user, setUser] = useState(null);
   const [userGroup, setUserGroup] = useState(null);
   const [course, setCourse] = useState(null);
@@ -126,6 +133,8 @@ function App() {
           <Router>
             <Suspense fallback={<div>Loading...</div>}>
               <Routes>
+                <Route path="/style-guide" element={<StyleGuide />} />
+                <Route path="/gallery" element={<Gallery />} />
                 <Route
                   path="/"
                   element={user ? <Navigate to="/home" /> : <Login />}
@@ -160,6 +169,21 @@ function App() {
       </UserContext.Provider>
     </NotificationProvider>
   );
+}
+
+// Strangler switch: the new OCELIA shell when VITE_UI_V2 is enabled, otherwise
+// the legacy MUI app. Both coexist until the rebuild completes (Phase 8), when
+// this branch, LegacyApp, and the flag are deleted. UserContext + Amplify.configure
+// above stay put — legacy pages still import UserContext from this module.
+function App() {
+  if (import.meta.env.VITE_UI_V2 === "true") {
+    return (
+      <Suspense fallback={<div>Loading...</div>}>
+        <AppV2 />
+      </Suspense>
+    );
+  }
+  return <LegacyApp />;
 }
 
 export default App;
