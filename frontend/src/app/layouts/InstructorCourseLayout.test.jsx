@@ -4,9 +4,11 @@ import { MemoryRouter, Routes, Route } from "react-router-dom"
 
 let coursesResult
 let promptResult
+let accessCodeResult
 vi.mock("@/services/queries", () => ({
   useInstructorCourses: () => coursesResult,
   useCoursePrompt: () => promptResult,
+  useAccessCode: () => accessCodeResult,
 }))
 
 import InstructorCourseLayout from "./InstructorCourseLayout"
@@ -30,6 +32,7 @@ beforeEach(() => {
     ],
   }
   promptResult = { data: null }
+  accessCodeResult = { data: "65XH19000jo12" }
 })
 
 describe("InstructorCourseLayout", () => {
@@ -39,6 +42,12 @@ describe("InstructorCourseLayout", () => {
     expect(screen.getByText("Intro")).toBeInTheDocument()
     // the active tab renders through the Outlet
     expect(screen.getByText("settings tab")).toBeInTheDocument()
+  })
+
+  it("shows the course access code (with a copy control) in the header", () => {
+    renderLayout()
+    expect(screen.getByText("65XH19000jo12")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /copy access code/i })).toBeInTheDocument()
   })
 
   it("flags the Settings tab with a dot when there is an unresolved prompt conflict", () => {

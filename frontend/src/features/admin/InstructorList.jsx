@@ -90,10 +90,10 @@ export function InstructorList() {
                 }
               >
                 <div className="flex min-w-0 flex-col">
-                  <span className="truncate text-caption font-semibold text-foreground">
+                  <span className="truncate text-caption font-semibold text-foreground group-aria-[current=true]:text-primary-foreground">
                     {instructorLabel(instructor)}
                   </span>
-                  <span className="truncate text-caption text-muted-foreground">
+                  <span className="truncate text-caption text-muted-foreground group-aria-[current=true]:text-primary-foreground/80">
                     {named ? instructor.user_email : "Invited — awaiting signup"}
                   </span>
                 </div>

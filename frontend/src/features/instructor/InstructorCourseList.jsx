@@ -49,7 +49,7 @@ export function InstructorCourseList() {
               >
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-caption font-semibold text-foreground">
+                    <span className="truncate text-caption font-semibold text-foreground group-aria-[current=true]:text-primary-foreground">
                       {courseCode(course)}
                     </span>
                     <Badge variant={active ? "success" : "secondary"}>
@@ -57,7 +57,7 @@ export function InstructorCourseList() {
                     </Badge>
                   </div>
                   {course.course_name && (
-                    <span className="truncate text-caption text-muted-foreground">
+                    <span className="truncate text-caption text-muted-foreground group-aria-[current=true]:text-primary-foreground/80">
                       {course.course_name}
                     </span>
                   )}

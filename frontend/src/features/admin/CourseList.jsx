@@ -53,10 +53,12 @@ export function CourseList() {
               onClick={() => navigate(`/admin/courses/${course.course_id}`)}
             >
               <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-caption font-semibold text-foreground">
+                <span className="truncate text-caption font-semibold text-foreground group-aria-[current=true]:text-primary-foreground">
                   {courseCode(course)}
                 </span>
-                <span className="truncate text-caption text-muted-foreground">{course.course_name}</span>
+                <span className="truncate text-caption text-muted-foreground group-aria-[current=true]:text-primary-foreground/80">
+                  {course.course_name}
+                </span>
               </div>
               {course.course_student_access === false && <Badge variant="secondary">Inactive</Badge>}
             </ListRow>
