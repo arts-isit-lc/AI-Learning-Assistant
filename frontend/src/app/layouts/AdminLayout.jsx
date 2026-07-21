@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils"
  */
 const navLinkClass = ({ isActive }) =>
   cn(
-    "border-b-2 pb-1 text-caption font-semibold transition-colors duration-fast",
+    "border-b-2 pb-1 text-caption font-semibold text-sm transition-colors duration-fast",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
     isActive
       ? "border-neutral-900 text-neutral-900"
@@ -38,8 +38,8 @@ export default function AdminLayout() {
       <AppHeader role="admin" />
 
       <div className="mx-auto w-full max-w-7xl px-6 pt-6 text-left">
-        <h1 className="text-h2 font-semibold uppercase text-foreground">Administration</h1>
-        <p className="mt-2 text-body text-muted-foreground">
+        <h1 className="text-h2 font-normal uppercase text-foreground">Administration</h1>
+        <p className="mt-4 text-body text-muted-foreground">
           Add and remove instructors, manage access, and create or duplicate new courses.
         </p>
       </div>
