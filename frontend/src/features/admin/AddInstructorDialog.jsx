@@ -61,7 +61,7 @@ export function AddInstructorDialog() {
         <DialogContent>
           <form onSubmit={submit} className="flex flex-col gap-6">
             <DialogHeader className="border-b border-border pb-3">
-              <DialogTitle>Add instructor(s)</DialogTitle>
+              <DialogTitle className="mt-2">Add instructor(s)</DialogTitle>
             </DialogHeader>
             <DialogDescription className="text-body text-foreground">
               To add an instructor, enter their email address below. They get instructor access the
