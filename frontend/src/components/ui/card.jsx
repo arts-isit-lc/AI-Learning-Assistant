@@ -19,6 +19,9 @@ const CardHeader = React.forwardRef(function CardHeader({ className, ...props },
 })
 
 const CardTitle = React.forwardRef(function CardTitle({ className, ...props }, ref) {
+  // Heading content is supplied by consumers via children; the static rule can't
+  // see it on this reusable primitive (it always receives content in use).
+  // eslint-disable-next-line jsx-a11y/heading-has-content
   return <h3 ref={ref} className={cn("text-h4 font-semibold text-navy", className)} {...props} />
 })
 

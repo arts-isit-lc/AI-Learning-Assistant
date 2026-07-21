@@ -35,7 +35,7 @@ export default function AdminLayout() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <AppHeader role="admin" />
+      <AppHeader userRole="admin" />
 
       <div className="mx-auto w-full max-w-7xl px-6 pt-6 text-left">
         <h1 className="text-h2 font-normal uppercase text-foreground">Administration</h1>

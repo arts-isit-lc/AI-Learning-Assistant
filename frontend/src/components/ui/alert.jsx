@@ -27,6 +27,9 @@ const Alert = React.forwardRef(function Alert({ className, variant, ...props }, 
 })
 
 const AlertTitle = React.forwardRef(function AlertTitle({ className, ...props }, ref) {
+  // Heading content is supplied by consumers via children; the static rule can't
+  // see it on this reusable primitive (it always receives content in use).
+  // eslint-disable-next-line jsx-a11y/heading-has-content
   return <h5 ref={ref} className={cn("mb-1 font-semibold leading-none tracking-tight", className)} {...props} />
 })
 

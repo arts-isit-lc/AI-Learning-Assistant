@@ -33,9 +33,9 @@ function initialsFrom(text) {
  * admin → its layout nav), never in the banner. All dividers use `border-border`
  * (#808080), per the frame.
  *
- * @param {{ role: "student"|"instructor"|"admin" }} props
+ * @param {{ userRole: "student"|"instructor"|"admin" }} props
  */
-export function AppHeader({ role }) {
+export function AppHeader({ userRole }) {
   const { user, signOut, isInstructorAsStudent, setIsInstructorAsStudent } = useAuth()
   const account = user?.email || user?.username || ""
 
@@ -74,7 +74,7 @@ export function AppHeader({ role }) {
                 <DropdownMenuSeparator />
               </>
             )}
-            {role === "instructor" && (
+            {userRole === "instructor" && (
               <DropdownMenuItem onClick={() => setIsInstructorAsStudent((v) => !v)}>
                 <Icon icon={isInstructorAsStudent ? MdVisibilityOff : MdVisibility} size={16} />
                 {isInstructorAsStudent ? "Exit student view" : "View as student"}

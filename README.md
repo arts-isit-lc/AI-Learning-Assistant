@@ -1,6 +1,6 @@
-# AI Learning Assistant
+# OCELIA
 
-A RAG-powered educational chatbot that provides personalized, adaptive learning experiences. The system processes course materials (PDF, PPTX, DOCX, LaTeX, CSV, HTML) into a multimodal knowledge base and delivers that knowledge through AI-guided conversations that track engagement, evaluate understanding, and adapt difficulty.
+OCELIA is a RAG-powered educational chatbot that provides personalized, adaptive learning experiences. The system processes course materials (PDF, PPTX, DOCX, LaTeX, CSV, HTML) into a multimodal knowledge base and delivers that knowledge through AI-guided conversations that track engagement, evaluate understanding, and adapt difficulty.
 
 Three user roles: **Admin** (platform management), **Instructor** (course materials, analytics), **Student** (AI chat, learning sessions).
 

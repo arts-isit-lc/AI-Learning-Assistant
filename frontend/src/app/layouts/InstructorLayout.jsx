@@ -11,7 +11,7 @@ import { InstructorTabBar } from "@/components/composed/InstructorTabBar"
 export default function InstructorLayout() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <AppHeader role="instructor" />
+      <AppHeader userRole="instructor" />
       <InstructorTabBar />
       <main className="flex-1">
         <Outlet />

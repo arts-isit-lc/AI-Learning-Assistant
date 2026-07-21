@@ -17,7 +17,7 @@ vi.mock("@/context/AuthContext", () => ({
 function renderHeader(role) {
   return render(
     <MemoryRouter>
-      <AppHeader role={role} />
+      <AppHeader userRole={role} />
     </MemoryRouter>
   )
 }
