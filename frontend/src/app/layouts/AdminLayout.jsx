@@ -14,10 +14,10 @@ import { cn } from "@/lib/utils"
  */
 const navLinkClass = ({ isActive }) =>
   cn(
-    "border-b-2 pb-1 text-caption font-semibold text-sm transition-colors duration-fast",
+    "border-b-2 pb-1 px-6 text-caption font-semibold text-sm transition-colors duration-fast",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
     isActive
-      ? "border-neutral-900 text-neutral-900"
+      ? "border-primary-foreground text-neutral-900"
       : "border-transparent text-primary hover:text-primary/80"
   )
 
