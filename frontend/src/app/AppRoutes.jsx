@@ -145,7 +145,10 @@ export default function AppRoutes() {
         <Route element={<RequireRole allow={["admin"]} />}>
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<Navigate to="instructors" replace />} />
-            <Route path="instructors" element={<SplitLayout list={<InstructorList />} />}>
+            <Route
+              path="instructors"
+              element={<SplitLayout listWidth="lg:w-[403px]" list={<InstructorList />} />}
+            >
               <Route
                 index
                 element={
@@ -156,7 +159,10 @@ export default function AppRoutes() {
               />
               <Route path=":instructorId" element={<InstructorDetail />} />
             </Route>
-            <Route path="courses" element={<SplitLayout list={<CourseList />} />}>
+            <Route
+              path="courses"
+              element={<SplitLayout listWidth="lg:w-[403px]" list={<CourseList />} />}
+            >
               <Route
                 index
                 element={
