@@ -11,7 +11,8 @@ import { cn } from "@/lib/utils"
  *   <Icon icon={MdHome} label="Home" />
  *
  * Do NOT ship the Material Symbols variable web font (loads every glyph, not
- * tree-shakeable) and do NOT use `@mui/icons-material` (pulls in MUI/emotion).
+ * tree-shakeable) and do NOT reintroduce `@mui/icons-material` (it would pull
+ * MUI/emotion back into the bundle).
  *
  * Colour inherits from the surrounding text colour (`currentColor`), so drive
  * it with a token class — `<Icon icon={MdWarning} className="text-warning" />`.

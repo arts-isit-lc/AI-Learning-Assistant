@@ -45,7 +45,7 @@ export default function AdminLayout() {
       </div>
 
       <div className="mt-6 border-b border-border">
-        <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-6 pb-4">
+        <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-6 pb-6">
           <nav className="flex items-center gap-6" aria-label="Admin navigation">
             <NavLink to="/admin/instructors" className={navLinkClass}>
               Instructors
@@ -55,9 +55,9 @@ export default function AdminLayout() {
             </NavLink>
           </nav>
           {inCourses ? (
-            <Button asChild size="sm">
+            <Button asChild size="sm" className="h-7 gap-4 px-6">
               <Link to="/admin/courses/new">
-                Add course <Icon icon={MdAdd} size={18} />
+                Add course <Icon icon={MdAdd} size={20} />
               </Link>
             </Button>
           ) : (

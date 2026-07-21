@@ -41,10 +41,9 @@ function GlobalErrorFallback() {
 }
 
 /**
- * OCELIA app shell (Phase 2), rendered when `VITE_UI_V2` is enabled. Wires the
- * three global contexts (Auth / Notification / Course), the router, global
- * toasts, and a top-level error boundary. The legacy MUI app stays the default
- * until the rebuild completes (strangler migration; flag removed in Phase 8).
+ * OCELIA app shell — the application root, rendered directly by `main.jsx`.
+ * Wires the three global contexts (Auth / Notification / Course), the router,
+ * global toasts, and a top-level error boundary.
  */
 export default function AppV2() {
   // One client per mount (stable across re-renders).

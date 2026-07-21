@@ -18,9 +18,6 @@ export default {
     extend: {
       fontFamily: {
         sans: ["var(--font-sans)"],
-        // Legacy MUI aliases — removed with MUI in Phase 8.
-        roboto: ["Roboto", "ui-sans-serif", "system-ui"],
-        inter: ["Inter", "ui-sans-serif", "system-ui"],
       },
       fontSize: {
         // OCELIA named type scale: [size, { lineHeight, fontWeight }].

@@ -8,7 +8,7 @@ RAG chatbot for personalized education. Roles: Admin, Instructor, Student. LangC
 
 ## Repo Structure
 ```
-frontend/              # React 18 SPA (Vite + Tailwind + shadcn/ui; migrating off MUI v9 — OCELIA rebuild)
+frontend/              # React 18 SPA (Vite + Tailwind + shadcn/ui — OCELIA; MUI fully removed in the Phase 8 purge)
 cdk/
 ├── bin/cdk.ts         # CDK app entrypoint
 ├── lib/               # 7 CDK stacks
