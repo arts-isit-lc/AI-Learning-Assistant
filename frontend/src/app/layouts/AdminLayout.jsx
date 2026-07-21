@@ -37,7 +37,7 @@ export default function AdminLayout() {
     <div className="flex min-h-screen flex-col bg-background">
       <AppHeader role="admin" />
 
-      <div className="w-full px-6 pt-6 text-left lg:px-28">
+      <div className="mx-auto w-full max-w-7xl px-6 pt-6 text-left">
         <h1 className="text-h2 font-semibold uppercase text-foreground">Administration</h1>
         <p className="mt-2 text-body text-muted-foreground">
           Add and remove instructors, manage access, and create or duplicate new courses.
@@ -45,7 +45,7 @@ export default function AdminLayout() {
       </div>
 
       <div className="mt-6 border-b border-border">
-        <div className="flex w-full items-center justify-between gap-4 px-6 pb-4 lg:px-28">
+        <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-6 pb-4">
           <nav className="flex items-center gap-6" aria-label="Admin navigation">
             <NavLink to="/admin/instructors" className={navLinkClass}>
               Instructors
