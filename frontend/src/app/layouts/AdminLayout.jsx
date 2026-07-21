@@ -55,7 +55,7 @@ export default function AdminLayout() {
             </NavLink>
           </nav>
           {inCourses ? (
-            <Button asChild size="sm" className="h-7 gap-4 px-6">
+            <Button asChild size="sm" className="h-7 gap-4 rounded-sm px-6">
               <Link to="/admin/courses/new">
                 Add course <Icon icon={MdAdd} size={20} />
               </Link>

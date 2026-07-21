@@ -54,7 +54,7 @@ export function AddInstructorDialog() {
 
   return (
     <>
-      <Button size="sm" className="h-7 gap-4 px-6" onClick={() => setOpen(true)}>
+      <Button size="sm" className="h-7 gap-4 rounded-sm px-6" onClick={() => setOpen(true)}>
         Add instructor <Icon icon={MdAdd} size={20} />
       </Button>
       <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : close())}>
