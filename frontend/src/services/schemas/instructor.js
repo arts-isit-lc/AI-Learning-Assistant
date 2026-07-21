@@ -142,6 +142,31 @@ export const ChatLogsSchema = z
   .object({ log_files: z.record(z.string(), z.string()).nullable().optional() })
   .passthrough()
 
+// --- Course-wide chat messages (GET instructor/course_messages_rows) — B5,
+//     paginated rows for the in-app Chat History table. ---
+export const CourseMessageRowSchema = z
+  .object({
+    user_email: z.string().nullable().optional(),
+    module_name: z.string().nullable().optional(),
+    module_number: z.union([z.string(), z.number()]).nullable().optional(),
+    concept_name: z.string().nullable().optional(),
+    concept_number: z.union([z.string(), z.number()]).nullable().optional(),
+    session_id: z.string().nullable().optional(),
+    session_name: z.string().nullable().optional(),
+    student_sent: z.boolean().nullable().optional(),
+    message_content: z.string().nullable().optional(),
+    time_sent: z.string().nullable().optional(),
+  })
+  .passthrough()
+export const CourseMessagesSchema = z
+  .object({
+    messages: z.array(CourseMessageRowSchema).nullable().optional(),
+    total: z.number().nullable().optional(),
+    limit: z.number().nullable().optional(),
+    offset: z.number().nullable().optional(),
+  })
+  .passthrough()
+
 // --- Chat-log job status (GET instructor/check_notifications_status) ---
 export const ChatlogStatusSchema = z
   .object({

@@ -14,7 +14,7 @@ beforeEach(() => mutate.mockReset())
 describe("JoinCourseDialog", () => {
   it("shows a validation error when the code is empty", async () => {
     render(<JoinCourseDialog open onOpenChange={() => {}} />)
-    await userEvent.click(screen.getByRole("button", { name: "Join" }))
+    await userEvent.click(screen.getByRole("button", { name: "Join course" }))
     expect(await screen.findByText("Enter your access code")).toBeInTheDocument()
     expect(mutate).not.toHaveBeenCalled()
   })
@@ -22,7 +22,7 @@ describe("JoinCourseDialog", () => {
   it("submits a valid access code", async () => {
     render(<JoinCourseDialog open onOpenChange={() => {}} />)
     await userEvent.type(screen.getByLabelText(/access code/i), "65XH19000jo12")
-    await userEvent.click(screen.getByRole("button", { name: "Join" }))
+    await userEvent.click(screen.getByRole("button", { name: "Join course" }))
     await waitFor(() =>
       expect(mutate).toHaveBeenCalledWith("65XH19000jo12", expect.any(Object))
     )

@@ -23,11 +23,15 @@ function initialsFrom(text) {
 }
 
 /**
- * OCELIA top banner (`Header` frame 859:7184) — the UBC signature (crest in a
- * full-height bordered box + purple letter-spaced OCELIA wordmark) on the left,
- * the account menu on the right. Brand + account ONLY: role navigation lives in
- * the bars below the banner (instructor → `InstructorTabBar`; admin → its layout
- * nav), never in the banner itself.
+ * OCELIA top banner (Figma `Header` 859:7184 — Student/Instructor/Administrator
+ * variants share this layout). Structure matches the frame exactly:
+ *   [ crest | OCELIA ]  ......................  [ avatar  email ]
+ * The crest sits in a right-bordered box, the purple letter-spaced OCELIA
+ * wordmark next to it; the account cluster is a left-bordered full-height box
+ * with a solid-purple avatar + the account **email** in purple. Brand + account
+ * ONLY — role navigation lives in the bars below (instructor → `InstructorTabBar`;
+ * admin → its layout nav), never in the banner. All dividers use `border-border`
+ * (#808080), per the frame.
  *
  * @param {{ role: "student"|"instructor"|"admin" }} props
  */
@@ -37,24 +41,26 @@ export function AppHeader({ role }) {
 
   return (
     <header className="sticky top-0 z-sticky border-b border-border bg-background">
-      <div className="flex h-20 items-center justify-between pr-4 sm:pr-6">
+      <div className="flex items-stretch justify-between">
         <Link
           to="/"
           aria-label="OCELIA home"
-          className="flex items-center gap-4 self-stretch focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          className="flex items-stretch focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         >
-          <span className="flex h-full w-20 items-center justify-center border-r border-border">
-            <img src={ubcLogo} alt="University of British Columbia" className="h-11 w-auto" />
+          <span className="flex items-center border-r border-border px-6 py-4">
+            <img src={ubcLogo} alt="University of British Columbia" className="h-12 w-auto" />
           </span>
-          <span className="text-h2 font-semibold tracking-[0.3em] text-primary">OCELIA</span>
+          <span className="flex items-center px-6 text-h2 font-semibold tracking-[0.5em] text-primary">
+            OCELIA
+          </span>
         </Link>
 
         <DropdownMenu>
           <DropdownMenuTrigger
-            className="flex items-center gap-3 rounded-md px-2 py-1.5 text-caption text-foreground transition-colors duration-fast hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="flex items-center gap-4 self-stretch border-l border-border px-6 text-caption text-primary transition-colors duration-fast hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             aria-label="Account menu"
           >
-            <Avatar className="h-9 w-9">
+            <Avatar className="h-8 w-8">
               <AvatarFallback className="bg-primary text-primary-foreground">
                 {initialsFrom(account)}
               </AvatarFallback>

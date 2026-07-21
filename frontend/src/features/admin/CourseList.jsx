@@ -66,6 +66,13 @@ export function CourseList() {
                       {course.course_name}
                     </span>
                   )}
+                  {/* term/section — forward-compatible (no schema columns today). */}
+                  {course.term && (
+                    <span className="truncate text-caption font-semibold text-foreground group-aria-[current=true]:text-primary-foreground/90">
+                      {course.term}
+                      {course.section ? ` (${course.section})` : ""}
+                    </span>
+                  )}
                 </div>
               </ListRow>
             )

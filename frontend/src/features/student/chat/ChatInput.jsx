@@ -49,8 +49,8 @@ export function ChatInput({ onSubmit, disabled = false }) {
         disabled={disabled}
         onKeyDown={handleKeyDown}
         onInput={handleInput}
-        placeholder="Message AI Assistant..."
-        aria-label="Message AI Assistant"
+        placeholder="Message OCELIA Assistant..."
+        aria-label="Message OCELIA Assistant"
         className="max-h-32 min-h-10 resize-none"
       />
       <Button

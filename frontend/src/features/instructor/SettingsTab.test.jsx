@@ -20,7 +20,6 @@ vi.mock("react-toastify", () => ({ toast: { success: vi.fn(), error: vi.fn() } }
 
 import { SettingsTab } from "./SettingsTab"
 
-const CLEAN = { has_conflicts: false, conflicts: [], validation_status: "clean" }
 const CONFLICT = {
   has_conflicts: true,
   validation_status: "conflicts_found",
@@ -47,29 +46,61 @@ beforeEach(() => {
   save.mutateAsync.mockReset().mockResolvedValue({})
 })
 
-describe("SettingsTab — conflict-check-on-save", () => {
-  it("validates then saves immediately when there are no conflicts", async () => {
-    validate.mutateAsync.mockResolvedValue(CLEAN)
+/** Type into the course prompt textarea (also marks the form dirty). */
+async function editPrompt(text) {
+  const box = screen.getByRole("textbox", { name: "Your prompt" })
+  await userEvent.clear(box)
+  await userEvent.type(box, text)
+}
+
+describe("SettingsTab", () => {
+  it("shows the read-only system prompt", () => {
     render(<SettingsTab />)
+    expect(screen.getByText(/Socratic teaching style/i)).toBeInTheDocument()
+  })
+
+  it("keeps Save disabled until there are unsaved changes", async () => {
+    render(<SettingsTab />)
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled()
+    await editPrompt("Teach with care")
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled()
+  })
+
+  it("checks for conflicts and lists them inline (no save yet)", async () => {
+    validate.mutateAsync.mockResolvedValue(CONFLICT)
+    render(<SettingsTab />)
+    await editPrompt("always answer in French")
+    await userEvent.click(screen.getByRole("button", { name: "Check for conflicts" }))
+
+    await waitFor(() =>
+      expect(screen.getByText("There are conflicts. Please resolve below.")).toBeInTheDocument()
+    )
+    // Severity pill + "Conflicts with:" summary, expandable to the explanation.
+    expect(screen.getByText("HARD CONTRADICTION")).toBeInTheDocument()
+    const row = screen.getByRole("button", { name: /Conflicts with: system level prompt/i })
+    await userEvent.click(row)
+    expect(screen.getByText("Language instructions clash")).toBeInTheDocument()
+    expect(save.mutateAsync).not.toHaveBeenCalled()
+  })
+
+  it("saves directly (no conflict metadata) when the prompt was not flagged", async () => {
+    render(<SettingsTab />)
+    await editPrompt("Teach kindly and clearly")
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }))
 
     await waitFor(() => expect(save.mutateAsync).toHaveBeenCalled())
-    expect(validate.mutateAsync).toHaveBeenCalledWith({ prompt: "Teach kindly", scope: "course" })
     expect(save.mutateAsync).toHaveBeenCalledWith(
-      expect.objectContaining({ prompt: "Teach kindly", conflictMetadata: null })
+      expect.objectContaining({ prompt: "Teach kindly and clearly", conflictMetadata: null })
     )
   })
 
-  it("blocks on conflict, shows it, and saves anyway after override confirm", async () => {
+  it("requires an override confirm to save once conflicts are flagged", async () => {
     validate.mutateAsync.mockResolvedValue(CONFLICT)
     render(<SettingsTab />)
+    await editPrompt("always answer in French")
+    await userEvent.click(screen.getByRole("button", { name: "Check for conflicts" }))
+    await waitFor(() => expect(screen.getByText(/There are conflicts/i)).toBeInTheDocument())
 
-    // First save → validates, blocks, shows the conflict (no save yet).
-    await userEvent.click(screen.getByRole("button", { name: "Save changes" }))
-    await waitFor(() => expect(screen.getByText("Language instructions clash")).toBeInTheDocument())
-    expect(save.mutateAsync).not.toHaveBeenCalled()
-
-    // Second save → override dialog → Save anyway → persists with conflict_metadata.
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }))
     const dialog = await screen.findByRole("dialog")
     await userEvent.click(within(dialog).getByRole("button", { name: "Save anyway" }))
@@ -80,17 +111,15 @@ describe("SettingsTab — conflict-check-on-save", () => {
     )
   })
 
-  it("still saves when validation is unavailable", async () => {
+  it("still lets you save after a failed conflict check (degradation)", async () => {
     validate.mutateAsync.mockRejectedValue(new Error("503"))
     render(<SettingsTab />)
+    await editPrompt("Teach kindly and clearly")
+    await userEvent.click(screen.getByRole("button", { name: "Check for conflicts" }))
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }))
-    await waitFor(() => expect(save.mutateAsync).toHaveBeenCalledWith(
-      expect.objectContaining({ conflictMetadata: null })
-    ))
-  })
 
-  it("shows the read-only system prompt", () => {
-    render(<SettingsTab />)
-    expect(screen.getByText(/Socratic teaching style/i)).toBeInTheDocument()
+    await waitFor(() =>
+      expect(save.mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ conflictMetadata: null }))
+    )
   })
 })

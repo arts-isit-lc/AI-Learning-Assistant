@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 
 let analyticsResult
 vi.mock("@/services/queries", () => ({
@@ -11,10 +12,10 @@ vi.mock("react-router-dom", async (importOriginal) => {
 })
 // Recharts isn't unit-testable in jsdom; the chart has its own smoke test.
 vi.mock("@/components/composed/AnalyticsChart", () => ({
-  AnalyticsChart: () => <div data-testid="analytics-chart" />,
+  AnalyticsChart: ({ ariaLabel }) => <div data-testid="analytics-chart" aria-label={ariaLabel} />,
 }))
 
-import { InsightsTab } from "./InsightsTab"
+import { InsightsTab, analyticsToCsv } from "./InsightsTab"
 
 const ROWS = [
   { module_name: "vectors", message_count: 10, perfect_score_percentage: 80, access_count: 5 },
@@ -25,22 +26,49 @@ beforeEach(() => {
   analyticsResult = { data: [], isLoading: false, isError: false }
 })
 
+describe("analyticsToCsv", () => {
+  it("serializes rows to CSV with a header", () => {
+    const csv = analyticsToCsv(ROWS)
+    expect(csv.split("\n")[0]).toBe("Module,Messages,Views,Mastery %")
+    expect(csv).toContain("vectors,10,5,80")
+    expect(csv).toContain("matrices,4,2,40")
+  })
+})
+
 describe("InsightsTab", () => {
-  it("renders aggregate stats, the chart, and a per-module breakdown", () => {
+  it("renders the chart, metric chips, and a data-derived summary (Messages default)", () => {
     analyticsResult = { data: ROWS, isLoading: false, isError: false }
     render(<InsightsTab />)
 
-    // aggregate stat cards (assert the unambiguous derived values)
-    expect(screen.getByText("Modules")).toBeInTheDocument()
-    expect(screen.getByText("14")).toBeInTheDocument() // total messages 10 + 4
-    expect(screen.getByText("60.0%")).toBeInTheDocument() // avg mastery (80 + 40) / 2
-
     expect(screen.getByTestId("analytics-chart")).toBeInTheDocument()
+    expect(screen.getByText("Number of messages per module")).toBeInTheDocument()
+    // metric switcher chips
+    expect(screen.getByRole("button", { name: "Messages" })).toHaveAttribute("aria-pressed", "true")
+    expect(screen.getByRole("button", { name: "Student Engagement" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Content Metrics" })).toBeInTheDocument()
+    // summary derived from the rows (14 total messages, 2 modules, top = Vectors)
+    expect(screen.getByText(/14 messages across 2 modules/i)).toBeInTheDocument()
+  })
 
-    // per-module table (title-cased names + formatted mastery)
-    expect(screen.getByText("Vectors")).toBeInTheDocument()
-    expect(screen.getByText("Matrices")).toBeInTheDocument()
-    expect(screen.getByText("80.0%")).toBeInTheDocument()
+  it("switches the chart title + summary when another metric is selected", async () => {
+    analyticsResult = { data: ROWS, isLoading: false, isError: false }
+    render(<InsightsTab />)
+
+    await userEvent.click(screen.getByRole("button", { name: "Content Metrics" }))
+    expect(screen.getByText("Average mastery per module")).toBeInTheDocument()
+    // avg mastery (80 + 40) / 2 = 60.0%
+    expect(screen.getByText(/Average mastery is 60\.0%/i)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole("button", { name: "Student Engagement" }))
+    expect(screen.getByText("Number of views per module")).toBeInTheDocument()
+    expect(screen.getByText(/7 views across 2 modules/i)).toBeInTheDocument()
+  })
+
+  it("offers Export and a disabled Clear data control", () => {
+    analyticsResult = { data: ROWS, isLoading: false, isError: false }
+    render(<InsightsTab />)
+    expect(screen.getByRole("button", { name: "Export" })).toBeEnabled()
+    expect(screen.getByRole("button", { name: "Clear data" })).toBeDisabled()
   })
 
   it("shows the empty state when there is no analytics data", () => {

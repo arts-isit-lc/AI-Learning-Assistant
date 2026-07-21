@@ -2,14 +2,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
-let logsResult
-let statusResult
-const { subscribe, http } = vi.hoisted(() => ({
+const { useCourseMessages, subscribe, http } = vi.hoisted(() => ({
+  useCourseMessages: vi.fn(),
   subscribe: vi.fn(),
   http: { getAuth: vi.fn(), post: vi.fn(), del: vi.fn() },
 }))
 
+let logsResult
+let statusResult
 vi.mock("@/services/queries", () => ({
+  useCourseMessages: (...args) => useCourseMessages(...args),
   useChatlogs: () => logsResult,
   useChatlogStatus: () => statusResult,
 }))
@@ -23,30 +25,78 @@ vi.mock("react-toastify", () => ({ toast: { success: vi.fn(), error: vi.fn(), in
 
 import { ChatHistoryTab } from "./ChatHistoryTab"
 
+const MSG = (over = {}) => ({
+  user_email: "stu@x.com",
+  module_name: "vectors",
+  concept_name: "algebra",
+  session_id: "s1",
+  session_name: "Session 1",
+  student_sent: true,
+  message_content: "what is a vector?",
+  time_sent: "2026-02-01T10:00:00Z",
+  ...over,
+})
+
 beforeEach(() => {
-  logsResult = { data: [], isLoading: false, refetch: vi.fn() }
-  statusResult = { data: { isEnabled: true }, refetch: vi.fn() }
+  logsResult = { data: [], refetch: vi.fn().mockResolvedValue({ data: [] }) }
+  statusResult = { data: { isEnabled: true } }
   subscribe.mockReset().mockResolvedValue(undefined)
   http.getAuth.mockReset().mockResolvedValue({ email: "prof@x.com" })
   http.post.mockReset().mockResolvedValue({})
   http.del.mockReset().mockResolvedValue({})
+  useCourseMessages.mockReset().mockReturnValue({
+    data: { messages: [], total: 0 },
+    isLoading: false,
+    isError: false,
+  })
 })
 
 describe("ChatHistoryTab", () => {
-  it("lists generated logs with a download action", () => {
-    logsResult = {
-      data: [{ name: "2026-02-01 10:00:00.csv", url: "https://s3/log.csv", date: "Feb 1, 2026, 10:00 AM" }],
+  it("renders the message table (User/Module/Concept/Session/Message + sender)", () => {
+    useCourseMessages.mockReturnValue({
+      data: { messages: [MSG(), MSG({ student_sent: false, message_content: "A vector has magnitude." })], total: 2 },
       isLoading: false,
-      refetch: vi.fn(),
-    }
+      isError: false,
+    })
     render(<ChatHistoryTab />)
-    expect(screen.getByText("Feb 1, 2026, 10:00 AM")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Download CSV" })).toBeInTheDocument()
+
+    expect(screen.getByText("User")).toBeInTheDocument()
+    expect(screen.getByText("Module name")).toBeInTheDocument()
+    expect(screen.getAllByText("stu@x.com")).toHaveLength(2) // one per row
+    expect(screen.getAllByText("Vectors")).toHaveLength(2) // title-cased module
+    expect(screen.getByText(/what is a vector\?/)).toBeInTheDocument()
+    // sender prefix distinguishes student vs assistant messages
+    expect(screen.getByText("Student:")).toBeInTheDocument()
+    expect(screen.getByText("OCELIA:")).toBeInTheDocument()
   })
 
-  it("subscribes before submitting the generation job", async () => {
+  it("paginates over offset (Previous disabled on page 1, Next advances)", async () => {
+    useCourseMessages.mockImplementation((_courseId, { offset }) =>
+      offset === 0
+        ? { data: { messages: [MSG({ message_content: "page one msg" })], total: 120 }, isLoading: false, isError: false }
+        : { data: { messages: [MSG({ message_content: "page two msg" })], total: 120 }, isLoading: false, isError: false }
+    )
     render(<ChatHistoryTab />)
-    await userEvent.click(screen.getByRole("button", { name: "Generate chat logs" }))
+
+    expect(screen.getByText("Page 1 of 3")).toBeInTheDocument() // ceil(120/50)
+    expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled()
+    expect(screen.getByText(/page one msg/)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole("button", { name: "Next" }))
+    expect(screen.getByText("Page 2 of 3")).toBeInTheDocument()
+    expect(screen.getByText(/page two msg/)).toBeInTheDocument()
+    expect(useCourseMessages).toHaveBeenLastCalledWith("c1", { limit: 50, offset: 50 })
+  })
+
+  it("exports via the async job (subscribe before submit)", async () => {
+    useCourseMessages.mockReturnValue({
+      data: { messages: [MSG()], total: 1 },
+      isLoading: false,
+      isError: false,
+    })
+    render(<ChatHistoryTab />)
+    await userEvent.click(screen.getByRole("button", { name: "Export CSV" }))
+
     await waitFor(() => expect(http.post).toHaveBeenCalled())
     expect(subscribe).toHaveBeenCalled()
     expect(http.post).toHaveBeenCalledWith(
@@ -56,8 +106,14 @@ describe("ChatHistoryTab", () => {
     )
   })
 
-  it("shows the empty state when there are no logs", () => {
+  it("shows the empty state when there are no messages", () => {
     render(<ChatHistoryTab />)
-    expect(screen.getByRole("heading", { name: "No chat logs yet" })).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "No chat history yet" })).toBeInTheDocument()
+  })
+
+  it("shows an error alert when messages fail to load", () => {
+    useCourseMessages.mockReturnValue({ data: undefined, isLoading: false, isError: true })
+    render(<ChatHistoryTab />)
+    expect(screen.getByText("Couldn’t load chat history")).toBeInTheDocument()
   })
 })

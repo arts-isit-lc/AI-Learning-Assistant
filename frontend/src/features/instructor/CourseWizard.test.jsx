@@ -63,7 +63,7 @@ async function advance() {
 describe("CourseWizard", () => {
   it("walks the 4 steps and finalizes with the collected values", async () => {
     const user = await advance()
-    await user.click(screen.getByRole("button", { name: "Create module" }))
+    await user.click(screen.getByRole("button", { name: "Publish" }))
     expect(finalize.mutate).toHaveBeenCalled()
     const [payload] = finalize.mutate.mock.calls[0]
     expect(payload).toMatchObject({
@@ -82,12 +82,17 @@ describe("CourseWizard", () => {
     expect(screen.getByRole("button", { name: "Next" })).toBeEnabled()
   })
 
-  it("discards the draft on cancel", async () => {
+  it("discards the draft from the footer Discard button (with confirm)", async () => {
     const user = userEvent.setup()
     render(<CourseWizard />)
-    await user.click(screen.getByRole("button", { name: "Cancel" }))
-    const dialog = await screen.findByRole("dialog")
-    await user.click(within(dialog).getByRole("button", { name: "Discard" }))
+    // Footer "Discard" opens the confirm modal (the only Discard button so far).
+    await user.click(screen.getByRole("button", { name: "Discard" }))
+    expect(await screen.findByText("Discard this module?")).toBeInTheDocument()
+    // Now two dialogs exist (wizard + confirm); click the confirm's Discard.
+    const confirm = screen
+      .getAllByRole("dialog")
+      .find((d) => within(d).queryByText("Discard this module?"))
+    await user.click(within(confirm).getByRole("button", { name: "Discard" }))
     await waitFor(() => expect(draft.cleanup).toHaveBeenCalled())
     expect(navigate).toHaveBeenCalledWith("/instructor/courses/c1/configuration")
   })

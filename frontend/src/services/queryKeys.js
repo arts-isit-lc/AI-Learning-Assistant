@@ -9,6 +9,7 @@ export const queryKeys = {
     all: ["courses"],
     list: (asInstructor = false) => ["courses", "list", { asInstructor }],
     page: (courseId) => ["courses", courseId, "page"],
+    progressSummary: (asInstructor = false) => ["courses", "progressSummary", { asInstructor }],
   },
   modules: {
     sessions: (courseId, moduleId) => ["modules", courseId, moduleId, "sessions"],
@@ -45,7 +46,13 @@ export const queryKeys = {
       studentEmail,
       "messages",
     ],
-    // Chat history (chat-log export job)
+    // Chat history (in-app message table + chat-log export job)
+    courseMessages: (courseId, limit, offset) => [
+      "instructor",
+      courseId,
+      "courseMessages",
+      { limit, offset },
+    ],
     chatlogs: (courseId) => ["instructor", courseId, "chatlogs"],
     chatlogStatus: (courseId) => ["instructor", courseId, "chatlogs", "status"],
     // Files (module create/edit references + per-module files)

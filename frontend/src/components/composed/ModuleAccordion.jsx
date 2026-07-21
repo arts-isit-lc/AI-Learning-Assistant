@@ -25,11 +25,10 @@ import {
   MdExpandMore,
 } from "react-icons/md"
 import { cn } from "@/lib/utils"
-import { titleCase } from "@/utils/formatters"
+import { titleCase, toRoman } from "@/utils/formatters"
 import { Icon } from "@/components/ui/icon"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card } from "@/components/ui/card"
 import { Tag } from "@/components/composed/Tag"
 
 /** key_topics may arrive as a JSON string or an array (legacy). */
@@ -44,8 +43,13 @@ export function parseKeyTopics(value) {
   }
 }
 
-/** One module: a sortable row that expands to a read-only summary + Edit/Delete. */
-function SortableModuleRow({ module, onEdit, onDelete }) {
+/**
+ * One module: an indented, sortable box (Figma 365:2504) showing `i. Name` + a
+ * disclosure chevron, expanding to a read-only summary + Edit/Delete. The drag
+ * handle is revealed on hover/focus so the row reads clean at rest like the
+ * mockup. `number` is the module's 1-based position (rendered as a roman numeral).
+ */
+function SortableModuleRow({ module, number, onEdit, onDelete }) {
   const [open, setOpen] = useState(false)
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: module.module_id,
@@ -54,29 +58,31 @@ function SortableModuleRow({ module, onEdit, onDelete }) {
   const topics = parseKeyTopics(module.key_topics)
 
   return (
-    <div ref={setNodeRef} style={style} className="rounded-md border border-border bg-background">
-      <div className="flex items-center gap-2 p-2">
+    <div ref={setNodeRef} style={style} className="group/module rounded-sm border border-border bg-muted">
+      <div className="flex items-center gap-2 py-2 pl-3 pr-2">
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+          className="flex flex-1 items-center justify-between gap-2 rounded py-1 text-left text-caption text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <span>
+            {toRoman(number)}. {titleCase(module.module_name)}
+          </span>
+          <Icon icon={MdExpandMore} size={18} className={cn("shrink-0 transition-transform", open && "rotate-180")} />
+        </button>
         <button
           type="button"
           aria-label={`Reorder ${module.module_name}`}
-          className="cursor-grab touch-none rounded p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="cursor-grab touch-none rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover/module:opacity-100"
           {...attributes}
           {...listeners}
         >
           <Icon icon={MdDragIndicator} size={18} />
         </button>
-        <button
-          type="button"
-          aria-expanded={open}
-          onClick={() => setOpen((o) => !o)}
-          className="flex flex-1 items-center justify-between gap-2 rounded py-1 text-left text-caption font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <span>{titleCase(module.module_name)}</span>
-          <Icon icon={MdExpandMore} size={18} className={cn("transition-transform", open && "rotate-180")} />
-        </button>
       </div>
       {open && (
-        <div className="border-t border-border p-3 text-caption">
+        <div className="border-t border-border bg-background p-3 text-caption">
           <p className="font-semibold text-foreground">Prompt</p>
           <p className="mb-3 whitespace-pre-wrap text-muted-foreground">
             {module.module_prompt || "No prompt set."}
@@ -103,14 +109,18 @@ function SortableModuleRow({ module, onEdit, onDelete }) {
 }
 
 /**
- * Configuration tree row for ONE concept (Figma ModuleAccordion): a concept
- * header (drag handle + inline rename + add-module + delete) over its sortable
- * module rows. The concept-level drag handle is wired by the parent via
- * `sortable` (from its `useSortable`); module reordering is self-contained here.
+ * Configuration tree entry for ONE concept (Figma 365:2504): a clean concept
+ * box — `N. Name` + an inline rename pencil — over its module boxes, which sit
+ * indented BELOW the concept box (not nested inside it). Management controls
+ * (reorder handle, add-module, delete) are revealed on hover/focus so the row
+ * reads clean at rest like the mockup. The concept-level drag handle is wired by
+ * the parent via `sortable` (from its `useSortable`); module reordering is
+ * self-contained here.
  *
  * @param {{
  *   concept: { concept_id: string, concept_name: string, concept_number?: number },
  *   modules?: Array<object>,
+ *   number?: number,
  *   sortable?: { setNodeRef?: Function, style?: object, attributes?: object, listeners?: object, isDragging?: boolean },
  *   onRename: (name: string) => void,
  *   onDelete: () => void,
@@ -123,6 +133,7 @@ function SortableModuleRow({ module, onEdit, onDelete }) {
 export function ModuleAccordion({
   concept,
   modules = [],
+  number,
   sortable,
   onRename,
   onDelete,
@@ -138,6 +149,7 @@ export function ModuleAccordion({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   )
   const moduleIds = modules.map((m) => m.module_id)
+  const displayNumber = number ?? concept.concept_number
 
   const handleModuleDragEnd = (event) => {
     const { active, over } = event
@@ -155,18 +167,13 @@ export function ModuleAccordion({
   }
 
   return (
-    <Card ref={sortable?.setNodeRef} style={sortable?.style} className={cn("p-0", sortable?.isDragging && "opacity-50")}>
-      <div className="flex items-center gap-2 border-b border-border p-3">
-        <button
-          type="button"
-          aria-label={`Reorder ${concept.concept_name}`}
-          className="cursor-grab touch-none rounded p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          {...(sortable?.attributes || {})}
-          {...(sortable?.listeners || {})}
-        >
-          <Icon icon={MdDragIndicator} size={20} />
-        </button>
-
+    <div
+      ref={sortable?.setNodeRef}
+      style={sortable?.style}
+      className={cn("flex flex-col gap-2", sortable?.isDragging && "opacity-50")}
+    >
+      {/* Concept box — clean at rest (number + name + pencil); controls on hover. */}
+      <div className="group flex items-center gap-2 rounded-sm border border-border bg-muted px-3 py-2.5">
         {editing ? (
           <div className="flex flex-1 items-center gap-2">
             <Input
@@ -200,41 +207,65 @@ export function ModuleAccordion({
           </div>
         ) : (
           <>
-            <h3 className="flex-1 text-h4 font-semibold text-navy">{titleCase(concept.concept_name)}</h3>
-            <Button
-              size="icon"
-              variant="ghost"
+            <h3 className="text-caption text-neutral-900">
+              {displayNumber != null ? `${displayNumber}. ` : ""}
+              {titleCase(concept.concept_name)}
+            </h3>
+            <button
+              type="button"
               aria-label="Rename concept"
               onClick={() => {
                 setName(concept.concept_name)
                 setEditing(true)
               }}
+              className="rounded p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <Icon icon={MdEdit} />
-            </Button>
-            <Button size="sm" variant="ghost" onClick={onAddModule}>
-              <Icon icon={MdAdd} size={18} /> Add module
-            </Button>
-            <Button size="icon" variant="ghost" aria-label="Delete concept" onClick={onDelete}>
-              <Icon icon={MdDelete} className="text-destructive" />
-            </Button>
+              <Icon icon={MdEdit} size={16} />
+            </button>
+            <div className="ml-auto flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+              <button
+                type="button"
+                aria-label={`Reorder ${concept.concept_name}`}
+                className="cursor-grab touch-none rounded p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                {...(sortable?.attributes || {})}
+                {...(sortable?.listeners || {})}
+              >
+                <Icon icon={MdDragIndicator} size={18} />
+              </button>
+              <Button size="sm" variant="ghost" onClick={onAddModule}>
+                <Icon icon={MdAdd} size={18} /> Add module
+              </Button>
+              <button
+                type="button"
+                aria-label="Delete concept"
+                onClick={onDelete}
+                className="rounded p-1 text-muted-foreground hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <Icon icon={MdDelete} />
+              </button>
+            </div>
           </>
         )}
       </div>
 
-      <div className="flex flex-col gap-2 p-3">
-        {modules.length === 0 ? (
-          <p className="text-caption text-muted-foreground">No modules yet. Add one to get started.</p>
-        ) : (
+      {/* Module boxes — indented below the concept box (not nested inside it). */}
+      {modules.length > 0 && (
+        <div className="ml-6 flex flex-col gap-2">
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleModuleDragEnd}>
             <SortableContext items={moduleIds} strategy={verticalListSortingStrategy}>
-              {modules.map((m) => (
-                <SortableModuleRow key={m.module_id} module={m} onEdit={onEditModule} onDelete={onDeleteModule} />
+              {modules.map((m, i) => (
+                <SortableModuleRow
+                  key={m.module_id}
+                  module={m}
+                  number={i + 1}
+                  onEdit={onEditModule}
+                  onDelete={onDeleteModule}
+                />
               ))}
             </SortableContext>
           </DndContext>
-        )}
-      </div>
-    </Card>
+        </div>
+      )}
+    </div>
   )
 }

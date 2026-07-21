@@ -8,10 +8,10 @@ import { ListRow } from "@/components/composed/ListRow"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 
-/** Display name for an instructor, falling back to the email before signup. */
+/** Display name for an instructor ("Lastname, Firstname" per Figma), else the email. */
 export function instructorLabel(instructor) {
   if (instructor.first_name && instructor.last_name) {
-    return `${titleCase(instructor.first_name)} ${titleCase(instructor.last_name)}`
+    return `${titleCase(instructor.last_name)}, ${titleCase(instructor.first_name)}`
   }
   return instructor.user_email
 }

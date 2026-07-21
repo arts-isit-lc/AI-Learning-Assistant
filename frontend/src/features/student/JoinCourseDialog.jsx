@@ -13,15 +13,17 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { FormField } from "@/components/composed/FormField"
 
 const schema = z.object({
   code: z.string().trim().min(1, "Enter your access code"),
 })
 
 /**
- * Join-by-code modal (RHF + Zod → `useEnrollCourse`). Validation + enrollment
- * errors render inline in the form; success closes and toasts.
+ * Join-by-code modal — Figma `Modal/Join course` (859:6784): title over a
+ * divider, instructions, a course-code input, a privacy notice, and Cancel /
+ * Join course actions. RHF + Zod → `useEnrollCourse`; validation + enrollment
+ * errors render inline; success closes and toasts. (Copy reworded off the frame's
+ * "6-digit" — the access code is the 16-char code, per decision B3.)
  */
 export function JoinCourseDialog({ open, onOpenChange }) {
   const enroll = useEnrollCourse()
@@ -60,19 +62,35 @@ export function JoinCourseDialog({ open, onOpenChange }) {
     <Dialog open={open} onOpenChange={close}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Join a course</DialogTitle>
-          <DialogDescription>Enter the access code provided by your instructor.</DialogDescription>
+          <DialogTitle>Join course</DialogTitle>
         </DialogHeader>
+        <div className="border-t border-border" aria-hidden="true" />
+        <DialogDescription className="text-body text-foreground">
+          Enter the access code from your instructor or administrator to join the course on OCELIA.
+        </DialogDescription>
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-          <FormField label="Access code" error={errors.code?.message}>
-            <Input placeholder="e.g. 65XH19000jo12" autoFocus {...register("code")} />
-          </FormField>
-          <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => close(false)}>
+          <div className="flex flex-col gap-1.5">
+            <Input
+              aria-label="Access code"
+              placeholder="Enter course code"
+              autoFocus
+              aria-invalid={errors.code ? true : undefined}
+              {...register("code")}
+            />
+            {errors.code && <p className="text-caption text-destructive">{errors.code.message}</p>}
+          </div>
+          <p className="text-caption text-muted-foreground">
+            <span className="font-semibold text-foreground">Privacy notice:</span> OCELIA collects usage
+            data to help evaluate course activity and improve your experience. This data is anonymized and
+            does not include personally identifiable information. By joining a course, you agree to this
+            data collection.
+          </p>
+          <DialogFooter className="border-t border-border pt-4">
+            <Button type="button" variant="outline" onClick={() => close(false)}>
               Cancel
             </Button>
             <Button type="submit" loading={enroll.isPending}>
-              Join
+              Join course
             </Button>
           </DialogFooter>
         </form>

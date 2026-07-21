@@ -1,25 +1,34 @@
 import { useMemo, useState } from "react"
 import { useParams, useSearchParams } from "react-router-dom"
 import { toast } from "react-toastify"
-import { useStudents, useAccessCode, useRegenerateAccessCode, useDeleteStudent } from "@/services/queries"
+import { MdClose, MdPeople } from "react-icons/md"
+import { useStudents, useDeleteStudent } from "@/services/queries"
 import { titleCase } from "@/utils/formatters"
-import { DataTable } from "@/components/composed/DataTable"
 import { Searchbar } from "@/components/composed/Searchbar"
 import { ConfirmDialog } from "@/components/composed/ConfirmDialog"
-import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import { EmptyState } from "@/components/composed/EmptyState"
+import { Icon } from "@/components/ui/icon"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
 import { StudentDetail } from "./StudentDetail"
 
-function studentName(s) {
-  const full = `${titleCase(s.first_name || "")} ${titleCase(s.last_name || "")}`.trim()
-  return full || s.user_email
+/** "Lastname, Firstname" per the Figma roster; falls back to the email. */
+function rosterName(s) {
+  const last = titleCase(s.last_name || "")
+  const first = titleCase(s.first_name || "")
+  if (last && first) return `${last}, ${first}`
+  return last || first || s.user_email
 }
 
 /**
- * Students tab — roster + course access code + unenroll, with a read-only
- * per-student chat-history detail opened inline via the `?student=` query param
- * (deep-linkable + refresh-safe, and avoids putting an email in the path).
+ * Students tab — Figma 376:2525. A purple-header roster (Student · Contact ·
+ * Remove) with a search field above; clicking a student's name opens their
+ * read-only chat history inline via the `?student=` query param (deep-linkable,
+ * avoids an email in the path). The × removes (unenrolls) a student after a
+ * confirm — removal persists immediately, so there's no Undo/Save footer (same
+ * save-only decision as Configuration). The course access code lives in the
+ * course-detail header, so it's not repeated here.
  */
 export function StudentsTab() {
   const { courseId } = useParams()
@@ -27,13 +36,10 @@ export function StudentsTab() {
   const selectedEmail = searchParams.get("student")
 
   const { data: students = [], isLoading, isError } = useStudents(courseId)
-  const { data: accessCode } = useAccessCode(courseId)
-  const regenerate = useRegenerateAccessCode(courseId)
   const deleteStudent = useDeleteStudent(courseId)
 
   const [query, setQuery] = useState("")
-  const [unenrollTarget, setUnenrollTarget] = useState(null)
-  const [regenOpen, setRegenOpen] = useState(false)
+  const [removeTarget, setRemoveTarget] = useState(null)
 
   const setStudentParam = (email) =>
     setSearchParams((prev) => {
@@ -46,130 +52,120 @@ export function StudentsTab() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return students
-    return students.filter((s) => `${studentName(s)} ${s.user_email}`.toLowerCase().includes(q))
+    return students.filter((s) => `${rosterName(s)} ${s.user_email}`.toLowerCase().includes(q))
   }, [students, query])
 
-  // Inline detail view (a sub-state of the Students tab).
+  // Inline per-student chat history (a sub-state of the Students tab).
   if (selectedEmail) {
     const match = students.find((s) => s.user_email === selectedEmail)
     return (
       <StudentDetail
         courseId={courseId}
         email={selectedEmail}
-        name={match ? studentName(match) : undefined}
+        name={match ? rosterName(match) : undefined}
         onBack={() => setStudentParam(null)}
       />
     )
   }
 
-  const columns = [
-    { id: "name", header: "Name", cell: ({ row }) => studentName(row.original) },
-    { accessorKey: "user_email", header: "Email" },
-    {
-      id: "actions",
-      header: "",
-      cell: ({ row }) => (
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setStudentParam(row.original.user_email)}>
-            View chats
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => setUnenrollTarget(row.original)}>
-            Unenroll
-          </Button>
-        </div>
-      ),
-    },
-  ]
+  if (isError) {
+    return (
+      <Alert variant="destructive">
+        <AlertTitle>Couldn&rsquo;t load the roster</AlertTitle>
+        <AlertDescription>Please refresh and try again.</AlertDescription>
+      </Alert>
+    )
+  }
 
-  const copyCode = async () => {
-    if (!accessCode) return
-    try {
-      await navigator.clipboard.writeText(accessCode)
-      toast.success("Access code copied")
-    } catch {
-      toast.error("Couldn't copy the code")
-    }
+  if (!isLoading && students.length === 0) {
+    return (
+      <EmptyState
+        icon={MdPeople}
+        title="No students enrolled yet"
+        description="Students appear here once they join with the course access code."
+      />
+    )
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <Card>
-        <CardContent className="flex flex-wrap items-center justify-between gap-4 p-6">
-          <div className="flex flex-col gap-1">
-            <p className="text-caption text-muted-foreground">Course access code</p>
-            <p className="font-mono text-h4 text-navy">{accessCode || "—"}</p>
-            <p className="text-caption text-muted-foreground">
-              Students use this code to join the course.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={copyCode} disabled={!accessCode}>
-              Copy
-            </Button>
-            <Button variant="outline" onClick={() => setRegenOpen(true)}>
-              Regenerate
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+    <div className="flex flex-col gap-4">
+      <Searchbar value={query} onChange={setQuery} placeholder="Search students" />
 
-      {isError ? (
-        <Alert variant="destructive">
-          <AlertTitle>Couldn&rsquo;t load the roster</AlertTitle>
-          <AlertDescription>Please refresh and try again.</AlertDescription>
-        </Alert>
-      ) : (
-        <div className="flex flex-col gap-4">
-          {students.length > 0 && (
-            <Searchbar
-              value={query}
-              onChange={setQuery}
-              placeholder="Search students"
-              className="max-w-sm"
-            />
-          )}
-          <DataTable
-            columns={columns}
-            data={filtered}
-            loading={isLoading}
-            emptyMessage="No students enrolled yet."
-          />
-        </div>
-      )}
-
-      <ConfirmDialog
-        open={regenOpen}
-        onOpenChange={setRegenOpen}
-        title="Regenerate access code?"
-        description="The current code will stop working. Students will need the new code to join."
-        confirmLabel="Regenerate"
-        variant="danger"
-        loading={regenerate.isPending}
-        onConfirm={() =>
-          regenerate.mutate(undefined, {
-            onSuccess: () => {
-              setRegenOpen(false)
-              toast.success("Access code regenerated")
-            },
-          })
-        }
-      />
+      <div className="overflow-hidden rounded-sm border border-border">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="bg-primary font-semibold text-primary-foreground">Student</TableHead>
+              <TableHead className="bg-primary font-semibold text-primary-foreground">Contact</TableHead>
+              <TableHead className="bg-primary text-right font-semibold text-primary-foreground">
+                Remove
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              Array.from({ length: 6 }, (_, i) => (
+                <TableRow key={`sk-${i}`}>
+                  {[0, 1, 2].map((j) => (
+                    <TableCell key={j}>
+                      <Skeleton className="h-4 w-full" />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : filtered.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
+                  No students match your search.
+                </TableCell>
+              </TableRow>
+            ) : (
+              filtered.map((s) => (
+                <TableRow key={s.user_email}>
+                  <TableCell>
+                    <button
+                      type="button"
+                      onClick={() => setStudentParam(s.user_email)}
+                      className="text-left text-foreground hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {rosterName(s)}
+                    </button>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{s.user_email}</TableCell>
+                  <TableCell className="text-right">
+                    <button
+                      type="button"
+                      aria-label={`Remove ${rosterName(s)}`}
+                      onClick={() => setRemoveTarget(s)}
+                      className="rounded p-1 text-primary hover:bg-primary-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <Icon icon={MdClose} size={18} />
+                    </button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
 
       <ConfirmDialog
-        open={Boolean(unenrollTarget)}
-        onOpenChange={(open) => !open && setUnenrollTarget(null)}
-        title="Unenroll student?"
+        open={Boolean(removeTarget)}
+        onOpenChange={(open) => !open && setRemoveTarget(null)}
+        title="Delete student?"
         description={
-          unenrollTarget ? `Remove ${studentName(unenrollTarget)} from this course?` : ""
+          removeTarget
+            ? `You are about to remove ${rosterName(removeTarget)} from this course. If they need access again, you'll need to send a new invitation to join.`
+            : ""
         }
-        confirmLabel="Unenroll"
+        confirmLabel="Delete student"
         variant="danger"
         loading={deleteStudent.isPending}
         onConfirm={() =>
-          deleteStudent.mutate(unenrollTarget.user_email, {
+          deleteStudent.mutate(removeTarget.user_email, {
             onSuccess: () => {
-              setUnenrollTarget(null)
-              toast.success("Student unenrolled")
+              setRemoveTarget(null)
+              toast.success("Student removed")
             },
           })
         }

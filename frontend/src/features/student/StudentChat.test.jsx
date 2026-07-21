@@ -26,11 +26,15 @@ vi.mock("@/services/queries", () => ({
     data: [{ module_id: "mod1", module_name: "week 1 intro", concept_id: "c1", concept_name: "Maps" }],
   }),
   useModuleFiles: () => ({ data: [], isLoading: false }),
+  useCourses: () => ({
+    data: [{ course_id: "c1", course_department: "geog", course_number: "412", course_name: "water" }],
+  }),
   useCreateSession: () => ({ mutate: vi.fn(), isPending: false }),
   useDeleteSession: () => ({ mutate: vi.fn(), isPending: false }),
   useDeleteLastMessage: () => ({ mutate: vi.fn(), isPending: false }),
 }))
 
+vi.mock("@/context/AuthContext", () => ({ useAuth: () => ({ isInstructorAsStudent: false }) }))
 vi.mock("./chat/useChatStream", () => ({ useChatStream: () => stream }))
 
 import { StudentChat } from "./StudentChat"
@@ -51,7 +55,7 @@ describe("StudentChat page", () => {
     expect(screen.getByRole("heading", { name: "Week 1 Intro" })).toBeInTheDocument()
     expect(screen.getByText("First chat")).toBeInTheDocument()
     expect(screen.getByText("Hello student")).toBeInTheDocument()
-    expect(screen.getByLabelText("Message AI Assistant")).toBeInTheDocument()
+    expect(screen.getByLabelText("Message OCELIA Assistant")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /new chat/i })).toBeInTheDocument()
   })
 })

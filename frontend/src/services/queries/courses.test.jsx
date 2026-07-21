@@ -12,7 +12,7 @@ vi.mock("../http", () => ({
   parseWith: (_schema, data) => data,
 }))
 
-import { useCourses, useCoursePage } from "./courses"
+import { useCourses, useCoursePage, useCourseProgressSummary } from "./courses"
 
 function makeWrapper() {
   const client = new QueryClient({
@@ -55,6 +55,24 @@ describe("useCourses", () => {
 describe("useCoursePage", () => {
   it("is disabled (no fetch) without a courseId", () => {
     const { result } = renderHook(() => useCoursePage(undefined), { wrapper: makeWrapper() })
+    expect(result.current.fetchStatus).toBe("idle")
+    expect(mockGet).not.toHaveBeenCalled()
+  })
+})
+
+describe("useCourseProgressSummary", () => {
+  it("fetches the per-course progress summary in one request", async () => {
+    mockGet.mockResolvedValue([{ course_id: "c1", percent: 50, completed: 1, total: 2 }])
+    const { result } = renderHook(() => useCourseProgressSummary(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(mockGet).toHaveBeenCalledWith("student/progress_summary", { email: "e@x.com" })
+    expect(result.current.data[0].percent).toBe(50)
+  })
+
+  it("is disabled (no fetch) in instructor preview mode", () => {
+    const { result } = renderHook(() => useCourseProgressSummary({ asInstructor: true }), {
+      wrapper: makeWrapper(),
+    })
     expect(result.current.fetchStatus).toBe("idle")
     expect(mockGet).not.toHaveBeenCalled()
   })

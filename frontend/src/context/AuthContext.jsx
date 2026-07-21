@@ -45,8 +45,14 @@ export function AuthProvider({ children }) {
       const { tokens } = await fetchAuthSession();
       if (tokens?.accessToken) {
         const payload = tokens.accessToken.payload;
-        setUser(payload);
-        setGroups(payload["cognito:groups"] || []);
+        // Email/name live on the ID token, NOT the access token. Merge the ID
+        // token claims over the access token so `user.email` is populated —
+        // otherwise the header falls back to the Cognito username (a UUID) and
+        // shows a "user ID" instead of the email. Groups stay sourced from the
+        // access token (the authorization token).
+        const idPayload = tokens.idToken?.payload;
+        setUser(idPayload ? { ...payload, ...idPayload } : payload);
+        setGroups(payload["cognito:groups"] || idPayload?.["cognito:groups"] || []);
       } else {
         setUser(null);
         setGroups([]);

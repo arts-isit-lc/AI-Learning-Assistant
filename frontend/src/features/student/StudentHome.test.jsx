@@ -6,6 +6,7 @@ import { MemoryRouter } from "react-router-dom"
 let coursesResult
 vi.mock("@/services/queries", () => ({
   useCourses: () => coursesResult,
+  useCourseProgressSummary: () => ({ data: [], isLoading: false, isError: false }),
   useEnrollCourse: () => ({ mutate: vi.fn(), isPending: false }),
 }))
 vi.mock("@/context/AuthContext", () => ({ useAuth: () => ({ isInstructorAsStudent: false }) }))
@@ -52,6 +53,6 @@ describe("StudentHome", () => {
     }
     renderHome()
     await userEvent.click(screen.getByRole("button", { name: "Join course" }))
-    expect(screen.getByRole("dialog")).toHaveAccessibleName("Join a course")
+    expect(screen.getByRole("dialog")).toHaveAccessibleName("Join course")
   })
 })

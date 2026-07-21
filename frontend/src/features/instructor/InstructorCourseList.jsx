@@ -54,7 +54,7 @@ export function InstructorCourseList() {
               >
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-caption font-semibold text-foreground group-aria-[current=true]:text-primary-foreground">
+                    <span className="truncate text-caption text-neutral-900 group-aria-[current=true]:text-primary-foreground">
                       {courseCode(course)}
                     </span>
                     <Badge variant={active ? "success" : "secondary"} className="shrink-0 uppercase">
@@ -62,8 +62,16 @@ export function InstructorCourseList() {
                     </Badge>
                   </div>
                   {course.course_name && (
-                    <span className="truncate text-caption text-muted-foreground group-aria-[current=true]:text-primary-foreground/90">
+                    <span className="truncate text-caption text-foreground group-aria-[current=true]:text-primary-foreground/90">
                       {course.course_name}
+                    </span>
+                  )}
+                  {/* Term + section line (Figma) — forward-compatible: the Courses
+                      record has no term/section columns today, so this is usually absent. */}
+                  {course.term && (
+                    <span className="truncate text-caption font-semibold text-foreground group-aria-[current=true]:text-primary-foreground">
+                      {course.term}
+                      {course.section ? ` (${course.section})` : ""}
                     </span>
                   )}
                 </div>

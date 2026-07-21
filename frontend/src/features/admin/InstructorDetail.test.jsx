@@ -52,8 +52,10 @@ beforeEach(() => {
 describe("InstructorDetail", () => {
   it("shows the instructor and their assigned courses with access toggles", () => {
     render(<InstructorDetail />)
-    expect(screen.getByRole("heading", { name: "Ada Lovelace" })).toBeInTheDocument()
-    expect(screen.getByText("GEOG 250 — Intro")).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Lovelace, Ada" })).toBeInTheDocument()
+    // course code + name render on separate lines
+    expect(screen.getByText("GEOG 250")).toBeInTheDocument()
+    expect(screen.getByText("Intro")).toBeInTheDocument()
     expect(screen.getByRole("switch", { name: "OCELIA access for GEOG 250 — Intro" })).toBeInTheDocument()
   })
 
@@ -66,9 +68,12 @@ describe("InstructorDetail", () => {
     )
   })
 
-  it("removes a course assignment", async () => {
+  it("removes a course assignment after confirmation", async () => {
     render(<InstructorDetail />)
     await userEvent.click(screen.getByRole("button", { name: "Remove" }))
+    const dialog = await screen.findByRole("dialog")
+    expect(within(dialog).getByText("Remove course?")).toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole("button", { name: "Remove course" }))
     expect(unenroll.mutate).toHaveBeenCalledWith(
       { courseId: "c1", instructorEmail: "ada@x.com" },
       expect.any(Object)
@@ -86,11 +91,11 @@ describe("InstructorDetail", () => {
     )
   })
 
-  it("removes (demotes) the instructor after confirmation", async () => {
+  it("deletes (demotes) the instructor after confirmation", async () => {
     render(<InstructorDetail />)
-    await userEvent.click(screen.getByRole("button", { name: "Remove instructor" }))
+    await userEvent.click(screen.getByRole("button", { name: "Delete instructor" }))
     const dialog = await screen.findByRole("dialog")
-    await userEvent.click(within(dialog).getByRole("button", { name: "Remove instructor" }))
+    await userEvent.click(within(dialog).getByRole("button", { name: "Delete instructor" }))
     await waitFor(() => expect(lower.mutate).toHaveBeenCalledWith("ada@x.com", expect.any(Object)))
   })
 })

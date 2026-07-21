@@ -58,6 +58,7 @@
     --popover-foreground: 0 0% 25%;
     --primary: 265 65% 46%; /* #6829C2 */
     --primary-foreground: 0 0% 100%;
+    --primary-subtle: 267 100% 95%; /* #F2E8FF Faculty of Arts/Lightest — hover / selected surface */
     --secondary: 0 0% 96%; /* light neutral surface (systematic fill) */
     --secondary-foreground: 0 0% 25%;
     --muted: 0 0% 96%;
@@ -76,15 +77,22 @@
     --warning-foreground: 0 0% 12%; /* dark text keeps AA on the mustard */
     --info: 198 73% 67%; /* #6EC4E8 info / in-progress */
     --info-foreground: 211 100% 14%; /* navy text on cyan (8:1) */
-    --border: 0 0% 75%; /* #BFBFBF */
-    --input: 0 0% 75%;
+    --border: 0 0% 50%; /* #808080 Arts ISIT Neutral/600 — structural borders + dividers (matches the Figma frames: header, cards, lists) */
+    --border-subtle: 0 0% 75%; /* #BFBFBF — lighter hairline where the design uses a faint divider */
+    --input: 0 0% 50%;
     --ring: 265 65% 46%; /* brand-purple focus ring (visible focus) */
 
-    /* --- Radius ---------------------------------------------------------- */
-    --radius-sm: 0.375rem; /* 6px */
-    --radius-md: 0.5rem; /* 8px */
-    --radius-lg: 0.75rem; /* 12px */
-    --radius: 0.5rem; /* shadcn compat alias = md */
+    /* --- Radius ----------------------------------------------------------------
+       OCELIA is a LOW-radius system. Controls (buttons / inputs / selects) are
+       SQUARE (rounded-none); containers (cards, modals, menus) get a subtle 4px;
+       pills/badges + avatars stay fully round. Matches the Figma frames exactly:
+       Card/Course = rounded-[4px], Modal = rounded-[4px], Button/CTA + Button/UI
+       + the course-code input have NO corner radius. (The old 6/8/12px scale made
+       everything look rounded.) */
+    --radius-sm: 0.25rem; /* 4px — container radius (cards, modals, menus) */
+    --radius-md: 0.375rem; /* 6px */
+    --radius-lg: 0.5rem; /* 8px */
+    --radius: 0.25rem; /* shadcn compat alias */
 
     /* --- Spacing (4pt grid) --------------------------------------------- */
     --space-xs: 0.25rem; /* 4px */
@@ -93,12 +101,12 @@
     --space-lg: 1.5rem; /* 24px */
     --space-xl: 2rem; /* 32px */
 
-    /* --- Shadow ---------------------------------------------------------- */
-    --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.05), 0 1px 3px 0 rgb(0 0 0 / 0.1);
-    --shadow-dropdown: 0 4px 6px -1px rgb(0 0 0 / 0.1),
-      0 2px 4px -2px rgb(0 0 0 / 0.1);
-    --shadow-modal: 0 10px 15px -3px rgb(0 0 0 / 0.1),
-      0 4px 6px -4px rgb(0 0 0 / 0.1);
+    /* --- Shadow ----------------------------------------------------------------
+       OCELIA uses a HARD OFFSET shadow (Figma: drop-shadow(4px 4px 2px
+       rgba(0,0,0,0.2))), not a soft ambient blur. Cards are FLAT (border-only). */
+    --shadow-card: none;
+    --shadow-dropdown: 2px 2px 2px 0 rgb(0 0 0 / 0.2);
+    --shadow-modal: 4px 4px 2px 0 rgb(0 0 0 / 0.2);
 
     /* --- Motion ---------------------------------------------------------- */
     --transition-fast: 150ms;

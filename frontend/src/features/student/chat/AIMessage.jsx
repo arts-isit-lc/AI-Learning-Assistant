@@ -1,9 +1,20 @@
-import { MdSmartToy } from "react-icons/md"
 import ErrorBoundary from "@/components/ErrorBoundary"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Icon } from "@/components/ui/icon"
 import { MarkdownMessage } from "./MarkdownMessage"
 import { FigureImage } from "./FigureImage"
+
+/** OCELIA assistant marker — the purple triangle glyph from the frames. */
+function AssistantMark() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="mt-1 h-4 w-4 shrink-0 text-primary"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M12 5l7 13H5z" />
+    </svg>
+  )
+}
 
 /** Structured table block: structured headers/rows, else markdown/text fallback. */
 function TableBlock({ block }) {
@@ -72,12 +83,8 @@ export function AIMessage({ content, blocks, isStreaming = false }) {
   const renderBlocks = blocks?.length ? blocks : [{ type: "text", content: content || "" }]
 
   return (
-    <div className="mb-6 flex max-w-3xl gap-4">
-      <Avatar className="h-8 w-8 shrink-0">
-        <AvatarFallback className="bg-primary/10 text-primary">
-          <Icon icon={MdSmartToy} size={18} />
-        </AvatarFallback>
-      </Avatar>
+    <div className="mb-6 flex gap-3">
+      <AssistantMark />
       <div className="min-w-0 flex-1 overflow-x-auto break-words text-foreground">
         {renderBlocks.map((block, i) => {
           let node

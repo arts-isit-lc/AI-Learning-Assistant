@@ -1,52 +1,55 @@
 ---
 inclusion: fileMatch
 fileMatchPattern:
-  - "frontend/src/pages/student/**"
-  - "frontend/src/components/AIMessage.jsx"
-  - "frontend/src/components/StudentMessage.jsx"
-  - "frontend/src/components/Session.jsx"
+  - "frontend/src/features/student/**"
 ---
 
 # Chat UX Patterns
 
-Specific to the student chat interface. These patterns are fixed — do not deviate without explicit instruction.
+Specific to the student chat interface. The **behavioral** rules (State Machine, What
+Never Happens, streaming, TypingIndicator timing) are fixed — do not deviate without
+explicit instruction. The **visual/layout** rules below were reconciled to the OCELIA
+Figma module-chat frames (162:3817 / 214:5316 / 209:5164) on 2026-07-20 — the earlier
+standalone "AI Assistant" SplitLayout was replaced; the behavior was preserved.
 
 ---
 
 ## Page Structure
+The module chat is **embedded under the shared course chrome** (not a standalone layout):
 ```
-SplitLayout
-+-- SessionSidebar (w-64, fixed, bg-secondary)
-|   +-- Module title + BackButton
-|   +-- Button "New Chat" (Plus icon, outline variant)
-|   +-- Separator
-|   +-- ScrollArea > SessionItem[] (reverse chronological)
-+-- Main (flex flex-col, flex-grow)
-    +-- PageHeader (fixed top, title="AI Assistant")
-    +-- ChatThread (flex-grow, overflow-y-auto)
-    |   +-- AIMessage[] / StudentMessage[]
-    |   +-- TypingIndicator (conditional)
-    |   +-- RetryBanner (conditional)
-    +-- ChatInput (sticky bottom, mb-4 mx-8)
+StudentChat (mx-auto max-w-7xl, full height below AppHeader)
++-- CourseHeader (shared with CourseView) — collapsible via a "Reduce / Expand" toggle
++-- LearningJourneyBar (shared) — hidden when the header is collapsed
++-- Row (flex, min-h-0 flex-1)
+    +-- SessionSidebar (w-72)
+    |   +-- module title + back-to-course circle + new-chat icon button
+    |   +-- "Previous chats" > ScrollArea > SessionItem[] (reverse chronological)
+    |   +-- "Module materials" (collapsible, pinned bottom) — files open the doc column
+    +-- ReferenceDocPanel (middle column, only when ?doc=:fileId) — bordered box
+    +-- Chat box (bordered, rounded-sm, flex-grow)
+        +-- "OCELIA ASSISTANT" heading (centred, top)
+        +-- ChatThread (flex-grow, overflow-y-auto)
+        |   +-- AIMessage[] / StudentMessage[]
+        |   +-- TypingIndicator (conditional)
+        |   +-- RetryBanner (conditional)
+        +-- ChatInput (bottom, inside the box)
 ```
+Materials open in the **middle reference-doc column** (3-column: sidebar · doc · chat), not a Sheet drawer.
 
 ---
 
 ## Message Rules
 
 **AIMessage:**
-- Left-aligned, no bubble background
-- Avatar: `Avatar` component, muted colour
-- Content: `react-markdown` with `react-syntax-highlighter` (dracula theme) for code blocks
-- Width: `max-w-3xl`
-- Streaming: same component with `isStreaming=true` — subtle pulse indicator
+- Left-aligned, **no bubble background**
+- Marker: a small **purple triangle glyph** (▲, the OCELIA assistant mark) — not an avatar circle
+- Content: `react-markdown` with `react-syntax-highlighter` (dracula) for code; block-based (text/figure/table/formula), each block wrapped in `ErrorBoundary` (chat-blanking fix — engineering-log)
+- Streaming: same component with `isStreaming=true` — subtle caret/pulse indicator
 
 **StudentMessage:**
-- Right-aligned
-- Bubble: `bg-secondary rounded-xl p-4`
-- Avatar: `Avatar` component, primary colour
+- **Right-aligned, no bubble** — plain right-aligned text with a small **purple sphere** marker to its left
 - Width: `max-w-xl`
-- Delete: `ghost` icon button with `Trash2`, visible on hover of most-recent message that has an AI reply after it
+- Delete: `ghost` icon button (`MdDelete`), on hover/focus of the most-recent student message that has an AI reply after it (keyboard-reachable, not hover-only)
 
 **TypingIndicator:**
 - Three dots, `animate-bounce` with staggered delay (0s, 0.2s, 0.4s)
@@ -57,25 +60,24 @@ SplitLayout
 
 ## Session Sidebar Rules
 
-**SessionItem states:**
-- Default: `hover:bg-muted rounded-md px-3 py-2 text-foreground`
-- Active: `bg-primary text-primary-foreground rounded-md px-3 py-2`
-- Delete: `ghost` size `icon` button, right-aligned, appears on hover only
-- Name: `truncate`, max one line
+**Module row (top):** module title + a back-to-course circle button (`‹`) + a new-chat **icon button** (top-right, `outline`/purple, `aria-label="New chat"`, disabled while creating). (Replaces the old full-width "New Chat" button.)
 
-**New Chat button:**
-- Always at top, `outline` variant, full width within sidebar padding
-- Disabled while `creatingSession` is true
-- Shows `Skeleton` SessionItem while creating
+**SessionItem ("Previous chats") states:**
+- Default: bordered box `rounded-sm border border-border`, purple filled chat glyph + purple name
+- Active: `bg-primary text-primary-foreground` (filled purple)
+- Delete: trash icon button, **always visible** on the row (keyboard-reachable)
+- Name: `truncate`, one line
+
+**Module materials:** a collapsible section pinned to the sidebar bottom; expanding lists the module's files, and selecting one opens it in the reference-doc column (active file = `bg-primary`).
 
 ---
 
 ## Chat Input Rules
 - `Textarea` auto-resizes on input up to `max-h-32`, then scrolls
-- `placeholder="Message AI Assistant..."`
+- `placeholder="Message OCELIA Assistant..."`
 - `Enter` sends, `Shift+Enter` inserts newline
 - Disabled (visually muted) while `isSubmitting || isAItyping || creatingSession`
-- Send: `ghost` size `icon` button with `SendHorizontal` icon, same disabled conditions
+- Send: `ghost` size `icon` button with a send icon, same disabled conditions
 - Max length: 2096 characters
 
 ---

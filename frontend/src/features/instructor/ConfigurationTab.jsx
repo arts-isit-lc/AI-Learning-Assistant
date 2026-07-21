@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { useNavigate, useParams } from "react-router-dom"
+import { Outlet, useNavigate, useParams } from "react-router-dom"
 import {
   DndContext,
   KeyboardSensor,
@@ -52,13 +52,14 @@ export function groupConceptTree(concepts, modules) {
 }
 
 /** Wraps a concept in `useSortable` and hands the drag bits to ModuleAccordion. */
-function SortableConceptSection({ concept, modules, ...handlers }) {
+function SortableConceptSection({ concept, modules, number, ...handlers }) {
   const s = useSortable({ id: concept.concept_id })
   const style = { transform: CSS.Transform.toString(s.transform), transition: s.transition }
   return (
     <ModuleAccordion
       concept={concept}
       modules={modules}
+      number={number}
       sortable={{
         setNodeRef: s.setNodeRef,
         style,
@@ -102,7 +103,7 @@ export function ConfigurationTab() {
   const tree = useMemo(() => groupConceptTree(concepts, modules), [concepts, modules])
   const conceptIds = tree.map((t) => t.concept.concept_id)
 
-  const moduleBasePath = `/instructor/courses/${courseId}/modules`
+  const moduleBasePath = `/instructor/courses/${courseId}/configuration/modules`
 
   const handleConceptDragEnd = (event) => {
     const { active, over } = event
@@ -143,13 +144,21 @@ export function ConfigurationTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-h4 font-semibold text-navy">Concepts &amp; modules</h2>
-        {concepts.length > 0 && (
-          <Button variant="outline" onClick={() => setAddingConcept(true)}>
-            <Icon icon={MdAdd} size={18} /> Add concept
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-caption font-semibold text-neutral-900">Course configuration</h2>
+        <div className="flex gap-2">
+          <Button variant="outline" aria-label="Add concept" onClick={() => setAddingConcept(true)}>
+            Concept <Icon icon={MdAdd} size={18} />
           </Button>
-        )}
+          <Button
+            variant="outline"
+            aria-label="Add module"
+            onClick={() => navigate(`${moduleBasePath}/new`)}
+            disabled={concepts.length === 0}
+          >
+            Module <Icon icon={MdAdd} size={18} />
+          </Button>
+        </div>
       </div>
 
       {addingConcept && (
@@ -209,11 +218,12 @@ export function ConfigurationTab() {
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleConceptDragEnd}>
           <SortableContext items={conceptIds} strategy={verticalListSortingStrategy}>
             <div className="flex flex-col gap-3">
-              {tree.map(({ concept, modules: conceptModules }) => (
+              {tree.map(({ concept, modules: conceptModules }, i) => (
                 <SortableConceptSection
                   key={concept.concept_id}
                   concept={concept}
                   modules={conceptModules}
+                  number={i + 1}
                   {...conceptHandlers(concept, conceptModules)}
                 />
               ))}
@@ -253,6 +263,9 @@ export function ConfigurationTab() {
           })
         }
       />
+
+      {/* Create / Edit module render as centered modals over this tab (nested route). */}
+      <Outlet />
     </div>
   )
 }

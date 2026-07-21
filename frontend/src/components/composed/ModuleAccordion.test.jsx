@@ -32,15 +32,15 @@ describe("parseKeyTopics", () => {
 })
 
 describe("ModuleAccordion", () => {
-  it("renders the concept name (title-cased) and its module rows", () => {
+  it("renders the numbered concept name (title-cased) and its roman-numbered module rows", () => {
     renderAccordion()
-    expect(screen.getByRole("heading", { name: "Algebra" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Vectors" })).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "1. Algebra" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "i. Vectors" })).toBeInTheDocument()
   })
 
   it("expands a module to a read-only summary with Edit/Delete", async () => {
     const { onEditModule } = renderAccordion()
-    await userEvent.click(screen.getByRole("button", { name: "Vectors" }))
+    await userEvent.click(screen.getByRole("button", { name: "i. Vectors" }))
     expect(screen.getByText("Explain vectors")).toBeInTheDocument()
     expect(screen.getByText("dot product")).toBeInTheDocument()
     await userEvent.click(screen.getByRole("button", { name: "Edit" }))

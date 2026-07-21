@@ -25,7 +25,7 @@ const DialogContent = React.forwardRef(function DialogContent({ className, child
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
-          "fixed left-1/2 top-1/2 z-modal grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border border-border bg-background p-6 shadow-modal animate-fade-in",
+          "fixed left-1/2 top-1/2 z-modal grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-sm border border-border bg-background p-6 shadow-modal animate-fade-in",
           className
         )}
         {...props}
@@ -48,7 +48,13 @@ function DialogFooter({ className, ...props }) {
 }
 
 const DialogTitle = React.forwardRef(function DialogTitle({ className, ...props }, ref) {
-  return <DialogPrimitive.Title ref={ref} className={cn("text-h4 font-semibold text-navy", className)} {...props} />
+  return (
+    <DialogPrimitive.Title
+      ref={ref}
+      className={cn("text-h4 font-semibold text-neutral-900", className)}
+      {...props}
+    />
+  )
 })
 
 const DialogDescription = React.forwardRef(function DialogDescription({ className, ...props }, ref) {

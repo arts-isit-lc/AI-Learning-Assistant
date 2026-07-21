@@ -73,6 +73,7 @@ export function CourseDetail() {
   const [accessOverrides, setAccessOverrides] = useState({})
   const [addOpen, setAddOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [removeTarget, setRemoveTarget] = useState(null)
 
   const active = activeOverride ?? (course?.course_student_access !== false)
 
@@ -145,10 +146,15 @@ export function CourseDetail() {
     )
   }
 
-  const handleRemove = (email) => {
+  const handleRemove = () => {
     unenroll.mutate(
-      { courseId, instructorEmail: email },
-      { onSuccess: () => toast.success("Instructor removed") }
+      { courseId, instructorEmail: removeTarget.user_email },
+      {
+        onSuccess: () => {
+          setRemoveTarget(null)
+          toast.success("Instructor removed")
+        },
+      }
     )
   }
 
@@ -168,40 +174,49 @@ export function CourseDetail() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Header: code + name + Active/Inactive toggle, then the access code. */}
-      <div className="flex flex-col gap-3 border-b border-border pb-4">
+      {/* Header: code + Active/Inactive toggle, name, then term|section + access code
+          (mirrors the instructor course-detail header). */}
+      <div className="flex flex-col gap-1 border-b border-border pb-4">
         <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <h1 className="text-h4 font-semibold text-navy">{courseCode(course)}</h1>
-            {course.course_name && (
-              <p className="text-caption text-muted-foreground">{course.course_name}</p>
-            )}
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <span className={cn("text-caption", active ? "text-muted-foreground" : "font-semibold text-foreground")}>
+          <h1 className="text-h2 font-semibold text-neutral-900">{courseCode(course)}</h1>
+          <div className="flex shrink-0 items-center gap-2 text-caption">
+            <span className={cn(active ? "text-muted-foreground" : "font-semibold text-foreground")}>
               Inactive
             </span>
             <Toggle checked={active} onCheckedChange={handleToggleActive} aria-label="Course student access" />
-            <span className={cn("text-caption", active ? "font-semibold text-foreground" : "text-muted-foreground")}>
+            <span className={cn(active ? "font-semibold text-foreground" : "text-muted-foreground")}>
               Active
             </span>
           </div>
         </div>
-        {course.course_access_code && (
-          <div className="flex items-center gap-2 text-caption text-muted-foreground">
-            <span>
-              Access Code: <span className="font-mono text-foreground">{course.course_access_code}</span>
-            </span>
-            <button
-              type="button"
-              onClick={copyCode}
-              aria-label="Copy access code"
-              className="rounded p-1 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Icon icon={MdContentCopy} size={16} />
-            </button>
+        {course.course_name && <p className="text-body text-foreground">{course.course_name}</p>}
+        <div className="mt-1 flex items-end justify-between gap-4">
+          {/* term | section — forward-compatible (no schema columns today). */}
+          <div className="text-caption text-foreground">
+            {course.term && (
+              <span>
+                {course.term}
+                {course.section ? ` | Section ${course.section}` : ""}
+              </span>
+            )}
           </div>
-        )}
+          {course.course_access_code && (
+            <div className="flex items-center gap-2 text-caption text-muted-foreground">
+              <span>
+                Access Code:{" "}
+                <span className="font-semibold text-foreground">{course.course_access_code}</span>
+              </span>
+              <button
+                type="button"
+                onClick={copyCode}
+                aria-label="Copy access code"
+                className="rounded p-1 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <Icon icon={MdContentCopy} size={16} />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Instructors: assigned list with Remove + per-instructor OCELIA access. */}
@@ -239,7 +254,7 @@ export function CourseDetail() {
                   </p>
                   <button
                     type="button"
-                    onClick={() => handleRemove(inst.user_email)}
+                    onClick={() => setRemoveTarget(inst)}
                     className="text-caption text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     Remove
@@ -272,11 +287,11 @@ export function CourseDetail() {
       {/* Add-instructor picker. */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent>
-          <DialogHeader>
+          <DialogHeader className="border-b border-border pb-3">
             <DialogTitle>Add an instructor</DialogTitle>
-            <DialogDescription>Give an instructor access to this course.</DialogDescription>
           </DialogHeader>
-          <div className="my-2 flex max-h-72 flex-col overflow-y-auto">
+          <DialogDescription>Give an instructor access to this course.</DialogDescription>
+          <div className="flex max-h-72 flex-col overflow-y-auto">
             {unassigned.length === 0 ? (
               <p className="py-3 text-caption text-muted-foreground">
                 All instructors are already assigned.
@@ -300,11 +315,26 @@ export function CourseDetail() {
       </Dialog>
 
       <ConfirmDialog
+        open={Boolean(removeTarget)}
+        onOpenChange={(o) => !o && setRemoveTarget(null)}
+        title="Remove instructor?"
+        description={
+          removeTarget
+            ? `Remove ${instructorLabel(removeTarget)} from ${courseCode(course)}? If they need access to this course again, you'll need to add them back.`
+            : ""
+        }
+        confirmLabel="Remove instructor"
+        variant="danger"
+        loading={unenroll.isPending}
+        onConfirm={handleRemove}
+      />
+
+      <ConfirmDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         title="Delete course?"
-        description={`Delete "${course.course_name}"? This removes the course and all its content. This can't be undone.`}
-        confirmLabel="Delete"
+        description={`You are about to delete ${courseCode(course)} from the OCELIA system. This change is permanent and removes all of the course's content. This can't be undone.`}
+        confirmLabel="Delete course"
         variant="danger"
         loading={del.isPending}
         onConfirm={() =>

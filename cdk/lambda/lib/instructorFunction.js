@@ -2,6 +2,9 @@
  * Instructor Lambda — Route index:
  *   GET    /instructor/student_course
  *   GET    /instructor/courses
+ *   POST   /instructor/updateCourseAccess
+ *   DELETE /instructor/delete_course
+ *   GET    /instructor/course_messages_rows
  *   GET    /instructor/analytics
  *   POST   /instructor/create_concept
  *   PUT    /instructor/edit_concept
@@ -183,6 +186,179 @@ exports.handler = async (event) => {
         } else {
           response.statusCode = 400;
           response.body = JSON.stringify({ error: "email is required" });
+        }
+        break;
+      case "POST /instructor/updateCourseAccess":
+        // Toggle Active/Inactive (Courses.course_student_access) for a course the
+        // instructor teaches. Ownership is checked against the authorizer email
+        // (trusted) via an instructor enrolment — an instructor can only toggle
+        // their own course. Mirrors admin/updateCourseAccess (which is unscoped).
+        if (
+          event.queryStringParameters != null &&
+          event.queryStringParameters.course_id &&
+          event.queryStringParameters.access
+        ) {
+          try {
+            const { course_id, access } = event.queryStringParameters;
+            const accessBool = access.toLowerCase() === "true";
+
+            const owns = await sqlConnection`
+                SELECT 1
+                FROM "Enrolments" e
+                JOIN "Users" u ON u.user_id = e.user_id
+                WHERE u.user_email = ${userEmailAttribute}
+                  AND e.course_id = ${course_id}
+                  AND e.enrolment_type = 'instructor'
+                LIMIT 1;
+              `;
+            if (owns.length === 0) {
+              response.statusCode = 403;
+              response.body = JSON.stringify({ error: "You do not teach this course" });
+              break;
+            }
+
+            const updated = await sqlConnection`
+                UPDATE "Courses"
+                SET course_student_access = ${accessBool}
+                WHERE course_id = ${course_id}
+                RETURNING course_id, course_student_access;
+              `;
+            if (updated.length === 0) {
+              response.statusCode = 404;
+              response.body = JSON.stringify({ error: "Course not found" });
+              break;
+            }
+
+            response.body = JSON.stringify({
+              message: "Course access updated successfully.",
+              course_student_access: updated[0].course_student_access,
+            });
+          } catch (err) {
+            response.statusCode = 500;
+            console.error(err);
+            response.body = JSON.stringify({ error: "Internal server error" });
+          }
+        } else {
+          response.statusCode = 400;
+          response.body = JSON.stringify({ error: "course_id and access are required" });
+        }
+        break;
+      case "DELETE /instructor/delete_course":
+        // Delete a course the instructor teaches. Ownership checked against the
+        // authorizer email. Row-cascade removes concepts/modules/enrolments/
+        // files/sessions/messages (ON DELETE CASCADE); S3 objects + pgvector
+        // embeddings are swept by the scheduled orphanCleanup backstop, same as
+        // admin/delete_course (see engineering-log B6).
+        if (
+          event.queryStringParameters != null &&
+          event.queryStringParameters.course_id
+        ) {
+          try {
+            const { course_id } = event.queryStringParameters;
+
+            const owns = await sqlConnection`
+                SELECT 1
+                FROM "Enrolments" e
+                JOIN "Users" u ON u.user_id = e.user_id
+                WHERE u.user_email = ${userEmailAttribute}
+                  AND e.course_id = ${course_id}
+                  AND e.enrolment_type = 'instructor'
+                LIMIT 1;
+              `;
+            if (owns.length === 0) {
+              response.statusCode = 403;
+              response.body = JSON.stringify({ error: "You do not teach this course" });
+              break;
+            }
+
+            await sqlConnection`
+                DELETE FROM "Courses"
+                WHERE course_id = ${course_id};
+              `;
+
+            response.body = JSON.stringify({
+              message: "Course and related records deleted successfully.",
+            });
+          } catch (err) {
+            response.statusCode = 500;
+            console.error(err);
+            response.body = JSON.stringify({ error: "Internal server error" });
+          }
+        } else {
+          response.statusCode = 400;
+          response.body = JSON.stringify({ error: "course_id is required" });
+        }
+        break;
+      case "GET /instructor/course_messages_rows":
+        // Course-wide chat messages (B5) for the in-app Chat History table.
+        // Ownership is checked against the authorizer email (an instructor may
+        // only read their own course's messages). Paginated (limit/offset) with
+        // a total count, so the browser never loads a whole course's log at once
+        // — the complete export stays on the async CSV path (course_messages).
+        if (
+          event.queryStringParameters != null &&
+          event.queryStringParameters.course_id
+        ) {
+          try {
+            const { course_id } = event.queryStringParameters;
+            const limit = Math.min(
+              Math.max(parseInt(event.queryStringParameters.limit ?? "50", 10) || 50, 1),
+              200
+            );
+            const offset = Math.max(parseInt(event.queryStringParameters.offset ?? "0", 10) || 0, 0);
+
+            const owns = await sqlConnection`
+                SELECT 1
+                FROM "Enrolments" e
+                JOIN "Users" u ON u.user_id = e.user_id
+                WHERE u.user_email = ${userEmailAttribute}
+                  AND e.course_id = ${course_id}
+                  AND e.enrolment_type = 'instructor'
+                LIMIT 1;
+              `;
+            if (owns.length === 0) {
+              response.statusCode = 403;
+              response.body = JSON.stringify({ error: "You do not teach this course" });
+              break;
+            }
+
+            const countRows = await sqlConnection`
+                SELECT COUNT(*)::int AS total
+                FROM "Messages" m
+                JOIN "Sessions" s ON m.session_id = s.session_id
+                JOIN "Student_Modules" sm ON s.student_module_id = sm.student_module_id
+                JOIN "Enrolments" e ON sm.enrolment_id = e.enrolment_id
+                WHERE e.course_id = ${course_id};
+              `;
+            const total = countRows[0]?.total ?? 0;
+
+            const messages = await sqlConnection`
+                SELECT u.user_email,
+                       cm.module_name, cm.module_number,
+                       cc.concept_name, cc.concept_number,
+                       s.session_id, s.session_name,
+                       m.student_sent, m.message_content, m.time_sent
+                FROM "Messages" m
+                JOIN "Sessions" s ON m.session_id = s.session_id
+                JOIN "Student_Modules" sm ON s.student_module_id = sm.student_module_id
+                JOIN "Course_Modules" cm ON sm.course_module_id = cm.module_id
+                JOIN "Course_Concepts" cc ON cm.concept_id = cc.concept_id
+                JOIN "Enrolments" e ON sm.enrolment_id = e.enrolment_id
+                JOIN "Users" u ON e.user_id = u.user_id
+                WHERE e.course_id = ${course_id}
+                ORDER BY m.time_sent DESC
+                LIMIT ${limit} OFFSET ${offset};
+              `;
+
+            response.body = JSON.stringify({ messages, total, limit, offset });
+          } catch (err) {
+            response.statusCode = 500;
+            console.error(err);
+            response.body = JSON.stringify({ error: "Internal server error" });
+          }
+        } else {
+          response.statusCode = 400;
+          response.body = JSON.stringify({ error: "course_id is required" });
         }
         break;
       case "GET /instructor/analytics":

@@ -1,17 +1,25 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { toast } from "react-toastify"
+import { MdContentCopy } from "react-icons/md"
 import { useAdminInstructors, useCreateCourse } from "@/services/queries"
 import { instructorLabel } from "./InstructorList"
-import { BackButton } from "@/components/composed/BackButton"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { Toggle } from "@/components/ui/toggle"
+import { Icon } from "@/components/ui/icon"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog"
 
-// Default course-level prompt (ported from the legacy AdminCreateCourse).
+// Default course-level prompt (ported from the legacy AdminCreateCourse). The
+// Figma Add-course modal omits the prompt + active fields, so they're defaulted
+// here and remain editable after creation (Settings tab / the detail toggle).
 const DEFAULT_PROMPT =
   "Engage with the student through questions and conversation to identify gaps in their understanding. Address those gaps with targeted explanations, answers to their questions, and references to the relevant course materials. Focus only on concepts needed to resolve the identified misunderstandings rather than providing broad summaries."
 
@@ -23,25 +31,38 @@ export function generateAccessCode() {
   return code.match(/.{1,4}/g).join("-")
 }
 
+/** Split a "DEPT NUMBER" code into { department, number } (last token = number). */
+export function parseCourseCode(code) {
+  const parts = code.trim().split(/\s+/).filter(Boolean)
+  if (parts.length < 2) return { department: parts[0] ?? "", number: "" }
+  return { department: parts.slice(0, -1).join(" "), number: parts[parts.length - 1] }
+}
+
 /**
- * Create-course form (right pane of /admin/courses/new). The access code is
- * generated client-side at submit (there's no server mint route). On success it
- * creates the course, enrolls the selected instructors, and opens the new course.
+ * Add-course modal (Figma 859:6864). A centered dialog over the course list:
+ * Course code + Course title, an instructor multi-select, and the generated
+ * access code (shown up front with "Generate new code"). Submits the course +
+ * enrolls the selected instructors, then opens the new course.
+ *
+ * DATA-GAP NOTE (flagged): the mockup's Term select and the Primary/Secondary
+ * instructor distinction (+ per-instructor email/invite) have no schema backing,
+ * so Term is omitted and instructors are a flat multi-select of existing
+ * instructors. Prompt + active are defaulted (editable post-create).
  */
 export function CreateCourse() {
   const navigate = useNavigate()
   const { data: instructors = [] } = useAdminInstructors()
   const create = useCreateCourse()
 
-  const [name, setName] = useState("")
-  const [department, setDepartment] = useState("")
-  const [number, setNumber] = useState("")
-  const [prompt, setPrompt] = useState(DEFAULT_PROMPT)
-  const [active, setActive] = useState(true)
+  const [code, setCode] = useState("")
+  const [title, setTitle] = useState("")
+  const [accessCode, setAccessCode] = useState(() => generateAccessCode())
   const [selected, setSelected] = useState(() => new Set())
 
-  const canCreate =
-    Boolean(name.trim() && department.trim() && number.trim() && prompt.trim()) && !create.isPending
+  const { department, number } = parseCourseCode(code)
+  const canCreate = Boolean(title.trim() && department && number) && !create.isPending
+
+  const close = () => navigate("/admin/courses")
 
   const toggleInstructor = (email) =>
     setSelected((prev) => {
@@ -51,20 +72,24 @@ export function CreateCourse() {
       return next
     })
 
-  const handleNumberChange = (e) => {
-    const value = e.target.value
-    if (/^\d*$/.test(value)) setNumber(value)
+  const copyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(accessCode)
+      toast.success("Access code copied")
+    } catch {
+      toast.error("Couldn't copy the code")
+    }
   }
 
   const handleCreate = () => {
     create.mutate(
       {
-        courseName: name.trim(),
-        department: department.trim(),
-        number: number.trim(),
-        accessCode: generateAccessCode(),
-        active,
-        systemPrompt: prompt,
+        courseName: title.trim(),
+        department,
+        number,
+        accessCode,
+        active: true,
+        systemPrompt: DEFAULT_PROMPT,
         instructorEmails: [...selected],
       },
       {
@@ -78,86 +103,93 @@ export function CreateCourse() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <BackButton onClick={() => navigate("/admin/courses")}>Back to courses</BackButton>
-      <h1 className="text-h4 font-semibold text-navy">Create a course</h1>
+    <Dialog open onOpenChange={(o) => !o && close()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader className="border-b border-border pb-3">
+          <DialogTitle>Add course</DialogTitle>
+        </DialogHeader>
+        <DialogDescription>
+          To add a new course to the OCELIA system please fill out the following fields. Fields marked
+          with <span className="text-destructive">*</span> are mandatory for course creation.
+        </DialogDescription>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Course details</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="course-name">Course name</Label>
-            <Input id="course-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={50} />
+            <Label htmlFor="add-course-code">
+              Course code <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="add-course-code"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder="e.g. GEOG 210"
+              maxLength={30}
+            />
           </div>
-          <div className="flex flex-col gap-4 sm:flex-row">
-            <div className="flex flex-1 flex-col gap-1.5">
-              <Label htmlFor="course-department">Department</Label>
-              <Input
-                id="course-department"
-                value={department}
-                onChange={(e) => setDepartment(e.target.value)}
-                placeholder="e.g. GEOG"
-                maxLength={20}
-              />
-            </div>
-            <div className="flex flex-1 flex-col gap-1.5">
-              <Label htmlFor="course-number">Course number</Label>
-              <Input
-                id="course-number"
-                value={number}
-                onChange={handleNumberChange}
-                inputMode="numeric"
-                placeholder="e.g. 250"
-                maxLength={10}
-              />
-            </div>
-          </div>
+
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="course-prompt">Course prompt</Label>
-            <Textarea id="course-prompt" value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={5} />
+            <Label htmlFor="add-course-title">
+              Course title <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="add-course-title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              maxLength={50}
+            />
           </div>
-          <div className="flex items-center gap-2">
-            <Toggle id="course-active" checked={active} onCheckedChange={setActive} />
-            <Label htmlFor="course-active">Active — students can access this course</Label>
+
+          <div className="flex flex-col gap-1.5">
+            <Label>Instructors</Label>
+            {instructors.length === 0 ? (
+              <p className="text-caption text-muted-foreground">No instructors to assign yet.</p>
+            ) : (
+              <fieldset className="flex max-h-40 flex-col gap-2 overflow-y-auto">
+                <legend className="sr-only">Instructors</legend>
+                {instructors.map((instructor) => (
+                  <label key={instructor.user_email} className="flex items-center gap-2 text-caption">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(instructor.user_email)}
+                      onChange={() => toggleInstructor(instructor.user_email)}
+                    />
+                    <span className="truncate">{instructorLabel(instructor)}</span>
+                  </label>
+                ))}
+              </fieldset>
+            )}
           </div>
-        </CardContent>
-      </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Assign instructors</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {instructors.length === 0 ? (
-            <p className="text-caption text-muted-foreground">No instructors to assign yet.</p>
-          ) : (
-            <fieldset className="flex flex-col gap-2">
-              <legend className="sr-only">Instructors</legend>
-              {instructors.map((instructor) => (
-                <label key={instructor.user_email} className="flex items-center gap-2 text-caption">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(instructor.user_email)}
-                    onChange={() => toggleInstructor(instructor.user_email)}
-                  />
-                  <span className="truncate">{instructorLabel(instructor)}</span>
-                </label>
-              ))}
-            </fieldset>
-          )}
-        </CardContent>
-      </Card>
+          <div className="flex flex-col gap-1.5">
+            <Label>Access code</Label>
+            <div className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2 text-caption">
+                <span className="font-semibold text-foreground">{accessCode}</span>
+                <button
+                  type="button"
+                  onClick={copyCode}
+                  aria-label="Copy access code"
+                  className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Icon icon={MdContentCopy} size={16} />
+                </button>
+              </span>
+              <Button variant="outline" size="sm" onClick={() => setAccessCode(generateAccessCode())}>
+                Generate new code
+              </Button>
+            </div>
+          </div>
+        </div>
 
-      <div className="flex justify-end gap-2">
-        <Button variant="ghost" onClick={() => navigate("/admin/courses")}>
-          Cancel
-        </Button>
-        <Button onClick={handleCreate} loading={create.isPending} disabled={!canCreate}>
-          Create course
-        </Button>
-      </div>
-    </div>
+        <DialogFooter className="border-t border-border pt-4">
+          <Button variant="outline" onClick={close}>
+            Cancel
+          </Button>
+          <Button onClick={handleCreate} loading={create.isPending} disabled={!canCreate}>
+            Add course
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

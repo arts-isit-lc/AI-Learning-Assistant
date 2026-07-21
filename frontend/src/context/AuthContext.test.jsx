@@ -10,12 +10,13 @@ vi.mock("aws-amplify/auth", () => ({
 }))
 
 function Probe() {
-  const { role, isAuthed, isLoading } = useAuth()
+  const { role, isAuthed, isLoading, user } = useAuth()
   return (
     <div>
       <span data-testid="role">{role ?? "none"}</span>
       <span data-testid="authed">{String(isAuthed)}</span>
       <span data-testid="loading">{String(isLoading)}</span>
+      <span data-testid="email">{user?.email ?? "none"}</span>
     </div>
   )
 }
@@ -78,5 +79,31 @@ describe("AuthProvider", () => {
     )
     expect(screen.getByTestId("role")).toHaveTextContent("none")
     expect(screen.getByTestId("authed")).toHaveTextContent("false")
+  })
+
+  it("sources the account email from the ID token, not the access token username", async () => {
+    // Repro: the access token carries only the Cognito username (a UUID) and
+    // groups; the email lives on the ID token. Before the fix the header showed
+    // the UUID.
+    fetchAuthSession.mockResolvedValue({
+      tokens: {
+        accessToken: {
+          payload: { "cognito:groups": ["student"], username: "9f8c1e02-uuid" },
+        },
+        idToken: { payload: { email: "student@ubc.ca" } },
+      },
+    })
+
+    render(
+      <AuthProvider>
+        <Probe />
+      </AuthProvider>
+    )
+
+    await waitFor(() =>
+      expect(screen.getByTestId("loading")).toHaveTextContent("false")
+    )
+    expect(screen.getByTestId("email")).toHaveTextContent("student@ubc.ca")
+    expect(screen.getByTestId("role")).toHaveTextContent("student")
   })
 })

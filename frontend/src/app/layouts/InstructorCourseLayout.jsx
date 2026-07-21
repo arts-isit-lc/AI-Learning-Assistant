@@ -1,9 +1,17 @@
-import { NavLink, Outlet, useParams } from "react-router-dom"
+import { useState } from "react"
+import { NavLink, Outlet, useNavigate, useParams } from "react-router-dom"
 import { MdContentCopy } from "react-icons/md"
 import { toast } from "react-toastify"
 import { cn } from "@/lib/utils"
-import { useInstructorCourses, useCoursePrompt, useAccessCode } from "@/services/queries"
-import { Badge } from "@/components/ui/badge"
+import {
+  useInstructorCourses,
+  useCoursePrompt,
+  useAccessCode,
+  useUpdateInstructorCourseAccess,
+  useDeleteInstructorCourse,
+} from "@/services/queries"
+import { Toggle } from "@/components/ui/toggle"
+import { ConfirmDialog } from "@/components/composed/ConfirmDialog"
 import { Icon } from "@/components/ui/icon"
 
 // Sub-tabs of the instructor course workspace (audit §7). Paths are relative to
@@ -26,25 +34,28 @@ const tabClass = ({ isActive }) =>
   )
 
 /**
- * Right detail pane of the instructor course workspace (`SplitLayout` detail —
- * the persistent course list is the left pane). Renders the course header
- * (code + status + title), the five section sub-tabs (with a conflict dot on
- * Settings when the stored prompt has unresolved conflicts), and the active tab
- * via `<Outlet>`. Course meta is derived from the instructor course list
- * (find-by-courseId); resilient to loading/error — never blocks the tabs.
+ * Right detail pane of the instructor course workspace (`SplitLayout` detail).
+ * Renders the course header (code + Active/Inactive toggle + name + term/section
+ * + access code + Delete course), the five section sub-tabs (with a conflict dot
+ * on Settings when the stored prompt has unresolved conflicts), and the active
+ * tab via `<Outlet>`. Matches Figma 365:2504. Course meta is derived from the
+ * instructor course list (find-by-courseId); resilient to loading/error.
  *
- * NOTE (Phase 2 fidelity): the Active/Inactive course toggle and the
- * Delete course · Save changes footer from the frame are deferred — they need
- * course-update mutations + cross-tab save coordination that don't exist yet;
- * status shows read-only for now. (The frame's `Undo` button is dropped by
- * decision — the footer is save-only.)
+ * The Active toggle + Delete course use the B7 instructor routes
+ * (updateCourseAccess / delete_course, server-side ownership-checked). Edits
+ * persist immediately (save-only, per decision — no Undo/Save footer).
+ * `term`/`section` render only if present on the course record (no schema columns
+ * today).
  */
 export default function InstructorCourseLayout() {
   const { courseId } = useParams()
+  const navigate = useNavigate()
   const { data: courses = [] } = useInstructorCourses()
   const { data: prompt } = useCoursePrompt(courseId)
-
   const { data: accessCode } = useAccessCode(courseId)
+  const updateAccess = useUpdateInstructorCourseAccess(courseId)
+  const deleteCourse = useDeleteInstructorCourse(courseId)
+  const [deleteOpen, setDeleteOpen] = useState(false)
 
   const course = courses.find((c) => c.course_id === courseId)
   const dept = course ? String(course.course_department ?? "").toUpperCase() : ""
@@ -58,33 +69,79 @@ export default function InstructorCourseLayout() {
     toast.success("Access code copied")
   }
 
+  const handleDelete = () => {
+    deleteCourse.mutate(undefined, {
+      onSuccess: () => {
+        setDeleteOpen(false)
+        toast.success("Course deleted")
+        navigate("/instructor/courses")
+      },
+      onError: () => toast.error("Couldn't delete the course."),
+    })
+  }
+
   return (
     <div className="flex flex-col">
       <div className="border-b border-border pb-4">
         <div className="flex items-start justify-between gap-4">
-          <h1 className="text-h2 font-semibold text-foreground">{code}</h1>
+          <h1 className="text-h2 font-semibold text-neutral-900">{code}</h1>
           {course && (
-            <Badge variant={active ? "success" : "secondary"}>{active ? "Active" : "Inactive"}</Badge>
+            <div className="flex shrink-0 items-center gap-2 text-caption">
+              <span className={active ? "text-muted-foreground" : "font-semibold text-foreground"}>
+                Inactive
+              </span>
+              <Toggle
+                checked={active}
+                onCheckedChange={(v) => updateAccess.mutate(v)}
+                disabled={updateAccess.isPending}
+                aria-label="Course active"
+              />
+              <span className={active ? "font-semibold text-foreground" : "text-muted-foreground"}>
+                Active
+              </span>
+            </div>
           )}
         </div>
-        {course?.course_name && (
-          <p className="mt-1 text-body text-muted-foreground">{course.course_name}</p>
-        )}
-        {course && accessCode && (
-          <div className="mt-2 flex items-center gap-2 text-caption text-muted-foreground">
-            <span>
-              Access Code: <span className="font-semibold text-foreground">{accessCode}</span>
-            </span>
-            <button
-              type="button"
-              onClick={copyAccessCode}
-              aria-label="Copy access code"
-              className="rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Icon icon={MdContentCopy} size={16} />
-            </button>
+
+        {course?.course_name && <p className="mt-1 text-body text-foreground">{course.course_name}</p>}
+
+        <div className="mt-2 flex items-end justify-between gap-4">
+          <div className="text-caption text-foreground">
+            {/* term | section — forward-compatible (no schema columns today). */}
+            {course?.term && (
+              <span>
+                {course.term}
+                {course.section ? ` | Section ${course.section}` : ""}
+              </span>
+            )}
           </div>
-        )}
+          <div className="flex flex-col items-end gap-1">
+            {course && accessCode && (
+              <div className="flex items-center gap-2 text-caption text-muted-foreground">
+                <span>
+                  Access Code: <span className="font-semibold text-foreground">{accessCode}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={copyAccessCode}
+                  aria-label="Copy access code"
+                  className="rounded-sm p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Icon icon={MdContentCopy} size={16} />
+                </button>
+              </div>
+            )}
+            {course && (
+              <button
+                type="button"
+                onClick={() => setDeleteOpen(true)}
+                className="text-caption font-semibold text-destructive hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                Delete course
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       <nav
@@ -110,6 +167,17 @@ export default function InstructorCourseLayout() {
       <div className="mt-6">
         <Outlet />
       </div>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Delete course?"
+        description={`Delete "${code}" and all its concepts, modules, files, and student data? This can't be undone.`}
+        confirmLabel="Delete course"
+        variant="danger"
+        loading={deleteCourse.isPending}
+        onConfirm={handleDelete}
+      />
     </div>
   )
 }

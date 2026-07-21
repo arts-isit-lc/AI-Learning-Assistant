@@ -56,11 +56,12 @@ describe("groupConceptTree", () => {
 })
 
 describe("ConfigurationTab", () => {
-  it("renders the concept tree with its modules", () => {
+  it("renders the numbered concept tree with its roman-numbered modules (sorted by module_number)", () => {
     render(<ConfigurationTab />)
-    expect(screen.getByRole("heading", { name: "Algebra" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Vectors" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Matrices" })).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "1. Algebra" })).toBeInTheDocument()
+    // MODULES sort by module_number: matrices (1) -> "i", vectors (2) -> "ii".
+    expect(screen.getByRole("button", { name: "i. Matrices" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "ii. Vectors" })).toBeInTheDocument()
   })
 
   it("creates a concept from the inline add form", async () => {

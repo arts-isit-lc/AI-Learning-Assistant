@@ -1,14 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { render, screen, within } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Routes, Route } from "react-router-dom"
 
 let coursesResult
 let promptResult
 let accessCodeResult
+const updateAccess = { mutate: vi.fn(), isPending: false }
+const deleteCourse = { mutate: vi.fn(), isPending: false }
 vi.mock("@/services/queries", () => ({
   useInstructorCourses: () => coursesResult,
   useCoursePrompt: () => promptResult,
   useAccessCode: () => accessCodeResult,
+  useUpdateInstructorCourseAccess: () => updateAccess,
+  useDeleteInstructorCourse: () => deleteCourse,
 }))
 
 import InstructorCourseLayout from "./InstructorCourseLayout"
@@ -33,6 +38,8 @@ beforeEach(() => {
   }
   promptResult = { data: null }
   accessCodeResult = { data: "65XH19000jo12" }
+  updateAccess.mutate.mockClear()
+  deleteCourse.mutate.mockClear()
 })
 
 describe("InstructorCourseLayout", () => {
@@ -66,5 +73,21 @@ describe("InstructorCourseLayout", () => {
     coursesResult = { data: [] }
     renderLayout()
     expect(screen.getByRole("heading", { name: "Course" })).toBeInTheDocument()
+  })
+
+  it("toggles course Active/Inactive from the header switch (B7)", async () => {
+    renderLayout()
+    await userEvent.click(screen.getByRole("switch", { name: /course active/i }))
+    expect(updateAccess.mutate).toHaveBeenCalled()
+  })
+
+  it("deletes the course after confirmation (B7)", async () => {
+    renderLayout()
+    await userEvent.click(screen.getByRole("button", { name: "Delete course" }))
+    const confirm = screen
+      .getAllByRole("dialog")
+      .find((d) => within(d).queryByText("Delete course?"))
+    await userEvent.click(within(confirm).getByRole("button", { name: "Delete course" }))
+    expect(deleteCourse.mutate).toHaveBeenCalled()
   })
 })

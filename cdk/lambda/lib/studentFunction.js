@@ -8,6 +8,7 @@
  *   GET    /student/module
  *   GET    /student/module_progress
  *   GET    /student/course_progress
+ *   GET    /student/progress_summary
  *   POST   /student/create_session
  *   DELETE /student/delete_session
  *   GET    /student/get_messages
@@ -325,6 +326,82 @@ exports.handler = async (event) => {
                 ORDER BY "Courses".course_name, "Courses".course_id;
               `;
             response.body = JSON.stringify(data);
+          } catch (err) {
+            response.statusCode = 500;
+            console.error(err);
+            response.body = JSON.stringify({ error: "Internal server error" });
+          }
+        } else {
+          response.statusCode = 400;
+          response.body = "Invalid value";
+        }
+        break;
+      case "GET /student/progress_summary":
+        if (
+          event.queryStringParameters != null &&
+          event.queryStringParameters.email
+        ) {
+          const summaryEmail = event.queryStringParameters.email;
+
+          try {
+            const userResult = await sqlConnection`
+                SELECT user_id FROM "Users" WHERE user_email = ${summaryEmail};
+              `;
+
+            if (userResult.length === 0) {
+              response.statusCode = 404;
+              response.body = JSON.stringify({ error: "User not found" });
+              break;
+            }
+
+            const userId = userResult[0].user_id;
+
+            // Per-course completion for the student's accessible enrolled
+            // courses, aggregated in ONE query (the home grid renders many cards
+            // — no per-card round trip). A concept counts complete when its
+            // active modules average a score of 100 (mirrors the course page /
+            // Learning Journey definition). Courses hidden from students
+            // (course_student_access = FALSE) are excluded, matching
+            // GET /student/course.
+            const summaryRows = await sqlConnection`
+                WITH concept_scores AS (
+                  SELECT
+                    cc.course_id,
+                    cc.concept_id,
+                    AVG(COALESCE(sm.module_score, 0)) AS avg_score
+                  FROM "Enrolments" e
+                  JOIN "Courses" co ON co.course_id = e.course_id
+                  JOIN "Course_Concepts" cc ON cc.course_id = e.course_id
+                  JOIN "Course_Modules" cm
+                    ON cm.concept_id = cc.concept_id
+                   AND cm.status = 'active'
+                  LEFT JOIN "Student_Modules" sm
+                    ON sm.course_module_id = cm.module_id
+                   AND sm.enrolment_id = e.enrolment_id
+                  WHERE e.user_id = ${userId}
+                    AND co.course_student_access = TRUE
+                  GROUP BY cc.course_id, cc.concept_id
+                )
+                SELECT
+                  course_id,
+                  COUNT(*)::int AS total,
+                  COUNT(*) FILTER (WHERE avg_score = 100)::int AS completed
+                FROM concept_scores
+                GROUP BY course_id;
+              `;
+
+            const summary = summaryRows.map((r) => {
+              const total = Number(r.total) || 0;
+              const completed = Number(r.completed) || 0;
+              return {
+                course_id: r.course_id,
+                total,
+                completed,
+                percent: total > 0 ? Math.round((completed / total) * 100) : 0,
+              };
+            });
+
+            response.body = JSON.stringify(summary);
           } catch (err) {
             response.statusCode = 500;
             console.error(err);

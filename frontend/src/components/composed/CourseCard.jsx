@@ -1,22 +1,53 @@
 import { cn } from "@/lib/utils"
-import { Card } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
+
+/** Status label text + colour, matching the Figma Card/Course states. */
+const STATUS_LABEL = {
+  completed: "COMPLETED",
+  in_progress: "IN PROGRESS",
+  access_requested: "ACCESS REQUESTED",
+}
+const STATUS_CLASS = {
+  completed: "text-success",
+  in_progress: "text-info",
+  access_requested: "text-white",
+}
 
 /**
- * Course tile (Figma Card/Course). Interactive when `onOpen` is provided (the
- * whole card is a keyboard-operable button). `state="inactive"` dims it.
+ * Course tile — Figma `Card/Course` (859:6653). Presentational only; the parent
+ * supplies progress/status. Matches the frame: 4px radius, #808080 border, FLAT
+ * (no shadow), 16px padding. Layout = course code (semibold) + name, a hairline
+ * divider, then `NN% (x/y concepts completed)` on the left + a status label on
+ * the right. States: Default / Hover (lightest-purple bg + purple border) /
+ * Inactive (grey fill + white text).
  *
- * @param {{ course: { course_department?: string, course_number?: string|number, course_name?: string }, onOpen?: () => void, state?: "default"|"inactive", className?: string }} props
+ * @param {{
+ *   code: string,
+ *   name?: string,
+ *   progress?: { percent: number, completed: number, total: number } | null,
+ *   status?: "completed"|"in_progress"|"access_requested",
+ *   state?: "default"|"inactive",
+ *   loading?: boolean,
+ *   onOpen?: () => void,
+ *   className?: string,
+ * }} props
  */
-export function CourseCard({ course, onOpen, state = "default", className }) {
-  const dept = String(course?.course_department ?? "").toUpperCase()
-  const number = course?.course_number ?? ""
-  const name = course?.course_name ?? "Untitled course"
+export function CourseCard({
+  code,
+  name,
+  progress = null,
+  status,
+  state = "default",
+  loading = false,
+  onOpen,
+  className,
+}) {
   const inactive = state === "inactive"
   const interactive = typeof onOpen === "function" && !inactive
+  const showProgress = loading || progress || status
 
   return (
-    <Card
+    <div
       role={interactive ? "button" : undefined}
       tabIndex={interactive ? 0 : undefined}
       onClick={interactive ? onOpen : undefined}
@@ -32,22 +63,45 @@ export function CourseCard({ course, onOpen, state = "default", className }) {
       }
       aria-disabled={inactive || undefined}
       className={cn(
-        "flex min-h-32 flex-col justify-between gap-4 p-6 transition-shadow",
+        "flex flex-col gap-6 rounded-sm border border-border p-4 transition-colors",
+        inactive ? "bg-neutral-300 text-white" : "bg-card text-neutral-900",
         interactive &&
-          "cursor-pointer hover:shadow-modal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-        inactive && "opacity-60",
+          "cursor-pointer hover:border-primary hover:bg-primary-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         className
       )}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex flex-col gap-1">
-          <span className="text-h4 font-semibold text-navy">
-            {dept} {number}
-          </span>
-          <span className="text-caption text-muted-foreground">{name}</span>
-        </div>
-        {inactive && <Badge variant="secondary">Inactive</Badge>}
+      <div className="flex flex-col gap-1">
+        <span className="text-h4 font-semibold leading-7">{code}</span>
+        {name && <span className="text-caption leading-7">{name}</span>}
       </div>
-    </Card>
+
+      {showProgress && (
+        <div className="flex flex-col gap-2">
+          <div
+            className={cn("h-px w-full", inactive ? "bg-white/50" : "bg-[hsl(var(--border-subtle))]")}
+            aria-hidden="true"
+          />
+          <div className="flex items-center justify-between gap-2 text-caption leading-7">
+            {loading ? (
+              <Skeleton className="h-4 w-44" />
+            ) : progress ? (
+              <span className="flex items-center gap-1">
+                <span className="font-semibold">{progress.percent}%</span>
+                <span>
+                  ({progress.completed}/{progress.total} concepts completed)
+                </span>
+              </span>
+            ) : (
+              <span />
+            )}
+            {status && (
+              <span className={cn("font-semibold", inactive ? "text-white" : STATUS_CLASS[status])}>
+                {STATUS_LABEL[status]}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
   )
 }

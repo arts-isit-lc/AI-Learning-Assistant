@@ -16,6 +16,21 @@ export const CourseSchema = z
   .passthrough()
 export const CoursesSchema = z.array(CourseSchema)
 
+// --- Per-course progress summary (GET student/progress_summary) ---
+// Server-aggregated completion for the home grid: one row per accessible
+// enrolled course. `percent` = completed/total concepts (a concept is complete
+// when its active modules average a score of 100).
+export const CourseProgressSummarySchema = z.array(
+  z
+    .object({
+      course_id: z.string(),
+      percent: z.number(),
+      completed: z.number(),
+      total: z.number(),
+    })
+    .passthrough()
+)
+
 // --- Course page (GET student/course_page) — flat concept+module rows ---
 export const CoursePageRowSchema = z
   .object({

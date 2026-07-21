@@ -26,8 +26,8 @@ beforeEach(() => {
 })
 
 describe("instructorLabel", () => {
-  it("uses the full name when present, else the email", () => {
-    expect(instructorLabel(INSTRUCTORS[0])).toBe("Ada Lovelace")
+  it("uses 'Lastname, Firstname' when present, else the email", () => {
+    expect(instructorLabel(INSTRUCTORS[0])).toBe("Lovelace, Ada")
     expect(instructorLabel(INSTRUCTORS[1])).toBe("pending@x.com")
   })
 })
@@ -35,19 +35,19 @@ describe("instructorLabel", () => {
 describe("InstructorList", () => {
   it("renders instructors and flags pending signups", () => {
     render(<InstructorList />)
-    expect(screen.getByText("Ada Lovelace")).toBeInTheDocument()
+    expect(screen.getByText("Lovelace, Ada")).toBeInTheDocument()
     expect(screen.getByText("Invited — awaiting signup")).toBeInTheDocument()
   })
 
   it("navigates to the (encoded) instructor detail on click", async () => {
     render(<InstructorList />)
-    await userEvent.click(screen.getByText("Ada Lovelace"))
+    await userEvent.click(screen.getByText("Lovelace, Ada"))
     expect(navigate).toHaveBeenCalledWith("/admin/instructors/ada%40x.com")
   })
 
   it("filters by the debounced search", async () => {
     render(<InstructorList />)
     await userEvent.type(screen.getByRole("searchbox", { name: "Search instructors" }), "pending")
-    await waitFor(() => expect(screen.queryByText("Ada Lovelace")).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.queryByText("Lovelace, Ada")).not.toBeInTheDocument())
   })
 })

@@ -15,8 +15,8 @@ describe("AddInstructorDialog", () => {
   it("opens from the header trigger and elevates the entered email", async () => {
     render(<AddInstructorDialog />)
     await userEvent.click(screen.getByRole("button", { name: "Add instructor" }))
-    await userEvent.type(screen.getByLabelText("Email"), "new@x.com")
-    await userEvent.click(screen.getByRole("button", { name: "Add" }))
+    await userEvent.type(screen.getByLabelText("Email address"), "new@x.com")
+    await userEvent.click(screen.getByRole("button", { name: "Send invite" }))
     expect(elevate.mutate).toHaveBeenCalledWith("new@x.com", expect.any(Object))
   })
 })

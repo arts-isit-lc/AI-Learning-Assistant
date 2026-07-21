@@ -65,8 +65,8 @@ describe("CourseDetail", () => {
     expect(screen.getByRole("heading", { name: "GEOG 250" })).toBeInTheDocument()
     expect(screen.getByText("ABCD-EFGH-IJKL-MNOP")).toBeInTheDocument()
     expect(screen.getByRole("switch", { name: "Course student access" })).toBeInTheDocument()
-    expect(screen.getByText("Ada Lovelace")).toBeInTheDocument()
-    expect(screen.getByRole("switch", { name: "OCELIA access for Ada Lovelace" })).toBeInTheDocument()
+    expect(screen.getByText("Lovelace, Ada")).toBeInTheDocument()
+    expect(screen.getByRole("switch", { name: "OCELIA access for Lovelace, Ada" })).toBeInTheDocument()
   })
 
   it("persists the course active toggle immediately", async () => {
@@ -80,16 +80,19 @@ describe("CourseDetail", () => {
 
   it("toggles a per-instructor OCELIA access flag (B4)", async () => {
     render(<CourseDetail />)
-    await userEvent.click(screen.getByRole("switch", { name: "OCELIA access for Ada Lovelace" }))
+    await userEvent.click(screen.getByRole("switch", { name: "OCELIA access for Lovelace, Ada" }))
     expect(updateInstructorAccess.mutate).toHaveBeenCalledWith(
       { courseId: "c1", instructorEmail: "ada@x.com", access: false },
       expect.any(Object)
     )
   })
 
-  it("removes an instructor from the course", async () => {
+  it("removes an instructor from the course after confirmation", async () => {
     render(<CourseDetail />)
     await userEvent.click(screen.getByRole("button", { name: "Remove" }))
+    const dialog = await screen.findByRole("dialog")
+    expect(within(dialog).getByText("Remove instructor?")).toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole("button", { name: "Remove instructor" }))
     expect(unenroll.mutate).toHaveBeenCalledWith(
       { courseId: "c1", instructorEmail: "ada@x.com" },
       expect.any(Object)
@@ -100,7 +103,7 @@ describe("CourseDetail", () => {
     render(<CourseDetail />)
     await userEvent.click(screen.getByRole("button", { name: "Add instructor" }))
     const dialog = await screen.findByRole("dialog")
-    await userEvent.click(within(dialog).getByRole("button", { name: /Alan Turing/ }))
+    await userEvent.click(within(dialog).getByRole("button", { name: /Turing, Alan/ }))
     expect(enroll.mutate).toHaveBeenCalledWith(
       { courseId: "c1", instructorEmail: "alan@x.com" },
       expect.any(Object)
@@ -111,7 +114,7 @@ describe("CourseDetail", () => {
     render(<CourseDetail />)
     await userEvent.click(screen.getByRole("button", { name: "Delete course" }))
     const dialog = await screen.findByRole("dialog")
-    await userEvent.click(within(dialog).getByRole("button", { name: "Delete" }))
+    await userEvent.click(within(dialog).getByRole("button", { name: "Delete course" }))
     await waitFor(() => expect(del.mutate).toHaveBeenCalledWith("c1", expect.any(Object)))
   })
 })

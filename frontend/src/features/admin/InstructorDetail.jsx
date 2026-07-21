@@ -28,9 +28,14 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 
-/** "DEPT NUMBER — Name" label for a course. */
+/** "DEPT NUMBER" course code. */
+function courseCode(course) {
+  return `${String(course.course_department ?? "").toUpperCase()} ${course.course_number ?? ""}`.trim()
+}
+
+/** "DEPT NUMBER — Name" label for a course (used for accessible names). */
 function courseLabel(course) {
-  const code = `${String(course.course_department ?? "").toUpperCase()} ${course.course_number ?? ""}`.trim()
+  const code = courseCode(course)
   return course.course_name ? `${code} — ${course.course_name}` : code
 }
 
@@ -76,6 +81,7 @@ export function InstructorDetail() {
   const [accessOverrides, setAccessOverrides] = useState({})
   const [addOpen, setAddOpen] = useState(false)
   const [removeOpen, setRemoveOpen] = useState(false)
+  const [removeCourseTarget, setRemoveCourseTarget] = useState(null)
 
   // Drop each per-course override once the refetch reflects it.
   useEffect(() => {
@@ -128,10 +134,15 @@ export function InstructorDetail() {
     )
   }
 
-  const handleRemove = (courseId) => {
+  const handleRemove = () => {
     unenroll.mutate(
-      { courseId, instructorEmail: email },
-      { onSuccess: () => toast.success("Course removed") }
+      { courseId: removeCourseTarget.course_id, instructorEmail: email },
+      {
+        onSuccess: () => {
+          setRemoveCourseTarget(null)
+          toast.success("Course removed")
+        },
+      }
     )
   }
 
@@ -172,10 +183,13 @@ export function InstructorDetail() {
                 className="flex items-center justify-between gap-4 border-b border-border py-3"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-caption font-medium text-foreground">{courseLabel(course)}</p>
+                  <p className="truncate text-caption text-neutral-900">{courseCode(course)}</p>
+                  {course.course_name && (
+                    <p className="truncate text-caption text-foreground">{course.course_name}</p>
+                  )}
                   <button
                     type="button"
-                    onClick={() => handleRemove(course.course_id)}
+                    onClick={() => setRemoveCourseTarget(course)}
                     className="text-caption text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     Remove
@@ -192,7 +206,8 @@ export function InstructorDetail() {
         </div>
       </div>
 
-      {/* Footer: Remove instructor (demote). */}
+      {/* Footer: Delete instructor (demotes — the only backend route is lower_instructor;
+          the account itself isn't hard-deleted, so the confirm says so honestly). */}
       <div className="flex items-center gap-4 border-t border-border pt-4">
         <Button
           variant="link"
@@ -200,18 +215,18 @@ export function InstructorDetail() {
           onClick={() => setRemoveOpen(true)}
           disabled={lower.isPending}
         >
-          Remove instructor
+          Delete instructor
         </Button>
       </div>
 
       {/* Assign-course picker. */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent>
-          <DialogHeader>
+          <DialogHeader className="border-b border-border pb-3">
             <DialogTitle>Assign a course</DialogTitle>
-            <DialogDescription>Give this instructor access to a course.</DialogDescription>
           </DialogHeader>
-          <div className="my-2 flex max-h-72 flex-col overflow-y-auto">
+          <DialogDescription>Give this instructor access to a course.</DialogDescription>
+          <div className="flex max-h-72 flex-col overflow-y-auto">
             {unassigned.length === 0 ? (
               <p className="py-3 text-caption text-muted-foreground">
                 This instructor is already assigned to every course.
@@ -234,11 +249,26 @@ export function InstructorDetail() {
       </Dialog>
 
       <ConfirmDialog
+        open={Boolean(removeCourseTarget)}
+        onOpenChange={(o) => !o && setRemoveCourseTarget(null)}
+        title="Remove course?"
+        description={
+          removeCourseTarget
+            ? `Remove ${courseLabel(removeCourseTarget)} from ${instructor ? instructorLabel(instructor) : email}? They'll lose instructor access to this course.`
+            : ""
+        }
+        confirmLabel="Remove course"
+        variant="danger"
+        loading={unenroll.isPending}
+        onConfirm={handleRemove}
+      />
+
+      <ConfirmDialog
         open={removeOpen}
         onOpenChange={setRemoveOpen}
-        title="Remove instructor?"
-        description={`Remove instructor access for ${email}? Their instructor role and course assignments are removed — their account and any student data are unaffected.`}
-        confirmLabel="Remove instructor"
+        title="Delete instructor?"
+        description={`Remove ${instructor ? instructorLabel(instructor) : email} as an instructor? Their instructor role and course assignments are removed. Their account and any student data are unaffected.`}
+        confirmLabel="Delete instructor"
         variant="danger"
         loading={lower.isPending}
         onConfirm={() =>

@@ -13,7 +13,10 @@ export function ReferenceDocPanel({ fileId, fileName, onClose }) {
   const { data, isLoading, isError, refetch } = useFileUrl(fileId, { enabled: Boolean(fileId) })
 
   return (
-    <aside className="flex h-full flex-col border-l border-border bg-background" aria-label="Reference document">
+    <aside
+      className="flex h-full w-full flex-col overflow-hidden rounded-sm border border-border bg-background"
+      aria-label="Reference document"
+    >
       <header className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
         <span className="truncate text-caption font-semibold text-foreground">
           {fileName || "Reference"}

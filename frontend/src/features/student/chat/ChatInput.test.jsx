@@ -7,7 +7,7 @@ describe("ChatInput", () => {
   it("submits the trimmed value on Enter", async () => {
     const onSubmit = vi.fn()
     render(<ChatInput onSubmit={onSubmit} />)
-    await userEvent.type(screen.getByLabelText("Message AI Assistant"), "hello{Enter}")
+    await userEvent.type(screen.getByLabelText("Message OCELIA Assistant"), "hello{Enter}")
     expect(onSubmit).toHaveBeenCalledWith("hello")
   })
 
@@ -15,7 +15,7 @@ describe("ChatInput", () => {
     const onSubmit = vi.fn()
     render(<ChatInput onSubmit={onSubmit} />)
     await userEvent.type(
-      screen.getByLabelText("Message AI Assistant"),
+      screen.getByLabelText("Message OCELIA Assistant"),
       "line1{Shift>}{Enter}{/Shift}"
     )
     expect(onSubmit).not.toHaveBeenCalled()
@@ -24,7 +24,7 @@ describe("ChatInput", () => {
   it("does not submit when disabled", async () => {
     const onSubmit = vi.fn()
     render(<ChatInput onSubmit={onSubmit} disabled />)
-    const box = screen.getByLabelText("Message AI Assistant")
+    const box = screen.getByLabelText("Message OCELIA Assistant")
     await userEvent.type(box, "hi{Enter}")
     expect(onSubmit).not.toHaveBeenCalled()
     expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled()

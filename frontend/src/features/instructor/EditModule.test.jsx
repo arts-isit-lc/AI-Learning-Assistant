@@ -90,8 +90,12 @@ describe("EditModule", () => {
   it("deletes the module after confirmation", async () => {
     render(<EditModule />)
     await userEvent.click(screen.getByRole("button", { name: "Delete module" }))
-    const dialog = await screen.findByRole("dialog")
-    await userEvent.click(within(dialog).getByRole("button", { name: "Delete" }))
+    // The editor is itself a modal; the confirm is a second dialog — scope to it.
+    expect(await screen.findByText("Delete module?")).toBeInTheDocument()
+    const confirm = screen
+      .getAllByRole("dialog")
+      .find((d) => within(d).queryByText("Delete module?"))
+    await userEvent.click(within(confirm).getByRole("button", { name: "Delete" }))
     await waitFor(() => expect(deleteModule.mutate).toHaveBeenCalled())
   })
 })

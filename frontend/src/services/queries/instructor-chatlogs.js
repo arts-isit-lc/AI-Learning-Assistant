@@ -1,7 +1,33 @@
-import { useQuery } from "@tanstack/react-query"
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { http, parseWith } from "../http"
 import { queryKeys } from "../queryKeys"
-import { ChatLogsSchema, ChatlogStatusSchema } from "../schemas/instructor"
+import { ChatLogsSchema, ChatlogStatusSchema, CourseMessagesSchema } from "../schemas/instructor"
+
+/**
+ * Course-wide chat messages for the in-app Chat History table (GET
+ * instructor/course_messages_rows → B5). Paginated (limit/offset); returns
+ * `{ messages, total, limit, offset }`. `keepPreviousData` holds the current
+ * page visible while the next one loads, so paging doesn't flash empty.
+ * @param {string} courseId
+ * @param {{ limit?: number, offset?: number }} [opts]
+ */
+export function useCourseMessages(courseId, { limit = 50, offset = 0 } = {}) {
+  return useQuery({
+    queryKey: queryKeys.instructor.courseMessages(courseId, limit, offset),
+    enabled: Boolean(courseId),
+    placeholderData: keepPreviousData,
+    queryFn: async () => {
+      const { email } = await http.getAuth()
+      const data = await http.get("instructor/course_messages_rows", {
+        course_id: courseId,
+        instructor_email: email,
+        limit,
+        offset,
+      })
+      return parseWith(CourseMessagesSchema, data ?? {}, "course messages")
+    },
+  })
+}
 
 /** Parse the "YYYY-MM-DD HH:MM:SS.csv" file name (UTC) into a local date string. */
 function chatlogDate(fileName) {

@@ -45,8 +45,9 @@ describe("CourseView", () => {
     expect(screen.getByRole("heading", { name: "GEOG 250" })).toBeInTheDocument()
     expect(screen.getByText(/week 1/i)).toBeInTheDocument()
     expect(screen.getByText(/week 2/i)).toBeInTheDocument()
-    expect(screen.getByText("Complete")).toBeInTheDocument()
-    expect(screen.getByText("Not started")).toBeInTheDocument()
+    // Module completion is now a status circle (icon with an accessible label).
+    expect(screen.getByLabelText("Complete")).toBeInTheDocument()
+    expect(screen.getByLabelText("Not complete")).toBeInTheDocument()
   })
 
   it("offers the Learning journey drawer", () => {

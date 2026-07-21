@@ -15,7 +15,7 @@ vi.mock("react-router-dom", async (importOriginal) => {
 })
 vi.mock("react-toastify", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
-import { CreateCourse, generateAccessCode } from "./CreateCourse"
+import { CreateCourse, generateAccessCode, parseCourseCode } from "./CreateCourse"
 
 beforeEach(() => {
   create.mutate.mockClear()
@@ -28,30 +28,42 @@ describe("generateAccessCode", () => {
   })
 })
 
+describe("parseCourseCode", () => {
+  it("splits a 'DEPT NUMBER' code (last token = number)", () => {
+    expect(parseCourseCode("GEOG 210")).toEqual({ department: "GEOG", number: "210" })
+    expect(parseCourseCode("GEOG_V 412")).toEqual({ department: "GEOG_V", number: "412" })
+    expect(parseCourseCode("GEOG")).toEqual({ department: "GEOG", number: "" })
+  })
+})
+
 describe("CreateCourse", () => {
-  it("disables Create until the required fields are filled", async () => {
+  it("disables Add course until the required fields (code + title) are filled", async () => {
     render(<CreateCourse />)
-    expect(screen.getByRole("button", { name: "Create course" })).toBeDisabled()
-    await userEvent.type(screen.getByLabelText("Course name"), "Intro Geography")
-    await userEvent.type(screen.getByLabelText("Department"), "GEOG")
-    await userEvent.type(screen.getByLabelText("Course number"), "250")
-    expect(screen.getByRole("button", { name: "Create course" })).toBeEnabled()
+    expect(screen.getByRole("button", { name: "Add course" })).toBeDisabled()
+    await userEvent.type(screen.getByLabelText(/Course code/), "GEOG 250")
+    await userEvent.type(screen.getByLabelText(/Course title/), "Intro Geography")
+    expect(screen.getByRole("button", { name: "Add course" })).toBeEnabled()
   })
 
-  it("only accepts digits in the course number", async () => {
+  it("regenerates the access code on demand", async () => {
     render(<CreateCourse />)
-    const number = screen.getByLabelText("Course number")
-    await userEvent.type(number, "2a5b0")
-    expect(number).toHaveValue("250")
+    const codeEl = screen.getByText(/^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/)
+    const before = codeEl.textContent
+    // regenerate until it differs (astronomically unlikely to repeat, but guard the flake)
+    await userEvent.click(screen.getByRole("button", { name: "Generate new code" }))
+    await waitFor(() =>
+      expect(screen.getByText(/^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/).textContent).not.toBe(
+        before
+      )
+    )
   })
 
-  it("creates the course with a generated access code + selected instructors", async () => {
+  it("creates the course (code parsed to dept+number) with the access code + instructors", async () => {
     render(<CreateCourse />)
-    await userEvent.type(screen.getByLabelText("Course name"), "Intro Geography")
-    await userEvent.type(screen.getByLabelText("Department"), "GEOG")
-    await userEvent.type(screen.getByLabelText("Course number"), "250")
-    await userEvent.click(screen.getByRole("checkbox", { name: /Ada Lovelace/ }))
-    await userEvent.click(screen.getByRole("button", { name: "Create course" }))
+    await userEvent.type(screen.getByLabelText(/Course code/), "GEOG 250")
+    await userEvent.type(screen.getByLabelText(/Course title/), "Intro Geography")
+    await userEvent.click(screen.getByRole("checkbox", { name: /Lovelace, Ada/ }))
+    await userEvent.click(screen.getByRole("button", { name: "Add course" }))
 
     await waitFor(() => expect(create.mutate).toHaveBeenCalled())
     const [payload] = create.mutate.mock.calls[0]

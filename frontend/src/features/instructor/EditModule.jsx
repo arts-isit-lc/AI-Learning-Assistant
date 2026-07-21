@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useLocation, useNavigate, useParams } from "react-router-dom"
 import { toast } from "react-toastify"
-import { MdClose } from "react-icons/md"
+import { MdDelete, MdInsertDriveFile } from "react-icons/md"
 import {
   useConcepts,
   useModules,
@@ -19,17 +19,15 @@ import { mergeTopics } from "@/utils/topicGenerationHelpers"
 import { titleCase } from "@/utils/formatters"
 import { BLOCKING_STATUSES } from "@/constants/uploadConfig"
 import { parseKeyTopics } from "@/components/composed/ModuleAccordion"
-import { FileUpload } from "@/components/composed/FileUpload"
 import { ConfirmDialog } from "@/components/composed/ConfirmDialog"
-import { BackButton } from "@/components/composed/BackButton"
 import { Tag } from "@/components/composed/Tag"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Icon } from "@/components/ui/icon"
 import { Progress } from "@/components/ui/progress"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import {
   Select,
   SelectTrigger,
@@ -39,10 +37,11 @@ import {
 } from "@/components/ui/select"
 
 /**
- * Single-page module editor (Figma Modal/EditModule) — all module fields on one
- * form (not stepped): name, concept, prompt, key topics, and files (add/remove).
+ * Single-page module editor — Figma `Modal/EditModule` (859:7574). A centered
+ * modal (not stepped) rendered over the Configuration tab with ALL module fields
+ * on one form: name, concept, reference, files (add/remove), prompt, key topics.
  * Opened from the Configuration tree's Edit action. Route:
- * /instructor/courses/:courseId/modules/:moduleId/edit.
+ * /instructor/courses/:courseId/configuration/modules/:moduleId/edit.
  */
 export function EditModule() {
   const { courseId, moduleId } = useParams()
@@ -66,6 +65,7 @@ export function EditModule() {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const seededRef = useRef(false)
   const refsSeededRef = useRef(false)
+  const uploadInputRef = useRef(null)
 
   const { data: existingFiles = [] } = useModuleAllFiles(courseId, moduleId, moduleName)
   const { fileStates, uploadFiles, removeFile } = useFileUpload({ courseId, moduleId, moduleName })
@@ -111,6 +111,12 @@ export function EditModule() {
     () => courseFiles.filter((f) => f.module_id !== moduleId),
     [courseFiles, moduleId]
   )
+  const fileNameById = useMemo(() => {
+    const map = new Map()
+    for (const f of otherFiles) map.set(f.file_id, f.filename || f.file_id)
+    return map
+  }, [otherFiles])
+  const attachableFiles = otherFiles.filter((f) => !referencedFileIds.includes(f.file_id))
   const canSave = Boolean(moduleName.trim() && conceptId) && !isProcessingBlocking && !editModule.isPending
 
   const goToConfiguration = () => navigate(`/instructor/courses/${courseId}/configuration`)
@@ -148,6 +154,11 @@ export function EditModule() {
     setTopicInput("")
   }
 
+  const toggleReference = (fileId) =>
+    setReferencedFileIds((prev) =>
+      prev.includes(fileId) ? prev.filter((id) => id !== fileId) : [...prev, fileId]
+    )
+
   const handleSave = () => {
     editModule.mutate(
       {
@@ -182,200 +193,211 @@ export function EditModule() {
     )
   }
 
-  if (!moduleData) {
-    return <p className="text-caption text-muted-foreground">Loading module…</p>
-  }
-
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <BackButton onClick={goToConfiguration}>Back to configuration</BackButton>
-        <Button
-          variant="danger"
-          onClick={() => setDeleteOpen(true)}
-          disabled={deleteModule.isPending}
-        >
-          Delete module
-        </Button>
-      </div>
-      <h1 className="text-h4 font-semibold text-navy">Edit module</h1>
+    <Dialog open onOpenChange={(open) => !open && goToConfiguration()}>
+      <DialogContent className="flex max-h-[90vh] w-[min(92vw,64rem)] max-w-none flex-col gap-0 p-0">
+        <div className="border-b border-border px-8 pb-4 pt-6">
+          <DialogTitle className="text-h4 font-semibold text-neutral-900">Edit module</DialogTitle>
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Details</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="edit-module-name">Module name</Label>
-            <Input
-              id="edit-module-name"
-              value={moduleName}
-              onChange={(e) => setModuleName(e.target.value)}
-              maxLength={100}
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Concept</Label>
-            <Select value={conceptId} onValueChange={setConceptId}>
-              <SelectTrigger aria-label="Concept" className="max-w-sm">
-                <SelectValue placeholder="Select a concept" />
-              </SelectTrigger>
-              <SelectContent>
-                {concepts.map((c) => (
-                  <SelectItem key={c.concept_id} value={c.concept_id}>
-                    {titleCase(c.concept_name)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+        <div className="flex-1 overflow-y-auto px-8 py-8">
+          <div className="mx-auto flex max-w-xl flex-col gap-6">
+            <p className="text-caption text-muted-foreground">
+              Changes made below are not updated unless Save is pressed once finished.
+            </p>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Files</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          {visibleExisting.length > 0 && (
-            <ul className="flex flex-col gap-2">
-              {visibleExisting.map((f) => (
-                <li
-                  key={f.fileName}
-                  className="flex items-center justify-between gap-2 rounded-md border border-border p-2"
-                >
-                  <span className="truncate text-caption">{f.fileName}</span>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    aria-label={`Remove ${f.fileName}`}
-                    onClick={() => setRemovedFiles((prev) => new Set(prev).add(f.fileName))}
+            {!moduleData ? (
+              <p className="text-caption text-muted-foreground">Loading module…</p>
+            ) : (
+              <>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="edit-module-name" className="text-neutral-900">Module name</Label>
+                  <Input
+                    id="edit-module-name"
+                    value={moduleName}
+                    onChange={(e) => setModuleName(e.target.value)}
+                    maxLength={100}
+                  />
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <Label className="text-neutral-900">Concept</Label>
+                  <Select value={conceptId} onValueChange={setConceptId}>
+                    <SelectTrigger aria-label="Concept">
+                      <SelectValue placeholder="Select a concept" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {concepts.map((c) => (
+                        <SelectItem key={c.concept_id} value={c.concept_id}>
+                          {titleCase(c.concept_name)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <Label className="text-neutral-900">Reference</Label>
+                  <Select
+                    value=""
+                    onValueChange={toggleReference}
+                    disabled={attachableFiles.length === 0}
                   >
-                    <Icon icon={MdClose} size={16} />
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <FileUpload onFiles={handleUpload} disabled={!moduleId} />
-          {fileList.length > 0 && (
-            <ul className="flex flex-col gap-2">
-              {fileList.map((f) => (
-                <li key={f.fileId} className="rounded-md border border-border p-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-caption font-semibold">{f.fileName}</span>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      aria-label={`Remove ${f.fileName}`}
-                      onClick={() => removeFile(f.fileId)}
-                    >
-                      <Icon icon={MdClose} size={16} />
-                    </Button>
-                  </div>
-                  {f.status === "uploading" && <Progress value={f.progress} className="mt-2" />}
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {otherFiles.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <p className="text-caption font-semibold text-foreground">
-                Reference files from other modules
-              </p>
-              <ul className="flex max-h-48 flex-col gap-1 overflow-y-auto rounded-md border border-border p-2">
-                {otherFiles.map((f) => (
-                  <li key={f.file_id}>
-                    <label className="flex items-center gap-2 text-caption">
-                      <input
-                        type="checkbox"
-                        checked={referencedFileIds.includes(f.file_id)}
-                        onChange={() =>
-                          setReferencedFileIds((prev) =>
-                            prev.includes(f.file_id)
-                              ? prev.filter((id) => id !== f.file_id)
-                              : [...prev, f.file_id]
-                          )
+                    <SelectTrigger aria-label="Reference">
+                      <SelectValue
+                        placeholder={
+                          attachableFiles.length === 0 ? "No other files available" : "Attach a reference file"
                         }
                       />
-                      <span className="truncate">
-                        {f.filename || f.file_id}
-                        {f.module_name ? ` — ${titleCase(f.module_name)}` : ""}
-                      </span>
-                    </label>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {attachableFiles.map((f) => (
+                        <SelectItem key={f.file_id} value={f.file_id}>
+                          {(f.filename || f.file_id) + (f.module_name ? ` — ${titleCase(f.module_name)}` : "")}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {referencedFileIds.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {referencedFileIds.map((id) => (
+                        <Tag key={id} label={fileNameById.get(id) || id} onRemove={() => toggleReference(id)} />
+                      ))}
+                    </div>
+                  )}
+                </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Prompt &amp; topics</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="edit-module-prompt">Module prompt</Label>
-            <Textarea
-              id="edit-module-prompt"
-              value={modulePrompt}
-              onChange={(e) => setModulePrompt(e.target.value)}
-              rows={6}
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <Label>Key topics</Label>
-              <Button size="sm" variant="outline" onClick={handleGenerate} loading={isGenerating}>
-                Generate topics
-              </Button>
-            </div>
-            <div className="flex gap-2">
-              <Input
-                value={topicInput}
-                onChange={(e) => setTopicInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault()
-                    addTopic()
-                  }
-                }}
-                placeholder="Add a topic and press Enter"
-                aria-label="Add key topic"
-              />
-              <Button variant="outline" onClick={addTopic}>
-                Add
-              </Button>
-            </div>
-            {keyTopics.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {keyTopics.map((t) => (
-                  <Tag key={t} label={t} onRemove={() => setKeyTopics((prev) => prev.filter((x) => x !== t))} />
-                ))}
-              </div>
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-neutral-900">Uploaded files</Label>
+                    <button
+                      type="button"
+                      onClick={() => uploadInputRef.current?.click()}
+                      disabled={!moduleId}
+                      className="text-caption font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                    >
+                      Upload files
+                    </button>
+                    <input
+                      ref={uploadInputRef}
+                      type="file"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => {
+                        handleUpload(Array.from(e.target.files || []))
+                        e.target.value = ""
+                      }}
+                    />
+                  </div>
+
+                  <ul className="flex flex-col gap-2">
+                    {visibleExisting.map((f) => (
+                      <li key={f.fileName} className="rounded-sm border border-border p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <Icon icon={MdInsertDriveFile} size={20} className="shrink-0 text-muted-foreground" />
+                            <span className="truncate text-caption font-semibold text-neutral-900">
+                              {f.fileName}
+                            </span>
+                          </div>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            aria-label={`Remove ${f.fileName}`}
+                            onClick={() => setRemovedFiles((prev) => new Set(prev).add(f.fileName))}
+                          >
+                            <Icon icon={MdDelete} size={18} />
+                          </Button>
+                        </div>
+                      </li>
+                    ))}
+                    {fileList.map((f) => (
+                      <li key={f.fileId} className="rounded-sm border border-border p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <Icon icon={MdInsertDriveFile} size={20} className="shrink-0 text-muted-foreground" />
+                            <span className="truncate text-caption font-semibold text-neutral-900">
+                              {f.fileName}
+                            </span>
+                          </div>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            aria-label={`Remove ${f.fileName}`}
+                            onClick={() => removeFile(f.fileId)}
+                          >
+                            <Icon icon={MdDelete} size={18} />
+                          </Button>
+                        </div>
+                        {f.status === "uploading" && <Progress value={f.progress} className="mt-2" />}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="edit-module-prompt" className="text-neutral-900">Module prompt</Label>
+                  <Textarea
+                    id="edit-module-prompt"
+                    value={modulePrompt}
+                    onChange={(e) => setModulePrompt(e.target.value)}
+                    rows={5}
+                  />
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  <Label className="text-neutral-900">Key topics</Label>
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={handleGenerate} loading={isGenerating}>
+                      Suggest
+                    </Button>
+                    <Input
+                      value={topicInput}
+                      onChange={(e) => setTopicInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault()
+                          addTopic()
+                        }
+                      }}
+                      placeholder="Add new…"
+                      aria-label="Add key topic"
+                      className="flex-1"
+                    />
+                  </div>
+                  {keyTopics.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {keyTopics.map((t) => (
+                        <Tag key={t} label={t} onRemove={() => setKeyTopics((prev) => prev.filter((x) => x !== t))} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
             )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
 
-      <div className="flex items-center justify-end gap-2">
-        <Button variant="ghost" onClick={goToConfiguration}>
-          Cancel
-        </Button>
-        <Button onClick={handleSave} loading={editModule.isPending} disabled={!canSave}>
-          Save changes
-        </Button>
-      </div>
+        <div className="flex items-center justify-between gap-2 border-t border-border px-8 py-4">
+          <Button variant="danger" onClick={() => setDeleteOpen(true)} disabled={deleteModule.isPending}>
+            Delete module
+          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={goToConfiguration}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} loading={editModule.isPending} disabled={!canSave}>
+              Save changes
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
 
       <ConfirmDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         title="Delete module?"
-        description={`Delete "${moduleData.module_name}" and its files? This can't be undone.`}
+        description={moduleData ? `Delete "${moduleData.module_name}" and its files? This can't be undone.` : ""}
         confirmLabel="Delete"
         variant="danger"
         loading={deleteModule.isPending}
@@ -389,6 +411,6 @@ export function EditModule() {
           })
         }
       />
-    </div>
+    </Dialog>
   )
 }

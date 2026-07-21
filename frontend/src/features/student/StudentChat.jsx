@@ -1,23 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useParams, useSearchParams } from "react-router-dom"
-import { MdFolderOpen } from "react-icons/md"
 import { toast } from "react-toastify"
 import {
   useModuleSessions,
   useSessionMessages,
   useCoursePage,
+  useCourses,
   useModuleFiles,
   useCreateSession,
   useDeleteSession,
   useDeleteLastMessage,
 } from "@/services/queries"
+import { useAuth } from "@/context/AuthContext"
+import { computeConceptProgress } from "@/utils/courseProgress"
 import { titleCase } from "@/utils/formatters"
-import { Button } from "@/components/ui/button"
-import { Icon } from "@/components/ui/icon"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
-import { FileRow } from "@/components/composed/FileRow"
-import { EmptyState } from "@/components/composed/EmptyState"
+import { CourseHeader } from "./CourseHeader"
+import { LearningJourneyBar } from "./LearningJourneyBar"
 import { SessionSidebar } from "./chat/SessionSidebar"
 import { ChatThread } from "./chat/ChatThread"
 import { ChatInput } from "./chat/ChatInput"
@@ -25,26 +23,31 @@ import { useChatStream } from "./chat/useChatStream"
 import { ReferenceDocPanel } from "./ReferenceDocPanel"
 
 /**
- * Student module chat. Composes the chat components + the Phase 3 data hooks +
- * `useChatStream` (AppSync streaming). States (OQ-13): intro (auto-created first
- * session greeting) · mid-conversation · slide-in materials drawer (Sheet) ·
- * reference-doc panel (?doc=:fileId). Route: /courses/:courseId/modules/:moduleId.
+ * Student module chat — Figma frames 162:3817 / 214:5316 / 209:5164. Embedded
+ * under the shared course header + Learning Journey bar (Reduce/Expand collapses
+ * them for more room). Left = module + "Previous chats" + "Module materials";
+ * right = the "OCELIA ASSISTANT" box (thread + composer); opening a material
+ * inserts a reference-doc column between them. Composes the Phase 3 hooks +
+ * `useChatStream` (AppSync streaming). Route: /courses/:courseId/modules/:moduleId.
  */
 export function StudentChat() {
   const { courseId, moduleId } = useParams()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const docId = searchParams.get("doc")
+  const { isInstructorAsStudent } = useAuth()
 
   // Sessions created this mount: their greeting streams into the cache, so we
   // must NOT fetch their (empty) server history and clobber it.
   const createdRef = useRef(new Set())
   const [activeSessionId, setActiveSessionId] = useState(null)
   const [materialsOpen, setMaterialsOpen] = useState(false)
+  const [headerCollapsed, setHeaderCollapsed] = useState(false)
 
   const sessionsQuery = useModuleSessions(courseId, moduleId)
   const sessions = useMemo(() => sessionsQuery.data ?? [], [sessionsQuery.data])
   const coursePage = useCoursePage(courseId)
+  const coursesQuery = useCourses({ asInstructor: isInstructorAsStudent })
   const files = useModuleFiles(courseId, moduleId)
   const stream = useChatStream({ courseId, moduleId })
   const createSession = useCreateSession(courseId, moduleId)
@@ -55,6 +58,12 @@ export function StudentChat() {
     enabled: Boolean(activeSessionId) && !createdRef.current.has(activeSessionId),
   })
   const messages = messagesQuery.data ?? []
+
+  const course = coursesQuery.data?.find((c) => c.course_id === courseId)
+  const { concepts, completedConcepts, totalConcepts, percent } = useMemo(
+    () => computeConceptProgress(coursePage.data ?? []),
+    [coursePage.data]
+  )
 
   const moduleName = useMemo(() => {
     const row = coursePage.data?.find((r) => r.module_id === moduleId)
@@ -112,7 +121,6 @@ export function StudentChat() {
       },
       { replace: true }
     )
-    setMaterialsOpen(false)
   }
   const closeDoc = () =>
     setSearchParams(
@@ -139,71 +147,69 @@ export function StudentChat() {
   const selectedFile = files.data?.find((f) => f.file_id === docId)
 
   return (
-    // Fill the viewport below the AppHeader (h-16 = 4rem) so the thread scrolls.
-    <div className="flex h-[calc(100vh-4rem)]">
-      <SessionSidebar
-        moduleName={moduleName}
-        sessions={sessions}
-        activeSessionId={activeSessionId}
-        onSelect={(s) => setActiveSessionId(s.session_id)}
-        onNew={startNewChat}
-        onDelete={handleDeleteSession}
-        onBack={() => navigate(`/courses/${courseId}`)}
-        creating={creating}
-        loading={sessionsQuery.isLoading}
+    <div className="mx-auto flex h-[calc(100vh-5rem)] w-full max-w-7xl flex-col px-6 py-2">
+      <CourseHeader
+        course={course}
+        collapsible
+        collapsed={headerCollapsed}
+        onToggleCollapse={() => setHeaderCollapsed((v) => !v)}
       />
+      {!headerCollapsed && (
+        <LearningJourneyBar
+          concepts={concepts}
+          completedConcepts={completedConcepts}
+          totalConcepts={totalConcepts}
+          percent={percent}
+        />
+      )}
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center justify-between border-b border-border px-6 py-3">
-          <h1 className="text-h4 font-semibold text-navy">AI Assistant</h1>
-          <Sheet open={materialsOpen} onOpenChange={setMaterialsOpen}>
-            <SheetTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-2">
-                <Icon icon={MdFolderOpen} size={18} />
-                Materials
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="right">
-              <SheetHeader>
-                <SheetTitle>Module materials</SheetTitle>
-              </SheetHeader>
-              <div className="mt-4 flex flex-col gap-2 overflow-y-auto">
-                {files.isLoading ? (
-                  [0, 1, 2].map((i) => <Skeleton key={i} className="h-10 w-full" />)
-                ) : files.data?.length ? (
-                  files.data.map((file) => (
-                    <FileRow key={file.file_id} file={file} onClick={() => openDoc(file.file_id)} />
-                  ))
-                ) : (
-                  <EmptyState title="No materials" description="This module has no reference files." />
-                )}
-              </div>
-            </SheetContent>
-          </Sheet>
+      <div className="mt-4 flex min-h-0 flex-1 gap-4">
+        <div className="flex w-72 shrink-0 flex-col">
+          <SessionSidebar
+            moduleName={moduleName}
+            onBack={() => navigate(`/courses/${courseId}`)}
+            onNew={startNewChat}
+            creating={creating}
+            loading={sessionsQuery.isLoading}
+            sessions={sessions}
+            activeSessionId={activeSessionId}
+            onSelect={(s) => setActiveSessionId(s.session_id)}
+            onDelete={handleDeleteSession}
+            files={files.data ?? []}
+            filesLoading={files.isLoading}
+            materialsOpen={materialsOpen}
+            onToggleMaterials={() => setMaterialsOpen((v) => !v)}
+            activeDocId={docId}
+            onOpenDoc={openDoc}
+          />
         </div>
 
-        <ChatThread
-          messages={messages}
-          streamingText={streamingText}
-          isTyping={isTyping}
-          retryError={stream.retryError}
-          onRetry={stream.retry}
-          mostRecentStudentIndex={mostRecentStudentIndex}
-          hasAiMessageAfter={hasAiMessageAfter}
-          onDeleteMessage={() => activeSessionId && deleteLastMessage.mutate()}
-          loading={messagesQuery.isLoading}
-        />
+        {docId && (
+          <div className="hidden min-w-0 flex-1 lg:flex">
+            <ReferenceDocPanel fileId={docId} fileName={selectedFile?.file_name} onClose={closeDoc} />
+          </div>
+        )}
 
-        <div className="border-t border-border px-6 py-4">
-          <ChatInput onSubmit={handleSubmit} disabled={inputDisabled} />
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-sm border border-border">
+          <h2 className="border-b border-border py-3 text-center text-h4 font-semibold text-neutral-900">
+            OCELIA ASSISTANT
+          </h2>
+          <ChatThread
+            messages={messages}
+            streamingText={streamingText}
+            isTyping={isTyping}
+            retryError={stream.retryError}
+            onRetry={stream.retry}
+            mostRecentStudentIndex={mostRecentStudentIndex}
+            hasAiMessageAfter={hasAiMessageAfter}
+            onDeleteMessage={() => activeSessionId && deleteLastMessage.mutate()}
+            loading={messagesQuery.isLoading}
+          />
+          <div className="border-t border-border p-4">
+            <ChatInput onSubmit={handleSubmit} disabled={inputDisabled} />
+          </div>
         </div>
       </div>
-
-      {docId && (
-        <div className="hidden w-2/5 shrink-0 lg:block">
-          <ReferenceDocPanel fileId={docId} fileName={selectedFile?.file_name} onClose={closeDoc} />
-        </div>
-      )}
     </div>
   )
 }

@@ -78,15 +78,15 @@ export function DuplicateCourseDialog({ course }) {
       </Button>
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent>
-          <form onSubmit={submit}>
-            <DialogHeader>
+          <form onSubmit={submit} className="flex flex-col gap-4">
+            <DialogHeader className="border-b border-border pb-3">
               <DialogTitle>Duplicate course</DialogTitle>
-              <DialogDescription>
-                Review and update the fields below. This copies the course and its concept/module
-                outline — reference files and student data are not copied.
-              </DialogDescription>
             </DialogHeader>
-            <div className="my-4 flex flex-col gap-4">
+            <DialogDescription>
+              Review and update the fields below. This copies the course and its concept/module
+              outline — reference files and student data are not copied.
+            </DialogDescription>
+            <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="dup-name">Course name</Label>
                 <Input
@@ -119,8 +119,8 @@ export function DuplicateCourseDialog({ course }) {
                 </div>
               </div>
             </div>
-            <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+            <DialogFooter className="border-t border-border pt-4">
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 Cancel
               </Button>
               <Button type="submit" loading={duplicate.isPending} disabled={!canSubmit}>

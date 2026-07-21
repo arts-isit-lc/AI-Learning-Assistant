@@ -5,7 +5,6 @@ import { useElevateInstructor } from "@/services/queries"
 import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/ui/icon"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import {
   Dialog,
   DialogContent,
@@ -47,31 +46,31 @@ export function AddInstructorDialog() {
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
-          <form onSubmit={submit}>
-            <DialogHeader>
-              <DialogTitle>Add an instructor</DialogTitle>
-              <DialogDescription>
-                Enter the instructor&rsquo;s email. They get instructor access the next time they sign in.
-              </DialogDescription>
+          <form onSubmit={submit} className="flex flex-col gap-4">
+            <DialogHeader className="border-b border-border pb-3">
+              <DialogTitle>Add instructor(s)</DialogTitle>
             </DialogHeader>
-            <div className="my-4 flex flex-col gap-1.5">
-              <Label htmlFor="instructor-email">Email</Label>
-              <Input
-                id="instructor-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoFocus
-                maxLength={40}
-              />
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+            <DialogDescription>
+              To add an instructor, enter their email address below. They get instructor access the
+              next time they sign in.
+            </DialogDescription>
+            <Input
+              id="instructor-email"
+              type="email"
+              aria-label="Email address"
+              placeholder="Email address"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoFocus
+              maxLength={40}
+            />
+            <DialogFooter className="border-t border-border pt-4">
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 Cancel
               </Button>
               <Button type="submit" loading={elevate.isPending}>
-                Add
+                Send invite
               </Button>
             </DialogFooter>
           </form>

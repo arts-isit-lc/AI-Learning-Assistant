@@ -118,13 +118,16 @@ export default function AppRoutes() {
               />
               <Route path=":courseId" element={<InstructorCourseLayout />}>
                 <Route index element={<Navigate to="configuration" replace />} />
-                <Route path="configuration" element={<ConfigurationTab />} />
+                {/* Create/Edit module are centered modals rendered OVER the
+                    Configuration tab (nested routes → ConfigurationTab <Outlet>). */}
+                <Route path="configuration" element={<ConfigurationTab />}>
+                  <Route path="modules/new" element={<CourseWizard />} />
+                  <Route path="modules/:moduleId/edit" element={<EditModule />} />
+                </Route>
                 <Route path="insights" element={<InsightsTab />} />
                 <Route path="chat-history" element={<ChatHistoryTab />} />
                 <Route path="settings" element={<SettingsTab />} />
                 <Route path="students" element={<StudentsTab />} />
-                <Route path="modules/new" element={<CourseWizard />} />
-                <Route path="modules/:moduleId/edit" element={<EditModule />} />
               </Route>
             </Route>
             <Route

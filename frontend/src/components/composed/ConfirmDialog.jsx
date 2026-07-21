@@ -33,12 +33,13 @@ export function ConfirmDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogHeader>
+        {/* Figma modal chrome: title over a divider, body, then a footer divider. */}
+        <DialogHeader className="border-b border-border pb-3">
           <DialogTitle>{title}</DialogTitle>
-          {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
-        <DialogFooter>
-          <Button variant="ghost" onClick={handleCancel} disabled={loading}>
+        {description && <DialogDescription>{description}</DialogDescription>}
+        <DialogFooter className="border-t border-border pt-4">
+          <Button variant="outline" onClick={handleCancel} disabled={loading}>
             {cancelLabel}
           </Button>
           <Button variant={variant} onClick={onConfirm} loading={loading}>
