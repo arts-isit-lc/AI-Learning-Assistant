@@ -272,8 +272,8 @@ export function CourseWizard() {
           </div>
 
           <div className="flex-1 overflow-y-auto px-8 py-8">
-            <div className="mx-auto flex max-w-xl flex-col gap-8">
-              <h2 className="text-body font-semibold text-neutral-900">{STEP_TITLES[step]}</h2>
+            <div className="mx-auto flex max-w-xl flex-col">
+              <h2 className="text-body mt-[56px] mb-[56px] text-neutral-900">{STEP_TITLES[step]}</h2>
 
               {reserveError && (
                 <Alert variant="destructive">
@@ -285,7 +285,7 @@ export function CourseWizard() {
               {step === 0 && (
                 <div className="flex flex-col gap-6">
                   <div className="flex flex-col gap-2">
-                    <Label htmlFor="module-name" className="text-neutral-900">Module name</Label>
+                    <Label htmlFor="module-name" className="text-body text-neutral-900">Module name</Label>
                     <Input
                       id="module-name"
                       value={moduleName}
@@ -296,7 +296,7 @@ export function CourseWizard() {
                   </div>
                   <div className="flex flex-col gap-2">
                     <div className="flex flex-col gap-0.5">
-                      <Label className="text-neutral-900">Concept</Label>
+                      <Label className="text-body text-neutral-900">Concept</Label>
                       <p className="text-caption text-muted-foreground">Select a Concept for this module.</p>
                     </div>
                     <Select value={conceptId} onValueChange={setConceptId}>
@@ -319,7 +319,7 @@ export function CourseWizard() {
                 <div className="flex flex-col gap-8">
                   <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-between">
-                      <Label className="text-neutral-900">Attach existing references</Label>
+                      <Label className="text-body text-neutral-900">Attach existing references</Label>
                       <span className="text-caption text-muted-foreground">(optional)</span>
                     </div>
                     <p className="text-caption text-muted-foreground">
@@ -356,7 +356,7 @@ export function CourseWizard() {
 
                   <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-between">
-                      <Label className="text-neutral-900">Upload files</Label>
+                      <Label className="text-body text-neutral-900">Upload files</Label>
                       <span className="text-caption text-muted-foreground">(optional)</span>
                     </div>
                     <p className="text-caption text-muted-foreground">
@@ -419,7 +419,7 @@ export function CourseWizard() {
                 <div className="flex flex-col gap-8">
                   <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="module-prompt" className="text-neutral-900">Module prompt</Label>
+                      <Label htmlFor="module-prompt" className="text-body text-neutral-900">Module prompt</Label>
                       <span className="text-caption text-muted-foreground">(optional)</span>
                     </div>
                     <p className="text-caption text-muted-foreground">
@@ -435,7 +435,7 @@ export function CourseWizard() {
                     />
                   </div>
                   <div className="flex flex-col gap-3">
-                    <Label className="text-neutral-900">Key topics</Label>
+                    <Label className="text-body text-neutral-900">Key topics</Label>
                     <p className="text-caption text-muted-foreground">
                       OCELIA automatically suggests key topics based on your uploaded files. You can
                       add/remove a topic or edit an existing one by clicking it below. To restore any
