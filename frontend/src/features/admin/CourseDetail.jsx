@@ -297,7 +297,7 @@ export function CourseDetail() {
                 className="flex items-center justify-between gap-4 border-b border-border py-3"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-2xl leading-9 font-medium text-foreground">
+                  <p className="truncate text-2xl leading-9 text-foreground">
                     {instructorLabel(inst)}
                   </p>
                   <button
