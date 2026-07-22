@@ -119,7 +119,7 @@ export default function InstructorCourseLayout() {
             {course && accessCode && (
               <div className="flex items-center gap-2 text-caption text-muted-foreground">
                 <span>
-                  Access Code: <span className="font-semibold text-foreground">{accessCode}</span>
+                  Access Code: <span className="text-foreground">{accessCode}</span>
                 </span>
                 <button
                   type="button"

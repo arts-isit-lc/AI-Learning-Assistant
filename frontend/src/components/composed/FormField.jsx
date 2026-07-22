@@ -26,7 +26,7 @@ export function FormField({ label, error, hint, required, children, className })
     : children
 
   return (
-    <div className={cn("flex flex-col gap-1.5", className)}>
+    <div className={cn("flex flex-col", className)}>
       {label && (
         <Label htmlFor={controlId}>
           {label}
