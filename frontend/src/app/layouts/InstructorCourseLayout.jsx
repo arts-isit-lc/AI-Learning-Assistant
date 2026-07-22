@@ -127,10 +127,10 @@ export default function InstructorCourseLayout() {
         </div>
 
         {/* Row 3: term | section (left) + Delete course (right). */}
-        <div className="mt-1 flex items-center gap-4">
+        <div className="flex items-center gap-4">
           {/* term | section — forward-compatible (no schema columns today). */}
           {course?.term && (
-            <div className="text-caption text-foreground">
+            <div className="text-lg leading-7 text-foreground">
               <span>
                 {course.term}
                 {course.section ? ` | Section ${course.section}` : ""}
@@ -150,7 +150,7 @@ export default function InstructorCourseLayout() {
       </div>
 
       <nav
-        className="mt-4 flex gap-6 overflow-x-auto border-b border-border"
+        className="mt-4 flex overflow-x-auto"
         aria-label="Course sections"
       >
         {TABS.map((tab) => (
