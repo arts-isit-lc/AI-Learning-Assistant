@@ -38,7 +38,7 @@ function AccessToggle({ checked, onCheckedChange, label }) {
         Off
       </span>
       <Toggle checked={checked} onCheckedChange={onCheckedChange} aria-label={label} />
-      <span className={cn("text-caption", checked ? "font-semibold text-foreground" : "text-muted-foreground")}>
+      <span className={cn("text-caption", checked ? "font-semibold text-success" : "text-muted-foreground")}>
         On
       </span>
     </div>
