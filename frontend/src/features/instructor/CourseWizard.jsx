@@ -284,8 +284,8 @@ export function CourseWizard() {
 
               {step === 0 && (
                 <div className="flex flex-col gap-6">
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="module-name" className="text-body text-neutral-900">Module name</Label>
+                  <div className="flex flex-col gap-1">
+                    <Label htmlFor="module-name" className="text-body text-neutral-900 font-semibold">Module name</Label>
                     <Input
                       id="module-name"
                       value={moduleName}
@@ -294,9 +294,9 @@ export function CourseWizard() {
                       placeholder="e.g. Vectors and matrices"
                     />
                   </div>
-                  <div className="flex flex-col gap-2">
+                  <div className="flex flex-col gap-1">
                     <div className="flex flex-col gap-0.5">
-                      <Label className="text-body text-neutral-900">Concept</Label>
+                      <Label className="text-body text-neutral-900 font-semibold">Concept</Label>
                       <p className="text-caption text-muted-foreground">Select a Concept for this module.</p>
                     </div>
                     <Select value={conceptId} onValueChange={setConceptId}>
