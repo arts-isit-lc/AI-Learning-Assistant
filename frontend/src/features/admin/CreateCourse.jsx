@@ -222,10 +222,15 @@ export function CreateCourse() {
         </div>
 
         <DialogFooter className="border-t border-border pt-4">
-          <Button variant="outline" onClick={close}>
+          <Button variant="outline" className="text-[16px]" onClick={close}>
             Cancel
           </Button>
-          <Button onClick={handleCreate} loading={create.isPending} disabled={!canCreate}>
+          <Button
+            className="text-[16px]"
+            onClick={handleCreate}
+            loading={create.isPending}
+            disabled={!canCreate}
+          >
             Add course
           </Button>
         </DialogFooter>
