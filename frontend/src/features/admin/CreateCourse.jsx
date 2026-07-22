@@ -127,7 +127,7 @@ export function CreateCourse() {
         <DialogHeader className="border-b border-border pb-2">
           <DialogTitle>Add course</DialogTitle>
         </DialogHeader>
-        <DialogDescription className="mt-8">
+        <DialogDescription className="mt-8 mb-6">
           To add a new course to the OCELIA system please fill out the following fields. Fields marked
           with <span className="text-destructive">*</span> are mandatory for course creation.
         </DialogDescription>
