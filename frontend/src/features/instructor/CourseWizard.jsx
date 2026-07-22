@@ -260,18 +260,18 @@ export function CourseWizard() {
   return (
     <>
       <UnsavedChangesPrompt when={isDirty && !leaving} onProceed={cleanup} />
-      <Dialog open onOpenChange={(open) => !open && setCancelOpen(true)}>
+      <Dialog className="px-8 py-10" open onOpenChange={(open) => !open && setCancelOpen(true)}>
         <DialogContent className="flex max-h-[90vh] w-[min(92vw,1200px)] max-w-none flex-col gap-0 p-0">
-          <div className="px-8 pb-3 pt-6">
+          <div className="pb-3">
             <DialogTitle className="text-h4 font-semibold text-neutral-900">Create new module</DialogTitle>
           </div>
           {/* Full-width bar inset to the modal's 32px gutter via padding (not
               `mx-8`, which would overflow on top of the Progress base's w-full). */}
-          <div className="shrink-0 px-8">
+          <div className="shrink-0">
             <Progress value={((step + 1) / STEP_COUNT) * 100} />
           </div>
 
-          <div className="flex-1 overflow-y-auto px-8 py-8">
+          <div className="flex-1 overflow-y-auto py-8">
             <div className="mx-auto flex max-w-xl flex-col">
               <h2 className="text-body mt-[56px] mb-[56px] text-neutral-900">{STEP_TITLES[step]}</h2>
 
@@ -501,7 +501,7 @@ export function CourseWizard() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-2 border-t border-border px-8 py-4">
+          <div className="flex items-center justify-between gap-2 border-t border-border pt-4">
             <div>
               {step > 0 && (
                 <Button variant="ghost" className="text-primary" onClick={() => setStep((s) => s - 1)}>
