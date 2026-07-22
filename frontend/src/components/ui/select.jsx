@@ -14,7 +14,10 @@ const SelectTrigger = React.forwardRef(function SelectTrigger({ className, child
       ref={ref}
       className={cn(
         "flex h-10 w-full items-center justify-between gap-2 rounded-none border border-input bg-background px-3 py-2 text-caption text-foreground",
-        "placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        // Radix marks the trigger with data-placeholder while the placeholder is
+        // shown (SelectValue is a span, so the native placeholder: pseudo never
+        // applied) — grey it to match the other fields.
+        "data-[placeholder]:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         "disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
         className
       )}

@@ -54,7 +54,7 @@ export function MultiSelect({
           <span className={cn("truncate", value.length === 0 && "text-muted-foreground")}>
             {value.length === 0 ? placeholder : `${value.length} selected`}
           </span>
-          <Icon icon={MdExpandMore} size={18} className="shrink-0 opacity-60" />
+          <Icon icon={MdExpandMore} size={24} className="shrink-0" />
         </PopoverTrigger>
         <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-1">
           {options.length === 0 ? (
