@@ -26,7 +26,7 @@ const TABS = [
 
 const tabClass = ({ isActive }) =>
   cn(
-    "-mb-px border-b-2 px-1 pb-2 text-caption font-semibold transition-colors duration-fast",
+    "-mb-px border-b-2 px-6 py-2 text-caption font-semibold transition-colors duration-fast",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
     isActive
       ? "border-primary text-primary"
@@ -150,7 +150,7 @@ export default function InstructorCourseLayout() {
       </div>
 
       <nav
-        className="mt-4 flex overflow-x-auto"
+        className="mt-4 flex gap-2 overflow-x-auto"
         aria-label="Course sections"
       >
         {TABS.map((tab) => (
