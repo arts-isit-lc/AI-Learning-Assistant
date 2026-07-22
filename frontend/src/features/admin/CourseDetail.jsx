@@ -228,7 +228,7 @@ export function CourseDetail() {
       {/* Header: code + Active/Inactive toggle, name, then term|section + access code. */}
       <div className="flex flex-col gap-1 border-b border-border pb-4">
         <div className="flex items-start justify-between gap-4">
-          <h1 className="text-h2 font-semibold text-neutral-900">{courseCode(course)}</h1>
+          <h1 className="text-[24px] font-semibold text-neutral-900">{courseCode(course)}</h1>
           <div className="flex shrink-0 items-center gap-2 text-caption">
             <span className={cn(active ? "text-muted-foreground" : "font-semibold text-foreground")}>
               Inactive
