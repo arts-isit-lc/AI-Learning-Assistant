@@ -234,7 +234,7 @@ export function CourseDetail() {
               Inactive
             </span>
             <Toggle checked={active} onCheckedChange={toggleActive} aria-label="Course student access" />
-            <span className={cn(active ? "font-semibold text-foreground" : "text-muted-foreground")}>
+            <span className={cn(active ? "font-semibold text-success" : "text-muted-foreground")}>
               Active
             </span>
           </div>
