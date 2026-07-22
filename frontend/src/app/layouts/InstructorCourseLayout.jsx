@@ -103,44 +103,49 @@ export default function InstructorCourseLayout() {
           )}
         </div>
 
-        {course?.course_name && <p className="mt-1 text-body text-foreground">{course.course_name}</p>}
+        {/* Row 2 (Figma 365:2504): course name (left) + access code aligned on the
+            same line (right) — not dropped to the term row, which left a gap above it. */}
+        <div className="mt-1 flex items-center gap-4">
+          {course?.course_name && (
+            <p className="min-w-0 text-body text-foreground">{course.course_name}</p>
+          )}
+          {course && accessCode && (
+            <div className="ml-auto flex shrink-0 items-center gap-2 text-caption text-muted-foreground">
+              <span>
+                Access Code: <span className="text-foreground">{accessCode}</span>
+              </span>
+              <button
+                type="button"
+                onClick={copyAccessCode}
+                aria-label="Copy access code"
+                className="rounded-sm p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <Icon icon={MdContentCopy} size={16} />
+              </button>
+            </div>
+          )}
+        </div>
 
-        <div className="mt-2 flex items-end justify-between gap-4">
-          <div className="text-caption text-foreground">
-            {/* term | section — forward-compatible (no schema columns today). */}
-            {course?.term && (
+        {/* Row 3: term | section (left) + Delete course (right). */}
+        <div className="mt-1 flex items-center gap-4">
+          {/* term | section — forward-compatible (no schema columns today). */}
+          {course?.term && (
+            <div className="text-caption text-foreground">
               <span>
                 {course.term}
                 {course.section ? ` | Section ${course.section}` : ""}
               </span>
-            )}
-          </div>
-          <div className="flex flex-col items-end gap-1">
-            {course && accessCode && (
-              <div className="flex items-center gap-2 text-caption text-muted-foreground">
-                <span>
-                  Access Code: <span className="text-foreground">{accessCode}</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={copyAccessCode}
-                  aria-label="Copy access code"
-                  className="rounded-sm p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <Icon icon={MdContentCopy} size={16} />
-                </button>
-              </div>
-            )}
-            {course && (
-              <button
-                type="button"
-                onClick={() => setDeleteOpen(true)}
-                className="text-caption font-semibold text-destructive hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                Delete course
-              </button>
-            )}
-          </div>
+            </div>
+          )}
+          {course && (
+            <button
+              type="button"
+              onClick={() => setDeleteOpen(true)}
+              className="ml-auto text-caption font-semibold text-destructive hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Delete course
+            </button>
+          )}
         </div>
       </div>
 
