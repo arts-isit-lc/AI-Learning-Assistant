@@ -254,7 +254,7 @@ export function InstructorDetail() {
                   <button
                     type="button"
                     onClick={() => removeCourse(course.course_id)}
-                    className="text-caption text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="text-caption text-primary leading-7 mb-4 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     Remove
                   </button>
