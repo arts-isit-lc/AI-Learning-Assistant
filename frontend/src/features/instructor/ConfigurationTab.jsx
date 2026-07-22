@@ -204,15 +204,13 @@ export function ConfigurationTab() {
           <AlertDescription>Please refresh and try again.</AlertDescription>
         </Alert>
       ) : concepts.length === 0 ? (
+        // Figma 1099:6510: a filled muted panel with just the icon + copy — no
+        // in-panel action button (the header "Concept" button is the add path).
         <EmptyState
           icon={MdAccountTree}
           title="No concepts yet"
           description="Add a concept to start organizing this course's modules."
-          action={
-            <Button onClick={() => setAddingConcept(true)}>
-              <Icon icon={MdAdd} size={18} /> Add concept
-            </Button>
-          }
+          className="border-0 bg-muted"
         />
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleConceptDragEnd}>

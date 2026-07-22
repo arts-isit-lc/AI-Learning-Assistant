@@ -86,9 +86,13 @@ describe("ConfigurationTab", () => {
     expect(arg.modules).toHaveLength(2)
   })
 
-  it("shows the empty state when there are no concepts", () => {
+  it("shows the empty state with no in-panel action button when there are no concepts", () => {
     conceptsResult = { data: [], isLoading: false, isError: false }
     render(<ConfigurationTab />)
     expect(screen.getByRole("heading", { name: "No concepts yet" })).toBeInTheDocument()
+    // Per Figma 1099:6510 the empty state has no action button of its own — the
+    // header "Concept" button is the only add-concept affordance, so a single
+    // getByRole match (which throws on duplicates) proves the redundant one is gone.
+    expect(screen.getByRole("button", { name: /add concept/i })).toBeInTheDocument()
   })
 })
