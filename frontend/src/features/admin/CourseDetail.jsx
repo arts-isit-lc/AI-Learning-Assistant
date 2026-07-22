@@ -223,10 +223,10 @@ export function CourseDetail() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col">
       <UnsavedChangesPrompt when={isDirty && !deleted} />
       {/* Header: code + Active/Inactive toggle, name, then term|section + access code. */}
-      <div className="flex flex-col gap-1 border-b border-border pb-4">
+      <div className="flex flex-col gap-1 border-b border-border pb-6">
         <div className="flex items-start justify-between gap-4">
           <h1 className="text-[24px] font-semibold text-neutral-900">{courseCode(course)}</h1>
           <div className="flex shrink-0 items-center gap-2 text-caption">
@@ -251,8 +251,8 @@ export function CourseDetail() {
             )}
           </div>
           {course.course_access_code && (
-            <div className="flex items-center gap-2 text-body text-foreground">
-              {/* Figma: single "Body - Desktop" run — 18px, Book (normal), not bold. */}
+            <div className="flex items-center gap-2 text-[16px] text-foreground">
+              {/* Access code: 16px, normal weight (per request; mockup Body is 18px). */}
               <span>Access Code: {course.course_access_code}</span>
               <button
                 type="button"
@@ -269,7 +269,7 @@ export function CourseDetail() {
 
       {/* Instructors: assigned list with Remove + per-instructor OCELIA access. */}
       <div>
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center justify-between gap-4 mt-2 mb-10">
           <div className="flex items-center gap-1">
             <h2 className="text-caption font-semibold text-foreground">Instructor(s)</h2>
             <Button
