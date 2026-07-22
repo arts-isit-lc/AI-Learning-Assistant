@@ -196,7 +196,7 @@ export function CreateCourse() {
             <Label>Access code</Label>
             <div className="flex items-center justify-between gap-2">
               <span className="flex items-center gap-2 text-caption">
-                <span className="font-semibold text-foreground">{accessCode}</span>
+                <span className="text-foreground">{accessCode}</span>
                 <button
                   type="button"
                   onClick={copyCode}
