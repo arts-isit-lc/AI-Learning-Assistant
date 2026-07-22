@@ -20,7 +20,7 @@ const tabClass = ({ isActive }) =>
   )
 
 const toggleClass =
-  "flex items-center gap-1 rounded-md text-caption font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+  "flex items-center gap-1 rounded-md text-base leading-7 text-primary underline hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
 
 /**
  * Instructor navigation bar (`Header/Instructor` frame 859:7380) — sits directly
