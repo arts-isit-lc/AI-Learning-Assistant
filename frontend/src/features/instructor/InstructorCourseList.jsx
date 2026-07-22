@@ -62,7 +62,7 @@ export function InstructorCourseList() {
                     </Badge>
                   </div>
                   {course.course_name && (
-                    <span className="truncate text-caption text-foreground group-aria-[current=true]:text-primary-foreground/90">
+                    <span className="truncate text-lg text-foreground group-aria-[current=true]:text-primary-foreground/90">
                       {course.course_name}
                     </span>
                   )}

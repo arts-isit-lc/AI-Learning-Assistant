@@ -249,7 +249,7 @@ export function InstructorDetail() {
                 <div className="min-w-0">
                   <p className="truncate text-lg text-neutral-900">{courseCode(course)}</p>
                   {course.course_name && (
-                    <p className="truncate text-caption text-foreground">{course.course_name}</p>
+                    <p className="truncate text-lg text-foreground">{course.course_name}</p>
                   )}
                   <button
                     type="button"
