@@ -269,7 +269,7 @@ export function CourseDetail() {
 
       {/* Instructors: assigned list with Remove + per-instructor OCELIA access. */}
       <div>
-        <div className="flex items-center justify-between gap-4 mt-2 mb-10">
+        <div className="flex items-center justify-between gap-4 mt-2 mb-6">
           <div className="flex items-center gap-1">
             <h2 className="text-caption font-semibold text-foreground">Instructor(s)</h2>
             <Button
@@ -294,7 +294,7 @@ export function CourseDetail() {
             displayed.map((inst) => (
               <div
                 key={inst.user_email}
-                className="flex items-center justify-between gap-4 border-b border-border py-3"
+                className="flex items-center justify-between gap-4 border-b border-border pt-4"
               >
                 <div className="min-w-0">
                   <p className="truncate text-2xl leading-9 text-foreground">
