@@ -13,6 +13,7 @@ import {
   useDeleteCourse,
 } from "@/services/queries"
 import { cn } from "@/lib/utils"
+import { useUnsavedChanges } from "@/context/UnsavedChangesContext"
 import { instructorLabel } from "./InstructorList"
 import { courseCode } from "./CourseList"
 import { DuplicateCourseDialog } from "./DuplicateCourseDialog"
@@ -46,13 +47,17 @@ function AccessToggle({ checked, onCheckedChange, label }) {
 
 /**
  * Course detail (right pane of /admin/courses). Matches the OCELIA frame: the
- * course header carries the Active/Inactive toggle (course-wide student access,
- * persisted immediately) and the access code; the instructor list shows each
- * assigned instructor with a Remove link and a per-instructor OCELIA access
- * toggle (backend track B4); the footer has Delete course + Duplicate (B2).
+ * course header carries the Active/Inactive toggle (course-wide student access)
+ * and the access code; the instructor list shows each assigned instructor with a
+ * Remove link and a per-instructor OCELIA access toggle (backend track B4); the
+ * footer has Delete course + Duplicate (left) and Save changes (right).
  *
- * Per-row toggles are optimistic (override the server value on click, then drop
- * the override once the refetch reflects it — or on error).
+ * STAGED EDITING (Option A): the Active toggle, per-instructor access toggles,
+ * and instructor add/remove are buffered locally and only committed to the
+ * backend when "Save changes" is clicked (active → removes → adds → access, via
+ * mutateAsync). "Save changes" is disabled until there are unsaved edits;
+ * navigating away discards them. Delete course + Duplicate are separate
+ * immediate actions.
  */
 export function CourseDetail() {
   const { courseId } = useParams()
@@ -66,96 +71,138 @@ export function CourseDetail() {
   const enroll = useEnrollInstructor()
   const unenroll = useUnenrollInstructor()
   const del = useDeleteCourse()
+  const { setDirty } = useUnsavedChanges()
 
   const course = courses.find((c) => c.course_id === courseId)
 
-  const [activeOverride, setActiveOverride] = useState(null)
-  const [accessOverrides, setAccessOverrides] = useState({})
+  // Staged (unsaved) edits — committed only on "Save changes".
+  const [pendingActive, setPendingActive] = useState(null) // null = unchanged
+  const [pendingAccess, setPendingAccess] = useState({}) // { [email]: boolean }
+  const [pendingAdds, setPendingAdds] = useState(() => new Set())
+  const [pendingRemoves, setPendingRemoves] = useState(() => new Set())
+  const [saving, setSaving] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [removeTarget, setRemoveTarget] = useState(null)
 
-  const active = activeOverride ?? (course?.course_student_access !== false)
-
-  // Drop the course-active override once the refetched course reflects it.
+  // Discard staged edits when switching to another course.
   useEffect(() => {
-    if (activeOverride != null && course && (course.course_student_access !== false) === activeOverride) {
-      setActiveOverride(null)
+    setPendingActive(null)
+    setPendingAccess({})
+    setPendingAdds(new Set())
+    setPendingRemoves(new Set())
+  }, [courseId])
+
+  const serverActive = course?.course_student_access !== false
+  const active = pendingActive ?? serverActive
+
+  const serverAccess = (email) => {
+    const inst = assigned.find((x) => x.user_email === email)
+    return inst ? inst.access_enabled !== false : true
+  }
+
+  // The instructor list as it will look once the staged edits are saved.
+  const displayed = useMemo(() => {
+    const out = []
+    for (const inst of assigned) {
+      if (pendingRemoves.has(inst.user_email)) continue
+      out.push({ ...inst, access_enabled: pendingAccess[inst.user_email] ?? (inst.access_enabled !== false) })
     }
-  }, [course, activeOverride])
-
-  // Drop each per-instructor override once the refetch reflects it.
-  useEffect(() => {
-    setAccessOverrides((prev) => {
-      if (Object.keys(prev).length === 0) return prev
-      const next = { ...prev }
-      let changed = false
-      for (const inst of assigned) {
-        if (inst.user_email in next && (inst.access_enabled !== false) === next[inst.user_email]) {
-          delete next[inst.user_email]
-          changed = true
-        }
-      }
-      return changed ? next : prev
-    })
-  }, [assigned])
+    for (const email of pendingAdds) {
+      const inst = allInstructors.find((x) => x.user_email === email)
+      if (inst) out.push({ ...inst, access_enabled: pendingAccess[email] ?? true })
+    }
+    return out
+  }, [assigned, allInstructors, pendingAccess, pendingAdds, pendingRemoves])
 
   const unassigned = useMemo(() => {
-    const assignedEmails = new Set(assigned.map((i) => i.user_email))
-    return allInstructors.filter((i) => !assignedEmails.has(i.user_email))
-  }, [assigned, allInstructors])
+    const shown = new Set(displayed.map((i) => i.user_email))
+    return allInstructors.filter((i) => !shown.has(i.user_email))
+  }, [displayed, allInstructors])
 
-  const accessOn = (inst) => accessOverrides[inst.user_email] ?? (inst.access_enabled !== false)
+  const isDirty =
+    pendingActive !== null ||
+    Object.keys(pendingAccess).length > 0 ||
+    pendingAdds.size > 0 ||
+    pendingRemoves.size > 0
 
-  const handleToggleActive = (value) => {
-    setActiveOverride(value)
-    updateCourseAccess.mutate(
-      { courseId, access: value },
-      {
-        onSuccess: () => toast.success(value ? "Course activated" : "Course deactivated"),
-        onError: () => setActiveOverride(null),
+  // Arm the navigation guard while there are unsaved staged edits.
+  useEffect(() => {
+    setDirty(isDirty)
+    return () => setDirty(false)
+  }, [isDirty, setDirty])
+
+  const toggleActive = (value) => setPendingActive(value === serverActive ? null : value)
+
+  const toggleAccess = (email, value) => {
+    setPendingAccess((p) => {
+      const next = { ...p }
+      const isAdd = pendingAdds.has(email)
+      if ((!isAdd && value === serverAccess(email)) || (isAdd && value === true)) {
+        delete next[email]
+      } else {
+        next[email] = value
       }
-    )
+      return next
+    })
   }
 
-  const handleToggleAccess = (email, value) => {
-    setAccessOverrides((o) => ({ ...o, [email]: value }))
-    updateInstructorAccess.mutate(
-      { courseId, instructorEmail: email, access: value },
-      {
-        onSuccess: () => toast.success(value ? "Access enabled" : "Access disabled"),
-        onError: () =>
-          setAccessOverrides((o) => {
-            const next = { ...o }
-            delete next[email]
-            return next
-          }),
-      }
-    )
+  const addInstructor = (email) => {
+    setPendingRemoves((r) => {
+      if (!r.has(email)) return r
+      const next = new Set(r)
+      next.delete(email)
+      return next
+    })
+    if (!assigned.some((i) => i.user_email === email)) {
+      setPendingAdds((a) => new Set(a).add(email))
+    }
+    setAddOpen(false)
   }
 
-  const handleAdd = (email) => {
-    enroll.mutate(
-      { courseId, instructorEmail: email },
-      {
-        onSuccess: () => {
-          setAddOpen(false)
-          toast.success("Instructor added")
-        },
-      }
-    )
+  const removeInstructor = (email) => {
+    if (pendingAdds.has(email)) {
+      setPendingAdds((a) => {
+        const next = new Set(a)
+        next.delete(email)
+        return next
+      })
+    } else {
+      setPendingRemoves((r) => new Set(r).add(email))
+    }
+    setPendingAccess((p) => {
+      if (!(email in p)) return p
+      const next = { ...p }
+      delete next[email]
+      return next
+    })
   }
 
-  const handleRemove = () => {
-    unenroll.mutate(
-      { courseId, instructorEmail: removeTarget.user_email },
-      {
-        onSuccess: () => {
-          setRemoveTarget(null)
-          toast.success("Instructor removed")
-        },
+  const saveChanges = async () => {
+    setSaving(true)
+    try {
+      if (pendingActive !== null && pendingActive !== serverActive) {
+        await updateCourseAccess.mutateAsync({ courseId, access: pendingActive })
       }
-    )
+      for (const em of pendingRemoves) {
+        await unenroll.mutateAsync({ courseId, instructorEmail: em })
+      }
+      for (const em of pendingAdds) {
+        await enroll.mutateAsync({ courseId, instructorEmail: em })
+      }
+      for (const [em, access] of Object.entries(pendingAccess)) {
+        if (pendingRemoves.has(em)) continue
+        await updateInstructorAccess.mutateAsync({ courseId, instructorEmail: em, access })
+      }
+      setPendingActive(null)
+      setPendingAccess({})
+      setPendingAdds(new Set())
+      setPendingRemoves(new Set())
+      toast.success("Changes saved")
+    } catch {
+      toast.error("Couldn't save all changes")
+    } finally {
+      setSaving(false)
+    }
   }
 
   const copyCode = async () => {
@@ -174,8 +221,7 @@ export function CourseDetail() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Header: code + Active/Inactive toggle, name, then term|section + access code
-          (mirrors the instructor course-detail header). */}
+      {/* Header: code + Active/Inactive toggle, name, then term|section + access code. */}
       <div className="flex flex-col gap-1 border-b border-border pb-4">
         <div className="flex items-start justify-between gap-4">
           <h1 className="text-h2 font-semibold text-neutral-900">{courseCode(course)}</h1>
@@ -183,7 +229,7 @@ export function CourseDetail() {
             <span className={cn(active ? "text-muted-foreground" : "font-semibold text-foreground")}>
               Inactive
             </span>
-            <Toggle checked={active} onCheckedChange={handleToggleActive} aria-label="Course student access" />
+            <Toggle checked={active} onCheckedChange={toggleActive} aria-label="Course student access" />
             <span className={cn(active ? "font-semibold text-foreground" : "text-muted-foreground")}>
               Active
             </span>
@@ -240,10 +286,10 @@ export function CourseDetail() {
         <div className="mt-2 flex flex-col">
           {isLoading ? (
             <Skeleton className="h-16 w-full" />
-          ) : assigned.length === 0 ? (
+          ) : displayed.length === 0 ? (
             <p className="py-3 text-caption text-muted-foreground">No instructors assigned yet.</p>
           ) : (
-            assigned.map((inst) => (
+            displayed.map((inst) => (
               <div
                 key={inst.user_email}
                 className="flex items-center justify-between gap-4 border-b border-border py-3"
@@ -254,15 +300,15 @@ export function CourseDetail() {
                   </p>
                   <button
                     type="button"
-                    onClick={() => setRemoveTarget(inst)}
+                    onClick={() => removeInstructor(inst.user_email)}
                     className="text-caption text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     Remove
                   </button>
                 </div>
                 <AccessToggle
-                  checked={accessOn(inst)}
-                  onCheckedChange={(v) => handleToggleAccess(inst.user_email, v)}
+                  checked={inst.access_enabled}
+                  onCheckedChange={(v) => toggleAccess(inst.user_email, v)}
                   label={`OCELIA access for ${instructorLabel(inst)}`}
                 />
               </div>
@@ -271,20 +317,25 @@ export function CourseDetail() {
         </div>
       </div>
 
-      {/* Footer: Delete course + Duplicate. */}
-      <div className="flex items-center gap-4 border-t border-border pt-4">
-        <Button
-          variant="link"
-          className="text-destructive"
-          onClick={() => setDeleteOpen(true)}
-          disabled={del.isPending}
-        >
-          Delete course
+      {/* Footer: Delete course + Duplicate (immediate) · Save changes (commits staged edits). */}
+      <div className="flex items-center justify-between gap-4 border-t border-border pt-4">
+        <div className="flex items-center gap-4">
+          <Button
+            variant="link"
+            className="text-destructive"
+            onClick={() => setDeleteOpen(true)}
+            disabled={del.isPending}
+          >
+            Delete course
+          </Button>
+          <DuplicateCourseDialog course={course} />
+        </div>
+        <Button variant="outline" onClick={saveChanges} disabled={!isDirty || saving} loading={saving}>
+          Save changes
         </Button>
-        <DuplicateCourseDialog course={course} />
       </div>
 
-      {/* Add-instructor picker. */}
+      {/* Add-instructor picker (staged — commits on Save changes). */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent>
           <DialogHeader className="border-b border-border pb-3">
@@ -301,9 +352,8 @@ export function CourseDetail() {
                 <button
                   key={inst.user_email}
                   type="button"
-                  onClick={() => handleAdd(inst.user_email)}
-                  disabled={enroll.isPending}
-                  className="flex items-center justify-between gap-3 border-b border-border px-1 py-3 text-left text-caption transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:opacity-50"
+                  onClick={() => addInstructor(inst.user_email)}
+                  className="flex items-center justify-between gap-3 border-b border-border px-1 py-3 text-left text-caption transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 >
                   <span className="truncate font-medium text-foreground">{instructorLabel(inst)}</span>
                   <span className="shrink-0 text-muted-foreground">{inst.user_email}</span>
@@ -313,21 +363,6 @@ export function CourseDetail() {
           </div>
         </DialogContent>
       </Dialog>
-
-      <ConfirmDialog
-        open={Boolean(removeTarget)}
-        onOpenChange={(o) => !o && setRemoveTarget(null)}
-        title="Remove instructor?"
-        description={
-          removeTarget
-            ? `Remove ${instructorLabel(removeTarget)} from ${courseCode(course)}? If they need access to this course again, you'll need to add them back.`
-            : ""
-        }
-        confirmLabel="Remove instructor"
-        variant="danger"
-        loading={unenroll.isPending}
-        onConfirm={handleRemove}
-      />
 
       <ConfirmDialog
         open={deleteOpen}

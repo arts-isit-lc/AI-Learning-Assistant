@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom"
 import { useAdminInstructors } from "@/services/queries"
 import { titleCase } from "@/utils/formatters"
 import { cn } from "@/lib/utils"
+import { useUnsavedChanges } from "@/context/UnsavedChangesContext"
 import { Searchbar } from "@/components/composed/Searchbar"
 import { ListRow } from "@/components/composed/ListRow"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -33,6 +34,7 @@ function initialsOf(instructor) {
  */
 export function InstructorList() {
   const navigate = useNavigate()
+  const { runGuarded } = useUnsavedChanges()
   const { instructorId } = useParams()
   const selectedEmail = instructorId ? decodeURIComponent(instructorId) : null
 
@@ -66,7 +68,9 @@ export function InstructorList() {
                 key={instructor.user_email}
                 selected={selectedEmail === instructor.user_email}
                 onClick={() =>
-                  navigate(`/admin/instructors/${encodeURIComponent(instructor.user_email)}`)
+                  runGuarded(() =>
+                    navigate(`/admin/instructors/${encodeURIComponent(instructor.user_email)}`)
+                  )
                 }
               >
                 <Avatar className="h-8 w-8 shrink-0">

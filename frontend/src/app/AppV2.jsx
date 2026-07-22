@@ -7,6 +7,7 @@ import ErrorBoundary from "@/components/ErrorBoundary"
 import { AuthProvider } from "@/context/AuthContext"
 import { NotificationProvider } from "@/context/NotificationContext"
 import { CourseProvider } from "@/context/CourseContext"
+import { UnsavedChangesProvider } from "@/context/UnsavedChangesContext"
 import { OfflineBanner } from "@/components/composed/OfflineBanner"
 import { createQueryClient } from "@/services/queryClient"
 import AppRoutes from "./AppRoutes"
@@ -56,16 +57,18 @@ export default function AppV2() {
           <NotificationProvider>
             <BrowserRouter>
               <CourseProvider>
-                <OfflineBanner />
-                <ToastContainer
-                  position="top-center"
-                  autoClose={2000}
-                  theme="colored"
-                  newestOnTop
-                />
-                <Suspense fallback={<LoadingScreen />}>
-                  <AppRoutes />
-                </Suspense>
+                <UnsavedChangesProvider>
+                  <OfflineBanner />
+                  <ToastContainer
+                    position="top-center"
+                    autoClose={2000}
+                    theme="colored"
+                    newestOnTop
+                  />
+                  <Suspense fallback={<LoadingScreen />}>
+                    <AppRoutes />
+                  </Suspense>
+                </UnsavedChangesProvider>
               </CourseProvider>
             </BrowserRouter>
           </NotificationProvider>

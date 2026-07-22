@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { useAdminCourses } from "@/services/queries"
+import { useUnsavedChanges } from "@/context/UnsavedChangesContext"
 import { Searchbar } from "@/components/composed/Searchbar"
 import { ListRow } from "@/components/composed/ListRow"
 import { Badge } from "@/components/ui/badge"
@@ -20,6 +21,7 @@ export function courseCode(course) {
  */
 export function CourseList() {
   const navigate = useNavigate()
+  const { runGuarded } = useUnsavedChanges()
   const { courseId } = useParams()
   const { data: courses = [], isLoading } = useAdminCourses()
   const [query, setQuery] = useState("")
@@ -50,7 +52,7 @@ export function CourseList() {
               <ListRow
                 key={course.course_id}
                 selected={courseId === course.course_id}
-                onClick={() => navigate(`/admin/courses/${course.course_id}`)}
+                onClick={() => runGuarded(() => navigate(`/admin/courses/${course.course_id}`))}
               >
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <div className="flex items-center justify-between gap-2">

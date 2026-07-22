@@ -3,9 +3,9 @@ import { render, screen, within, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
 let assignedResult
-const updateInstructorAccess = { mutate: vi.fn(), isPending: false }
-const enroll = { mutate: vi.fn(), isPending: false }
-const unenroll = { mutate: vi.fn(), isPending: false }
+const updateInstructorAccess = { mutate: vi.fn(), mutateAsync: vi.fn().mockResolvedValue({}), isPending: false }
+const enroll = { mutate: vi.fn(), mutateAsync: vi.fn().mockResolvedValue({}), isPending: false }
+const unenroll = { mutate: vi.fn(), mutateAsync: vi.fn().mockResolvedValue({}), isPending: false }
 const lower = { mutate: vi.fn(), isPending: false }
 const navigate = vi.fn()
 
@@ -42,56 +42,70 @@ beforeEach(() => {
     ],
     isLoading: false,
   }
-  updateInstructorAccess.mutate.mockClear()
-  enroll.mutate.mockClear()
-  unenroll.mutate.mockClear()
+  updateInstructorAccess.mutateAsync.mockClear().mockResolvedValue({})
+  enroll.mutateAsync.mockClear().mockResolvedValue({})
+  unenroll.mutateAsync.mockClear().mockResolvedValue({})
   lower.mutate.mockClear()
   navigate.mockClear()
 })
 
-describe("InstructorDetail", () => {
+describe("InstructorDetail (staged editing)", () => {
   it("shows the instructor and their assigned courses with access toggles", () => {
     render(<InstructorDetail />)
     expect(screen.getByRole("heading", { name: "Lovelace, Ada" })).toBeInTheDocument()
-    // course code + name render on separate lines
     expect(screen.getByText("GEOG 250")).toBeInTheDocument()
     expect(screen.getByText("Intro")).toBeInTheDocument()
     expect(screen.getByRole("switch", { name: "OCELIA access for GEOG 250 — Intro" })).toBeInTheDocument()
   })
 
-  it("toggles a per-course OCELIA access flag (B4)", async () => {
+  it("keeps Save changes disabled until there is a staged edit", async () => {
+    render(<InstructorDetail />)
+    const save = screen.getByRole("button", { name: "Save changes" })
+    expect(save).toBeDisabled()
+    await userEvent.click(screen.getByRole("switch", { name: "OCELIA access for GEOG 250 — Intro" }))
+    expect(save).toBeEnabled()
+  })
+
+  it("stages a per-course access toggle and commits it only on Save (B4)", async () => {
     render(<InstructorDetail />)
     await userEvent.click(screen.getByRole("switch", { name: "OCELIA access for GEOG 250 — Intro" }))
-    expect(updateInstructorAccess.mutate).toHaveBeenCalledWith(
-      { courseId: "c1", instructorEmail: "ada@x.com", access: false },
-      expect.any(Object)
+    expect(updateInstructorAccess.mutateAsync).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }))
+    await waitFor(() =>
+      expect(updateInstructorAccess.mutateAsync).toHaveBeenCalledWith({
+        courseId: "c1",
+        instructorEmail: "ada@x.com",
+        access: false,
+      })
     )
   })
 
-  it("removes a course assignment after confirmation", async () => {
+  it("stages a course removal (no confirm dialog) and commits it on Save", async () => {
     render(<InstructorDetail />)
     await userEvent.click(screen.getByRole("button", { name: "Remove" }))
-    const dialog = await screen.findByRole("dialog")
-    expect(within(dialog).getByText("Remove course?")).toBeInTheDocument()
-    await userEvent.click(within(dialog).getByRole("button", { name: "Remove course" }))
-    expect(unenroll.mutate).toHaveBeenCalledWith(
-      { courseId: "c1", instructorEmail: "ada@x.com" },
-      expect.any(Object)
+    // Staged only: no confirm dialog, and the row disappears immediately.
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    expect(screen.queryByText("GEOG 250")).not.toBeInTheDocument()
+    expect(unenroll.mutateAsync).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }))
+    await waitFor(() =>
+      expect(unenroll.mutateAsync).toHaveBeenCalledWith({ courseId: "c1", instructorEmail: "ada@x.com" })
     )
   })
 
-  it("assigns an unassigned course from the picker", async () => {
+  it("stages a course assignment from the picker and commits it on Save", async () => {
     render(<InstructorDetail />)
     await userEvent.click(screen.getByRole("button", { name: "Assign course" }))
     const dialog = await screen.findByRole("dialog")
     await userEvent.click(within(dialog).getByRole("button", { name: /PHYS 100/ }))
-    expect(enroll.mutate).toHaveBeenCalledWith(
-      { courseId: "c2", instructorEmail: "ada@x.com" },
-      expect.any(Object)
+    expect(enroll.mutateAsync).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }))
+    await waitFor(() =>
+      expect(enroll.mutateAsync).toHaveBeenCalledWith({ courseId: "c2", instructorEmail: "ada@x.com" })
     )
   })
 
-  it("deletes (demotes) the instructor after confirmation", async () => {
+  it("deletes (demotes) the instructor immediately after confirmation", async () => {
     render(<InstructorDetail />)
     await userEvent.click(screen.getByRole("button", { name: "Delete instructor" }))
     const dialog = await screen.findByRole("dialog")
