@@ -17,7 +17,7 @@ export function ListRow({ children, onClick, selected = false, className }) {
         // Flush, divider-separated rows (mockup: master-detail list) — not
         // individually bordered boxes. Each row carries a hairline bottom border;
         // the selected row drops it for a solid, flush (square) brand fill.
-        "group flex w-full items-center gap-3 border-b border-border px-4 py-4 text-left transition-colors duration-fast",
+        "group flex w-full items-center gap-3 border-b border-border pt-2 pb-4 py-4 text-left transition-colors duration-fast",
         interactive &&
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
         interactive && !selected && "hover:bg-accent",
