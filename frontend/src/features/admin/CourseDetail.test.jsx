@@ -71,7 +71,7 @@ describe("CourseDetail (staged editing)", () => {
   it("renders the course header, access code, and assigned instructors", () => {
     render(<CourseDetail />)
     expect(screen.getByRole("heading", { name: "GEOG 250" })).toBeInTheDocument()
-    expect(screen.getByText("ABCD-EFGH-IJKL-MNOP")).toBeInTheDocument()
+    expect(screen.getByText(/ABCD-EFGH-IJKL-MNOP/)).toBeInTheDocument()
     expect(screen.getByRole("switch", { name: "Course student access" })).toBeInTheDocument()
     expect(screen.getByText("Lovelace, Ada")).toBeInTheDocument()
     expect(screen.getByRole("switch", { name: "OCELIA access for Lovelace, Ada" })).toBeInTheDocument()

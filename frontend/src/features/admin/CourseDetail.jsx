@@ -251,16 +251,14 @@ export function CourseDetail() {
             )}
           </div>
           {course.course_access_code && (
-            <div className="flex items-center gap-2 text-caption text-muted-foreground">
-              <span>
-                Access Code:{" "}
-                <span className="font-semibold text-foreground">{course.course_access_code}</span>
-              </span>
+            <div className="flex items-center gap-2 text-body text-foreground">
+              {/* Figma: single "Body - Desktop" run — 18px, Book (normal), not bold. */}
+              <span>Access Code: {course.course_access_code}</span>
               <button
                 type="button"
                 onClick={copyCode}
                 aria-label="Copy access code"
-                className="rounded p-1 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="rounded p-1 text-primary transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <Icon icon={MdContentCopy} size={16} />
               </button>
@@ -299,7 +297,7 @@ export function CourseDetail() {
                 className="flex items-center justify-between gap-4 border-b border-border py-3"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-caption font-medium text-foreground">
+                  <p className="truncate text-2xl leading-9 font-medium text-foreground">
                     {instructorLabel(inst)}
                   </p>
                   <button
