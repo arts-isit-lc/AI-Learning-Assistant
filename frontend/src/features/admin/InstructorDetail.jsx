@@ -275,7 +275,7 @@ export function InstructorDetail() {
       <div className="flex items-center justify-between gap-4 pt-4">
         <Button
           variant="link"
-          className="text-destructive"
+          className="p-0 text-destructive"
           onClick={() => setRemoveOpen(true)}
           disabled={lower.isPending}
         >

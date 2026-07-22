@@ -326,7 +326,7 @@ export function CourseDetail() {
         <div className="flex items-center gap-4">
           <Button
             variant="link"
-            className="text-destructive"
+            className="p-0 text-destructive"
             onClick={() => setDeleteOpen(true)}
             disabled={del.isPending}
           >
