@@ -8,7 +8,14 @@ import { Input } from "@/components/ui/input"
  * Debounced search input. Fires `onChange(value)` after `debounceMs` of idle so
  * queries aren't spammed on every keystroke (perceived-performance, plan §10).
  */
-export function Searchbar({ value = "", onChange, placeholder = "Search", debounceMs = 250, className }) {
+export function Searchbar({
+  value = "",
+  onChange,
+  placeholder = "Search",
+  debounceMs = 250,
+  className,
+  inputClassName,
+}) {
   const [text, setText] = useState(value)
   const timer = useRef(null)
 
@@ -29,7 +36,7 @@ export function Searchbar({ value = "", onChange, placeholder = "Search", deboun
         value={text}
         onChange={handleChange}
         placeholder={placeholder}
-        className="pr-9"
+        className={cn("pr-9", inputClassName)}
       />
       <Icon
         icon={MdSearch}

@@ -32,7 +32,12 @@ export function CourseList() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Searchbar value={query} onChange={setQuery} placeholder="Search courses" />
+      <Searchbar
+        value={query}
+        onChange={setQuery}
+        placeholder="Search courses"
+        inputClassName="h-[50px]"
+      />
 
       <div className="flex max-h-[calc(100vh-18rem)] flex-col overflow-y-auto">
         {isLoading ? (
