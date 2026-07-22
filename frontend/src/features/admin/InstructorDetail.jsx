@@ -247,7 +247,7 @@ export function InstructorDetail() {
                 className="flex items-center justify-between gap-4 border-b border-border py-3"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-caption text-neutral-900">{courseCode(course)}</p>
+                  <p className="truncate text-lg text-neutral-900">{courseCode(course)}</p>
                   {course.course_name && (
                     <p className="truncate text-caption text-foreground">{course.course_name}</p>
                   )}
@@ -281,7 +281,13 @@ export function InstructorDetail() {
         >
           Delete instructor
         </Button>
-        <Button variant="outline" onClick={saveChanges} disabled={!isDirty || saving} loading={saving}>
+        <Button
+          variant="ghost"
+          className="text-neutral-300"
+          onClick={saveChanges}
+          disabled={!isDirty || saving}
+          loading={saving}
+        >
           Save changes
         </Button>
       </div>

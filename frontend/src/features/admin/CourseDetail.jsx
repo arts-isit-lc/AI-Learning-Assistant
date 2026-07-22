@@ -334,7 +334,13 @@ export function CourseDetail() {
           </Button>
           <DuplicateCourseDialog course={course} />
         </div>
-        <Button variant="outline" onClick={saveChanges} disabled={!isDirty || saving} loading={saving}>
+        <Button
+          variant="ghost"
+          className="text-neutral-300"
+          onClick={saveChanges}
+          disabled={!isDirty || saving}
+          loading={saving}
+        >
           Save changes
         </Button>
       </div>
