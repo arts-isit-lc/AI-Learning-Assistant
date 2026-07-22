@@ -6,6 +6,7 @@ import { useAdminInstructors, useCreateCourse } from "@/services/queries"
 import { COURSE_TERMS } from "@/constants/courseTerms"
 import { instructorLabel } from "./InstructorList"
 import { UnsavedChangesPrompt } from "@/components/composed/UnsavedChangesPrompt"
+import { MultiSelect } from "@/components/composed/MultiSelect"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -67,7 +68,7 @@ export function CreateCourse() {
   const [title, setTitle] = useState("")
   const [term, setTerm] = useState("")
   const [accessCode, setAccessCode] = useState(() => generateAccessCode())
-  const [selected, setSelected] = useState(() => new Set())
+  const [selected, setSelected] = useState([])
   // Set to the destination once the course is created, so the unsaved-changes
   // guard is disarmed before we navigate to the new course (see effect below).
   const [leaveTo, setLeaveTo] = useState(null)
@@ -76,7 +77,7 @@ export function CreateCourse() {
   // Term is required (like code + title); the access code is auto-generated.
   const canCreate = Boolean(title.trim() && department && number && term) && !create.isPending
   // Any user-entered field (the access code is auto-generated, not user input).
-  const isDirty = Boolean(code.trim() || title.trim() || term || selected.size > 0)
+  const isDirty = Boolean(code.trim() || title.trim() || term || selected.length > 0)
 
   // Navigate from an effect (not inline in onSuccess) so the guard observes
   // `when=false` before the route change — otherwise creating the course would
@@ -87,14 +88,6 @@ export function CreateCourse() {
 
   // Cancel / dismiss navigates directly so a dirty form IS guarded here.
   const close = () => navigate("/admin/courses")
-
-  const toggleInstructor = (email) =>
-    setSelected((prev) => {
-      const next = new Set(prev)
-      if (next.has(email)) next.delete(email)
-      else next.add(email)
-      return next
-    })
 
   const copyCode = async () => {
     try {
@@ -115,7 +108,7 @@ export function CreateCourse() {
         accessCode,
         active: true,
         systemPrompt: DEFAULT_PROMPT,
-        instructorEmails: [...selected],
+        instructorEmails: selected,
       },
       {
         onSuccess: (data) => {
@@ -184,24 +177,19 @@ export function CreateCourse() {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label>Instructors</Label>
-            {instructors.length === 0 ? (
-              <p className="text-caption text-muted-foreground">No instructors to assign yet.</p>
-            ) : (
-              <fieldset className="flex max-h-40 flex-col gap-2 overflow-y-auto">
-                <legend className="sr-only">Instructors</legend>
-                {instructors.map((instructor) => (
-                  <label key={instructor.user_email} className="flex items-center gap-2 text-caption">
-                    <input
-                      type="checkbox"
-                      checked={selected.has(instructor.user_email)}
-                      onChange={() => toggleInstructor(instructor.user_email)}
-                    />
-                    <span className="truncate">{instructorLabel(instructor)}</span>
-                  </label>
-                ))}
-              </fieldset>
-            )}
+            <Label htmlFor="add-course-instructors">Instructors</Label>
+            <MultiSelect
+              id="add-course-instructors"
+              aria-label="Instructors"
+              placeholder="Select instructors"
+              emptyText="No instructors to assign yet."
+              options={instructors.map((i) => ({
+                value: i.user_email,
+                label: instructorLabel(i),
+              }))}
+              value={selected}
+              onChange={setSelected}
+            />
           </div>
 
           <div className="flex flex-col gap-1.5">

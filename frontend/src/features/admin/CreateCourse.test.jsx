@@ -75,7 +75,10 @@ describe("CreateCourse", () => {
     await userEvent.type(screen.getByLabelText(/Course title/), "Intro Geography")
     await userEvent.click(screen.getByRole("combobox", { name: "Term" }))
     await userEvent.click(await screen.findByRole("option", { name: "2026 Winter Term 2" }))
-    await userEvent.click(screen.getByRole("checkbox", { name: /Lovelace, Ada/ }))
+    // Instructors is a multi-select: open it, toggle Ada, then close the popover.
+    await userEvent.click(screen.getByRole("button", { name: "Instructors" }))
+    await userEvent.click(await screen.findByRole("button", { name: "Lovelace, Ada" }))
+    await userEvent.click(screen.getByRole("button", { name: "Instructors" }))
     await userEvent.click(screen.getByRole("button", { name: "Add course" }))
 
     await waitFor(() => expect(create.mutate).toHaveBeenCalled())
