@@ -45,7 +45,7 @@ export default function AdminLayout() {
       </div>
 
       <div className="mt-6 border-b border-border">
-        <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-6 pb-6">
+        <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-6 pb-8">
           <nav className="flex items-center gap-6" aria-label="Admin navigation">
             <NavLink to="/admin/instructors" className={navLinkClass}>
               Instructors
