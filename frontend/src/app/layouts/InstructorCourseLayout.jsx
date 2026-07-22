@@ -84,7 +84,7 @@ export default function InstructorCourseLayout() {
     <div className="flex flex-col">
       <div className="border-b border-border pb-4">
         <div className="flex items-start justify-between gap-4">
-          <h1 className="text-2xl font-semibold text-neutral-900">{code}</h1>
+          <h1 className="text-2xl leading-normal font-semibold text-neutral-900">{code}</h1>
           {course && (
             <div className="flex shrink-0 items-center gap-2 text-caption">
               <span className={active ? "text-muted-foreground" : "font-semibold text-foreground"}>
@@ -105,12 +105,12 @@ export default function InstructorCourseLayout() {
 
         {/* Row 2 (Figma 365:2504): course name (left) + access code aligned on the
             same line (right) — not dropped to the term row, which left a gap above it. */}
-        <div className="mt-1 flex items-center gap-4">
+        <div className="flex items-center gap-4 mb-4">
           {course?.course_name && (
             <p className="min-w-0 text-body text-foreground">{course.course_name}</p>
           )}
           {course && accessCode && (
-            <div className="ml-auto flex shrink-0 items-center gap-2 text-caption text-muted-foreground">
+            <div className="ml-auto flex shrink-0 items-center gap-2 text-lg mb-2">
               <span>
                 Access Code: <span className="text-foreground">{accessCode}</span>
               </span>
@@ -141,7 +141,7 @@ export default function InstructorCourseLayout() {
             <button
               type="button"
               onClick={() => setDeleteOpen(true)}
-              className="ml-auto text-caption font-semibold text-destructive hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="ml-auto text-caption text-destructive leading-7 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Delete course
             </button>
