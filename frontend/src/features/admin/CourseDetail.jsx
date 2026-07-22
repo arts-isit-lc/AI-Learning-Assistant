@@ -303,7 +303,7 @@ export function CourseDetail() {
                   <button
                     type="button"
                     onClick={() => removeInstructor(inst.user_email)}
-                    className="text-caption text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="text-caption text-primary mb-4 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     Remove
                   </button>
