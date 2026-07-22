@@ -75,6 +75,34 @@ describe("OpenAPI contract: admin course-management routes", () => {
     expect(route.post["x-amazon-apigateway-integration"].uri["Fn::Sub"]).toBe(adminUri);
   });
 
+  it("POST /admin/create_course: required `term` query param (+ course fields, system_prompt body, adminAuthorizer)", () => {
+    const route = spec.paths["/admin/create_course"];
+    expect(route).toBeDefined();
+    expect(route.post).toBeDefined();
+    expect(route.options).toBeDefined();
+
+    const byName = Object.fromEntries(route.post.parameters.map((p: any) => [p.name, p]));
+    for (const name of [
+      "course_name",
+      "course_department",
+      "course_number",
+      "course_access_code",
+      "course_student_access",
+      "term",
+    ]) {
+      expect(byName[name]).toBeDefined();
+      expect(byName[name].in).toBe("query");
+      expect(byName[name].required).toBe(true);
+    }
+    expect(byName["term"].schema.type).toBe("string");
+    // system_prompt still travels in the JSON body.
+    expect(
+      route.post.requestBody.content["application/json"].schema.properties.system_prompt
+    ).toBeDefined();
+    expect(route.post.security).toEqual([{ adminAuthorizer: [] }]);
+    expect(route.post["x-amazon-apigateway-integration"].uri["Fn::Sub"]).toBe(adminUri);
+  });
+
   it("DELETE /admin/unenroll_instructor: course_id + instructor_email (query) + adminAuthorizer", () => {
     const route = spec.paths["/admin/unenroll_instructor"];
     expect(route).toBeDefined();
@@ -109,6 +137,21 @@ describe("initializer.py migration: Enrolments.access_enabled", () => {
     expect(initializer).toContain(
       'ALTER TABLE "Enrolments" ADD COLUMN IF NOT EXISTS "access_enabled" boolean NOT NULL DEFAULT true;'
     );
+  });
+});
+
+describe("initializer.py migration: Courses.term", () => {
+  const initializer = fs.readFileSync(
+    path.join(__dirname, "..", "lambda", "initializer", "initializer.py"),
+    "utf8"
+  );
+
+  it("declares term in the Courses CREATE TABLE (varchar)", () => {
+    expect(initializer).toContain('"term" varchar');
+  });
+
+  it("adds an idempotent nullable ADD COLUMN IF NOT EXISTS migration for existing databases", () => {
+    expect(initializer).toContain('ALTER TABLE "Courses" ADD COLUMN IF NOT EXISTS "term" varchar;');
   });
 });
 
@@ -380,6 +423,40 @@ describe("adminFunction — POST /admin/duplicate_course (B2)", () => {
 
   it("400: when the JSON body is missing (no DB access)", async () => {
     const res = await handler(makeEvent("POST", "/admin/duplicate_course", VALID_QS, null));
+    expect(res.statusCode).toBe(400);
+    expect(mockSql.calls).toHaveLength(0);
+  });
+});
+
+describe("adminFunction — POST /admin/create_course (term)", () => {
+  beforeEach(() => {
+    mockSql.reset();
+    (global as any).sqlConnectionTableCreator = mockSql;
+  });
+
+  const VALID_QS = {
+    course_name: "Intro Geography",
+    course_department: "GEOG",
+    course_number: "250",
+    course_access_code: "ABCD-EFGH-IJKL-MNOP",
+    course_student_access: "true",
+    term: "2026 Winter Term 2",
+  };
+  const BODY = JSON.stringify({ system_prompt: "You are a tutor." });
+
+  it("200: inserts the course with the term column in the INSERT", async () => {
+    mockSql.queueResult([{ course_id: "new-course", term: "2026 Winter Term 2" }]);
+    const res = await handler(makeEvent("POST", "/admin/create_course", VALID_QS, BODY));
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).course_id).toBe("new-course");
+    const insertSql = mockSql.calls[0];
+    expect(insertSql).toContain('INSERT INTO "Courses"');
+    expect(insertSql).toContain("term");
+  });
+
+  it("400: when the required term query param is missing (no DB access)", async () => {
+    const { term, ...rest } = VALID_QS;
+    const res = await handler(makeEvent("POST", "/admin/create_course", rest, BODY));
     expect(res.statusCode).toBe(400);
     expect(mockSql.calls).toHaveLength(0);
   });

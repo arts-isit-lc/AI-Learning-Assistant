@@ -27,6 +27,7 @@ export const AdminCourseSchema = z
     course_access_code: z.string().nullable().optional(),
     course_student_access: z.boolean().nullable().optional(),
     system_prompt: z.string().nullable().optional(),
+    term: z.string().nullable().optional(),
   })
   .passthrough()
 export const AdminCoursesSchema = z.array(AdminCourseSchema)

@@ -44,11 +44,15 @@ describe("parseCourseCode", () => {
 })
 
 describe("CreateCourse", () => {
-  it("disables Add course until the required fields (code + title) are filled", async () => {
+  it("disables Add course until code, title, and term are all provided", async () => {
     render(<CreateCourse />)
     expect(screen.getByRole("button", { name: "Add course" })).toBeDisabled()
     await userEvent.type(screen.getByLabelText(/Course code/), "GEOG 250")
     await userEvent.type(screen.getByLabelText(/Course title/), "Intro Geography")
+    // Term is required too — the button stays disabled until a term is picked.
+    expect(screen.getByRole("button", { name: "Add course" })).toBeDisabled()
+    await userEvent.click(screen.getByRole("combobox", { name: "Term" }))
+    await userEvent.click(await screen.findByRole("option", { name: "2026 Winter Term 2" }))
     expect(screen.getByRole("button", { name: "Add course" })).toBeEnabled()
   })
 
@@ -65,10 +69,12 @@ describe("CreateCourse", () => {
     )
   })
 
-  it("creates the course (code parsed to dept+number) with the access code + instructors", async () => {
+  it("creates the course (code parsed to dept+number) with the term, access code + instructors", async () => {
     render(<CreateCourse />)
     await userEvent.type(screen.getByLabelText(/Course code/), "GEOG 250")
     await userEvent.type(screen.getByLabelText(/Course title/), "Intro Geography")
+    await userEvent.click(screen.getByRole("combobox", { name: "Term" }))
+    await userEvent.click(await screen.findByRole("option", { name: "2026 Winter Term 2" }))
     await userEvent.click(screen.getByRole("checkbox", { name: /Lovelace, Ada/ }))
     await userEvent.click(screen.getByRole("button", { name: "Add course" }))
 
@@ -78,6 +84,7 @@ describe("CreateCourse", () => {
       courseName: "Intro Geography",
       department: "GEOG",
       number: "250",
+      term: "2026 Winter Term 2",
       active: true,
       instructorEmails: ["ada@x.com"],
     })

@@ -190,6 +190,7 @@ exports.handler = async (event) => {
           event.queryStringParameters.course_number &&
           event.queryStringParameters.course_access_code &&
           event.queryStringParameters.course_student_access &&
+          event.queryStringParameters.term &&
           event.body
         ) {
           try {
@@ -200,6 +201,7 @@ exports.handler = async (event) => {
               course_number,
               course_access_code,
               course_student_access,
+              term,
             } = event.queryStringParameters;
 
             const { system_prompt } = JSON.parse(event.body);
@@ -213,6 +215,7 @@ exports.handler = async (event) => {
                       course_number,
                       course_access_code,
                       course_student_access,
+                      term,
                       system_prompt
                   )
                   VALUES (
@@ -222,6 +225,7 @@ exports.handler = async (event) => {
                       ${course_number},
                       ${course_access_code},
                       ${course_student_access.toLowerCase() === "true"},
+                      ${term},
                       ${system_prompt}
                   )
                   RETURNING *;
@@ -281,6 +285,7 @@ exports.handler = async (event) => {
                     course_number,
                     course_access_code,
                     course_student_access,
+                    term,
                     system_prompt,
                     llm_model_id
                 )
@@ -291,6 +296,7 @@ exports.handler = async (event) => {
                     ${course_number},
                     ${course_access_code},
                     ${course_student_access.toLowerCase() === "true"},
+                    term,
                     ${system_prompt},
                     llm_model_id
                 FROM "Courses"

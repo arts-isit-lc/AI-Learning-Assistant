@@ -4813,6 +4813,12 @@ paths:
             type: string
           description: Name of the course
         - in: query
+          name: term
+          required: true
+          schema:
+            type: string
+          description: Academic term label for the course (e.g. "2026 Winter Term 2")
+        - in: query
           name: course_department
           required: true
           schema:

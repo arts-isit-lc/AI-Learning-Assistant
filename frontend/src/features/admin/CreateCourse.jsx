@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { toast } from "react-toastify"
 import { MdContentCopy } from "react-icons/md"
 import { useAdminInstructors, useCreateCourse } from "@/services/queries"
+import { COURSE_TERMS } from "@/constants/courseTerms"
 import { instructorLabel } from "./InstructorList"
 import { UnsavedChangesPrompt } from "@/components/composed/UnsavedChangesPrompt"
 import { Button } from "@/components/ui/button"
@@ -17,6 +18,13 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog"
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select"
 
 // Default course-level prompt (ported from the legacy AdminCreateCourse). The
 // Figma Add-course modal omits the prompt + active fields, so they're defaulted
@@ -57,6 +65,7 @@ export function CreateCourse() {
 
   const [code, setCode] = useState("")
   const [title, setTitle] = useState("")
+  const [term, setTerm] = useState("")
   const [accessCode, setAccessCode] = useState(() => generateAccessCode())
   const [selected, setSelected] = useState(() => new Set())
   // Set to the destination once the course is created, so the unsaved-changes
@@ -64,9 +73,10 @@ export function CreateCourse() {
   const [leaveTo, setLeaveTo] = useState(null)
 
   const { department, number } = parseCourseCode(code)
-  const canCreate = Boolean(title.trim() && department && number) && !create.isPending
+  // Term is required (like code + title); the access code is auto-generated.
+  const canCreate = Boolean(title.trim() && department && number && term) && !create.isPending
   // Any user-entered field (the access code is auto-generated, not user input).
-  const isDirty = Boolean(code.trim() || title.trim() || selected.size > 0)
+  const isDirty = Boolean(code.trim() || title.trim() || term || selected.size > 0)
 
   // Navigate from an effect (not inline in onSuccess) so the guard observes
   // `when=false` before the route change — otherwise creating the course would
@@ -101,6 +111,7 @@ export function CreateCourse() {
         courseName: title.trim(),
         department,
         number,
+        term,
         accessCode,
         active: true,
         systemPrompt: DEFAULT_PROMPT,
@@ -152,6 +163,24 @@ export function CreateCourse() {
               onChange={(e) => setTitle(e.target.value)}
               maxLength={50}
             />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="add-course-term">
+              Term <span className="text-destructive">*</span>
+            </Label>
+            <Select value={term} onValueChange={setTerm}>
+              <SelectTrigger id="add-course-term" aria-label="Term">
+                <SelectValue placeholder="Select a term" />
+              </SelectTrigger>
+              <SelectContent>
+                {COURSE_TERMS.map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {t}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="flex flex-col gap-1.5">

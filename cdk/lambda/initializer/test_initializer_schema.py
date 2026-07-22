@@ -156,6 +156,13 @@ class TestFeatureColumnBackfillMigrations:
         assert 'ALTER TABLE "Courses" ADD COLUMN IF NOT EXISTS "validation_hash"' in src
         assert 'ALTER TABLE "Courses" ADD COLUMN IF NOT EXISTS "validation_cached_report"' in src
 
+    def test_courses_term_column_migrated(self):
+        # Academic term (e.g. "2026 Winter Term 2"). Declared on the CREATE TABLE
+        # AND backfilled idempotently so existing/prod databases gain the column.
+        src = _source()
+        assert '"term" varchar' in src
+        assert 'ALTER TABLE "Courses" ADD COLUMN IF NOT EXISTS "term" varchar' in src
+
     def test_course_modules_feature_columns_migrated(self):
         src = _source()
         for col in (
@@ -196,6 +203,7 @@ class TestFeatureColumnBackfillMigrations:
                 or '"content_hash"' in line
                 or '"last_processed_at"' in line
                 or '"chunk_count"' in line
+                or '"term"' in line
             ):
                 assert "NOT NULL" not in line, f"backfilled column must be nullable: {line.strip()}"
 

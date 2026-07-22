@@ -73,6 +73,7 @@ def handler(event, context):
                 "course_number" integer,
                 "course_access_code" varchar,
                 "course_student_access" bool,
+                "term" varchar,
                 "system_prompt" text,
                 "llm_model_id" varchar DEFAULT 'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
                 "conflict_metadata" jsonb DEFAULT NULL,
@@ -265,6 +266,10 @@ def handler(event, context):
             ALTER TABLE "Courses" ADD COLUMN IF NOT EXISTS "conflict_metadata" jsonb DEFAULT NULL;
             ALTER TABLE "Courses" ADD COLUMN IF NOT EXISTS "validation_hash" text;
             ALTER TABLE "Courses" ADD COLUMN IF NOT EXISTS "validation_cached_report" jsonb;
+            -- Academic term label (e.g. "2026 Winter Term 2"). Required at the
+            -- create-course API/UI; kept nullable here so the backfill is safe on
+            -- the populated prod table and on duplicates of pre-term courses.
+            ALTER TABLE "Courses" ADD COLUMN IF NOT EXISTS "term" varchar;
             ALTER TABLE "Course_Modules" ADD COLUMN IF NOT EXISTS "conflict_metadata" jsonb DEFAULT NULL;
             ALTER TABLE "Course_Modules" ADD COLUMN IF NOT EXISTS "generated_topics" jsonb DEFAULT NULL;
             ALTER TABLE "Course_Modules" ADD COLUMN IF NOT EXISTS "validation_hash" text;

@@ -31,7 +31,7 @@ export function useCourseInstructors(courseId) {
  * `{ system_prompt }` body) then enroll the selected instructors. `active` is
  * sent as-is; `apiClient` stringifies it to "true"/"false" for the backend.
  * Returns the created `{ course_id }`. Variables:
- * `{ courseName, department, number, accessCode, active, systemPrompt, instructorEmails }`.
+ * `{ courseName, department, number, term, accessCode, active, systemPrompt, instructorEmails }`.
  */
 export function useCreateCourse() {
   const qc = useQueryClient()
@@ -40,6 +40,7 @@ export function useCreateCourse() {
       courseName,
       department,
       number,
+      term,
       accessCode,
       active,
       systemPrompt,
@@ -51,6 +52,7 @@ export function useCreateCourse() {
           course_name: courseName,
           course_department: department,
           course_number: number,
+          term,
           course_access_code: accessCode,
           course_student_access: active,
         },
