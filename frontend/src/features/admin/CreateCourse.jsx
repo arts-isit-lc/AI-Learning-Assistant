@@ -122,7 +122,7 @@ export function CreateCourse() {
 
   return (
     <Dialog open onOpenChange={(o) => !o && close()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg px-9 pb-9 pt-14">
         <UnsavedChangesPrompt when={isDirty && !leaveTo} />
         <DialogHeader className="border-b border-border pb-2">
           <DialogTitle>Add course</DialogTitle>
