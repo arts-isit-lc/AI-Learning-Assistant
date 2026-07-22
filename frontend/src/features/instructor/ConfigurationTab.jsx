@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react"
 import { Outlet, useNavigate, useParams } from "react-router-dom"
+import { useAuth } from "@/context/AuthContext"
 import {
   DndContext,
   KeyboardSensor,
@@ -81,6 +82,7 @@ function SortableConceptSection({ concept, modules, number, ...handlers }) {
 export function ConfigurationTab() {
   const { courseId } = useParams()
   const navigate = useNavigate()
+  const { setIsInstructorAsStudent } = useAuth()
   const { data: concepts = [], isLoading, isError } = useConcepts(courseId)
   const { data: modules = [] } = useModules(courseId)
 
@@ -104,6 +106,14 @@ export function ConfigurationTab() {
   const conceptIds = tree.map((t) => t.concept.concept_id)
 
   const moduleBasePath = `/instructor/courses/${courseId}/configuration/modules`
+
+  // Preview this course as a student. Instructors are permitted on the student
+  // route (see AppRoutes); the flag mirrors the header's "View as student" and
+  // keeps progress writes off while previewing.
+  const openStudentView = () => {
+    setIsInstructorAsStudent(true)
+    navigate(`/courses/${courseId}`)
+  }
 
   const handleConceptDragEnd = (event) => {
     const { active, over } = event
@@ -239,6 +249,18 @@ export function ConfigurationTab() {
           </SortableContext>
         </DndContext>
       )}
+
+      {/* Footer (Figma 365:2622) — shown in every state, incl. empty: Student view
+          (left) previews the course as a student; Save changes (right) is disabled
+          because configuration edits (add/rename/delete/reorder) persist immediately. */}
+      <div className="flex items-center justify-between gap-4 border-t border-border pt-4">
+        <Button variant="link" className="p-0" onClick={openStudentView}>
+          Student view
+        </Button>
+        <Button variant="ghost" className="text-neutral-300" disabled>
+          Save changes
+        </Button>
+      </div>
 
       <ConfirmDialog
         open={Boolean(deleteConceptTarget)}

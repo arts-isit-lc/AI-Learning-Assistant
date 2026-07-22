@@ -173,7 +173,7 @@ export function ModuleAccordion({
       className={cn("flex flex-col gap-2", sortable?.isDragging && "opacity-50")}
     >
       {/* Concept box — clean at rest (number + name + pencil); controls on hover. */}
-      <div className="group flex items-center gap-2 rounded-sm border border-border bg-muted px-3 py-2.5">
+      <div className="group flex items-center gap-2 rounded-sm border border-border bg-muted px-1 py-2">
         {editing ? (
           <div className="flex flex-1 items-center gap-2">
             <Input
@@ -207,7 +207,7 @@ export function ModuleAccordion({
           </div>
         ) : (
           <>
-            <h3 className="text-caption text-neutral-900">
+            <h3 className="text-caption leading-7 text-neutral-900">
               {displayNumber != null ? `${displayNumber}. ` : ""}
               {titleCase(concept.concept_name)}
             </h3>
@@ -232,9 +232,6 @@ export function ModuleAccordion({
               >
                 <Icon icon={MdDragIndicator} size={18} />
               </button>
-              <Button size="sm" variant="ghost" onClick={onAddModule}>
-                <Icon icon={MdAdd} size={18} /> Add module
-              </Button>
               <button
                 type="button"
                 aria-label="Delete concept"

@@ -11,6 +11,8 @@ const deleteConcept = { mutate: vi.fn(), isPending: false }
 const deleteModule = { mutate: vi.fn(), isPending: false }
 const reorderConcepts = { mutate: vi.fn(), isPending: false }
 const reorderModules = { mutate: vi.fn(), isPending: false }
+const navigate = vi.fn()
+const setIsInstructorAsStudent = vi.fn()
 
 vi.mock("@/services/queries", () => ({
   useConcepts: () => conceptsResult,
@@ -24,8 +26,11 @@ vi.mock("@/services/queries", () => ({
 }))
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal()
-  return { ...actual, useParams: () => ({ courseId: "c1" }), useNavigate: () => vi.fn() }
+  return { ...actual, useParams: () => ({ courseId: "c1" }), useNavigate: () => navigate }
 })
+vi.mock("@/context/AuthContext", () => ({
+  useAuth: () => ({ setIsInstructorAsStudent }),
+}))
 
 const CONCEPTS = [{ concept_id: "con1", concept_name: "algebra", concept_number: 1 }]
 const MODULES = [
@@ -39,6 +44,8 @@ beforeEach(() => {
   Object.values({ createConcept, renameConcept, deleteConcept, deleteModule, reorderConcepts, reorderModules }).forEach(
     (m) => m.mutate.mockClear()
   )
+  navigate.mockClear()
+  setIsInstructorAsStudent.mockClear()
 })
 
 describe("groupConceptTree", () => {
@@ -94,5 +101,24 @@ describe("ConfigurationTab", () => {
     // header "Concept" button is the only add-concept affordance, so a single
     // getByRole match (which throws on duplicates) proves the redundant one is gone.
     expect(screen.getByRole("button", { name: /add concept/i })).toBeInTheDocument()
+  })
+
+  it("shows the Student view + Save changes footer even when there are no concepts", () => {
+    conceptsResult = { data: [], isLoading: false, isError: false }
+    render(<ConfigurationTab />)
+    expect(screen.getByRole("button", { name: "Student view" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeInTheDocument()
+  })
+
+  it("previews the course as a student from the footer (enters preview mode + navigates)", async () => {
+    render(<ConfigurationTab />)
+    await userEvent.click(screen.getByRole("button", { name: "Student view" }))
+    expect(setIsInstructorAsStudent).toHaveBeenCalledWith(true)
+    expect(navigate).toHaveBeenCalledWith("/courses/c1")
+  })
+
+  it("keeps Save changes disabled — configuration edits persist immediately", () => {
+    render(<ConfigurationTab />)
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled()
   })
 })
