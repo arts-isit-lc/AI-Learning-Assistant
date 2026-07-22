@@ -244,10 +244,10 @@ export function InstructorDetail() {
             displayed.map((course) => (
               <div
                 key={course.course_id}
-                className="flex items-center justify-between gap-4 border-b border-border pt-4"
+                className="flex items-center justify-between gap-4 border-b border-border"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-lg text-neutral-900">{courseCode(course)}</p>
+                  <p className="truncate text-lg text-neutral-900 pt-4">{courseCode(course)}</p>
                   {course.course_name && (
                     <p className="truncate text-lg text-foreground">{course.course_name}</p>
                   )}

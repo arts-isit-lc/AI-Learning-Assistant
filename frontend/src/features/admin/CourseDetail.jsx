@@ -294,10 +294,10 @@ export function CourseDetail() {
             displayed.map((inst) => (
               <div
                 key={inst.user_email}
-                className="flex items-center justify-between gap-4 border-b border-border pt-4"
+                className="flex items-center justify-between gap-4 border-b border-border"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-2xl leading-9 text-foreground">
+                  <p className="truncate text-2xl leading-9 text-foreground pt-4">
                     {instructorLabel(inst)}
                   </p>
                   <button
