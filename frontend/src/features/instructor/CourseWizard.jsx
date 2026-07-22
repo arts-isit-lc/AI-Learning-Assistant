@@ -261,7 +261,7 @@ export function CourseWizard() {
     <>
       <UnsavedChangesPrompt when={isDirty && !leaving} onProceed={cleanup} />
       <Dialog open onOpenChange={(open) => !open && setCancelOpen(true)}>
-        <DialogContent className="flex max-h-[90vh] w-[min(92vw,64rem)] max-w-none flex-col gap-0 p-0">
+        <DialogContent className="flex max-h-[90vh] w-[min(92vw,1200px)] max-w-none flex-col gap-0 p-0">
           <div className="px-8 pb-3 pt-6">
             <DialogTitle className="text-h4 font-semibold text-neutral-900">Create new module</DialogTitle>
           </div>

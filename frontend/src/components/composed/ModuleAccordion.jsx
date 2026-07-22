@@ -234,6 +234,14 @@ export function ModuleAccordion({
               </button>
               <button
                 type="button"
+                aria-label="Add module"
+                onClick={onAddModule}
+                className="rounded p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <Icon icon={MdAdd} size={18} />
+              </button>
+              <button
+                type="button"
                 aria-label="Delete concept"
                 onClick={onDelete}
                 className="rounded p-1 text-muted-foreground hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
