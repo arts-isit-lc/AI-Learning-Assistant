@@ -12,7 +12,7 @@ const TABS = [
 
 const tabClass = ({ isActive }) =>
   cn(
-    "-mb-px border-b-2 px-1 pb-2 text-caption font-semibold transition-colors duration-fast",
+    "-mb-px border-b-2 px-6 pb-2 text-caption font-semibold transition-colors duration-fast",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
     isActive
       ? "border-primary text-primary"
@@ -77,7 +77,7 @@ export function InstructorTabBar() {
             <div className="mt-6">{tabs}</div>
           </div>
         ) : (
-          <div className="flex items-center justify-between py-2">
+          <div className="flex items-center justify-between py-6">
             {tabs}
             <button type="button" onClick={() => setExpanded(true)} className={toggleClass}>
               Expand
