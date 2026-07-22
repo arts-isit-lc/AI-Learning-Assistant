@@ -133,7 +133,7 @@ export function CreateCourse() {
         </DialogDescription>
 
         <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col">
             <Label htmlFor="add-course-code">
               Course code <span className="text-destructive">*</span>
             </Label>
@@ -146,7 +146,7 @@ export function CreateCourse() {
             />
           </div>
 
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col">
             <Label htmlFor="add-course-title">
               Course title <span className="text-destructive">*</span>
             </Label>
@@ -158,7 +158,7 @@ export function CreateCourse() {
             />
           </div>
 
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col">
             <Label htmlFor="add-course-term">
               Term <span className="text-destructive">*</span>
             </Label>
@@ -176,7 +176,7 @@ export function CreateCourse() {
             </Select>
           </div>
 
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col">
             <Label htmlFor="add-course-instructors">Instructors</Label>
             <MultiSelect
               id="add-course-instructors"
@@ -192,7 +192,7 @@ export function CreateCourse() {
             />
           </div>
 
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col">
             <Label>Access code</Label>
             <div className="flex items-center justify-between gap-2">
               <span className="flex items-center gap-2 text-caption">
@@ -206,7 +206,12 @@ export function CreateCourse() {
                   <Icon icon={MdContentCopy} size={16} />
                 </button>
               </span>
-              <Button variant="outline" size="sm" onClick={() => setAccessCode(generateAccessCode())}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7"
+                onClick={() => setAccessCode(generateAccessCode())}
+              >
                 Generate new code
               </Button>
             </div>
