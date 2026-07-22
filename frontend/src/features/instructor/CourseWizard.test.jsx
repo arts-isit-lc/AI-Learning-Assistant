@@ -36,6 +36,10 @@ vi.mock("react-router-dom", async (importOriginal) => {
     useParams: () => ({ courseId: "c1" }),
     useNavigate: () => navigate,
     useSearchParams: () => [new URLSearchParams("concept=con1"), vi.fn()],
+    // The wizard renders <UnsavedChangesPrompt>, whose useBlocker needs a data
+    // router. Bare render — stub the blocker as never-blocking; the guard's own
+    // behaviour is covered in UnsavedChangesPrompt.test.jsx.
+    useBlocker: () => ({ state: "unblocked", proceed: vi.fn(), reset: vi.fn() }),
   }
 })
 vi.mock("react-toastify", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }))
@@ -94,6 +98,10 @@ describe("CourseWizard", () => {
       .find((d) => within(d).queryByText("Discard this module?"))
     await user.click(within(confirm).getByRole("button", { name: "Discard" }))
     await waitFor(() => expect(draft.cleanup).toHaveBeenCalled())
-    expect(navigate).toHaveBeenCalledWith("/instructor/courses/c1/configuration")
+    // Discard cleans up then navigates via an effect (once `leaving` flips), so
+    // wait for the navigation rather than asserting it synchronously.
+    await waitFor(() =>
+      expect(navigate).toHaveBeenCalledWith("/instructor/courses/c1/configuration")
+    )
   })
 })

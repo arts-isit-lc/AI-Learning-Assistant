@@ -10,7 +10,7 @@ fileMatchPattern: "frontend/**"
 > purge (2026-07-20)** — MUI/emotion, `lucide-react`, and `material-react-table` are no longer dependencies.
 
 ## Stack
-React 18 (JSX only) · Vite 5 · React Router 7 (`BrowserRouter`, nested layout routes, lazy routes) · **Tailwind 3 + shadcn/ui** (single UI system) · **Material Symbols icons** as per-icon SVG components via an `<Icon>` wrapper · **TanStack Query** (server state) · **React Hook Form + Zod** (forms + runtime API contracts) · Amplify v6 (auth/API) · react-markdown + react-syntax-highlighter · rehype-katex + remark-math · Recharts · react-toastify · react-pdf
+React 18 (JSX only) · Vite 5 · React Router 7 (**data router**: `createBrowserRouter` + `RouterProvider`, nested layout routes, lazy routes) · **Tailwind 3 + shadcn/ui** (single UI system) · **Material Symbols icons** as per-icon SVG components via an `<Icon>` wrapper · **TanStack Query** (server state) · **React Hook Form + Zod** (forms + runtime API contracts) · Amplify v6 (auth/API) · react-markdown + react-syntax-highlighter · rehype-katex + remark-math · Recharts · react-toastify · react-pdf
 
 ## Key Rules
 - Functional components only, no class components
@@ -45,7 +45,7 @@ Google Material icons as **tree-shakeable per-icon SVG components** behind a thi
 - Gate: ESLint + `npm run build` + tests. Harness **landed in Phase 1**: Vitest + RTL (jsdom, `src/test/setup.js`) via `npm run test`; Playwright via `npm run test:e2e`.
 
 ## Routing
-`BrowserRouter` + nested layout routes + role guards (replacing the old `getHomePage()` switch). **Resource IDs live in the URL** (e.g. `/courses/:courseId/modules/:moduleId`) so every screen is deep-linkable and refresh-safe — not held in top-level component state. No dead ends (every screen has a back/breadcrumb path); 404 route + redirects for legacy/invalid paths; Amplify SPA rewrite replaces the old `#/` hash routing.
+**Data router** (`createBrowserRouter(routes)` + `<RouterProvider>` in `AppV2`; `routes` exported from `AppRoutes` via `createRoutesFromElements` under a `RootLayout` element) + nested layout routes + role guards (replacing the old `getHomePage()` switch). The data router (not the declarative `<BrowserRouter>`) is required so `useBlocker` works — it backs the app-wide `<UnsavedChangesPrompt when={isDirty} />` guard (unsaved-form navigation, incl. browser back/forward). `CourseProvider` + the lazy-route `Suspense` live in `RootLayout` (they read the location). **Resource IDs live in the URL** (e.g. `/courses/:courseId/modules/:moduleId`) so every screen is deep-linkable and refresh-safe — not held in top-level component state. No dead ends (every screen has a back/breadcrumb path); 404 route + redirects for legacy/invalid paths; Amplify SPA rewrite replaces the old `#/` hash routing.
 
 **Navigation shell = top-nav `AppHeader` per role** (student/instructor/admin), **not** a left sidebar — the old `AppSidebar` assumption is retired (Phase 0). Instructor top-nav keeps Global Analytics + Global Chats as items wired to placeholder "coming soon" stubs; the header `Quicklink?` placeholder is dropped (no defined target). See `ui-component-registry.md`.
 

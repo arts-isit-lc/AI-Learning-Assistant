@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils"
 import { LanguageModelDropdown } from "@/components/composed/LanguageModelDropdown"
 import { PromptHistory } from "@/components/composed/PromptHistory"
 import { ConfirmDialog } from "@/components/composed/ConfirmDialog"
+import { UnsavedChangesPrompt } from "@/components/composed/UnsavedChangesPrompt"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -203,6 +204,7 @@ export function SettingsTab() {
 
   return (
     <div className="flex max-w-3xl flex-col gap-8">
+      <UnsavedChangesPrompt when={dirty} />
       {/* Language model */}
       <section>
         <h3 className="text-caption font-semibold text-neutral-900">Language model</h3>

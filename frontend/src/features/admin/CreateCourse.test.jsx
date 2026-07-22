@@ -11,7 +11,14 @@ vi.mock("@/services/queries", () => ({
 }))
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal()
-  return { ...actual, useNavigate: () => navigate }
+  return {
+    ...actual,
+    useNavigate: () => navigate,
+    // The modal renders <UnsavedChangesPrompt>, whose useBlocker needs a data
+    // router. Bare render — stub the blocker as never-blocking; the guard's own
+    // behaviour is covered in UnsavedChangesPrompt.test.jsx.
+    useBlocker: () => ({ state: "unblocked", proceed: vi.fn(), reset: vi.fn() }),
+  }
 })
 vi.mock("react-toastify", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 

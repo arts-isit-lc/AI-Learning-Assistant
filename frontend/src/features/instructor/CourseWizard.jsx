@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils"
 import { BLOCKING_STATUSES } from "@/constants/uploadConfig"
 import { FileUpload } from "@/components/composed/FileUpload"
 import { ConfirmDialog } from "@/components/composed/ConfirmDialog"
+import { UnsavedChangesPrompt } from "@/components/composed/UnsavedChangesPrompt"
 import { Tag } from "@/components/composed/Tag"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -107,6 +108,7 @@ export function CourseWizard() {
   const [topicInput, setTopicInput] = useState("")
   const [referencedFileIds, setReferencedFileIds] = useState([])
   const [cancelOpen, setCancelOpen] = useState(false)
+  const [leaving, setLeaving] = useState(false)
   const autoGenRef = useRef(false)
 
   const { fileStates, uploadFiles, removeFile } = useFileUpload({ courseId, moduleId, moduleName })
@@ -138,6 +140,19 @@ export function CourseWizard() {
     return map
   }, [otherFiles])
   const attachableFiles = otherFiles.filter((f) => !referencedFileIds.includes(f.file_id))
+
+  // Unsaved work in the draft. A pre-filled concept (from the ?concept= link)
+  // isn't user input, so it only counts once changed. Uploaded files count —
+  // leaving discards the reserved draft (cleanup below).
+  const initialConcept = searchParams.get("concept") || ""
+  const isDirty = Boolean(
+    moduleName.trim() ||
+      conceptId !== initialConcept ||
+      modulePrompt.trim() ||
+      keyTopics.length > 0 ||
+      referencedFileIds.length > 0 ||
+      fileList.length > 0
+  )
 
   const handleGenerate = async () => {
     try {
@@ -186,12 +201,17 @@ export function CourseWizard() {
       prev.includes(fileId) ? prev.filter((id) => id !== fileId) : [...prev, fileId]
     )
 
-  const goToConfiguration = () => navigate(`/instructor/courses/${courseId}/configuration`)
+  // Leave after a successful publish or a confirmed discard. Navigating from an
+  // effect lets the guard see `when=false` first (leaving = true), so neither
+  // path double-prompts on top of Publish / the wizard's own Discard confirm.
+  useEffect(() => {
+    if (leaving) navigate(`/instructor/courses/${courseId}/configuration`)
+  }, [leaving, navigate, courseId])
 
   const handleCancel = async () => {
     setCancelOpen(false)
     await cleanup()
-    goToConfiguration()
+    setLeaving(true)
   }
 
   const handleSave = () => {
@@ -223,7 +243,7 @@ export function CourseWizard() {
             }
           }
           toast.success("Module created")
-          goToConfiguration()
+          setLeaving(true)
         },
         onError: (err) => {
           if (err?.status === 400) toast.error("A module with this name already exists")
@@ -239,6 +259,7 @@ export function CourseWizard() {
 
   return (
     <>
+      <UnsavedChangesPrompt when={isDirty && !leaving} onProceed={cleanup} />
       <Dialog open onOpenChange={(open) => !open && setCancelOpen(true)}>
         <DialogContent className="flex max-h-[90vh] w-[min(92vw,64rem)] max-w-none flex-col gap-0 p-0">
           <div className="px-8 pb-3 pt-6">

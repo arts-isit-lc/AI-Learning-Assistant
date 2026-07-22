@@ -20,6 +20,7 @@ import { titleCase } from "@/utils/formatters"
 import { BLOCKING_STATUSES } from "@/constants/uploadConfig"
 import { parseKeyTopics } from "@/components/composed/ModuleAccordion"
 import { ConfirmDialog } from "@/components/composed/ConfirmDialog"
+import { UnsavedChangesPrompt } from "@/components/composed/UnsavedChangesPrompt"
 import { Tag } from "@/components/composed/Tag"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -63,6 +64,7 @@ export function EditModule() {
   const [removedFiles, setRemovedFiles] = useState(() => new Set())
   const [referencedFileIds, setReferencedFileIds] = useState([])
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [leaving, setLeaving] = useState(false)
   const seededRef = useRef(false)
   const refsSeededRef = useRef(false)
   const uploadInputRef = useRef(null)
@@ -102,6 +104,13 @@ export function EditModule() {
     }
   }, [references])
 
+  // Leave the modal after a successful save/delete. Navigating from an effect
+  // (rather than inline in onSuccess) lets the unsaved-changes guard observe
+  // `when=false` first, so a just-saved/just-deleted module doesn't prompt.
+  useEffect(() => {
+    if (leaving) navigate(`/instructor/courses/${courseId}/configuration`)
+  }, [leaving, navigate, courseId])
+
   const fileList = Object.values(fileStates)
   const isProcessingBlocking = [...fileList, ...Object.values(trackedFiles)].some((f) =>
     BLOCKING_STATUSES.includes(f.status)
@@ -118,6 +127,27 @@ export function EditModule() {
   }, [otherFiles])
   const attachableFiles = otherFiles.filter((f) => !referencedFileIds.includes(f.file_id))
   const canSave = Boolean(moduleName.trim() && conceptId) && !isProcessingBlocking && !editModule.isPending
+
+  // Effective initial concept id — backfilled from concept_name when the record
+  // carries no id (mirrors the backfill effect above), so re-selecting the
+  // module's existing concept doesn't read as an edit.
+  const initialConceptId =
+    moduleData?.concept_id ||
+    concepts.find((c) => c.concept_name === moduleData?.concept_name)?.concept_id ||
+    ""
+  const initialTopics = useMemo(() => parseKeyTopics(moduleData?.key_topics), [moduleData])
+  // Unsaved staged edits (the Save button commits these). Uploaded files persist
+  // immediately, so they aren't part of "unsaved"; a staged file removal is.
+  const isDirty =
+    Boolean(moduleData) &&
+    (moduleName !== (moduleData.module_name || "") ||
+      conceptId !== initialConceptId ||
+      modulePrompt !== (moduleData.module_prompt || "") ||
+      removedFiles.size > 0 ||
+      JSON.stringify(keyTopics) !== JSON.stringify(initialTopics) ||
+      (refsSeededRef.current &&
+        JSON.stringify(referencedFileIds) !==
+          JSON.stringify(Array.isArray(references) ? references : [])))
 
   const goToConfiguration = () => navigate(`/instructor/courses/${courseId}/configuration`)
 
@@ -183,7 +213,7 @@ export function EditModule() {
             }
           }
           toast.success("Module updated")
-          goToConfiguration()
+          setLeaving(true)
         },
         onError: (err) => {
           if (err?.status === 400) toast.error("A module with this name already exists")
@@ -196,6 +226,7 @@ export function EditModule() {
   return (
     <Dialog open onOpenChange={(open) => !open && goToConfiguration()}>
       <DialogContent className="flex max-h-[90vh] w-[min(92vw,64rem)] max-w-none flex-col gap-0 p-0">
+        <UnsavedChangesPrompt when={isDirty && !leaving} />
         <div className="border-b border-border px-8 pb-4 pt-6">
           <DialogTitle className="text-h4 font-semibold text-neutral-900">Edit module</DialogTitle>
         </div>
@@ -406,7 +437,7 @@ export function EditModule() {
             onSuccess: () => {
               setDeleteOpen(false)
               toast.success("Module deleted")
-              goToConfiguration()
+              setLeaving(true)
             },
           })
         }

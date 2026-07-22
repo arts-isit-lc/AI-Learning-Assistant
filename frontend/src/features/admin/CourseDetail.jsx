@@ -13,11 +13,11 @@ import {
   useDeleteCourse,
 } from "@/services/queries"
 import { cn } from "@/lib/utils"
-import { useUnsavedChanges } from "@/context/UnsavedChangesContext"
 import { instructorLabel } from "./InstructorList"
 import { courseCode } from "./CourseList"
 import { DuplicateCourseDialog } from "./DuplicateCourseDialog"
 import { ConfirmDialog } from "@/components/composed/ConfirmDialog"
+import { UnsavedChangesPrompt } from "@/components/composed/UnsavedChangesPrompt"
 import { Button } from "@/components/ui/button"
 import { Toggle } from "@/components/ui/toggle"
 import { Icon } from "@/components/ui/icon"
@@ -71,7 +71,6 @@ export function CourseDetail() {
   const enroll = useEnrollInstructor()
   const unenroll = useUnenrollInstructor()
   const del = useDeleteCourse()
-  const { setDirty } = useUnsavedChanges()
 
   const course = courses.find((c) => c.course_id === courseId)
 
@@ -83,6 +82,7 @@ export function CourseDetail() {
   const [saving, setSaving] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleted, setDeleted] = useState(false)
 
   // Discard staged edits when switching to another course.
   useEffect(() => {
@@ -125,11 +125,14 @@ export function CourseDetail() {
     pendingAdds.size > 0 ||
     pendingRemoves.size > 0
 
-  // Arm the navigation guard while there are unsaved staged edits.
+  // After the course is deleted, leave the pane. Navigating from an effect
+  // (rather than inline in the delete's onSuccess) lets the guard observe
+  // `when=false` first — deleting the record makes any staged edits moot, so we
+  // don't want the unsaved-changes prompt on the way out. (Duplicate keeps the
+  // source course, so its navigation is intentionally still guarded.)
   useEffect(() => {
-    setDirty(isDirty)
-    return () => setDirty(false)
-  }, [isDirty, setDirty])
+    if (deleted) navigate("/admin/courses")
+  }, [deleted, navigate])
 
   const toggleActive = (value) => setPendingActive(value === serverActive ? null : value)
 
@@ -221,6 +224,7 @@ export function CourseDetail() {
 
   return (
     <div className="flex flex-col gap-6">
+      <UnsavedChangesPrompt when={isDirty && !deleted} />
       {/* Header: code + Active/Inactive toggle, name, then term|section + access code. */}
       <div className="flex flex-col gap-1 border-b border-border pb-4">
         <div className="flex items-start justify-between gap-4">
@@ -377,7 +381,7 @@ export function CourseDetail() {
             onSuccess: () => {
               setDeleteOpen(false)
               toast.success("Course deleted")
-              navigate("/admin/courses")
+              setDeleted(true)
             },
           })
         }

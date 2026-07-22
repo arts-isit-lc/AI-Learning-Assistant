@@ -1,11 +1,10 @@
-import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom"
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom"
 import { MdAdd } from "react-icons/md"
 import { AppHeader } from "@/components/composed/AppHeader"
 import { AddInstructorDialog } from "@/features/admin/AddInstructorDialog"
 import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/ui/icon"
 import { cn } from "@/lib/utils"
-import { useUnsavedChanges } from "@/context/UnsavedChangesContext"
 
 /**
  * Admin tab (Figma `Button/UI/Desktop/Tertiary`): the active tab is black with a
@@ -32,16 +31,7 @@ const navLinkClass = ({ isActive }) =>
  */
 export default function AdminLayout() {
   const { pathname } = useLocation()
-  const navigate = useNavigate()
-  const { runGuarded } = useUnsavedChanges()
   const inCourses = pathname.startsWith("/admin/courses")
-
-  // Route tab / action navigation through the unsaved-changes guard so leaving a
-  // dirty detail pane prompts first (keeps NavLink active styling intact).
-  const guardedNav = (event, to) => {
-    event.preventDefault()
-    runGuarded(() => navigate(to))
-  }
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -57,27 +47,16 @@ export default function AdminLayout() {
       <div className="mt-6 border-b border-border">
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-6 pb-6">
           <nav className="flex items-center gap-6" aria-label="Admin navigation">
-            <NavLink
-              to="/admin/instructors"
-              className={navLinkClass}
-              onClick={(e) => guardedNav(e, "/admin/instructors")}
-            >
+            <NavLink to="/admin/instructors" className={navLinkClass}>
               Instructors
             </NavLink>
-            <NavLink
-              to="/admin/courses"
-              className={navLinkClass}
-              onClick={(e) => guardedNav(e, "/admin/courses")}
-            >
+            <NavLink to="/admin/courses" className={navLinkClass}>
               Courses
             </NavLink>
           </nav>
           {inCourses ? (
             <Button asChild size="sm" className="h-7 gap-4 rounded-sm px-6">
-              <Link
-                to="/admin/courses/new"
-                onClick={(e) => guardedNav(e, "/admin/courses/new")}
-              >
+              <Link to="/admin/courses/new">
                 Add course <Icon icon={MdAdd} size={20} />
               </Link>
             </Button>

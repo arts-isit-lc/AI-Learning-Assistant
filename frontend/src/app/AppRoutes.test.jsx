@@ -1,12 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen } from "@testing-library/react"
-import { Suspense } from "react"
-import { MemoryRouter } from "react-router-dom"
+import { createMemoryRouter, RouterProvider } from "react-router-dom"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import AppRoutes from "./AppRoutes"
+import { routes } from "./AppRoutes"
 
 // Control role/auth without Amplify; stub the heavy lazy screens so the test
-// stays focused on routing (not MUI Login / the token gallery).
+// stays focused on routing (not the real Login / the token gallery).
 let authState
 vi.mock("@/context/AuthContext", () => ({
   useAuth: () => authState,
@@ -39,19 +38,19 @@ beforeEach(() => {
   }
 })
 
-// The instructor course layout reads live Query hooks (course meta + prompt
-// conflict dot), so routing renders need a QueryClient. A fresh client per
-// render with retries off keeps tests isolated and fast; unmocked queryFns just
-// settle to an (ignored) error state — the layout renders regardless.
+// The app now uses a data router (createBrowserRouter + RouterProvider) so
+// useBlocker works app-wide. Tests exercise the SAME route tree via
+// createMemoryRouter, seeded to the target path. The route tree's RootLayout
+// supplies CourseProvider + the Suspense boundary, so the harness only needs a
+// QueryClient (the instructor course layout reads live Query hooks — course
+// meta + prompt conflict dot). A fresh client per render with retries off keeps
+// tests isolated and fast; unmocked queryFns settle to an (ignored) error state.
 function renderAt(path) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const router = createMemoryRouter(routes, { initialEntries: [path] })
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[path]}>
-        <Suspense fallback={<div>loading</div>}>
-          <AppRoutes />
-        </Suspense>
-      </MemoryRouter>
+      <RouterProvider router={router} />
     </QueryClientProvider>
   )
 }
@@ -95,9 +94,9 @@ describe("AppRoutes — role guards", () => {
 })
 
 describe("AppRoutes — 404 + legacy redirects", () => {
-  it("shows a 404 for an unknown path", () => {
+  it("shows a 404 for an unknown path", async () => {
     renderAt("/nope/nope")
-    expect(screen.getByRole("heading", { name: "404" })).toBeInTheDocument()
+    expect(await screen.findByRole("heading", { name: "404" })).toBeInTheDocument()
   })
 
   it("redirects the legacy /student_chat route to the student home", async () => {

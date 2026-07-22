@@ -13,10 +13,10 @@ import {
 } from "@/services/queries"
 import { cn } from "@/lib/utils"
 import { titleCase } from "@/utils/formatters"
-import { useUnsavedChanges } from "@/context/UnsavedChangesContext"
 import { instructorLabel } from "./InstructorList"
 import { ProfileHeader } from "@/components/composed/ProfileHeader"
 import { ConfirmDialog } from "@/components/composed/ConfirmDialog"
+import { UnsavedChangesPrompt } from "@/components/composed/UnsavedChangesPrompt"
 import { Button } from "@/components/ui/button"
 import { Toggle } from "@/components/ui/toggle"
 import { Icon } from "@/components/ui/icon"
@@ -80,7 +80,6 @@ export function InstructorDetail() {
   const enroll = useEnrollInstructor()
   const unenroll = useUnenrollInstructor()
   const lower = useLowerInstructor()
-  const { setDirty } = useUnsavedChanges()
 
   const instructor = instructors.find((i) => i.user_email === email)
   const named = Boolean(instructor?.first_name && instructor?.last_name)
@@ -92,6 +91,7 @@ export function InstructorDetail() {
   const [saving, setSaving] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const [removeOpen, setRemoveOpen] = useState(false)
+  const [deleted, setDeleted] = useState(false)
 
   // Discard staged edits when switching to another instructor.
   useEffect(() => {
@@ -129,11 +129,13 @@ export function InstructorDetail() {
   const isDirty =
     Object.keys(pendingAccess).length > 0 || pendingAdds.size > 0 || pendingRemoves.size > 0
 
-  // Arm the navigation guard while there are unsaved staged edits.
+  // After the instructor is deleted, leave the pane. Navigating from an effect
+  // (rather than inline in the delete's onSuccess) lets the guard observe
+  // `when=false` first — deleting the record makes any staged edits moot, so we
+  // don't want the unsaved-changes prompt on the way out.
   useEffect(() => {
-    setDirty(isDirty)
-    return () => setDirty(false)
-  }, [isDirty, setDirty])
+    if (deleted) navigate("/admin/instructors")
+  }, [deleted, navigate])
 
   const toggleAccess = (courseId, value) => {
     setPendingAccess((p) => {
@@ -209,6 +211,7 @@ export function InstructorDetail() {
 
   return (
     <div className="flex flex-col gap-6">
+      <UnsavedChangesPrompt when={isDirty && !deleted} />
       <ProfileHeader
         user={{ name: instructor ? instructorLabel(instructor) : titleCase(email), email }}
         subtitle={named ? email : "Invited — awaiting signup"}
@@ -324,7 +327,7 @@ export function InstructorDetail() {
             onSuccess: () => {
               setRemoveOpen(false)
               toast.success("Instructor removed")
-              navigate("/admin/instructors")
+              setDeleted(true)
             },
           })
         }

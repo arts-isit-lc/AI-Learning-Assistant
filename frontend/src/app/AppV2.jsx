@@ -1,17 +1,14 @@
 import { lazy, Suspense, useState } from "react"
-import { BrowserRouter } from "react-router-dom"
+import { createBrowserRouter, RouterProvider } from "react-router-dom"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { ToastContainer } from "react-toastify"
 import "react-toastify/dist/ReactToastify.css"
 import ErrorBoundary from "@/components/ErrorBoundary"
 import { AuthProvider } from "@/context/AuthContext"
 import { NotificationProvider } from "@/context/NotificationContext"
-import { CourseProvider } from "@/context/CourseContext"
-import { UnsavedChangesProvider } from "@/context/UnsavedChangesContext"
 import { OfflineBanner } from "@/components/composed/OfflineBanner"
 import { createQueryClient } from "@/services/queryClient"
-import AppRoutes from "./AppRoutes"
-import LoadingScreen from "./LoadingScreen"
+import { routes } from "./AppRoutes"
 
 // Dev-only React Query devtools — dead-code-eliminated from the prod build
 // (import.meta.env.DEV is statically false there).
@@ -22,6 +19,13 @@ const ReactQueryDevtools = import.meta.env.DEV
       }))
     )
   : () => null
+
+// Data router built once at module scope. `createBrowserRouter` + `RouterProvider`
+// (rather than the declarative `<BrowserRouter>`) is what unlocks React Router's
+// `useBlocker`, which the app-wide <UnsavedChangesPrompt> guard relies on.
+// CourseProvider + the lazy-route Suspense boundary live in the router's
+// RootLayout element (see AppRoutes) because they read the location.
+const router = createBrowserRouter(routes)
 
 function GlobalErrorFallback() {
   return (
@@ -43,8 +47,9 @@ function GlobalErrorFallback() {
 
 /**
  * OCELIA app shell — the application root, rendered directly by `main.jsx`.
- * Wires the three global contexts (Auth / Notification / Course), the router,
- * global toasts, and a top-level error boundary.
+ * Wires the global contexts (Auth / Notification), the data router, global
+ * toasts, and a top-level error boundary. CourseProvider lives inside the
+ * router (RootLayout) since it reads the location.
  */
 export default function AppV2() {
   // One client per mount (stable across re-renders).
@@ -55,22 +60,14 @@ export default function AppV2() {
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <NotificationProvider>
-            <BrowserRouter>
-              <CourseProvider>
-                <UnsavedChangesProvider>
-                  <OfflineBanner />
-                  <ToastContainer
-                    position="top-center"
-                    autoClose={2000}
-                    theme="colored"
-                    newestOnTop
-                  />
-                  <Suspense fallback={<LoadingScreen />}>
-                    <AppRoutes />
-                  </Suspense>
-                </UnsavedChangesProvider>
-              </CourseProvider>
-            </BrowserRouter>
+            <OfflineBanner />
+            <ToastContainer
+              position="top-center"
+              autoClose={2000}
+              theme="colored"
+              newestOnTop
+            />
+            <RouterProvider router={router} />
           </NotificationProvider>
         </AuthProvider>
         {import.meta.env.DEV && (

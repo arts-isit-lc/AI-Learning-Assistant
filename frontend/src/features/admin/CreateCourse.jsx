@@ -1,9 +1,10 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { toast } from "react-toastify"
 import { MdContentCopy } from "react-icons/md"
 import { useAdminInstructors, useCreateCourse } from "@/services/queries"
 import { instructorLabel } from "./InstructorList"
+import { UnsavedChangesPrompt } from "@/components/composed/UnsavedChangesPrompt"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -58,10 +59,23 @@ export function CreateCourse() {
   const [title, setTitle] = useState("")
   const [accessCode, setAccessCode] = useState(() => generateAccessCode())
   const [selected, setSelected] = useState(() => new Set())
+  // Set to the destination once the course is created, so the unsaved-changes
+  // guard is disarmed before we navigate to the new course (see effect below).
+  const [leaveTo, setLeaveTo] = useState(null)
 
   const { department, number } = parseCourseCode(code)
   const canCreate = Boolean(title.trim() && department && number) && !create.isPending
+  // Any user-entered field (the access code is auto-generated, not user input).
+  const isDirty = Boolean(code.trim() || title.trim() || selected.size > 0)
 
+  // Navigate from an effect (not inline in onSuccess) so the guard observes
+  // `when=false` before the route change — otherwise creating the course would
+  // trip the unsaved-changes prompt on the way to the new course.
+  useEffect(() => {
+    if (leaveTo) navigate(leaveTo)
+  }, [leaveTo, navigate])
+
+  // Cancel / dismiss navigates directly so a dirty form IS guarded here.
   const close = () => navigate("/admin/courses")
 
   const toggleInstructor = (email) =>
@@ -95,7 +109,7 @@ export function CreateCourse() {
       {
         onSuccess: (data) => {
           toast.success("Course created")
-          navigate(`/admin/courses/${data.course_id}`)
+          setLeaveTo(`/admin/courses/${data.course_id}`)
         },
         onError: () => toast.error("Failed to create course"),
       }
@@ -105,6 +119,7 @@ export function CreateCourse() {
   return (
     <Dialog open onOpenChange={(o) => !o && close()}>
       <DialogContent className="max-w-lg">
+        <UnsavedChangesPrompt when={isDirty && !leaveTo} />
         <DialogHeader className="border-b border-border pb-3">
           <DialogTitle>Add course</DialogTitle>
         </DialogHeader>
