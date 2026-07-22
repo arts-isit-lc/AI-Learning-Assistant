@@ -219,7 +219,7 @@ export function InstructorDetail() {
 
       {/* Assigned courses: each with Remove + per-course OCELIA access toggle. */}
       <div>
-        <div className="flex items-center justify-between gap-4 mb-10">
+        <div className="flex items-center justify-between gap-4 mb-8">
           <div className="flex items-center gap-1">
             <h2 className="text-caption font-semibold text-foreground">Assigned courses</h2>
             <Button
