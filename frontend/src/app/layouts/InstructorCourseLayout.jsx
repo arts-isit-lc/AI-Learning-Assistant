@@ -84,7 +84,7 @@ export default function InstructorCourseLayout() {
     <div className="flex flex-col">
       <div className="border-b border-border pb-4">
         <div className="flex items-start justify-between gap-4">
-          <h1 className="text-h2 font-semibold text-neutral-900">{code}</h1>
+          <h1 className="text-2xl font-semibold text-neutral-900">{code}</h1>
           {course && (
             <div className="flex shrink-0 items-center gap-2 text-caption">
               <span className={active ? "text-muted-foreground" : "font-semibold text-foreground"}>
