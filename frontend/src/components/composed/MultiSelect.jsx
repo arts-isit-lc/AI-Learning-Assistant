@@ -30,6 +30,7 @@ export function MultiSelect({
   id,
   "aria-label": ariaLabel,
   className,
+  triggerClassName,
 }) {
   const [open, setOpen] = useState(false)
   const selected = new Set(value)
@@ -45,7 +46,10 @@ export function MultiSelect({
           id={id}
           type="button"
           aria-label={ariaLabel}
-          className="flex h-10 w-full items-center justify-between gap-2 rounded-none border border-input bg-background px-3 py-2 text-caption text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          className={cn(
+            "flex h-10 w-full items-center justify-between gap-2 rounded-none border border-input bg-background px-3 py-2 text-caption text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+            triggerClassName
+          )}
         >
           <span className={cn("truncate", value.length === 0 && "text-muted-foreground")}>
             {value.length === 0 ? placeholder : `${value.length} selected`}
