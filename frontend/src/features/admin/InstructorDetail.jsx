@@ -283,7 +283,7 @@ export function InstructorDetail() {
         </Button>
         <Button
           variant="ghost"
-          className="text-neutral-300"
+          className={isDirty ? "text-primary" : "text-neutral-300"}
           onClick={saveChanges}
           disabled={!isDirty || saving}
           loading={saving}
