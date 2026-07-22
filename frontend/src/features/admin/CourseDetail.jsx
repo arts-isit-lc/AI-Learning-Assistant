@@ -322,7 +322,7 @@ export function CourseDetail() {
       </div>
 
       {/* Footer: Delete course + Duplicate (immediate) · Save changes (commits staged edits). */}
-      <div className="flex items-center justify-between gap-4 border-t border-border pt-4">
+      <div className="flex items-center justify-between gap-4 pt-4">
         <div className="flex items-center gap-4">
           <Button
             variant="link"

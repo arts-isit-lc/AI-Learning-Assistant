@@ -272,7 +272,7 @@ export function InstructorDetail() {
 
       {/* Footer: Delete instructor (immediate, terminal) + Save changes (commits
           the staged edits; disabled until there are unsaved changes). */}
-      <div className="flex items-center justify-between gap-4 border-t border-border pt-4">
+      <div className="flex items-center justify-between gap-4 pt-4">
         <Button
           variant="link"
           className="text-destructive"
