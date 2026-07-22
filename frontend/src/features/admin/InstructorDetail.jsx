@@ -210,7 +210,7 @@ export function InstructorDetail() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col">
       <UnsavedChangesPrompt when={isDirty && !deleted} />
       <ProfileHeader
         user={{ name: instructor ? instructorLabel(instructor) : titleCase(email), email }}
@@ -219,7 +219,7 @@ export function InstructorDetail() {
 
       {/* Assigned courses: each with Remove + per-course OCELIA access toggle. */}
       <div>
-        <div className="flex items-center justify-between gap-4 mb-8">
+        <div className="flex items-center justify-between gap-4 mb-6 mt-2">
           <div className="flex items-center gap-1">
             <h2 className="text-caption font-semibold text-foreground">Assigned courses</h2>
             <Button
