@@ -74,7 +74,7 @@ export function CourseList() {
                   )}
                   {/* term/section — forward-compatible (no schema columns today). */}
                   {course.term && (
-                    <span className="truncate text-caption font-semibold text-foreground group-aria-[current=true]:text-primary-foreground/90">
+                    <span className="truncate text-xs font-semibold text-foreground group-aria-[current=true]:text-primary-foreground/90">
                       {course.term}
                       {course.section ? ` (${course.section})` : ""}
                     </span>

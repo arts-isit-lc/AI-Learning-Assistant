@@ -32,7 +32,12 @@ export function InstructorCourseList() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Searchbar value={query} onChange={setQuery} placeholder="Search" />
+      <Searchbar
+        value={query}
+        onChange={setQuery}
+        placeholder="Search courses"
+        inputClassName="h-[50px]"
+      />
 
       <div className="flex max-h-[calc(100vh-18rem)] flex-col overflow-y-auto">
         {isLoading ? (
@@ -54,7 +59,7 @@ export function InstructorCourseList() {
               >
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-lg text-neutral-900 group-aria-[current=true]:text-primary-foreground">
+                    <span className="truncate text-base text-neutral-900 group-aria-[current=true]:text-primary-foreground">
                       {courseCode(course)}
                     </span>
                     <Badge variant={active ? "success" : "secondary"} className="shrink-0 uppercase">
@@ -62,14 +67,14 @@ export function InstructorCourseList() {
                     </Badge>
                   </div>
                   {course.course_name && (
-                    <span className="truncate text-lg text-foreground group-aria-[current=true]:text-primary-foreground/90">
+                    <span className="truncate text-base text-foreground group-aria-[current=true]:text-primary-foreground/90">
                       {course.course_name}
                     </span>
                   )}
                   {/* Term + section line (Figma) — forward-compatible: the Courses
                       record has no term/section columns today, so this is usually absent. */}
                   {course.term && (
-                    <span className="truncate text-caption font-semibold text-foreground group-aria-[current=true]:text-primary-foreground">
+                    <span className="truncate text-xs font-semibold text-foreground group-aria-[current=true]:text-primary-foreground">
                       {course.term}
                       {course.section ? ` (${course.section})` : ""}
                     </span>

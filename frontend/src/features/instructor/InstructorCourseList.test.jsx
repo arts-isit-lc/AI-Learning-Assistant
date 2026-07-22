@@ -46,7 +46,7 @@ describe("InstructorCourseList", () => {
 
   it("filters by the debounced search", async () => {
     render(<InstructorCourseList />)
-    await userEvent.type(screen.getByRole("searchbox", { name: "Search" }), "mechanics")
+    await userEvent.type(screen.getByRole("searchbox", { name: "Search courses" }), "mechanics")
     await waitFor(() => expect(screen.queryByText("GEOG 250")).not.toBeInTheDocument())
   })
 })
