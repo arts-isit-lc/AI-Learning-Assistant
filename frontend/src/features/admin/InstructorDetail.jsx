@@ -219,7 +219,7 @@ export function InstructorDetail() {
 
       {/* Assigned courses: each with Remove + per-course OCELIA access toggle. */}
       <div>
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center justify-between gap-4 mb-10">
           <div className="flex items-center gap-1">
             <h2 className="text-caption font-semibold text-foreground">Assigned courses</h2>
             <Button
@@ -235,7 +235,7 @@ export function InstructorDetail() {
           <span className="text-caption font-semibold text-foreground">OCELIA access</span>
         </div>
 
-        <div className="mt-2 flex flex-col">
+        <div className="flex flex-col">
           {isLoading ? (
             <Skeleton className="h-16 w-full" />
           ) : displayed.length === 0 ? (
