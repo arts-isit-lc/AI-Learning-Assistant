@@ -46,7 +46,7 @@ export function InstructorList() {
   }, [instructors, query])
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <Searchbar value={query} onChange={setQuery} placeholder="Search instructors" />
 
       <div className="flex max-h-[calc(100vh-18rem)] flex-col overflow-y-auto">
