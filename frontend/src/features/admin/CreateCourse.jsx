@@ -124,10 +124,10 @@ export function CreateCourse() {
     <Dialog open onOpenChange={(o) => !o && close()}>
       <DialogContent className="max-w-lg">
         <UnsavedChangesPrompt when={isDirty && !leaveTo} />
-        <DialogHeader className="border-b border-border pb-3">
+        <DialogHeader className="border-b border-border pb-2">
           <DialogTitle>Add course</DialogTitle>
         </DialogHeader>
-        <DialogDescription>
+        <DialogDescription className="mt-8">
           To add a new course to the OCELIA system please fill out the following fields. Fields marked
           with <span className="text-destructive">*</span> are mandatory for course creation.
         </DialogDescription>
