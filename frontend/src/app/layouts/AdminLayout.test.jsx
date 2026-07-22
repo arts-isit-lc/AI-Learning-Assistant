@@ -41,12 +41,13 @@ describe("AdminLayout", () => {
     expect(screen.getByRole("button", { name: "Add instructor" })).toBeInTheDocument()
   })
 
-  it("shows the Add course action on the courses section", () => {
+  it("shows the Duplicate course + Add course actions on the courses section", () => {
     render(
       <MemoryRouter initialEntries={["/admin/courses"]}>
         <AdminLayout />
       </MemoryRouter>
     )
+    expect(screen.getByRole("link", { name: "Duplicate course" })).toBeInTheDocument()
     expect(screen.getByRole("link", { name: "Add course" })).toBeInTheDocument()
   })
 })

@@ -330,7 +330,7 @@ export function CourseDetail() {
           >
             Delete course
           </Button>
-          <DuplicateCourseDialog course={course} />
+          <DuplicateCourseDialog className="ml-6" course={course} />
         </div>
         <Button
           variant="ghost"

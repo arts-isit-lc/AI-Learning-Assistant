@@ -5219,6 +5219,14 @@ paths:
           schema:
             type: boolean
           description: Whether students can access the new course
+        - in: query
+          name: term
+          required: false
+          schema:
+            type: string
+          description: >-
+            Optional academic term for the new course. When omitted, the source
+            course's term is preserved (server-side COALESCE).
       requestBody:
         required: true
         content:

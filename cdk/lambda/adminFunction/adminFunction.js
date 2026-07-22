@@ -272,6 +272,12 @@ exports.handler = async (event) => {
               course_student_access,
             } = event.queryStringParameters;
 
+            // Optional: an edited term overrides the source term; when omitted
+            // (e.g. the course-detail Duplicate dialog) the COALESCE below keeps
+            // the source course's term. Coerce to null (not undefined) so the pg
+            // driver binds SQL NULL rather than throwing.
+            const term = event.queryStringParameters.term ?? null;
+
             const { system_prompt } = JSON.parse(event.body);
 
             // 1. Create the new course. INSERT ... SELECT copies llm_model_id
@@ -296,7 +302,7 @@ exports.handler = async (event) => {
                     ${course_number},
                     ${course_access_code},
                     ${course_student_access.toLowerCase() === "true"},
-                    term,
+                    COALESCE(${term}, term),
                     ${system_prompt},
                     llm_model_id
                 FROM "Courses"

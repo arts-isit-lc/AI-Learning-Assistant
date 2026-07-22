@@ -66,6 +66,9 @@ const CourseList = lazy(() =>
 const CreateCourse = lazy(() =>
   import("@/features/admin/CreateCourse").then((m) => ({ default: m.CreateCourse }))
 )
+const DuplicateCourse = lazy(() =>
+  import("@/features/admin/DuplicateCourse").then((m) => ({ default: m.DuplicateCourse }))
+)
 const CourseDetail = lazy(() =>
   import("@/features/admin/CourseDetail").then((m) => ({ default: m.CourseDetail }))
 )
@@ -186,6 +189,7 @@ export const routes = createRoutesFromElements(
               }
             />
             <Route path="new" element={<CreateCourse />} />
+            <Route path="duplicate" element={<DuplicateCourse />} />
             <Route path=":courseId" element={<CourseDetail />} />
           </Route>
         </Route>

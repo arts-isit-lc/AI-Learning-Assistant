@@ -75,6 +75,17 @@ describe("OpenAPI contract: admin course-management routes", () => {
     expect(route.post["x-amazon-apigateway-integration"].uri["Fn::Sub"]).toBe(adminUri);
   });
 
+  it("POST /admin/duplicate_course: optional `term` query param (source term kept when omitted)", () => {
+    const route = spec.paths["/admin/duplicate_course"];
+    const byName = Object.fromEntries(route.post.parameters.map((p: any) => [p.name, p]));
+    expect(byName["term"]).toBeDefined();
+    expect(byName["term"].in).toBe("query");
+    // Optional, unlike create_course's required term — omitting it preserves the
+    // source course's term server-side (COALESCE).
+    expect(byName["term"].required).toBe(false);
+    expect(byName["term"].schema.type).toBe("string");
+  });
+
   it("POST /admin/create_course: required `term` query param (+ course fields, system_prompt body, adminAuthorizer)", () => {
     const route = spec.paths["/admin/create_course"];
     expect(route).toBeDefined();
@@ -425,6 +436,33 @@ describe("adminFunction — POST /admin/duplicate_course (B2)", () => {
     const res = await handler(makeEvent("POST", "/admin/duplicate_course", VALID_QS, null));
     expect(res.statusCode).toBe(400);
     expect(mockSql.calls).toHaveLength(0);
+  });
+
+  it("200: threads an optional term through the course INSERT via COALESCE(term, source)", async () => {
+    mockSql
+      .queueResult([{ course_id: "new-course" }]) // INSERT...SELECT Courses RETURNING *
+      .queueResult([]); // no concepts (stops after the course row)
+    const res = await handler(
+      makeEvent(
+        "POST",
+        "/admin/duplicate_course",
+        { ...VALID_QS, term: "2026 Winter Term 2" },
+        BODY
+      )
+    );
+    expect(res.statusCode).toBe(200);
+    const courseInsert = mockSql.calls[0];
+    expect(courseInsert).toContain('INSERT INTO "Courses"');
+    // The edited term overrides the source's; omitting it (as the course-detail
+    // dialog does) binds NULL so COALESCE keeps the source term.
+    expect(courseInsert).toContain("COALESCE(?, term)");
+  });
+
+  it("200: omitting term still succeeds (source term preserved) — no COALESCE param error", async () => {
+    mockSql.queueResult([{ course_id: "new-course" }]).queueResult([]);
+    const res = await handler(makeEvent("POST", "/admin/duplicate_course", VALID_QS, BODY));
+    expect(res.statusCode).toBe(200);
+    expect(mockSql.calls[0]).toContain("COALESCE(?, term)");
   });
 });
 

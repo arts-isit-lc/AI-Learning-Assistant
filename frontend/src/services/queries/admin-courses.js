@@ -184,8 +184,11 @@ export function useUpdateInstructorAccess() {
  * Duplicate a course (POST admin/duplicate_course, backend track B2). Clones the
  * course row + the concept/module outline server-side; NOT files, embeddings,
  * enrolments, or student data. `active` is sent as-is (apiClient stringifies it
- * to "true"/"false"). Returns the new `{ course_id }`. Variables:
- * `{ sourceCourseId, courseName, department, number, accessCode, active, systemPrompt }`.
+ * to "true"/"false"). `term` is optional and only sent when non-empty — omitting
+ * it makes the backend keep the source course's term (COALESCE), so the
+ * course-detail Duplicate dialog (which sends no term) is unaffected. Returns the
+ * new `{ course_id }`. Variables:
+ * `{ sourceCourseId, courseName, department, number, term?, accessCode, active, systemPrompt }`.
  */
 export function useDuplicateCourse() {
   const qc = useQueryClient()
@@ -195,6 +198,7 @@ export function useDuplicateCourse() {
       courseName,
       department,
       number,
+      term,
       accessCode,
       active,
       systemPrompt,
@@ -206,6 +210,7 @@ export function useDuplicateCourse() {
           course_name: courseName,
           course_department: department,
           course_number: number,
+          ...(term ? { term } : {}),
           course_access_code: accessCode,
           course_student_access: active,
         },

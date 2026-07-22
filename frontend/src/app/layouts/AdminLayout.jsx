@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom"
-import { MdAdd } from "react-icons/md"
+import { MdAdd, MdContentCopy } from "react-icons/md"
 import { AppHeader } from "@/components/composed/AppHeader"
 import { AddInstructorDialog } from "@/features/admin/AddInstructorDialog"
 import { Button } from "@/components/ui/button"
@@ -55,11 +55,20 @@ export default function AdminLayout() {
             </NavLink>
           </nav>
           {inCourses ? (
-            <Button asChild size="sm" className="h-7 gap-4 rounded-sm px-6">
-              <Link to="/admin/courses/new">
-                Add course <Icon icon={MdAdd} size={20} />
-              </Link>
-            </Button>
+            // Figma `1035:6492`: two `Secondary with Icon` buttons in a
+            // right-aligned 8px group — Duplicate course (left) + Add course.
+            <div className="flex items-center justify-end gap-2">
+              <Button asChild variant="outline" size="sm" className="h-7 gap-4 rounded-sm px-6">
+                <Link to="/admin/courses/duplicate">
+                  Duplicate course <Icon icon={MdContentCopy} size={20} />
+                </Link>
+              </Button>
+              <Button asChild variant="outline" size="sm" className="h-7 gap-4 rounded-sm px-6">
+                <Link to="/admin/courses/new">
+                  Add course <Icon icon={MdAdd} size={20} />
+                </Link>
+              </Button>
+            </div>
           ) : (
             <AddInstructorDialog />
           )}
