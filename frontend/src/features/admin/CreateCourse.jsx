@@ -195,7 +195,7 @@ export function CreateCourse() {
             />
           </div>
 
-          <div className="flex flex-col">
+          <div className="flex flex-col mb-6">
             <Label>Access code</Label>
             <div className="flex items-center justify-between gap-2">
               <span className="flex items-center gap-2 text-caption">
