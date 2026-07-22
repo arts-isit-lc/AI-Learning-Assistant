@@ -56,10 +56,11 @@ export function CourseList() {
                 key={course.course_id}
                 selected={courseId === course.course_id}
                 onClick={() => navigate(`/admin/courses/${course.course_id}`)}
+                className="p-4"
               >
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-caption font-semibold text-foreground group-aria-[current=true]:text-primary-foreground">
+                    <span className="truncate text-base leading-7 mb-1 font-semibold text-foreground group-aria-[current=true]:text-primary-foreground">
                       {courseCode(course)}
                     </span>
                     <Badge variant={active ? "success" : "secondary"} className="shrink-0 uppercase">
