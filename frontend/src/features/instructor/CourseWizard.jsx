@@ -265,7 +265,11 @@ export function CourseWizard() {
           <div className="px-8 pb-3 pt-6">
             <DialogTitle className="text-h4 font-semibold text-neutral-900">Create new module</DialogTitle>
           </div>
-          <Progress value={((step + 1) / STEP_COUNT) * 100} className="mx-8 h-2 shrink-0" />
+          {/* Full-width bar inset to the modal's 32px gutter via padding (not
+              `mx-8`, which would overflow on top of the Progress base's w-full). */}
+          <div className="shrink-0 px-8">
+            <Progress value={((step + 1) / STEP_COUNT) * 100} />
+          </div>
 
           <div className="flex-1 overflow-y-auto px-8 py-8">
             <div className="mx-auto flex max-w-xl flex-col gap-8">
