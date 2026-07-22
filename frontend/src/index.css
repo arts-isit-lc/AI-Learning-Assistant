@@ -112,11 +112,14 @@
     --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
 
     /* --- Z-index --------------------------------------------------------- */
+    /* Flyout overlays (select / dropdown-menu / popover) sit ABOVE modals so
+       they stay visible + clickable when opened from inside a dialog. Only
+       those three primitives use --z-dropdown. */
     --z-base: 0;
-    --z-dropdown: 1000;
     --z-sticky: 1100;
     --z-overlay: 1200;
     --z-modal: 1300;
+    --z-dropdown: 1350;
     --z-toast: 1400;
   }
 
