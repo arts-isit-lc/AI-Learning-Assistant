@@ -22,7 +22,7 @@ const SelectTrigger = React.forwardRef(function SelectTrigger({ className, child
     >
       {children}
       <SelectPrimitive.Icon asChild>
-        <Icon icon={MdExpandMore} size={18} className="opacity-60" />
+        <Icon icon={MdExpandMore} size={24} />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   )
