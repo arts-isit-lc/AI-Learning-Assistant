@@ -29,7 +29,7 @@ const SelectTrigger = React.forwardRef(function SelectTrigger({ className, child
 })
 
 const SelectContent = React.forwardRef(function SelectContent(
-  { className, children, position = "popper", ...props },
+  { className, children, position = "popper", sideOffset = 10, ...props },
   ref
 ) {
   return (
@@ -37,8 +37,9 @@ const SelectContent = React.forwardRef(function SelectContent(
       <SelectPrimitive.Content
         ref={ref}
         position={position}
+        sideOffset={sideOffset}
         className={cn(
-          "relative z-dropdown max-h-96 min-w-[8rem] overflow-hidden rounded-sm border border-border bg-popover text-popover-foreground shadow-dropdown animate-fade-in",
+          "relative z-dropdown max-h-96 min-w-[8rem] overflow-hidden rounded-none border border-border bg-popover text-popover-foreground shadow-dropdown animate-fade-in",
           className
         )}
         {...props}
