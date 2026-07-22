@@ -28,7 +28,7 @@ export function initialsOf(name) {
 export function ProfileHeader({ user, subtitle, actions, className }) {
   const name = user?.name || user?.email || "Profile"
   return (
-    <div className={cn("flex items-center justify-between gap-4 border-b border-border pb-4", className)}>
+    <div className={cn("flex items-center justify-between gap-4 border-b border-border pb-6", className)}>
       <div className="flex items-center gap-4">
         <Avatar className="h-12 w-12">
           {/* Branded initials avatar (matches the master-list rows), not the
