@@ -65,12 +65,12 @@ export function CourseView() {
       />
 
       <div className="mt-6 flex items-center justify-between">
-        <h2 className="text-caption font-semibold text-neutral-900">Concepts</h2>
+        <h2 className="text-lg leading-7 font-semibold text-neutral-900">Concepts</h2>
         <div className="flex items-center gap-2 text-caption">
           <button
             type="button"
             onClick={() => setOpen(conceptIds)}
-            className="font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="font-semibold text-lg text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Expand all
           </button>
@@ -78,7 +78,7 @@ export function CourseView() {
           <button
             type="button"
             onClick={() => setOpen([])}
-            className="font-semibold text-muted-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="font-semibold text-lg text-muted-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Collapse all
           </button>

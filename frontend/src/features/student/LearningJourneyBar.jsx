@@ -41,9 +41,9 @@ export function LearningJourneyBar({
         )}
       >
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="text-caption font-semibold text-neutral-900">Learning Journey</span>
-          <span className={cn("text-caption font-semibold uppercase", status.cls)}>{status.label}</span>
-          <span className="text-caption text-foreground">
+          <span className="text-lg leading-7 font-semibold text-neutral-900">Learning Journey</span>
+          <span className={cn("text-base leading-7 font-semibold uppercase", status.cls)}>{status.label}</span>
+          <span className="text-caption text-foreground leading-7">
             {percent}% ({completedConcepts}/{totalConcepts} concepts completed)
           </span>
         </div>
