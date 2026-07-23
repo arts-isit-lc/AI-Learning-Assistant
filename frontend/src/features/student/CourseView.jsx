@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Link, useParams, useSearchParams } from "react-router-dom"
+import { Link, useParams } from "react-router-dom"
 import { MdCheckCircle, MdRadioButtonUnchecked } from "react-icons/md"
+import { cn } from "@/lib/utils"
 import { useCoursePage, useCourses } from "@/services/queries"
 import { useAuth } from "@/context/AuthContext"
 import { getModuleStatus } from "@/utils/moduleStatus"
@@ -31,8 +32,6 @@ export { groupConcepts }
  */
 export function CourseView() {
   const { courseId } = useParams()
-  const [searchParams] = useSearchParams()
-  const expandAll = searchParams.get("expand") === "1"
   const { isInstructorAsStudent } = useAuth()
 
   const { data: rows = [], isLoading, isError } = useCoursePage(courseId)
@@ -46,13 +45,16 @@ export function CourseView() {
 
   const conceptIds = concepts.map((c) => c.concept_id)
   const [open, setOpen] = useState([])
+  // Expand/Collapse-all toggle — "Expand all" is active by default, so every
+  // concept is open on first load; only the two toggle buttons change this.
+  const [expandedMode, setExpandedMode] = useState(true)
   const seededRef = useRef(false)
   useEffect(() => {
-    if (!seededRef.current && expandAll && conceptIds.length) {
+    if (!seededRef.current && conceptIds.length) {
       seededRef.current = true
       setOpen(conceptIds)
     }
-  }, [expandAll, conceptIds])
+  }, [conceptIds])
 
   return (
     <PageContainer>
@@ -69,16 +71,30 @@ export function CourseView() {
         <div className="flex items-center gap-2 text-caption">
           <button
             type="button"
-            onClick={() => setOpen(conceptIds)}
-            className="font-semibold text-lg text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-pressed={expandedMode}
+            onClick={() => {
+              setExpandedMode(true)
+              setOpen(conceptIds)
+            }}
+            className={cn(
+              "text-lg hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              expandedMode ? "font-semibold text-primary" : "font-normal text-neutral-500"
+            )}
           >
             Expand all
           </button>
           <span className="text-border" aria-hidden="true">|</span>
           <button
             type="button"
-            onClick={() => setOpen([])}
-            className="font-semibold text-lg text-muted-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-pressed={!expandedMode}
+            onClick={() => {
+              setExpandedMode(false)
+              setOpen([])
+            }}
+            className={cn(
+              "text-lg hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              !expandedMode ? "font-semibold text-primary" : "font-normal text-neutral-500"
+            )}
           >
             Collapse all
           </button>

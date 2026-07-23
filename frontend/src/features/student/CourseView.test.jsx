@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 import { render, screen } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Routes, Route } from "react-router-dom"
 import { groupConcepts } from "./CourseView"
 
@@ -53,5 +54,25 @@ describe("CourseView", () => {
   it("offers the Learning journey drawer", () => {
     renderCourse()
     expect(screen.getByRole("button", { name: /learning journey/i })).toBeInTheDocument()
+  })
+
+  it("toggles Expand all / Collapse all — Expand all active (bold + primary) by default", async () => {
+    renderCourse()
+    const expandBtn = screen.getByRole("button", { name: "Expand all" })
+    const collapseBtn = screen.getByRole("button", { name: "Collapse all" })
+
+    // Default: Expand all is the active option (bold + primary); Collapse all is
+    // inactive (normal weight + #808080 = text-neutral-500).
+    expect(expandBtn).toHaveAttribute("aria-pressed", "true")
+    expect(expandBtn).toHaveClass("font-semibold", "text-primary")
+    expect(collapseBtn).toHaveAttribute("aria-pressed", "false")
+    expect(collapseBtn).toHaveClass("font-normal", "text-neutral-500")
+
+    // Clicking Collapse all flips the active option.
+    await userEvent.click(collapseBtn)
+    expect(collapseBtn).toHaveAttribute("aria-pressed", "true")
+    expect(collapseBtn).toHaveClass("font-semibold", "text-primary")
+    expect(expandBtn).toHaveAttribute("aria-pressed", "false")
+    expect(expandBtn).toHaveClass("font-normal", "text-neutral-500")
   })
 })
