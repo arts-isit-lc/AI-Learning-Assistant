@@ -117,7 +117,7 @@ export function CourseView() {
                     </span>
                   </span>
                 </AccordionTrigger>
-                <AccordionContent>
+                <AccordionContent className="ml-20 mt-8">
                   <p className="mb-2 text-caption font-semibold text-neutral-900">Modules:</p>
                   <ul className="flex flex-col gap-3">
                     {concept.modules.map((module, idx) => {
