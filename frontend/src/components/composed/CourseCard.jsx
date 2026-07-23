@@ -71,8 +71,8 @@ export function CourseCard({
       )}
     >
       <div className="flex flex-col gap-1">
-        <span className="text-h4 font-semibold leading-7">{code}</span>
-        {name && <span className="text-caption leading-7">{name}</span>}
+        <span className="text-h4 font-semibold leading-7 mb-6">{code}</span>
+        {name && <span className="text-caption leading-7 mb-4">{name}</span>}
       </div>
 
       {showProgress && (
