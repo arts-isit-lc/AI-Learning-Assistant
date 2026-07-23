@@ -109,10 +109,10 @@ export function CourseView() {
               >
                 <AccordionTrigger className="gap-3 font-normal hover:no-underline">
                   <span className="flex flex-1 items-center justify-between gap-3 pr-2 text-left">
-                    <span className="text-neutral-900">
+                    <span className="text-neutral-900 text-lg leading-7">
                       {i + 1}. {titleCase(concept.concept_name)}
                     </span>
-                    <span className="shrink-0 text-foreground">
+                    <span className="shrink-0 text-foreground text-lg leading-7">
                       {concept.completedModules}/{concept.totalModules} completed
                     </span>
                   </span>
@@ -131,7 +131,7 @@ export function CourseView() {
                             {toRoman(idx + 1)}. {titleCase(module.module_name)}
                           </Link>
                           {complete ? (
-                            <Icon icon={MdCheckCircle} size={20} className="shrink-0 text-success" label="Complete" />
+                            <Icon icon={MdCheckCircle} size={24} className="shrink-0 text-success" label="Complete" />
                           ) : (
                             <Icon
                               icon={MdRadioButtonUnchecked}
