@@ -41,7 +41,7 @@ export function AnalyticsChart({
   className,
 }) {
   const lineColor = tokenColor("--primary", "#6829C2")
-  const gridColor = tokenColor("--border", "#BFBFBF")
+  const gridColor = tokenColor("--border", "#808080")
   const axisColor = tokenColor("--muted-foreground", "#737373")
 
   return (

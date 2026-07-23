@@ -58,7 +58,7 @@ const BRAND_RAMP = [
   { token: "--neutral-900", hex: "#000000" },
   { token: "--neutral-700", hex: "#404040" },
   { token: "--neutral-500", hex: "#808080" },
-  { token: "--neutral-300", hex: "#BFBFBF" },
+  { token: "--neutral-300", hex: "#808080" },
   { token: "--neutral-0", hex: "#FFFFFF" },
 ]
 

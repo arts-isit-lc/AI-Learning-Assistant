@@ -42,7 +42,7 @@
     --brand-navy: 211 100% 14%; /* #002145 UBC navy */
     --brand-cyan: 198 73% 67%; /* #6EC4E8 accent / in-progress */
     --neutral-0: 0 0% 100%; /* #FFFFFF */
-    --neutral-300: 0 0% 75%; /* #BFBFBF */
+    --neutral-300: 0 0% 50%; /* #808080 */
     --neutral-500: 0 0% 50%; /* #808080 */
     --neutral-700: 0 0% 25%; /* #404040 */
     --neutral-900: 0 0% 0%; /* #000000 */
@@ -76,7 +76,7 @@
     --info: 198 73% 67%; /* #6EC4E8 info / in-progress */
     --info-foreground: 211 100% 14%; /* navy text on cyan (8:1) */
     --border: 0 0% 50%; /* #808080 Arts ISIT Neutral/600 — structural borders + dividers (matches the Figma frames: header, cards, lists) */
-    --border-subtle: 0 0% 75%; /* #BFBFBF — lighter hairline where the design uses a faint divider */
+    --border-subtle: 0 0% 50%; /* #808080 — same as --border */
     --input: 0 0% 50%;
     --ring: 265 65% 46%; /* brand-purple focus ring (visible focus) */
 
