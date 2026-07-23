@@ -76,7 +76,7 @@ export function CourseHeader({ course, collapsible = false, collapsed = false, o
       <h1 className="text-3xl leadgin-7 font-semibold text-neutral-900 mb-4">{title}</h1>
       {course?.course_name && <p className="text-body text-foreground mb-6">{titleCase(course.course_name)}</p>}
       {metaParts.length > 0 && (
-        <div className="flex flex-wrap items-center text-base leading-7 text-foreground">
+        <div className="flex flex-wrap items-center text-base leading-7 text-foreground mb-8">
           {metaParts.map((p, i) => (
             <span key={i} className="flex items-center">
               {i > 0 && (
