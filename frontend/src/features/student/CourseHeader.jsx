@@ -8,9 +8,9 @@ function CoursesBackLink() {
   return (
     <Link
       to="/courses"
-      className="inline-flex items-center gap-1 text-caption font-semibold uppercase text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className="inline-flex items-center gap-2 text-base leading-7 mb-6 font-semibold uppercase text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
-      <Icon icon={MdChevronLeft} size={18} />
+      <Icon icon={MdChevronLeft} size={24} />
       Courses
     </Link>
   )
@@ -22,7 +22,7 @@ function CollapseToggle({ collapsed, onToggle }) {
     <button
       type="button"
       onClick={onToggle}
-      className="inline-flex items-center gap-1 text-caption font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className="inline-flex items-center gap-1 text-caption text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
       {collapsed ? "Expand" : "Reduce"}
       <Icon icon={collapsed ? MdExpandMore : MdExpandLess} size={18} />
@@ -68,15 +68,15 @@ export function CourseHeader({ course, collapsible = false, collapsed = false, o
   }
 
   return (
-    <div className="flex flex-col gap-1 pt-2">
+    <div className="flex flex-col">
       <div className="flex items-start justify-between gap-4">
         <CoursesBackLink />
         {collapsible && <CollapseToggle collapsed={false} onToggle={onToggleCollapse} />}
       </div>
-      <h1 className="text-h2 font-semibold text-neutral-900">{title}</h1>
-      {course?.course_name && <p className="text-body text-foreground">{titleCase(course.course_name)}</p>}
+      <h1 className="text-3xl leadgin-7 font-semibold text-neutral-900 mb-4">{title}</h1>
+      {course?.course_name && <p className="text-body text-foreground mb-6">{titleCase(course.course_name)}</p>}
       {metaParts.length > 0 && (
-        <div className="mt-1 flex flex-wrap items-center text-caption text-foreground">
+        <div className="flex flex-wrap items-center text-base leading-7 text-foreground">
           {metaParts.map((p, i) => (
             <span key={i} className="flex items-center">
               {i > 0 && (
