@@ -1,14 +1,18 @@
 import { useId, useState } from "react"
-import { MdCheckCircle, MdMap, MdExpandMore, MdExpandLess } from "react-icons/md"
-import { titleCase } from "@/utils/formatters"
+import { Link, useParams } from "react-router-dom"
+import { MdCheckCircle, MdRadioButtonUnchecked, MdMap, MdExpandMore, MdExpandLess } from "react-icons/md"
+import { titleCase, toRoman } from "@/utils/formatters"
+import { getModuleStatus } from "@/utils/moduleStatus"
 import { cn } from "@/lib/utils"
 import { Icon } from "@/components/ui/icon"
 
 /**
  * Learning Journey bar (Figma course + module-chat frames): label + overall
  * status + `NN% (x/y concepts completed)`, with a map/chevron trigger that
- * expands the per-concept progress list *inline, right below the bar* (an
- * accordion, not a right-side drawer). Shared by CourseView + StudentChat.
+ * expands the progress tracker *inline, right below the bar* (an accordion, not
+ * a right-side drawer). Expanded, it lists every concept and — nested beneath
+ * each — that concept's modules with their completion state, mirroring the
+ * expanded `Concept` card. Shared by CourseView + StudentChat.
  *
  * The top/bottom border is FULL-BLEED — it spans the entire viewport width (the
  * frames run the bar edge-to-edge) via a `w-screen` break-out, while the content
@@ -27,6 +31,7 @@ export function LearningJourneyBar({
   percent = 0,
   contentClassName,
 }) {
+  const { courseId } = useParams()
   const [open, setOpen] = useState(false)
   const panelId = useId()
 
@@ -62,30 +67,65 @@ export function LearningJourneyBar({
         </div>
 
         {open && (
-          <ul
-            id={panelId}
-            className="mt-4 grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3"
-          >
+          <ul id={panelId} className="mt-4 flex flex-col gap-6">
             {concepts.map((concept, i) => (
-              <li key={concept.concept_id} className="flex items-center gap-3">
-                <span
-                  className={cn(
-                    "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-caption font-semibold",
-                    concept.isComplete
-                      ? "bg-success text-success-foreground"
-                      : "bg-muted text-muted-foreground"
-                  )}
-                >
-                  {concept.isComplete ? <Icon icon={MdCheckCircle} size={16} label="Complete" /> : i + 1}
-                </span>
-                <div className="flex min-w-0 flex-col">
-                  <span className="truncate text-caption font-semibold text-foreground">
-                    {titleCase(concept.concept_name)}
+              <li key={concept.concept_id} className="flex flex-col gap-3">
+                <div className="flex items-center gap-3">
+                  <span
+                    className={cn(
+                      "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-caption font-semibold",
+                      concept.isComplete
+                        ? "bg-success text-success-foreground"
+                        : "bg-muted text-muted-foreground"
+                    )}
+                  >
+                    {concept.isComplete ? <Icon icon={MdCheckCircle} size={16} label="Complete" /> : i + 1}
                   </span>
-                  <span className="text-caption text-muted-foreground">
-                    {concept.completedModules}/{concept.totalModules} modules complete
-                  </span>
+                  <div className="flex min-w-0 flex-col">
+                    <span className="truncate text-caption font-semibold text-foreground">
+                      {titleCase(concept.concept_name)}
+                    </span>
+                    <span className="text-caption text-muted-foreground">
+                      {concept.completedModules}/{concept.totalModules} modules complete
+                    </span>
+                  </div>
                 </div>
+
+                {concept.modules?.length > 0 && (
+                  <ul className="ml-11 flex flex-col gap-2">
+                    {concept.modules.map((module, idx) => {
+                      const complete = getModuleStatus(module) === "complete"
+                      return (
+                        <li
+                          key={module.module_id}
+                          className="flex items-center justify-between gap-3"
+                        >
+                          <Link
+                            to={`/courses/${courseId}/modules/${module.module_id}`}
+                            className="text-caption text-primary underline underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            {toRoman(idx + 1)}. {titleCase(module.module_name)}
+                          </Link>
+                          {complete ? (
+                            <Icon
+                              icon={MdCheckCircle}
+                              size={20}
+                              className="shrink-0 text-success"
+                              label="Complete"
+                            />
+                          ) : (
+                            <Icon
+                              icon={MdRadioButtonUnchecked}
+                              size={18}
+                              className="shrink-0 text-muted-foreground"
+                              label="Not complete"
+                            />
+                          )}
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
               </li>
             ))}
           </ul>

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import { MemoryRouter, Routes, Route } from "react-router-dom"
 
 import { LearningJourneyBar } from "./LearningJourneyBar"
 
@@ -9,29 +10,44 @@ const concepts = [
     concept_id: "c1",
     concept_name: "introduction to water",
     isComplete: true,
-    completedModules: 3,
-    totalModules: 3,
-    modules: [],
+    completedModules: 2,
+    totalModules: 2,
+    modules: [
+      { module_id: "m1", module_name: "the hydrological cycle", module_score: 100 },
+      { module_id: "m2", module_name: "drainage basin dynamics", module_score: 100 },
+    ],
   },
   {
     concept_id: "c2",
     concept_name: "water security",
     isComplete: false,
     completedModules: 1,
-    totalModules: 3,
-    modules: [],
+    totalModules: 2,
+    modules: [
+      { module_id: "m3", module_name: "water quality", module_score: 100 },
+      { module_id: "m4", module_name: "climate change and water", module_score: 0 },
+    ],
   },
 ]
 
 function renderBar(props = {}) {
   return render(
-    <LearningJourneyBar
-      concepts={concepts}
-      completedConcepts={2}
-      totalConcepts={8}
-      percent={25}
-      {...props}
-    />
+    <MemoryRouter initialEntries={["/courses/course-1"]}>
+      <Routes>
+        <Route
+          path="/courses/:courseId"
+          element={
+            <LearningJourneyBar
+              concepts={concepts}
+              completedConcepts={1}
+              totalConcepts={8}
+              percent={25}
+              {...props}
+            />
+          }
+        />
+      </Routes>
+    </MemoryRouter>
   )
 }
 
@@ -40,7 +56,7 @@ describe("LearningJourneyBar", () => {
     renderBar()
     expect(screen.getByText("Learning Journey")).toBeInTheDocument()
     expect(screen.getByText("IN PROGRESS")).toBeInTheDocument()
-    expect(screen.getByText(/25% \(2\/8 concepts completed\)/)).toBeInTheDocument()
+    expect(screen.getByText(/25% \(1\/8 concepts completed\)/)).toBeInTheDocument()
   })
 
   it("reflects the completion status from percent", () => {
@@ -48,31 +64,56 @@ describe("LearningJourneyBar", () => {
     expect(screen.getByText("COMPLETED")).toBeInTheDocument()
 
     rerender(
-      <LearningJourneyBar concepts={concepts} completedConcepts={0} totalConcepts={8} percent={0} />
+      <MemoryRouter initialEntries={["/courses/course-1"]}>
+        <Routes>
+          <Route
+            path="/courses/:courseId"
+            element={
+              <LearningJourneyBar concepts={concepts} completedConcepts={0} totalConcepts={8} percent={0} />
+            }
+          />
+        </Routes>
+      </MemoryRouter>
     )
     expect(screen.getByText("NOT STARTED")).toBeInTheDocument()
   })
 
-  it("is collapsed by default (no concept detail shown)", () => {
+  it("is collapsed by default (no concept or module detail shown)", () => {
     renderBar()
     const toggle = screen.getByRole("button", { name: /learning journey/i })
     expect(toggle).toHaveAttribute("aria-expanded", "false")
     expect(screen.queryByText(/modules complete/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole("link", { name: /hydrological cycle/i })).not.toBeInTheDocument()
   })
 
-  it("expands the per-concept progress inline when the trigger is clicked", async () => {
+  it("expands to show each concept with its modules nested below it", async () => {
     renderBar()
     const toggle = screen.getByRole("button", { name: /learning journey/i })
 
     await userEvent.click(toggle)
 
     expect(toggle).toHaveAttribute("aria-expanded", "true")
-    // Concept rows now render inline, right below the bar.
+    // Concept level (kept from before).
     expect(screen.getByText(/water security/i)).toBeInTheDocument()
-    expect(screen.getByText(/3\/3 modules complete/)).toBeInTheDocument()
-    expect(screen.getByText(/1\/3 modules complete/)).toBeInTheDocument()
-    // Completed concept shows the check marker.
-    expect(screen.getByRole("img", { name: "Complete" })).toBeInTheDocument()
+    expect(screen.getByText(/2\/2 modules complete/)).toBeInTheDocument()
+    expect(screen.getByText(/1\/2 modules complete/)).toBeInTheDocument()
+
+    // Modules nested under their concept, as links to the module chat.
+    const firstModule = screen.getByRole("link", { name: /the hydrological cycle/i })
+    expect(firstModule).toHaveAttribute("href", "/courses/course-1/modules/m1")
+    expect(screen.getByRole("link", { name: /climate change and water/i })).toHaveAttribute(
+      "href",
+      "/courses/course-1/modules/m4"
+    )
+  })
+
+  it("marks module completion (complete vs not complete)", async () => {
+    renderBar()
+    await userEvent.click(screen.getByRole("button", { name: /learning journey/i }))
+    // 3 modules are score 100 (2 in c1 + 1 in c2); the concept check badge adds one more "Complete".
+    expect(screen.getAllByRole("img", { name: "Complete" }).length).toBeGreaterThanOrEqual(3)
+    // The one score-0 module renders the "Not complete" marker.
+    expect(screen.getByRole("img", { name: "Not complete" })).toBeInTheDocument()
   })
 
   it("expands inline rather than opening a right-side dialog/drawer", async () => {
@@ -87,10 +128,10 @@ describe("LearningJourneyBar", () => {
     const toggle = screen.getByRole("button", { name: /learning journey/i })
 
     await userEvent.click(toggle)
-    expect(screen.getByText(/1\/3 modules complete/)).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: /the hydrological cycle/i })).toBeInTheDocument()
 
     await userEvent.click(toggle)
     expect(toggle).toHaveAttribute("aria-expanded", "false")
-    expect(screen.queryByText(/modules complete/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole("link", { name: /the hydrological cycle/i })).not.toBeInTheDocument()
   })
 })
