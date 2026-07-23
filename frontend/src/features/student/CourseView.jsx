@@ -126,7 +126,7 @@ export function CourseView() {
                         <li key={module.module_id} className="flex items-center justify-between gap-3">
                           <Link
                             to={`/courses/${courseId}/modules/${module.module_id}`}
-                            className="text-caption text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            className="text-lg leading-7 text-primary underline underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           >
                             {toRoman(idx + 1)}. {titleCase(module.module_name)}
                           </Link>
