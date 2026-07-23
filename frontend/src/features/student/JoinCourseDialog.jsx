@@ -85,11 +85,11 @@ export function JoinCourseDialog({ open, onOpenChange }) {
             does not include personally identifiable information. By joining a course, you agree to this
             data collection.
           </p>
-          <DialogFooter className="border-t border-border mb-4">
-            <Button type="button" variant="outline" onClick={() => close(false)}>
+          <DialogFooter className="border-t border-border">
+            <Button className="mt-4" type="button" variant="outline" onClick={() => close(false)}>
               Cancel
             </Button>
-            <Button type="submit" loading={enroll.isPending}>
+            <Button className="mt-4" type="submit" loading={enroll.isPending}>
               Join course
             </Button>
           </DialogFooter>
