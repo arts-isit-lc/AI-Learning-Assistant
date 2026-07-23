@@ -118,8 +118,8 @@ export function CourseView() {
                   </span>
                 </AccordionTrigger>
                 <AccordionContent className="ml-20 mt-8">
-                  <p className="mb-2 text-caption font-semibold text-neutral-900">Modules:</p>
-                  <ul className="flex flex-col gap-3">
+                  <p className="mb-4 text-lg leading-7 font-semibold text-neutral-900">Modules:</p>
+                  <ul className="flex flex-col gap-4 text-lg leading-7">
                     {concept.modules.map((module, idx) => {
                       const complete = getModuleStatus(module) === "complete"
                       return (
