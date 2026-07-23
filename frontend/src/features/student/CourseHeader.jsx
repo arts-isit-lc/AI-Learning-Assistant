@@ -8,7 +8,7 @@ function CoursesBackLink() {
   return (
     <Link
       to="/courses"
-      className="inline-flex items-center gap-2 text-base leading-7 mb-6 font-semibold uppercase text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className="inline-flex items-center gap-2 text-base leading-7 mb-6 uppercase underline text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
       <Icon icon={MdChevronLeft} size={24} />
       Courses
