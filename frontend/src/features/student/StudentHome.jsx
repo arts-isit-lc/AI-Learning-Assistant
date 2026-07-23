@@ -37,7 +37,7 @@ export function StudentHome() {
     <PageContainer>
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-h2 uppercase text-neutral-900">Courses</h1>
-        <Button className="gap-2 px-6 py-1" onClick={() => setJoinOpen(true)}>
+        <Button className="gap-2 px-6 py-1 rounded" onClick={() => setJoinOpen(true)}>
           Join course
           <Icon icon={MdAdd} size={18} />
         </Button>
