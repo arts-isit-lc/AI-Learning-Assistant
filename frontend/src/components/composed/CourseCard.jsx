@@ -63,7 +63,7 @@ export function CourseCard({
       }
       aria-disabled={inactive || undefined}
       className={cn(
-        "flex flex-col gap-6 rounded-sm border border-border p-4 transition-colors",
+        "flex flex-col rounded-sm border border-border p-4 transition-colors",
         inactive ? "bg-neutral-300 text-white" : "bg-card text-neutral-900",
         interactive &&
           "cursor-pointer hover:border-primary hover:bg-primary-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
