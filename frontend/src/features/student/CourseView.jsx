@@ -64,7 +64,7 @@ export function CourseView() {
         percent={percent}
       />
 
-      <div className="mt-6 flex items-center justify-between">
+      <div className="mt-6 mb-6 flex items-center justify-between">
         <h2 className="text-lg leading-7 font-semibold text-neutral-900">Concepts</h2>
         <div className="flex items-center gap-2 text-caption">
           <button
@@ -85,7 +85,7 @@ export function CourseView() {
         </div>
       </div>
 
-      <div className="mt-3">
+      <div>
         {isLoading ? (
           <div className="flex flex-col gap-2">
             {[0, 1, 2].map((i) => (
