@@ -160,6 +160,7 @@ export function StudentChat() {
           completedConcepts={completedConcepts}
           totalConcepts={totalConcepts}
           percent={percent}
+          contentClassName="px-6"
         />
       )}
 
