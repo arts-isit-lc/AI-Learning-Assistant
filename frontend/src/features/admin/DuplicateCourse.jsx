@@ -124,7 +124,7 @@ export function DuplicateCourse() {
 
   return (
     <Dialog open onOpenChange={(o) => !o && close()}>
-      <DialogContent className="max-w-lg px-9 pb-9 pt-14">
+      <DialogContent className="max-w-lg">
         <UnsavedChangesPrompt when={isDirty && !leaveTo} />
         <DialogHeader className="border-b border-border pb-2">
           <DialogTitle>Duplicate course</DialogTitle>

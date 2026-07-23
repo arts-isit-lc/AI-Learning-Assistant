@@ -6,6 +6,8 @@ const draft = { moduleId: "m1", isReserving: false, reserveError: null, cleanup:
 const finalize = { mutate: vi.fn(), isPending: false }
 const validate = { mutateAsync: vi.fn().mockResolvedValue({ has_conflicts: false }) }
 const navigate = vi.fn()
+// Per-test processing state (step 2 gating). Empty = nothing in flight.
+let trackedFilesResult = {}
 
 vi.mock("./hooks/useDraftModule", () => ({ useDraftModule: () => draft }))
 vi.mock("./hooks/useFileUpload", () => ({
@@ -17,7 +19,7 @@ vi.mock("./hooks/useFileUpload", () => ({
   }),
 }))
 vi.mock("./hooks/useProcessingPoller", () => ({
-  useProcessingPoller: () => ({ trackedFiles: {}, addTrackedFiles: vi.fn() }),
+  useProcessingPoller: () => ({ trackedFiles: trackedFilesResult, addTrackedFiles: vi.fn() }),
 }))
 vi.mock("./hooks/useModuleTopics", () => ({
   useModuleTopics: () => ({ generate: vi.fn().mockResolvedValue({ topics: [] }), isGenerating: false }),
@@ -51,6 +53,7 @@ beforeEach(() => {
   draft.cleanup.mockClear()
   draft.markSaved.mockClear()
   navigate.mockClear()
+  trackedFilesResult = {}
 })
 
 async function advance() {
@@ -84,6 +87,16 @@ describe("CourseWizard", () => {
     expect(screen.getByRole("button", { name: "Next" })).toBeDisabled()
     await userEvent.type(screen.getByLabelText("Module name"), "Vectors")
     expect(screen.getByRole("button", { name: "Next" })).toBeEnabled()
+  })
+
+  it("keeps Next disabled on the references step while a file is still ingesting", async () => {
+    // f1 finished uploading (mock) but is still processing -> must wait here.
+    trackedFilesResult = { f1: { fileId: "f1", status: "processing" } }
+    const user = userEvent.setup()
+    render(<CourseWizard />)
+    await user.type(screen.getByLabelText("Module name"), "Vectors")
+    await user.click(screen.getByRole("button", { name: "Next" })) // step 0 -> references
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled()
   })
 
   it("discards the draft from the footer Discard button (with confirm)", async () => {

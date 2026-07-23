@@ -164,8 +164,9 @@ export function CourseWizard() {
       } else if (result?.status === "error") {
         toast.error(result.message || "Failed to generate topics")
       } else if (result?.topics) {
+        // No success toast — topic generation runs in the background during the
+        // step-2 wait; the topics just appear (as tags) on step 3.
         setKeyTopics((prev) => mergeTopics(prev, result.topics))
-        toast.success("Topics generated")
       }
     } catch {
       toast.error("Failed to generate topics")
@@ -254,8 +255,16 @@ export function CourseWizard() {
     )
   }
 
+  // Step 1 (references): keep the user here until ingestion finishes — Next stays
+  // disabled while any file is still uploading/processing. This is the whole point
+  // of the wizard: the file ingests + topics auto-generate during this wait, so
+  // step 3 opens with topics ready and the user only waits once, here.
   const canNext =
-    step === 0 ? Boolean(moduleName.trim() && conceptId) : step === 1 ? uploadedCount > 0 : true
+    step === 0
+      ? Boolean(moduleName.trim() && conceptId)
+      : step === 1
+        ? uploadedCount > 0 && !isProcessingBlocking
+        : true
 
   return (
     <>
@@ -357,7 +366,6 @@ export function CourseWizard() {
                   <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-between">
                       <Label className="text-body text-neutral-900">Upload files</Label>
-                      <span className="text-caption text-muted-foreground">(optional)</span>
                     </div>
                     <p className="text-caption text-muted-foreground">
                       To add new references, upload your files below.

@@ -15,4 +15,16 @@ describe("Dialog", () => {
     expect(screen.getByRole("dialog")).toHaveAccessibleName("Confirm")
     expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument()
   })
+
+  it("applies the standard modal padding (36px sides/bottom, 56px top)", () => {
+    render(
+      <Dialog open>
+        <DialogContent>
+          <DialogTitle>Confirm</DialogTitle>
+        </DialogContent>
+      </Dialog>
+    )
+    const content = screen.getByRole("dialog")
+    expect(content).toHaveClass("px-9", "pb-9", "pt-14")
+  })
 })

@@ -173,7 +173,7 @@ export function ModuleAccordion({
       className={cn("flex flex-col gap-2", sortable?.isDragging && "opacity-50")}
     >
       {/* Concept box — clean at rest (number + name + pencil); controls on hover. */}
-      <div className="group flex items-center gap-2 rounded-sm border border-border bg-muted px-3 py-1">
+      <div className="group flex items-center gap-2 rounded-sm border border-border bg-muted px-3 py-1 max-w-[600px]">
         {editing ? (
           <div className="flex flex-1 items-center gap-2">
             <Input
@@ -255,7 +255,7 @@ export function ModuleAccordion({
 
       {/* Module boxes — indented below the concept box (not nested inside it). */}
       {modules.length > 0 && (
-        <div className="ml-6 flex flex-col gap-2">
+        <div className="flex flex-col gap-2">
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleModuleDragEnd}>
             <SortableContext items={moduleIds} strategy={verticalListSortingStrategy}>
               {modules.map((m, i) => (

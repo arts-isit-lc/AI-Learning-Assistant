@@ -62,13 +62,13 @@ export function JoinCourseDialog({ open, onOpenChange }) {
     <Dialog open={open} onOpenChange={close}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Join course</DialogTitle>
+          <DialogTitle className="mb-2">Join course</DialogTitle>
         </DialogHeader>
-        <div className="border-t border-border" aria-hidden="true" />
-        <DialogDescription className="text-body text-foreground">
+        <div className="border-t border-border mb-8" aria-hidden="true" />
+        <DialogDescription className="text-body text-foreground mb-6">
           Enter the access code from your instructor or administrator to join the course on OCELIA.
         </DialogDescription>
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col">
           <div className="flex flex-col gap-1.5">
             <Input
               aria-label="Access code"
@@ -79,13 +79,13 @@ export function JoinCourseDialog({ open, onOpenChange }) {
             />
             {errors.code && <p className="text-caption text-destructive">{errors.code.message}</p>}
           </div>
-          <p className="text-caption text-muted-foreground">
+          <p className="text-base text-muted-foreground mt-6 mb-8">
             <span className="font-semibold text-foreground">Privacy notice:</span> OCELIA collects usage
             data to help evaluate course activity and improve your experience. This data is anonymized and
             does not include personally identifiable information. By joining a course, you agree to this
             data collection.
           </p>
-          <DialogFooter className="border-t border-border pt-4">
+          <DialogFooter className="border-t border-border mb-4">
             <Button type="button" variant="outline" onClick={() => close(false)}>
               Cancel
             </Button>
