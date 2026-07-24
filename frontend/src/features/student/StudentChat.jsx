@@ -172,7 +172,7 @@ export function StudentChat() {
       )}
 
       <div className="mt-6 flex min-h-0 flex-1 gap-4">
-        <div className="flex w-72 shrink-0 flex-col">
+        <div className="flex w-1/3 shrink-0 flex-col">
           <SessionSidebar
             moduleName={moduleName}
             onBack={() => navigate(`/courses/${courseId}`)}
@@ -193,7 +193,7 @@ export function StudentChat() {
         </div>
 
         {docId && (
-          <div className="hidden min-w-0 flex-1 lg:flex">
+          <div className="hidden w-1/3 shrink-0 min-w-0 lg:flex">
             <ReferenceDocPanel fileId={docId} fileName={selectedFile?.filename} onClose={closeDoc} />
           </div>
         )}
