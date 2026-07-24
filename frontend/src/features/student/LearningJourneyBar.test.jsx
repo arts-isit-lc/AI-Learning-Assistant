@@ -106,15 +106,6 @@ describe("LearningJourneyBar", () => {
     )
   })
 
-  it("marks module completion (complete vs not complete)", async () => {
-    renderBar()
-    await userEvent.click(screen.getByRole("button", { name: /learning journey/i }))
-    // 3 modules are score 100 (2 in c1 + 1 in c2); the concept check badge adds one more "Complete".
-    expect(screen.getAllByRole("img", { name: "Complete" }).length).toBeGreaterThanOrEqual(3)
-    // The one score-0 module renders the "Not complete" marker.
-    expect(screen.getByRole("img", { name: "Not complete" })).toBeInTheDocument()
-  })
-
   it("expands inline rather than opening a right-side dialog/drawer", async () => {
     renderBar()
     await userEvent.click(screen.getByRole("button", { name: /learning journey/i }))

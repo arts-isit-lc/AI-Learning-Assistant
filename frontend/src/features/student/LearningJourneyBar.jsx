@@ -1,8 +1,7 @@
 import { useId, useState } from "react"
 import { Link, useParams } from "react-router-dom"
-import { MdCheckCircle, MdRadioButtonUnchecked, MdMap, MdExpandMore, MdExpandLess } from "react-icons/md"
+import { MdCheckCircle, MdMap, MdExpandMore, MdExpandLess } from "react-icons/md"
 import { titleCase } from "@/utils/formatters"
-import { getModuleStatus } from "@/utils/moduleStatus"
 import { cn } from "@/lib/utils"
 import { Icon } from "@/components/ui/icon"
 
@@ -90,22 +89,16 @@ export function LearningJourneyBar({
 
                 {concept.modules?.length > 0 && (
                   <ul className="flex flex-col gap-2">
-                    {concept.modules.map((module) => {
-                      const complete = getModuleStatus(module) === "complete"
-                      return (
-                        <li
-                          key={module.module_id}
-                          className="flex items-center justify-between gap-3"
+                    {concept.modules.map((module) => (
+                      <li key={module.module_id} className="flex items-center gap-3">
+                        <Link
+                          to={`/courses/${courseId}/modules/${module.module_id}`}
+                          className="rounded-[12.75px] border-[0.75px] px-1.5 py-[3px] border-primary bg-background text-[10.5px] text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
                         >
-                          <Link
-                            to={`/courses/${courseId}/modules/${module.module_id}`}
-                            className="rounded-[12.75px] border-[0.75px] px-1.5 py-[3px] border-primary bg-background text-[10.5px] text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
-                          >
-                            {titleCase(module.module_name)}
-                          </Link>
-                        </li>
-                      )
-                    })}
+                          {titleCase(module.module_name)}
+                        </Link>
+                      </li>
+                    ))}
                   </ul>
                 )}
               </li>

@@ -31,8 +31,8 @@ export function SessionSidebar({
   const ordered = sessions.slice().reverse()
 
   return (
-    <div className="flex h-full flex-col gap-3">
-      <div className="flex items-start justify-between gap-2">
+    <div className="flex h-full flex-col">
+      <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex items-start gap-2">
           {onBack && (
             <button
@@ -44,7 +44,7 @@ export function SessionSidebar({
               <Icon icon={MdChevronLeft} size={16} />
             </button>
           )}
-          <h2 className="text-h4 font-semibold text-neutral-900">{moduleName}</h2>
+          <h2 className="text-h4 text-neutral-900">{moduleName}</h2>
         </div>
         <button
           type="button"
@@ -59,7 +59,7 @@ export function SessionSidebar({
 
       <div className="border-t border-border" />
 
-      <p className="text-caption font-semibold text-neutral-900">Previous chats</p>
+      <p className="text-lg leading-7 font-semibold text-neutral-900 py-4">Previous chats</p>
       <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-2 pr-2">
           {loading ? (

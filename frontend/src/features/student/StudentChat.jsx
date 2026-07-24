@@ -154,16 +154,24 @@ export function StudentChat() {
         collapsed={headerCollapsed}
         onToggleCollapse={() => setHeaderCollapsed((v) => !v)}
       />
-      {!headerCollapsed && (
+      {!headerCollapsed ? (
         <LearningJourneyBar
           concepts={concepts}
           completedConcepts={completedConcepts}
           totalConcepts={totalConcepts}
           percent={percent}
         />
+      ) : (
+        // Reduced: the Learning Journey bar — which supplies the full-bleed rule
+        // between the top area and the chat — is hidden, so stand in a matching
+        // edge-to-edge divider (same w-screen break-out) to keep that separation.
+        <div
+          role="separator"
+          className="relative left-1/2 w-screen -translate-x-1/2 border-b border-border"
+        />
       )}
 
-      <div className="mt-4 flex min-h-0 flex-1 gap-4">
+      <div className="mt-6 flex min-h-0 flex-1 gap-4">
         <div className="flex w-72 shrink-0 flex-col">
           <SessionSidebar
             moduleName={moduleName}
