@@ -82,7 +82,7 @@ describe("LearningJourneyBar", () => {
     renderBar()
     const toggle = screen.getByRole("button", { name: /learning journey/i })
     expect(toggle).toHaveAttribute("aria-expanded", "false")
-    expect(screen.queryByText(/modules complete/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/water security/i)).not.toBeInTheDocument()
     expect(screen.queryByRole("link", { name: /hydrological cycle/i })).not.toBeInTheDocument()
   })
 
@@ -93,10 +93,9 @@ describe("LearningJourneyBar", () => {
     await userEvent.click(toggle)
 
     expect(toggle).toHaveAttribute("aria-expanded", "true")
-    // Concept level (kept from before).
+    // Concept level.
+    expect(screen.getByText(/introduction to water/i)).toBeInTheDocument()
     expect(screen.getByText(/water security/i)).toBeInTheDocument()
-    expect(screen.getByText(/2\/2 modules complete/)).toBeInTheDocument()
-    expect(screen.getByText(/1\/2 modules complete/)).toBeInTheDocument()
 
     // Modules nested under their concept, as links to the module chat.
     const firstModule = screen.getByRole("link", { name: /the hydrological cycle/i })

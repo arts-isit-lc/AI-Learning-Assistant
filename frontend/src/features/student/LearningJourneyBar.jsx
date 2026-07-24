@@ -1,7 +1,7 @@
 import { useId, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import { MdCheckCircle, MdRadioButtonUnchecked, MdMap, MdExpandMore, MdExpandLess } from "react-icons/md"
-import { titleCase, toRoman } from "@/utils/formatters"
+import { titleCase } from "@/utils/formatters"
 import { getModuleStatus } from "@/utils/moduleStatus"
 import { cn } from "@/lib/utils"
 import { Icon } from "@/components/ui/icon"
@@ -90,7 +90,7 @@ export function LearningJourneyBar({
 
                 {concept.modules?.length > 0 && (
                   <ul className="ml-11 flex flex-col gap-2">
-                    {concept.modules.map((module, idx) => {
+                    {concept.modules.map((module) => {
                       const complete = getModuleStatus(module) === "complete"
                       return (
                         <li
@@ -99,7 +99,7 @@ export function LearningJourneyBar({
                         >
                           <Link
                             to={`/courses/${courseId}/modules/${module.module_id}`}
-                            className="text-caption text-primary underline underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            className="rounded-[12.75px] border-[0.75px] border-primary bg-background text-[10.5px] text-primary"
                           >
                             {titleCase(module.module_name)}
                           </Link>
