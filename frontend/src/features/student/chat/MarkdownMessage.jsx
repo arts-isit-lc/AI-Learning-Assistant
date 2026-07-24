@@ -37,7 +37,7 @@ export function escapeCurrencyDollars(markdown) {
 export function MarkdownMessage({ content }) {
   const safeContent = escapeCurrencyDollars(content)
   return (
-    <div className="space-y-3 leading-relaxed [&_a]:text-primary [&_a]:underline [&_li]:ml-4 [&_ol]:list-decimal [&_ul]:list-disc">
+    <div className="space-y-3 text-lg leading-7 leading-relaxed [&_a]:text-primary [&_a]:underline [&_li]:ml-4 [&_ol]:list-decimal [&_ul]:list-disc">
       <ReactMarkdown
         remarkPlugins={[remarkMath]}
         rehypePlugins={[rehypeKatex]}
