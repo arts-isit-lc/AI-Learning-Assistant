@@ -61,7 +61,7 @@ export function SessionSidebar({
 
       <p className="text-lg leading-7 font-semibold text-neutral-900 py-4">Previous chats</p>
       <ScrollArea className="min-h-0 flex-1">
-        <div className="flex flex-col gap-2 pr-2">
+        <div className="flex flex-col gap-2">
           {loading ? (
             [0, 1, 2].map((i) => <Skeleton key={i} className="h-10 w-full" />)
           ) : (

@@ -172,7 +172,7 @@ export function StudentChat() {
         />
       )}
 
-      <div className="mt-6 grid min-h-0 flex-1 grid-cols-3 grid-rows-1 gap-4">
+      <div className="mt-6 grid min-h-0 flex-1 grid-cols-3 grid-rows-1 gap-8">
         <div className="flex min-w-0 flex-col">
           <SessionSidebar
             moduleName={moduleName}
