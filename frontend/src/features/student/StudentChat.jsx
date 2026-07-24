@@ -14,6 +14,7 @@ import {
 import { useAuth } from "@/context/AuthContext"
 import { computeConceptProgress } from "@/utils/courseProgress"
 import { titleCase } from "@/utils/formatters"
+import { cn } from "@/lib/utils"
 import { CourseHeader } from "./CourseHeader"
 import { LearningJourneyBar } from "./LearningJourneyBar"
 import { SessionSidebar } from "./chat/SessionSidebar"
@@ -171,8 +172,8 @@ export function StudentChat() {
         />
       )}
 
-      <div className="mt-6 flex min-h-0 flex-1 gap-4">
-        <div className="flex w-1/3 shrink-0 flex-col">
+      <div className="mt-6 grid min-h-0 flex-1 grid-cols-3 grid-rows-1 gap-4">
+        <div className="flex min-w-0 flex-col">
           <SessionSidebar
             moduleName={moduleName}
             onBack={() => navigate(`/courses/${courseId}`)}
@@ -193,12 +194,17 @@ export function StudentChat() {
         </div>
 
         {docId && (
-          <div className="hidden w-1/3 shrink-0 min-w-0 lg:flex">
+          <div className="hidden min-w-0 lg:flex">
             <ReferenceDocPanel fileId={docId} fileName={selectedFile?.filename} onClose={closeDoc} />
           </div>
         )}
 
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-sm border border-border">
+        <div
+          className={cn(
+            "col-span-2 flex min-w-0 flex-col overflow-hidden rounded-sm border border-border",
+            docId && "lg:col-span-1"
+          )}
+        >
           <h2 className="pt-4 pb-10 text-center text-h4 font-semibold text-neutral-900">
             OCELIA ASSISTANT
           </h2>
