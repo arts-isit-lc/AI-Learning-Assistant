@@ -87,10 +87,10 @@ export function SessionSidebar({
           type="button"
           onClick={onToggleMaterials}
           aria-expanded={materialsOpen}
-          className="flex w-full items-center justify-between py-2 text-caption font-semibold text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex w-full items-center justify-between py-2 text-lg leading-7 font-semibold text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           Module materials
-          <Icon icon={materialsOpen ? MdExpandMore : MdExpandLess} size={18} />
+          <Icon icon={materialsOpen ? MdExpandMore : MdExpandLess} size={24} />
         </button>
         {materialsOpen && (
           <div className="flex max-h-48 flex-col gap-1 overflow-y-auto pb-1">
