@@ -22,7 +22,7 @@ function CollapseToggle({ collapsed, onToggle }) {
     <button
       type="button"
       onClick={onToggle}
-      className="inline-flex items-center gap-1 text-caption text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className="inline-flex items-center gap-1 text-base leading-7 text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
       {collapsed ? "Expand" : "Reduce"}
       <Icon icon={collapsed ? MdExpandMore : MdExpandLess} size={18} />
@@ -68,7 +68,7 @@ export function CourseHeader({ course, collapsible = false, collapsed = false, o
 
   return (
     <div className="flex flex-col">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-4 mt-6">
         <CoursesBackLink />
         {collapsible && <CollapseToggle collapsed={false} onToggle={onToggleCollapse} />}
       </div>
