@@ -22,7 +22,7 @@ function CollapseToggle({ collapsed, onToggle }) {
     <button
       type="button"
       onClick={onToggle}
-      className="inline-flex items-center gap-1 text-base leading-7 text-primary underline"
+      className="inline-flex items-center gap-2 text-base leading-7 text-primary underline"
     >
       {collapsed ? "Expand" : "Reduce"}
       <Icon icon={collapsed ? MdExpandMore : MdExpandLess} size={24} />
