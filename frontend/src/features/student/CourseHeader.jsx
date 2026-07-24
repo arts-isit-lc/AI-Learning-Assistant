@@ -60,7 +60,6 @@ export function CourseHeader({ course, collapsible = false, collapsed = false, o
       <div className="flex items-center justify-between gap-4 py-4">
         <div className="flex items-center gap-3">
           <CoursesBackLink />
-          <span className="text-h4 font-semibold text-neutral-900">{title}</span>
         </div>
         {collapsible && <CollapseToggle collapsed onToggle={onToggleCollapse} />}
       </div>
