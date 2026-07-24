@@ -110,7 +110,7 @@ export function SessionSidebar({
                   )}
                 >
                   <Icon icon={MdDescription} size={16} className="shrink-0" />
-                  <span className="truncate">{file.file_name || file.file_id}</span>
+                  <span className="truncate">{file.filename || file.file_id}</span>
                 </button>
               ))
             ) : (

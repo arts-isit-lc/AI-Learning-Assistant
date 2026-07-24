@@ -194,12 +194,12 @@ export function StudentChat() {
 
         {docId && (
           <div className="hidden min-w-0 flex-1 lg:flex">
-            <ReferenceDocPanel fileId={docId} fileName={selectedFile?.file_name} onClose={closeDoc} />
+            <ReferenceDocPanel fileId={docId} fileName={selectedFile?.filename} onClose={closeDoc} />
           </div>
         )}
 
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-sm border border-border">
-          <h2 className="border-b border-border py-3 text-center text-h4 font-semibold text-neutral-900">
+          <h2 className="pt-4 pb-10 text-center text-h4 font-semibold text-neutral-900">
             OCELIA ASSISTANT
           </h2>
           <ChatThread

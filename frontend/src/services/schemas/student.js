@@ -68,11 +68,15 @@ export const MessageSchema = z
 export const MessagesSchema = z.array(MessageSchema)
 
 // --- Module files (GET student/files) ---
+// The endpoint returns rows straight from "Module_Files": the columns are
+// `filename` / `filetype` (NOT file_name/file_type). Match them exactly so the
+// UI can display the human filename instead of falling back to the UUID file_id.
 export const ModuleFileSchema = z
   .object({
     file_id: z.string(),
-    file_name: z.string().optional(),
-    file_type: z.string().optional(),
+    filename: z.string().optional(),
+    filetype: z.string().optional(),
+    time_uploaded: z.string().optional(),
   })
   .passthrough()
 export const ModuleFilesSchema = z.array(ModuleFileSchema)
