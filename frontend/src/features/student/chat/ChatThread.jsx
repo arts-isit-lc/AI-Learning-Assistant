@@ -42,7 +42,7 @@ export function ChatThread({
       role="log"
       aria-live="polite"
       aria-label="Conversation"
-      className="flex flex-1 flex-col overflow-y-auto px-6 py-4"
+      className="flex flex-1 flex-col overflow-y-auto px-4 pb-4"
     >
       {messages.map((message, index) =>
         message.student_sent ? (
