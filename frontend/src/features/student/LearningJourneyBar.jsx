@@ -82,11 +82,8 @@ export function LearningJourneyBar({
                     {concept.isComplete ? <Icon icon={MdCheckCircle} size={16} label="Complete" /> : i + 1}
                   </span>
                   <div className="flex min-w-0 flex-col">
-                    <span className="truncate text-caption font-semibold text-foreground">
+                    <span className="truncate text-base font-semibold text-foreground">
                       {titleCase(concept.concept_name)}
-                    </span>
-                    <span className="text-caption text-muted-foreground">
-                      {concept.completedModules}/{concept.totalModules} modules complete
                     </span>
                   </div>
                 </div>
@@ -104,7 +101,7 @@ export function LearningJourneyBar({
                             to={`/courses/${courseId}/modules/${module.module_id}`}
                             className="text-caption text-primary underline underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           >
-                            {toRoman(idx + 1)}. {titleCase(module.module_name)}
+                            {titleCase(module.module_name)}
                           </Link>
                           {complete ? (
                             <Icon
