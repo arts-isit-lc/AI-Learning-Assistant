@@ -13,7 +13,7 @@ export function SessionItem({ session, isActive = false, onSelect, onDelete }) {
   return (
     <div
       className={cn(
-        "flex items-center gap-2 rounded-sm border px-3 py-2 transition-colors",
+        "flex items-center gap-2 rounded-sm border p-[10px] transition-colors",
         isActive
           ? "border-primary bg-primary text-primary-foreground"
           : "border-border bg-background text-primary hover:bg-primary-subtle"
@@ -25,7 +25,7 @@ export function SessionItem({ session, isActive = false, onSelect, onDelete }) {
         aria-current={isActive ? "true" : undefined}
         className="flex min-w-0 flex-1 items-center gap-2 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <Icon icon={MdChat} size={16} className="shrink-0" />
+        <Icon icon={MdChat} size={24} className="shrink-0" />
         <span className="truncate text-caption">{name}</span>
       </button>
       {onDelete && (
@@ -35,7 +35,7 @@ export function SessionItem({ session, isActive = false, onSelect, onDelete }) {
           aria-label={`Delete chat: ${name}`}
           className="shrink-0 rounded-sm p-1 opacity-80 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <Icon icon={MdDelete} size={16} />
+          <Icon icon={MdDelete} size={24} />
         </button>
       )}
     </div>
