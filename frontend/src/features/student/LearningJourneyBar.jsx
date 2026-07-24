@@ -99,7 +99,7 @@ export function LearningJourneyBar({
                         >
                           <Link
                             to={`/courses/${courseId}/modules/${module.module_id}`}
-                            className="rounded-[12.75px] border-[0.75px] border-primary bg-background text-[10.5px] text-primary"
+                            className="rounded-[12.75px] border-[0.75px] px-1.5 py-[3px] border-primary bg-background text-[10.5px] text-primary"
                           >
                             {titleCase(module.module_name)}
                           </Link>
