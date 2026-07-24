@@ -89,7 +89,7 @@ export function LearningJourneyBar({
                 </div>
 
                 {concept.modules?.length > 0 && (
-                  <ul className="ml-11 flex flex-col gap-2">
+                  <ul className="flex flex-col gap-2">
                     {concept.modules.map((module) => {
                       const complete = getModuleStatus(module) === "complete"
                       return (
