@@ -28,7 +28,7 @@ export function StudentMessage({ content, isMostRecent = false, hasAiMessageAfte
         aria-hidden="true"
         className="mt-1 h-6 w-6 shrink-0 rounded-full bg-gradient-to-b from-primary to-navy"
       />
-      <div className="max-w-xl whitespace-pre-wrap break-words text-right text-caption text-foreground">
+      <div className="max-w-xl whitespace-pre-wrap break-words text-right text-lg leading-7 text-foreground">
         {content}
       </div>
     </div>
