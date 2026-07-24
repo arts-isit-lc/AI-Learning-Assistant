@@ -57,7 +57,7 @@ export function CourseHeader({ course, collapsible = false, collapsed = false, o
 
   if (collapsed) {
     return (
-      <div className="flex items-center justify-between gap-4 py-4">
+      <div className="flex items-center justify-between items-start gap-4 py-4">
         <div className="flex items-center gap-3">
           <CoursesBackLink />
         </div>
