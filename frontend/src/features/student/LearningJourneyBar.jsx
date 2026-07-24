@@ -103,21 +103,6 @@ export function LearningJourneyBar({
                           >
                             {titleCase(module.module_name)}
                           </Link>
-                          {complete ? (
-                            <Icon
-                              icon={MdCheckCircle}
-                              size={20}
-                              className="shrink-0 text-success"
-                              label="Complete"
-                            />
-                          ) : (
-                            <Icon
-                              icon={MdRadioButtonUnchecked}
-                              size={18}
-                              className="shrink-0 text-muted-foreground"
-                              label="Not complete"
-                            />
-                          )}
                         </li>
                       )
                     })}
