@@ -64,4 +64,15 @@ describe("ModuleAccordion", () => {
     await userEvent.click(screen.getByRole("button", { name: "Delete concept" }))
     expect(onDelete).toHaveBeenCalled()
   })
+
+  it("sizes modules to the same 600px as concepts but right-aligns them", () => {
+    renderAccordion()
+    // Concept box: capped at 600px, left (default alignment).
+    const conceptBox = screen.getByRole("heading", { name: "1. Algebra" }).closest("div")
+    expect(conceptBox).toHaveClass("max-w-[600px]")
+    // Module row: same 600px cap, and its list container right-aligns the rows.
+    const moduleRow = screen.getByRole("button", { name: "i. Vectors" }).closest("[class*='group/module']")
+    expect(moduleRow).toHaveClass("w-full", "max-w-[600px]")
+    expect(moduleRow.parentElement).toHaveClass("items-end")
+  })
 })

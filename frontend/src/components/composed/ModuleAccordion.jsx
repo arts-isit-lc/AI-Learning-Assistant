@@ -58,7 +58,7 @@ function SortableModuleRow({ module, number, onEdit, onDelete }) {
   const topics = parseKeyTopics(module.key_topics)
 
   return (
-    <div ref={setNodeRef} style={style} className="group/module rounded-sm border border-border bg-muted">
+    <div ref={setNodeRef} style={style} className="group/module w-full max-w-[600px] rounded-sm border border-border bg-muted">
       <div className="flex items-center gap-2 py-2 pl-3 pr-2">
         <button
           type="button"
@@ -253,9 +253,10 @@ export function ModuleAccordion({
         )}
       </div>
 
-      {/* Module boxes — indented below the concept box (not nested inside it). */}
+      {/* Module boxes — same 600px width as the concept box, but right-aligned
+          (concepts float left, modules float right) per the Configuration mockup. */}
       {modules.length > 0 && (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col items-end gap-2">
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleModuleDragEnd}>
             <SortableContext items={moduleIds} strategy={verticalListSortingStrategy}>
               {modules.map((m, i) => (
