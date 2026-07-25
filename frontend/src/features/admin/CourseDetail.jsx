@@ -231,11 +231,11 @@ export function CourseDetail() {
           <h1 className="text-[24px] font-semibold text-neutral-900">{courseCode(course)}</h1>
           <div className="flex shrink-0 items-center gap-2 text-caption">
             <span className={cn(active ? "text-muted-foreground" : "font-semibold text-foreground")}>
-              Inactive
+              Off
             </span>
             <Toggle checked={active} onCheckedChange={toggleActive} aria-label="Course student access" />
             <span className={cn(active ? "font-semibold text-success" : "text-muted-foreground")}>
-              Active
+              On
             </span>
           </div>
         </div>
