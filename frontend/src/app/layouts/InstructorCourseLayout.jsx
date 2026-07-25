@@ -26,7 +26,7 @@ const TABS = [
 
 const tabClass = ({ isActive }) =>
   cn(
-    "-mb-px border-b-2 px-6 py-2 text-caption font-semibold transition-colors duration-fast",
+    "-mb-px border-b-[3px] px-6 py-2 text-caption font-semibold transition-colors duration-fast",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
     isActive
       ? "border-primary text-primary"
@@ -88,7 +88,7 @@ export default function InstructorCourseLayout() {
           {course && (
             <div className="flex shrink-0 items-center gap-2 text-caption">
               <span className={active ? "text-muted-foreground" : "font-semibold text-foreground"}>
-                Inactive
+                Off
               </span>
               <Toggle
                 checked={active}
@@ -97,7 +97,7 @@ export default function InstructorCourseLayout() {
                 aria-label="Course active"
               />
               <span className={active ? "font-semibold text-foreground" : "text-muted-foreground"}>
-                Active
+                On
               </span>
             </div>
           )}
