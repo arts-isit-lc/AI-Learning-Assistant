@@ -204,6 +204,11 @@ exports.handler = async (event) => {
               term,
             } = event.queryStringParameters;
 
+            // Optional section label; coerce to null (not undefined) so the pg
+            // driver binds SQL NULL. Read OUTSIDE the required-param guard above
+            // so it stays optional (mirrors duplicate_course's optional term).
+            const section = event.queryStringParameters.section ?? null;
+
             const { system_prompt } = JSON.parse(event.body);
 
             // Insert new course into Courses table
@@ -216,6 +221,7 @@ exports.handler = async (event) => {
                       course_access_code,
                       course_student_access,
                       term,
+                      section,
                       system_prompt
                   )
                   VALUES (
@@ -226,6 +232,7 @@ exports.handler = async (event) => {
                       ${course_access_code},
                       ${course_student_access.toLowerCase() === "true"},
                       ${term},
+                      ${section},
                       ${system_prompt}
                   )
                   RETURNING *;

@@ -106,6 +106,11 @@ describe("OpenAPI contract: admin course-management routes", () => {
       expect(byName[name].required).toBe(true);
     }
     expect(byName["term"].schema.type).toBe("string");
+    // section is an OPTIONAL free-text query param, unlike the required term.
+    expect(byName["section"]).toBeDefined();
+    expect(byName["section"].in).toBe("query");
+    expect(byName["section"].required).toBe(false);
+    expect(byName["section"].schema.type).toBe("string");
     // system_prompt still travels in the JSON body.
     expect(
       route.post.requestBody.content["application/json"].schema.properties.system_prompt
@@ -163,6 +168,21 @@ describe("initializer.py migration: Courses.term", () => {
 
   it("adds an idempotent nullable ADD COLUMN IF NOT EXISTS migration for existing databases", () => {
     expect(initializer).toContain('ALTER TABLE "Courses" ADD COLUMN IF NOT EXISTS "term" varchar;');
+  });
+});
+
+describe("initializer.py migration: Courses.section (nullable)", () => {
+  const initializer = fs.readFileSync(
+    path.join(__dirname, "..", "lambda", "initializer", "initializer.py"),
+    "utf8"
+  );
+
+  it("declares section in the Courses CREATE TABLE (varchar)", () => {
+    expect(initializer).toContain('"section" varchar');
+  });
+
+  it("adds an idempotent nullable ADD COLUMN IF NOT EXISTS migration for existing databases", () => {
+    expect(initializer).toContain('ALTER TABLE "Courses" ADD COLUMN IF NOT EXISTS "section" varchar;');
   });
 });
 
@@ -497,5 +517,23 @@ describe("adminFunction — POST /admin/create_course (term)", () => {
     const res = await handler(makeEvent("POST", "/admin/create_course", rest, BODY));
     expect(res.statusCode).toBe(400);
     expect(mockSql.calls).toHaveLength(0);
+  });
+
+  it("200: includes the optional section column in the INSERT when provided", async () => {
+    mockSql.queueResult([{ course_id: "new-course", section: "001" }]);
+    const res = await handler(
+      makeEvent("POST", "/admin/create_course", { ...VALID_QS, section: "001" }, BODY)
+    );
+    expect(res.statusCode).toBe(200);
+    expect(mockSql.calls[0]).toContain("section");
+  });
+
+  it("200: section is OPTIONAL — creates the course even when section is omitted", async () => {
+    mockSql.queueResult([{ course_id: "new-course" }]);
+    const res = await handler(makeEvent("POST", "/admin/create_course", VALID_QS, BODY));
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).course_id).toBe("new-course");
+    // The column is still in the INSERT (bound to NULL when omitted).
+    expect(mockSql.calls[0]).toContain("section");
   });
 });

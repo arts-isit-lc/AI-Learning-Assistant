@@ -50,14 +50,15 @@ export function parseCourseCode(code) {
 
 /**
  * Add-course modal (Figma 859:6864). A centered dialog over the course list:
- * Course code + Course title, an instructor multi-select, and the generated
- * access code (shown up front with "Generate new code"). Submits the course +
- * enrolls the selected instructors, then opens the new course.
+ * Course code + Course title, Term, an optional Section, an instructor
+ * multi-select, and the generated access code (shown up front with "Generate
+ * new code"). Submits the course + enrolls the selected instructors, then opens
+ * the new course.
  *
- * DATA-GAP NOTE (flagged): the mockup's Term select and the Primary/Secondary
- * instructor distinction (+ per-instructor email/invite) have no schema backing,
- * so Term is omitted and instructors are a flat multi-select of existing
- * instructors. Prompt + active are defaulted (editable post-create).
+ * DATA-GAP NOTE (flagged): the mockup's Primary/Secondary instructor distinction
+ * (+ per-instructor email/invite) has no schema backing, so instructors are a
+ * flat multi-select of existing instructors. Prompt + active are defaulted
+ * (editable post-create). Term + Section are backed by Courses columns.
  */
 export function CreateCourse() {
   const navigate = useNavigate()
@@ -67,6 +68,7 @@ export function CreateCourse() {
   const [code, setCode] = useState("")
   const [title, setTitle] = useState("")
   const [term, setTerm] = useState("")
+  const [section, setSection] = useState("")
   const [accessCode, setAccessCode] = useState(() => generateAccessCode())
   const [selected, setSelected] = useState([])
   // Set to the destination once the course is created, so the unsaved-changes
@@ -77,7 +79,7 @@ export function CreateCourse() {
   // Term is required (like code + title); the access code is auto-generated.
   const canCreate = Boolean(title.trim() && department && number && term) && !create.isPending
   // Any user-entered field (the access code is auto-generated, not user input).
-  const isDirty = Boolean(code.trim() || title.trim() || term || selected.length > 0)
+  const isDirty = Boolean(code.trim() || title.trim() || term || section.trim() || selected.length > 0)
 
   // Navigate from an effect (not inline in onSuccess) so the guard observes
   // `when=false` before the route change — otherwise creating the course would
@@ -105,6 +107,7 @@ export function CreateCourse() {
         department,
         number,
         term,
+        section: section.trim(),
         accessCode,
         active: true,
         systemPrompt: DEFAULT_PROMPT,
@@ -176,6 +179,18 @@ export function CreateCourse() {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="flex flex-col">
+            <Label htmlFor="add-course-section">Section</Label>
+            <Input
+              id="add-course-section"
+              className="h-7"
+              value={section}
+              onChange={(e) => setSection(e.target.value)}
+              placeholder="e.g. 001"
+              maxLength={20}
+            />
           </div>
 
           <div className="flex flex-col">

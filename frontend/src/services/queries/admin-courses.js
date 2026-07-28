@@ -31,7 +31,8 @@ export function useCourseInstructors(courseId) {
  * `{ system_prompt }` body) then enroll the selected instructors. `active` is
  * sent as-is; `apiClient` stringifies it to "true"/"false" for the backend.
  * Returns the created `{ course_id }`. Variables:
- * `{ courseName, department, number, term, accessCode, active, systemPrompt, instructorEmails }`.
+ * `{ courseName, department, number, term, section?, accessCode, active, systemPrompt, instructorEmails }`.
+ * `section` is optional and only sent when non-empty.
  */
 export function useCreateCourse() {
   const qc = useQueryClient()
@@ -41,6 +42,7 @@ export function useCreateCourse() {
       department,
       number,
       term,
+      section,
       accessCode,
       active,
       systemPrompt,
@@ -53,6 +55,8 @@ export function useCreateCourse() {
           course_department: department,
           course_number: number,
           term,
+          // Optional; only sent when non-empty (mirrors duplicate_course's term).
+          ...(section ? { section } : {}),
           course_access_code: accessCode,
           course_student_access: active,
         },

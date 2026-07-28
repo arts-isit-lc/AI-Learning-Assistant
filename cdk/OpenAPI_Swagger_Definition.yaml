@@ -4807,6 +4807,12 @@ paths:
       operationId: admin_create_course_POST
       parameters:
         - in: query
+          name: section
+          required: false
+          schema:
+            type: string
+          description: Optional course section label (e.g. "001")
+        - in: query
           name: course_name
           required: true
           schema:

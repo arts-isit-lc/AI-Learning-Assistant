@@ -163,6 +163,14 @@ class TestFeatureColumnBackfillMigrations:
         assert '"term" varchar' in src
         assert 'ALTER TABLE "Courses" ADD COLUMN IF NOT EXISTS "term" varchar' in src
 
+    def test_courses_section_column_migrated(self):
+        # Optional course section label (e.g. "001"). Nullable; declared on the
+        # CREATE TABLE AND backfilled idempotently like term so existing/prod
+        # databases gain the column.
+        src = _source()
+        assert '"section" varchar' in src
+        assert 'ALTER TABLE "Courses" ADD COLUMN IF NOT EXISTS "section" varchar' in src
+
     def test_course_modules_feature_columns_migrated(self):
         src = _source()
         for col in (

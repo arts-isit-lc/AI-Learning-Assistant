@@ -93,4 +93,18 @@ describe("CreateCourse", () => {
     })
     expect(payload.accessCode).toMatch(/^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/)
   })
+
+  it("sends the optional Section field in the create payload when filled", async () => {
+    render(<CreateCourse />)
+    await userEvent.type(screen.getByLabelText(/Course code/), "GEOG 250")
+    await userEvent.type(screen.getByLabelText(/Course title/), "Intro Geography")
+    await userEvent.click(screen.getByRole("combobox", { name: "Term" }))
+    await userEvent.click(await screen.findByRole("option", { name: "2026 Winter Term 2" }))
+    await userEvent.type(screen.getByLabelText("Section"), "001")
+    await userEvent.click(screen.getByRole("button", { name: "Add course" }))
+
+    await waitFor(() => expect(create.mutate).toHaveBeenCalled())
+    const [payload] = create.mutate.mock.calls[0]
+    expect(payload.section).toBe("001")
+  })
 })
