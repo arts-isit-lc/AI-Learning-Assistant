@@ -44,12 +44,24 @@ beforeEach(() => {
 })
 
 describe("Login", () => {
+  it("renders the OCELIA brand lockup and the sign-in form", () => {
+    render(<Login />)
+    expect(screen.getByRole("img", { name: "University of British Columbia" })).toBeInTheDocument()
+    expect(screen.getByRole("img", { name: "OCELIA" })).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Please log in" })).toBeInTheDocument()
+    expect(screen.getByLabelText("Email")).toBeInTheDocument()
+    expect(screen.getByLabelText("Password")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Log in" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Forgot password?" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Create an account" })).toBeInTheDocument()
+  })
+
   it("signs in and lands on the role home", async () => {
     h.signIn.mockResolvedValue({ isSignedIn: true })
     render(<Login />)
     await userEvent.type(screen.getByLabelText("Email"), "ada@x.com")
     await userEvent.type(screen.getByLabelText("Password"), "secretpass")
-    await userEvent.click(screen.getByRole("button", { name: "Sign in" }))
+    await userEvent.click(screen.getByRole("button", { name: "Log in" }))
 
     expect(h.signIn).toHaveBeenCalledWith({ username: "ada@x.com", password: "secretpass" })
     await waitFor(() => expect(h.navigate).toHaveBeenCalledWith("/", { replace: true }))
@@ -61,7 +73,7 @@ describe("Login", () => {
     render(<Login />)
     await userEvent.type(screen.getByLabelText("Email"), "ada@x.com")
     await userEvent.type(screen.getByLabelText("Password"), "nope")
-    await userEvent.click(screen.getByRole("button", { name: "Sign in" }))
+    await userEvent.click(screen.getByRole("button", { name: "Log in" }))
     expect(await screen.findByText("Incorrect username or password.")).toBeInTheDocument()
     expect(h.navigate).not.toHaveBeenCalled()
   })
@@ -74,7 +86,7 @@ describe("Login", () => {
     render(<Login />)
     await userEvent.type(screen.getByLabelText("Email"), "ada@x.com")
     await userEvent.type(screen.getByLabelText("Password"), "temp")
-    await userEvent.click(screen.getByRole("button", { name: "Sign in" }))
+    await userEvent.click(screen.getByRole("button", { name: "Log in" }))
     expect(await screen.findByRole("heading", { name: "Set a new password" })).toBeInTheDocument()
   })
 

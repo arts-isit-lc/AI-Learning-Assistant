@@ -12,11 +12,12 @@ import {
 import { toast } from "react-toastify"
 import apiClient from "@/services/api"
 import { useAuth } from "@/context/AuthContext"
-import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Card } from "@/components/ui/card"
+import ubcLogo from "@/assets/ubc-logo.svg"
 
 /** Cognito password policy (ported from the legacy signup validation). */
 function validatePassword(pw) {
@@ -33,6 +34,11 @@ function validatePassword(pw) {
  * sign up + email confirmation, force-new-password, and forgot/reset password —
  * on the Tailwind/shadcn system. Auth calls go straight to Amplify; on success it
  * refreshes AuthContext and lands on the role home via the "/" RoleRedirect.
+ *
+ * Layout matches the OCELIA "Login" Figma frame (955:6766): a single centered
+ * card with the UBC + OCELIA brand lockup, a welcome blurb, and the auth form.
+ * The mockup draws only the sign-in view; the other Cognito modes reuse the same
+ * card chrome so the flow stays cohesive.
  */
 export function Login() {
   const navigate = useNavigate()
@@ -233,46 +239,61 @@ export function Login() {
   }
 
   return (
-    <div className="grid min-h-screen lg:grid-cols-2">
-      <div className="hidden items-center justify-center bg-gradient-to-br from-primary/15 to-navy/20 p-10 lg:flex">
-        <div className="max-w-sm text-center">
-          <h1 className="text-h2 font-semibold text-navy">Welcome to OCELIA</h1>
-          <p className="mt-3 text-body text-muted-foreground">
-            Your course AI learning assistant, grounded in your materials.
+    <div className="flex min-h-screen items-center justify-center bg-muted p-4">
+      {/* max-w-[540px] = OCELIA login card width (Figma 955:6766). */}
+      <Card className="flex w-full max-w-[540px] flex-col gap-16 p-8">
+        {/* Brand lockup + welcome — constant across every auth mode. */}
+        <div className="flex flex-col items-center gap-8">
+          <div className="flex w-full items-center gap-6">
+            <img src={ubcLogo} alt="University of British Columbia" className="h-14 w-auto shrink-0" />
+            {/* tracking is the OCELIA logotype letter-spacing — no spacing token covers it. */}
+            <span
+              role="img"
+              aria-label="OCELIA"
+              className="flex-1 text-center text-3xl font-semibold uppercase leading-none tracking-[0.35em] text-primary"
+            >
+              OCELIA
+            </span>
+          </div>
+          <p className="w-full text-body text-foreground">
+            Welcome to OCELIA, your course learning assistant. Sign in to pick up where you left
+            off — answers are grounded in your course materials.
           </p>
         </div>
-      </div>
 
-      <div className="flex items-center justify-center p-6">
-        <div className="w-full max-w-sm">
+        <div className="flex flex-col gap-6">
           {error && (
-            <Alert variant="destructive" className="mb-4">
+            <Alert variant="destructive">
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
           {message && !error && (
-            <Alert variant="info" className="mb-4">
+            <Alert variant="info">
               <AlertDescription>{message}</AlertDescription>
             </Alert>
           )}
 
           {mode === "signIn" && (
-            <form onSubmit={handleSignIn} className="flex flex-col gap-4">
-              <h2 className="text-h4 font-semibold text-navy">Sign in</h2>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={40} required autoFocus />
+            <form onSubmit={handleSignIn} className="flex flex-col gap-20">
+              <div className="flex flex-col gap-6">
+                <div className="flex flex-col gap-6">
+                  <h1 className="text-2xl font-book leading-9 text-foreground">Please log in</h1>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="email" className="text-h4 text-foreground">Email</Label>
+                    <Input id="email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={40} required autoFocus />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="password" className="text-h4 text-foreground">Password</Label>
+                    <Input id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} maxLength={50} required />
+                  </div>
+                </div>
+                <Button type="submit" loading={busy} className="w-full">Log in</Button>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="password">Password</Label>
-                <Input id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} maxLength={50} required />
-              </div>
-              <Button type="submit" loading={busy}>Sign in</Button>
-              <div className="flex items-center justify-between">
-                <Button type="button" variant="link" size="sm" className="px-0" onClick={() => switchMode("forgot")}>
+              <div className="flex items-center justify-between border-t border-border pt-2">
+                <Button type="button" variant="link" className="px-0" onClick={() => switchMode("forgot")}>
                   Forgot password?
                 </Button>
-                <Button type="button" variant="link" size="sm" className="px-0" onClick={() => switchMode("signUp")}>
+                <Button type="button" variant="link" className="px-0" onClick={() => switchMode("signUp")}>
                   Create an account
                 </Button>
               </div>
@@ -280,56 +301,56 @@ export function Login() {
           )}
 
           {mode === "signUp" && (
-            <form onSubmit={handleSignUp} className="flex flex-col gap-4">
-              <h2 className="text-h4 font-semibold text-navy">Create your account</h2>
+            <form onSubmit={handleSignUp} className="flex flex-col gap-6">
+              <h1 className="text-2xl font-book leading-9 text-foreground">Create your account</h1>
               <div className="flex gap-3">
                 <div className="flex flex-1 flex-col gap-1.5">
-                  <Label htmlFor="firstName">First name</Label>
+                  <Label htmlFor="firstName" className="text-h4 text-foreground">First name</Label>
                   <Input id="firstName" autoComplete="given-name" value={firstName} onChange={(e) => setFirstName(e.target.value)} maxLength={30} required autoFocus />
                 </div>
                 <div className="flex flex-1 flex-col gap-1.5">
-                  <Label htmlFor="lastName">Last name</Label>
+                  <Label htmlFor="lastName" className="text-h4 text-foreground">Last name</Label>
                   <Input id="lastName" autoComplete="family-name" value={lastName} onChange={(e) => setLastName(e.target.value)} maxLength={30} required />
                 </div>
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="signup-email">Email</Label>
+                <Label htmlFor="signup-email" className="text-h4 text-foreground">Email</Label>
                 <Input id="signup-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={40} required />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="signup-password">Password</Label>
+                <Label htmlFor="signup-password" className="text-h4 text-foreground">Password</Label>
                 <Input id="signup-password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} maxLength={50} required />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="confirm-password">Confirm password</Label>
+                <Label htmlFor="confirm-password" className="text-h4 text-foreground">Confirm password</Label>
                 <Input id="confirm-password" type="password" autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} maxLength={50} required />
               </div>
               <p className="text-caption text-muted-foreground">
                 Personal information is optional beyond what account setup requires.
               </p>
-              <Button type="submit" loading={busy}>Sign up</Button>
-              <Button type="button" variant="link" size="sm" className="px-0" onClick={() => switchMode("signIn")}>
+              <Button type="submit" loading={busy} className="w-full">Sign up</Button>
+              <Button type="button" variant="link" className="px-0" onClick={() => switchMode("signIn")}>
                 Already have an account? Sign in
               </Button>
             </form>
           )}
 
           {mode === "confirmSignUp" && (
-            <form onSubmit={handleConfirmSignUp} className="flex flex-col gap-4">
-              <h2 className="text-h4 font-semibold text-navy">Confirm your account</h2>
+            <form onSubmit={handleConfirmSignUp} className="flex flex-col gap-6">
+              <h1 className="text-2xl font-book leading-9 text-foreground">Confirm your account</h1>
               <p className="text-caption text-muted-foreground">
                 Enter the confirmation code sent to {email || "your email"}.
               </p>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="code">Confirmation code</Label>
+                <Label htmlFor="code" className="text-h4 text-foreground">Confirmation code</Label>
                 <Input id="code" value={code} onChange={(e) => setCode(e.target.value)} maxLength={15} required autoFocus />
               </div>
-              <Button type="submit" loading={busy}>Confirm</Button>
-              <div className="flex items-center justify-between">
-                <Button type="button" variant="link" size="sm" className="px-0" onClick={handleResendCode}>
+              <Button type="submit" loading={busy} className="w-full">Confirm</Button>
+              <div className="flex items-center justify-between border-t border-border pt-2">
+                <Button type="button" variant="link" className="px-0" onClick={handleResendCode}>
                   Resend code
                 </Button>
-                <Button type="button" variant="link" size="sm" className="px-0" onClick={() => switchMode("signIn")}>
+                <Button type="button" variant="link" className="px-0" onClick={() => switchMode("signIn")}>
                   Back to sign in
                 </Button>
               </div>
@@ -337,58 +358,57 @@ export function Login() {
           )}
 
           {mode === "newPassword" && (
-            <form onSubmit={handleNewPassword} className="flex flex-col gap-4">
-              <h2 className="text-h4 font-semibold text-navy">Set a new password</h2>
+            <form onSubmit={handleNewPassword} className="flex flex-col gap-6">
+              <h1 className="text-2xl font-book leading-9 text-foreground">Set a new password</h1>
               <p className="text-caption text-muted-foreground">Choose a new password for your account.</p>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="new-password">New password</Label>
+                <Label htmlFor="new-password" className="text-h4 text-foreground">New password</Label>
                 <Input id="new-password" type="password" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} maxLength={50} required autoFocus />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="confirm-new-password">Confirm new password</Label>
+                <Label htmlFor="confirm-new-password" className="text-h4 text-foreground">Confirm new password</Label>
                 <Input id="confirm-new-password" type="password" autoComplete="new-password" value={confirmNewPassword} onChange={(e) => setConfirmNewPassword(e.target.value)} maxLength={50} required />
               </div>
-              <Button type="submit" loading={busy}>Set password</Button>
+              <Button type="submit" loading={busy} className="w-full">Set password</Button>
             </form>
           )}
 
           {mode === "forgot" && (
-            <div className="flex flex-col gap-4">
-              <h2 className="text-h4 font-semibold text-navy">Reset password</h2>
+            <div className="flex flex-col gap-6">
+              <h1 className="text-2xl font-book leading-9 text-foreground">Reset password</h1>
 
               {resetStep === "request" && (
-                <form onSubmit={handleRequestReset} className="flex flex-col gap-4">
+                <form onSubmit={handleRequestReset} className="flex flex-col gap-6">
                   <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="reset-email">Email</Label>
+                    <Label htmlFor="reset-email" className="text-h4 text-foreground">Email</Label>
                     <Input id="reset-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={40} required autoFocus />
                   </div>
-                  <Button type="submit" loading={busy}>Send reset code</Button>
+                  <Button type="submit" loading={busy} className="w-full">Send reset code</Button>
                 </form>
               )}
 
               {resetStep === "confirm" && (
-                <form onSubmit={handleConfirmReset} className="flex flex-col gap-4">
+                <form onSubmit={handleConfirmReset} className="flex flex-col gap-6">
                   <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="reset-code">Confirmation code</Label>
+                    <Label htmlFor="reset-code" className="text-h4 text-foreground">Confirmation code</Label>
                     <Input id="reset-code" value={code} onChange={(e) => setCode(e.target.value)} maxLength={15} required autoFocus />
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="reset-new-password">New password</Label>
+                    <Label htmlFor="reset-new-password" className="text-h4 text-foreground">New password</Label>
                     <Input id="reset-new-password" type="password" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} maxLength={50} required />
                   </div>
-                  <Button type="submit" loading={busy}>Reset password</Button>
+                  <Button type="submit" loading={busy} className="w-full">Reset password</Button>
                 </form>
               )}
 
               {resetStep === "done" && (
-                <p className="text-caption text-success">Your password has been reset. You can sign in now.</p>
+                <p className="text-body text-success">Your password has been reset. You can sign in now.</p>
               )}
 
               <Button
                 type="button"
                 variant="link"
-                size="sm"
-                className={cn("px-0")}
+                className="px-0"
                 onClick={() => {
                   setResetStep("request")
                   switchMode("signIn")
@@ -399,7 +419,7 @@ export function Login() {
             </div>
           )}
         </div>
-      </div>
+      </Card>
     </div>
   )
 }
