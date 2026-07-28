@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Card } from "@/components/ui/card"
+import { cn } from "@/lib/utils"
 import ubcLogo from "@/assets/ubc-logo.svg"
 
 /** Cognito password policy (ported from the legacy signup validation). */
@@ -27,6 +28,15 @@ function validatePassword(pw) {
   if (!/[0-9]/.test(pw)) return "Password must contain a number."
   if (!/[^a-zA-Z0-9\s]/.test(pw)) return "Password must contain a special character."
   return ""
+}
+
+/**
+ * Login inputs stand 44px tall (`h-11`) to match the OCELIA login frame — taller
+ * than the app-wide 40px `Input` default. Scoped to this page so the shared
+ * primitive (used by every other form) is untouched.
+ */
+function LoginInput({ className, ...props }) {
+  return <Input className={cn("h-11", className)} {...props} />
 }
 
 /**
@@ -280,20 +290,20 @@ export function Login() {
                   <h1 className="text-2xl font-book leading-9 text-foreground">Please log in</h1>
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="email" className="text-h4 text-foreground">Email</Label>
-                    <Input id="email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={40} required autoFocus />
+                    <LoginInput id="email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={40} required autoFocus />
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="password" className="text-h4 text-foreground">Password</Label>
-                    <Input id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} maxLength={50} required />
+                    <LoginInput id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} maxLength={50} required />
                   </div>
                 </div>
-                <Button type="submit" loading={busy} className="w-full">Log in</Button>
+                <Button type="submit" loading={busy} className="w-full text-base">Log in</Button>
               </div>
               <div className="flex items-center justify-between border-t border-border pt-2">
-                <Button type="button" variant="link" className="px-0" onClick={() => switchMode("forgot")}>
+                <Button type="button" variant="link" className="px-0 text-base" onClick={() => switchMode("forgot")}>
                   Forgot password?
                 </Button>
-                <Button type="button" variant="link" className="px-0" onClick={() => switchMode("signUp")}>
+                <Button type="button" variant="link" className="px-0 text-base" onClick={() => switchMode("signUp")}>
                   Create an account
                 </Button>
               </div>
@@ -306,24 +316,24 @@ export function Login() {
               <div className="flex gap-3">
                 <div className="flex flex-1 flex-col gap-1.5">
                   <Label htmlFor="firstName" className="text-h4 text-foreground">First name</Label>
-                  <Input id="firstName" autoComplete="given-name" value={firstName} onChange={(e) => setFirstName(e.target.value)} maxLength={30} required autoFocus />
+                  <LoginInput id="firstName" autoComplete="given-name" value={firstName} onChange={(e) => setFirstName(e.target.value)} maxLength={30} required autoFocus />
                 </div>
                 <div className="flex flex-1 flex-col gap-1.5">
                   <Label htmlFor="lastName" className="text-h4 text-foreground">Last name</Label>
-                  <Input id="lastName" autoComplete="family-name" value={lastName} onChange={(e) => setLastName(e.target.value)} maxLength={30} required />
+                  <LoginInput id="lastName" autoComplete="family-name" value={lastName} onChange={(e) => setLastName(e.target.value)} maxLength={30} required />
                 </div>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="signup-email" className="text-h4 text-foreground">Email</Label>
-                <Input id="signup-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={40} required />
+                <LoginInput id="signup-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={40} required />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="signup-password" className="text-h4 text-foreground">Password</Label>
-                <Input id="signup-password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} maxLength={50} required />
+                <LoginInput id="signup-password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} maxLength={50} required />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="confirm-password" className="text-h4 text-foreground">Confirm password</Label>
-                <Input id="confirm-password" type="password" autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} maxLength={50} required />
+                <LoginInput id="confirm-password" type="password" autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} maxLength={50} required />
               </div>
               <p className="text-caption text-muted-foreground">
                 Personal information is optional beyond what account setup requires.
@@ -343,7 +353,7 @@ export function Login() {
               </p>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="code" className="text-h4 text-foreground">Confirmation code</Label>
-                <Input id="code" value={code} onChange={(e) => setCode(e.target.value)} maxLength={15} required autoFocus />
+                <LoginInput id="code" value={code} onChange={(e) => setCode(e.target.value)} maxLength={15} required autoFocus />
               </div>
               <Button type="submit" loading={busy} className="w-full">Confirm</Button>
               <div className="flex items-center justify-between border-t border-border pt-2">
@@ -363,11 +373,11 @@ export function Login() {
               <p className="text-caption text-muted-foreground">Choose a new password for your account.</p>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="new-password" className="text-h4 text-foreground">New password</Label>
-                <Input id="new-password" type="password" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} maxLength={50} required autoFocus />
+                <LoginInput id="new-password" type="password" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} maxLength={50} required autoFocus />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="confirm-new-password" className="text-h4 text-foreground">Confirm new password</Label>
-                <Input id="confirm-new-password" type="password" autoComplete="new-password" value={confirmNewPassword} onChange={(e) => setConfirmNewPassword(e.target.value)} maxLength={50} required />
+                <LoginInput id="confirm-new-password" type="password" autoComplete="new-password" value={confirmNewPassword} onChange={(e) => setConfirmNewPassword(e.target.value)} maxLength={50} required />
               </div>
               <Button type="submit" loading={busy} className="w-full">Set password</Button>
             </form>
@@ -381,7 +391,7 @@ export function Login() {
                 <form onSubmit={handleRequestReset} className="flex flex-col gap-6">
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="reset-email" className="text-h4 text-foreground">Email</Label>
-                    <Input id="reset-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={40} required autoFocus />
+                    <LoginInput id="reset-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={40} required autoFocus />
                   </div>
                   <Button type="submit" loading={busy} className="w-full">Send reset code</Button>
                 </form>
@@ -391,11 +401,11 @@ export function Login() {
                 <form onSubmit={handleConfirmReset} className="flex flex-col gap-6">
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="reset-code" className="text-h4 text-foreground">Confirmation code</Label>
-                    <Input id="reset-code" value={code} onChange={(e) => setCode(e.target.value)} maxLength={15} required autoFocus />
+                    <LoginInput id="reset-code" value={code} onChange={(e) => setCode(e.target.value)} maxLength={15} required autoFocus />
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="reset-new-password" className="text-h4 text-foreground">New password</Label>
-                    <Input id="reset-new-password" type="password" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} maxLength={50} required />
+                    <LoginInput id="reset-new-password" type="password" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} maxLength={50} required />
                   </div>
                   <Button type="submit" loading={busy} className="w-full">Reset password</Button>
                 </form>
