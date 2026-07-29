@@ -28,6 +28,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Icon } from "@/components/ui/icon"
 import { Progress } from "@/components/ui/progress"
+import { AnimatedEllipsis } from "@/components/ui/animated-ellipsis"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion"
@@ -48,29 +49,42 @@ const STEP_TITLES = [
 ]
 const STEP_COUNT = STEP_TITLES.length
 
-/** Human-readable label for a per-file status. */
+/** Active (non-terminal) statuses whose label gets an animated ellipsis. The
+ *  ellipsis is rendered separately, so these labels carry no trailing "…". */
+const IN_PROGRESS_STATUSES = new Set([
+  "uploading",
+  "upload_complete",
+  "pending",
+  "ingesting",
+  "enriching",
+  "processing",
+  "not_found",
+])
+
+/** Human-readable label for a per-file status. In-progress labels omit the
+ *  trailing ellipsis — an animated one (`AnimatedEllipsis`) is appended instead. */
 function statusLabel(status) {
   switch (status) {
     case "uploading":
-      return "Uploading…"
+      return "Uploading"
     case "upload_complete":
-      return "Uploaded — processing…"
+      return "Uploaded — processing"
     case "upload_failed":
       return "Upload failed"
     case "pending":
-      return "Queued…"
+      return "Queued"
     case "ingesting":
-      return "Reading document…"
+      return "Reading document"
     case "enriching":
-      return "Analyzing content…"
+      return "Analyzing content"
     case "processing":
-      return "Processing…"
+      return "Processing"
     case "complete":
       return "Complete"
     case "failed":
       return "Processing failed"
     case "not_found":
-      return "Waiting…"
+      return "Waiting"
     case "timed_out":
       return "Timed out"
     default:
@@ -454,7 +468,14 @@ export function CourseWizard() {
                                               : "text-muted-foreground"
                                         )}
                                       >
-                                        {statusLabel(status)}
+                                        {IN_PROGRESS_STATUSES.has(status) ? (
+                                          <>
+                                            <span>{statusLabel(status)}</span>
+                                            <AnimatedEllipsis />
+                                          </>
+                                        ) : (
+                                          statusLabel(status)
+                                        )}
                                       </span>
                                     </div>
                                   </div>

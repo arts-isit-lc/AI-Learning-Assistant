@@ -147,6 +147,12 @@ export default {
           from: { height: "var(--radix-accordion-content-height)", opacity: "1" },
           to: { height: "0", opacity: "0" },
         },
+        // "Typing dots" wave for in-progress status text. Base opacity comes from
+        // the element (1), so motion-reduce:animate-none leaves the dots static.
+        "ellipsis-bounce": {
+          "0%, 80%, 100%": { opacity: "0.2" },
+          "40%": { opacity: "1" },
+        },
       },
       animation: {
         "indeterminate-progress": "indeterminate-progress 1.5s ease-in-out infinite",
@@ -154,6 +160,7 @@ export default {
         // 250ms (normal) reads smoother/more deliberate than the 150ms snap.
         "accordion-down": "accordion-down var(--transition-normal) var(--ease-standard)",
         "accordion-up": "accordion-up var(--transition-normal) var(--ease-standard)",
+        "ellipsis-bounce": "ellipsis-bounce 1.4s ease-in-out infinite both",
       },
     },
   },
