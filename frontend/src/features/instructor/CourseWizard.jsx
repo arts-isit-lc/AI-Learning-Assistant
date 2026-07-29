@@ -445,12 +445,13 @@ export function CourseWizard() {
                                     </div>
                                   </div>
                                   <Button
+                                    className="gap-0"
                                     size="icon"
                                     variant="ghost"
                                     aria-label={`Remove ${f.fileName}`}
                                     onClick={() => handleRemoveFile(f.fileId)}
                                   >
-                                    <Icon className="gap-0" icon={MdDelete} size={24} />
+                                    <Icon  icon={MdDelete} size={24} />
                                   </Button>
                                 </div>
                                 {f.status === "uploading" && <Progress value={f.progress} />}
