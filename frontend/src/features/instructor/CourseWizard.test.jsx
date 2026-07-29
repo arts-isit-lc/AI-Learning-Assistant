@@ -277,19 +277,30 @@ describe("CourseWizard", () => {
     await waitFor(() => expect(screen.queryByLabelText("Module prompt")).not.toBeInTheDocument())
   })
 
-  it("stays on conflicts, warns on a second Next, and proceeds on Okay", async () => {
-    validate.mutateAsync.mockResolvedValue({ has_conflicts: true })
+  it("shows the inline conflict report, warns on a second Next, and proceeds on Okay", async () => {
+    validate.mutateAsync.mockResolvedValue({
+      has_conflicts: true,
+      conflicts: [
+        {
+          type: "HARD_CONTRADICTION",
+          prompt_a_source: "system_prompt",
+          prompt_b_source: "module_prompt:Vectors",
+          explanation: "Conflict on summaries.",
+        },
+      ],
+    })
     const user = userEvent.setup()
     render(<CourseWizard />)
     await user.type(screen.getByLabelText("Module name"), "Vectors")
     await user.click(screen.getByRole("button", { name: "Next" })) // -> references
     await user.click(screen.getByRole("button", { name: "Next" })) // -> prompt & topics
     await user.type(screen.getByLabelText("Module prompt"), "Always answer in French.")
-    // First Next: the check finds conflicts → stay on the step + inline warning.
+    // First Next: the check finds conflicts → stay + inline conflict report.
     await user.click(screen.getByRole("button", { name: "Next" }))
     expect(validate.mutateAsync).toHaveBeenCalledTimes(1)
     expect(screen.getByLabelText("Module prompt")).toBeInTheDocument()
-    expect(screen.getByText("Potential prompt conflicts")).toBeInTheDocument()
+    expect(screen.getByText("There are conflicts. Please resolve below.")).toBeInTheDocument()
+    expect(screen.getByText("HARD CONTRADICTION")).toBeInTheDocument()
     // Second Next (unresolved): opens the confirm warning without re-checking.
     await user.click(screen.getByRole("button", { name: "Next" }))
     expect(validate.mutateAsync).toHaveBeenCalledTimes(1)

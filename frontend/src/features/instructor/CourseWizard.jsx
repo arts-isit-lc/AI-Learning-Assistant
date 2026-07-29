@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { toast } from "react-toastify"
-import { MdDelete, MdInsertDriveFile } from "react-icons/md"
+import { MdDelete, MdInsertDriveFile, MdErrorOutline } from "react-icons/md"
 import {
   useConcepts,
   useModules,
@@ -22,6 +22,7 @@ import { ConfirmDialog } from "@/components/composed/ConfirmDialog"
 import { UnsavedChangesPrompt } from "@/components/composed/UnsavedChangesPrompt"
 import { Tag } from "@/components/composed/Tag"
 import { EditableTagList } from "@/components/composed/EditableTagList"
+import { ConflictList } from "@/components/composed/ConflictList"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -311,7 +312,7 @@ export function CourseWizard() {
 
     // Same prompt already checked — reuse the result (no repeat LLM call).
     if (lastPromptCheck && lastPromptCheck.prompt === trimmed) {
-      if (lastPromptCheck.hasConflicts) setConflictWarnOpen(true)
+      if (lastPromptCheck.report?.has_conflicts) setConflictWarnOpen(true)
       else setStep((s) => s + 1)
       return
     }
@@ -320,9 +321,8 @@ export function CourseWizard() {
     setCheckingConflicts(true)
     try {
       const report = await validate.mutateAsync({ prompt: trimmed, scope: "module", moduleId })
-      const hasConflicts = Boolean(report?.has_conflicts)
-      setLastPromptCheck({ prompt: trimmed, hasConflicts })
-      if (!hasConflicts) setStep((s) => s + 1)
+      setLastPromptCheck({ prompt: trimmed, report })
+      if (!report?.has_conflicts) setStep((s) => s + 1)
       // else: stay — the inline Alert appears; a re-click opens the confirm dialog.
     } catch {
       // Advisory only — a validation failure must not trap the user on the step.
@@ -348,6 +348,13 @@ export function CourseWizard() {
       : step === 1
         ? uploadedCount > 0 && !isProcessingBlocking
         : true
+
+  // Conflicts from the last check, but only while they still describe the prompt
+  // currently in the textarea (editing invalidates them → re-check on next Next).
+  const promptConflictReport =
+    lastPromptCheck && lastPromptCheck.prompt === modulePrompt.trim() && lastPromptCheck.report?.has_conflicts
+      ? lastPromptCheck.report
+      : null
 
   return (
     <>
@@ -559,23 +566,28 @@ export function CourseWizard() {
                     Provide any specific instructions for this module, which will be used with the
                     course-level prompt.
                   </p>
-                  <Textarea
-                    id="module-prompt"
-                    value={modulePrompt}
-                    onChange={(e) => setModulePrompt(e.target.value)}
-                    rows={5}
-                    placeholder="Module-specific instructions for the assistant…"
-                  />
-
-                  {lastPromptCheck?.hasConflicts && lastPromptCheck.prompt === modulePrompt.trim() && (
-                    <Alert variant="warning">
-                      <AlertTitle>Potential prompt conflicts</AlertTitle>
-                      <AlertDescription>
-                        This module prompt may conflict with the course or system prompt. Revise it,
-                        or click Next to continue anyway.
-                      </AlertDescription>
-                    </Alert>
-                  )}
+                  {/* Figma AddModule/Step3/A conflict state: red banner above the
+                      prompt, red-bordered textarea, and the collapsible conflict
+                      rows below. */}
+                  <div className="flex flex-col gap-2">
+                    {promptConflictReport && (
+                      <Alert variant="destructive">
+                        <Icon icon={MdErrorOutline} size={18} className="text-destructive" />
+                        <AlertDescription className="text-destructive">
+                          There are conflicts. Please resolve below.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                    <Textarea
+                      id="module-prompt"
+                      value={modulePrompt}
+                      onChange={(e) => setModulePrompt(e.target.value)}
+                      rows={5}
+                      aria-invalid={promptConflictReport ? true : undefined}
+                      placeholder="Module-specific instructions for the assistant…"
+                    />
+                    <ConflictList report={promptConflictReport} />
+                  </div>
 
                   <div className="flex flex-col mt-9">
                     <Label className="text-body text-neutral-900">Key topics</Label>
