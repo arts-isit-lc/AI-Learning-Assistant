@@ -55,6 +55,7 @@ beforeEach(() => {
   draft.cleanup.mockClear()
   draft.markSaved.mockClear()
   navigate.mockClear()
+  validate.mutateAsync.mockReset().mockResolvedValue({ has_conflicts: false })
   trackedFilesResult = {}
   generateResult = { topics: [] }
 })
@@ -232,5 +233,69 @@ describe("CourseWizard", () => {
     await user.click(screen.getByRole("button", { name: "Suggest" }))
     expect(await screen.findByRole("button", { name: "Edit alpha" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Suggest" })).toBeDisabled()
+  })
+
+  it("runs the prompt conflict check on Next when a module prompt was entered", async () => {
+    const user = userEvent.setup()
+    render(<CourseWizard />)
+    await user.type(screen.getByLabelText("Module name"), "Vectors")
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> references
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> prompt & topics
+    await user.type(screen.getByLabelText("Module prompt"), "Always answer in French.")
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> review (triggers the check)
+    expect(validate.mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ prompt: "Always answer in French.", scope: "module", moduleId: "m1" })
+    )
+  })
+
+  it("skips the prompt conflict check on Next when the module prompt is empty", async () => {
+    const user = userEvent.setup()
+    render(<CourseWizard />)
+    await user.type(screen.getByLabelText("Module name"), "Vectors")
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> references
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> prompt & topics
+    // No module prompt entered (it's optional).
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> review
+    expect(validate.mutateAsync).not.toHaveBeenCalled()
+  })
+
+  it("blocks advancing with a loading state while the conflict check runs", async () => {
+    let resolveCheck
+    validate.mutateAsync.mockReturnValueOnce(new Promise((res) => (resolveCheck = res)))
+    const user = userEvent.setup()
+    render(<CourseWizard />)
+    await user.type(screen.getByLabelText("Module name"), "Vectors")
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> references
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> prompt & topics
+    await user.type(screen.getByLabelText("Module prompt"), "Some instructions")
+    await user.click(screen.getByRole("button", { name: "Next" }))
+    // Blocked on the prompt step; Next is disabled (loading) while checking.
+    expect(screen.getByLabelText("Module prompt")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled()
+    // Resolve with no conflicts → advances off the prompt step.
+    resolveCheck({ has_conflicts: false })
+    await waitFor(() => expect(screen.queryByLabelText("Module prompt")).not.toBeInTheDocument())
+  })
+
+  it("stays on conflicts, warns on a second Next, and proceeds on Okay", async () => {
+    validate.mutateAsync.mockResolvedValue({ has_conflicts: true })
+    const user = userEvent.setup()
+    render(<CourseWizard />)
+    await user.type(screen.getByLabelText("Module name"), "Vectors")
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> references
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> prompt & topics
+    await user.type(screen.getByLabelText("Module prompt"), "Always answer in French.")
+    // First Next: the check finds conflicts → stay on the step + inline warning.
+    await user.click(screen.getByRole("button", { name: "Next" }))
+    expect(validate.mutateAsync).toHaveBeenCalledTimes(1)
+    expect(screen.getByLabelText("Module prompt")).toBeInTheDocument()
+    expect(screen.getByText("Potential prompt conflicts")).toBeInTheDocument()
+    // Second Next (unresolved): opens the confirm warning without re-checking.
+    await user.click(screen.getByRole("button", { name: "Next" }))
+    expect(validate.mutateAsync).toHaveBeenCalledTimes(1)
+    expect(await screen.findByText("Prompt conflicts detected")).toBeInTheDocument()
+    // Okay proceeds to the review step.
+    await user.click(screen.getByRole("button", { name: "Okay" }))
+    await waitFor(() => expect(screen.queryByLabelText("Module prompt")).not.toBeInTheDocument())
   })
 })

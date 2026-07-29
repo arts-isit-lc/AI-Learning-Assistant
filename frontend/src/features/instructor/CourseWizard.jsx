@@ -132,6 +132,9 @@ export function CourseWizard() {
   const [fileDescriptions, setFileDescriptions] = useState({}) // fileId -> description
   const [cancelOpen, setCancelOpen] = useState(false)
   const [leaving, setLeaving] = useState(false)
+  const [checkingConflicts, setCheckingConflicts] = useState(false) // module-prompt conflict check in flight
+  const [lastPromptCheck, setLastPromptCheck] = useState(null) // { prompt, hasConflicts } for the last checked prompt
+  const [conflictWarnOpen, setConflictWarnOpen] = useState(false) // "proceed despite conflicts?" dialog
   const autoGenRef = useRef(false)
 
   const { fileStates, uploadFiles, removeFile } = useFileUpload({ courseId, moduleId, moduleName })
@@ -279,22 +282,10 @@ export function CourseWizard() {
           .map((f) => ({ fileName: f.fileName, description: fileDescriptions[f.fileId].trim() })),
       },
       {
-        onSuccess: async () => {
+        onSuccess: () => {
+          // The module-prompt conflict check runs earlier, on Next off the
+          // prompt step (see handleNext) — not here.
           markSaved()
-          if (modulePrompt.trim()) {
-            try {
-              const report = await validate.mutateAsync({
-                prompt: modulePrompt,
-                scope: "module",
-                moduleId,
-              })
-              if (report?.has_conflicts) {
-                toast.info("Module saved. Prompt conflicts were detected — review them in Settings.")
-              }
-            } catch {
-              // Non-blocking — the module is already saved.
-            }
-          }
           toast.success("Module created")
           setLeaving(true)
         },
@@ -305,6 +296,46 @@ export function CourseWizard() {
         },
       }
     )
+  }
+
+  // Advancing past the module-prompt step (2) BLOCKS on the conflict check (only
+  // when a prompt was entered — it's optional). No conflicts → advance. Conflicts
+  // → stay and surface an inline warning; a second Next (still unresolved) opens a
+  // confirm dialog whose "Okay" proceeds anyway.
+  const handleNext = async () => {
+    const trimmed = modulePrompt.trim()
+    if (step !== 2 || !trimmed || !moduleId) {
+      setStep((s) => s + 1)
+      return
+    }
+
+    // Same prompt already checked — reuse the result (no repeat LLM call).
+    if (lastPromptCheck && lastPromptCheck.prompt === trimmed) {
+      if (lastPromptCheck.hasConflicts) setConflictWarnOpen(true)
+      else setStep((s) => s + 1)
+      return
+    }
+
+    // New/changed prompt → run the check. Next shows a spinner and blocks.
+    setCheckingConflicts(true)
+    try {
+      const report = await validate.mutateAsync({ prompt: trimmed, scope: "module", moduleId })
+      const hasConflicts = Boolean(report?.has_conflicts)
+      setLastPromptCheck({ prompt: trimmed, hasConflicts })
+      if (!hasConflicts) setStep((s) => s + 1)
+      // else: stay — the inline Alert appears; a re-click opens the confirm dialog.
+    } catch {
+      // Advisory only — a validation failure must not trap the user on the step.
+      setStep((s) => s + 1)
+    } finally {
+      setCheckingConflicts(false)
+    }
+  }
+
+  // "Okay" on the conflict warning → proceed to the next step.
+  const proceedPastConflicts = () => {
+    setConflictWarnOpen(false)
+    setStep((s) => s + 1)
   }
 
   // Step 1 (references): keep the user here until ingestion finishes — Next stays
@@ -536,6 +567,16 @@ export function CourseWizard() {
                     placeholder="Module-specific instructions for the assistant…"
                   />
 
+                  {lastPromptCheck?.hasConflicts && lastPromptCheck.prompt === modulePrompt.trim() && (
+                    <Alert variant="warning">
+                      <AlertTitle>Potential prompt conflicts</AlertTitle>
+                      <AlertDescription>
+                        This module prompt may conflict with the course or system prompt. Revise it,
+                        or click Next to continue anyway.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
                   <div className="flex flex-col mt-9">
                     <Label className="text-body text-neutral-900">Key topics</Label>
                     <p className="text-caption text-muted-foreground mb-8">
@@ -615,7 +656,12 @@ export function CourseWizard() {
                 {/* Left slot: Back (empty on step 1 keeps the right group pinned). */}
                 <div>
                   {step > 0 && (
-                    <Button variant="ghost" className="text-primary text-base" onClick={() => setStep((s) => s - 1)}>
+                    <Button
+                      variant="ghost"
+                      className="text-primary text-base"
+                      disabled={checkingConflicts}
+                      onClick={() => setStep((s) => s - 1)}
+                    >
                       Back
                     </Button>
                   )}
@@ -625,7 +671,7 @@ export function CourseWizard() {
                     Cancel
                   </Button>
                   {step < STEP_COUNT - 1 ? (
-                    <Button className="text-base" onClick={() => setStep((s) => s + 1)} disabled={!canNext}>
+                    <Button className="text-base" onClick={handleNext} loading={checkingConflicts} disabled={!canNext}>
                       Next
                     </Button>
                   ) : (
@@ -648,6 +694,17 @@ export function CourseWizard() {
         confirmLabel="Discard"
         variant="danger"
         onConfirm={handleCancel}
+      />
+
+      <ConfirmDialog
+        open={conflictWarnOpen}
+        onOpenChange={setConflictWarnOpen}
+        title="Prompt conflicts detected"
+        description="This module prompt may conflict with the course or system prompt. You can go back and revise it, or continue anyway."
+        confirmLabel="Okay"
+        cancelLabel="Cancel"
+        variant="default"
+        onConfirm={proceedPastConflicts}
       />
     </>
   )
