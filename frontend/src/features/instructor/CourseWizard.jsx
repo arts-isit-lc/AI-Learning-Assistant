@@ -294,12 +294,12 @@ export function CourseWizard() {
     <>
       <UnsavedChangesPrompt when={isDirty && !leaving} onProceed={cleanup} />
       <Dialog open onOpenChange={(open) => !open && setCancelOpen(true)}>
-        {/* Figma `Modal/Admin/AddModule` (node 1141:6789): explicit height 80vh
-            (floored at 640px, capped at 80vh). The header (title + progress) and
+        {/* Figma `Modal/Admin/AddModule` (node 1141:6789): explicit height 90vh
+            (floored at 640px, capped at 90vh). The header (title + progress) and
             footer (actions) stay fixed; only the body between them scrolls.
             Full-bleed (`p-0`) — each region pads itself to the modal's 36px
             (px-9) gutter. */}
-        <DialogContent className="flex h-[80vh] min-h-[640px] max-h-[80vh] w-[min(92vw,1088px)] max-w-none flex-col gap-0 overflow-hidden p-0">
+        <DialogContent className="flex h-[90vh] min-h-[640px] max-h-[90vh] w-[min(92vw,1088px)] max-w-none flex-col gap-0 overflow-hidden p-0">
           {/* Fixed header: title + divider (pt-14 clears the close control),
               then the determinate progress bar (16px track, #D9D9D9). */}
           <div className="shrink-0">
