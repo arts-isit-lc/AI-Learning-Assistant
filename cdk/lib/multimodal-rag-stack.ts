@@ -179,6 +179,33 @@ export class MultimodalRagStack extends cdk.Stack {
               actions: ["sqs:SendMessage"],
               resources: [this.enrichmentQueue.queueArn],
             }),
+            // Secrets Manager — specific DB secret ARN (write per-stage
+            // processing_status so the UI can show 'ingesting').
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ["secretsmanager:GetSecretValue"],
+              resources: [db.secretPathUser.secretArn],
+            }),
+            // EC2 VPC networking — resource '*' required by AWS for ENI operations
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                "ec2:CreateNetworkInterface",
+                "ec2:DescribeNetworkInterfaces",
+                "ec2:DeleteNetworkInterface",
+                "ec2:AssignPrivateIpAddresses",
+                "ec2:UnassignPrivateIpAddresses",
+              ],
+              resources: ["*"],
+            }),
+            // RDS Proxy connect — specific instance resource ID
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ["rds-db:connect"],
+              resources: [
+                `arn:aws:rds-db:${this.region}:${this.account}:dbuser:${db.dbInstance.instanceResourceId}/*`,
+              ],
+            }),
           ],
         }),
       },
@@ -388,11 +415,15 @@ export class MultimodalRagStack extends cdk.Stack {
         timeout: Duration.seconds(300),
         tracing: lambda.Tracing.ACTIVE,
         logRetention: logRetention,
+        vpc: vpc.vpc,
         functionName: `${id}-ragIngestionFunction`,
         role: ragIngestionRole,
         environment: {
           IR_BUCKET_NAME: this.irBucket.bucketName,
           ENRICHMENT_QUEUE_URL: this.enrichmentQueue.queueUrl,
+          // DB access so ingestion can write processing_status='ingesting'.
+          DB_SECRET_ARN: db.secretPathUser.secretArn,
+          DB_PROXY_ENDPOINT: db.rdsProxyEndpoint,
           REGION: this.region,
         },
       }

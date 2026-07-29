@@ -43,6 +43,7 @@ from ..models.data_models import (
     RetrievalUnit,
 )
 from ..persistence.ir_persistence import IRPersistence
+from ..persistence.processing_status import set_processing_status
 from .document_summary import DocumentSummaryGenerator
 from .element_router import ElementRouter
 from .embedding_generator import EmbeddingGenerator
@@ -194,6 +195,10 @@ def _process_record(record: dict[str, Any]) -> dict[str, Any]:
             "retrieval_unit_count": 0,
             "status": "skipped_module_deleting",
         }
+
+    # Signal the UI that enrichment (the long ~2-min stage) has started. The
+    # completion writer flips this to 'complete' at the end. Best-effort.
+    set_processing_status(file_id, "enriching")
 
     record_start = time.time()
 

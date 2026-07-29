@@ -57,6 +57,11 @@ function statusLabel(status) {
     case "upload_failed":
       return "Upload failed"
     case "pending":
+      return "Queued…"
+    case "ingesting":
+      return "Reading document…"
+    case "enriching":
+      return "Analyzing content…"
     case "processing":
       return "Processing…"
     case "complete":

@@ -166,4 +166,24 @@ describe("CourseWizard", () => {
     await user.click(screen.getByRole("button", { name: "Next" })) // -> references
     expect(screen.queryByRole("button", { name: /Description \(optional\)/i })).not.toBeInTheDocument()
   })
+
+  it("shows 'Reading document…' while a file is ingesting", async () => {
+    trackedFilesResult = { f1: { fileId: "f1", status: "ingesting" } }
+    const user = userEvent.setup()
+    render(<CourseWizard />)
+    await user.type(screen.getByLabelText("Module name"), "Vectors")
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> references
+    expect(screen.getByText("Reading document…")).toBeInTheDocument()
+  })
+
+  it("shows 'Analyzing content…' while enriching and keeps Publish gated", async () => {
+    trackedFilesResult = { f1: { fileId: "f1", status: "enriching" } }
+    const user = userEvent.setup()
+    render(<CourseWizard />)
+    await user.type(screen.getByLabelText("Module name"), "Vectors")
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> references
+    expect(screen.getByText("Analyzing content…")).toBeInTheDocument()
+    // 'enriching' is a blocking status, so the user can't advance until 'complete'.
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled()
+  })
 })

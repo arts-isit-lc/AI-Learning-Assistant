@@ -146,7 +146,9 @@ export function useProcessingPoller({ moduleId, enabled = true }) {
     try {
       const data = await apiClient.get("instructor/file_processing_statuses", { module_id: moduleId })
       const inProgressFiles = (data.files || [])
-        .filter((f) => f.processing_status === "pending" || f.processing_status === "processing")
+        .filter((f) =>
+          ["pending", "processing", "ingesting", "enriching"].includes(f.processing_status)
+        )
         .map((f) => ({ fileId: f.file_id, uploadCompletedAt: Date.now() }))
       if (inProgressFiles.length > 0) {
         dispatch({ type: "ADD_TRACKED_FILES", payload: { files: inProgressFiles } })

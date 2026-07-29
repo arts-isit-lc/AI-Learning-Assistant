@@ -31,6 +31,7 @@ from aws_lambda_powertools import Logger
 
 from ..models.data_models import FileMetadata
 from ..persistence.ir_persistence import IRPersistence
+from ..persistence.processing_status import set_processing_status
 from .adapter_registry import AdapterRegistry
 from .adapters.csv_adapter import CsvAdapter
 from .adapters.docx_adapter import DocxAdapter
@@ -244,6 +245,11 @@ def _process_record(record: dict[str, Any]) -> dict[str, Any]:
             module_id=module_id,
             file_id=file_id,
         )
+
+        # Signal the UI that ingestion has started (first server stage after
+        # upload; enrichment later flips this to 'enriching' then 'complete').
+        # Best-effort: never fails or slows ingestion.
+        set_processing_status(file_id, "ingesting")
 
         # Build FileMetadata
         file_metadata = FileMetadata(
