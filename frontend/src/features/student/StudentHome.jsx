@@ -39,7 +39,7 @@ export function StudentHome() {
         <h1 className="text-h2 uppercase text-neutral-900">Courses</h1>
         <Button className="gap-2 px-6 py-1 rounded" onClick={() => setJoinOpen(true)}>
           Join course
-          <Icon icon={MdAdd} size={18} />
+          <Icon icon={MdAdd} size={24} />
         </Button>
       </div>
 

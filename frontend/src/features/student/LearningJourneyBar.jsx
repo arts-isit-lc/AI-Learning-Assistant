@@ -61,7 +61,7 @@ export function LearningJourneyBar({
             className="inline-flex items-center gap-1 rounded-sm p-1 text-primary transition-colors hover:bg-primary-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Icon icon={MdMap} size={20} />
-            <Icon icon={open ? MdExpandLess : MdExpandMore} size={18} />
+            <Icon icon={open ? MdExpandLess : MdExpandMore} size={24} />
           </button>
         </div>
 

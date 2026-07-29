@@ -22,7 +22,7 @@ export function ReferenceDocPanel({ fileId, fileName, onClose }) {
           {fileName || "Reference"}
         </span>
         <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close document">
-          <Icon icon={MdClose} size={18} />
+          <Icon icon={MdClose} size={24} />
         </Button>
       </header>
       <div className="min-h-0 flex-1">

@@ -68,7 +68,7 @@ export function InstructorTabBar() {
       aria-controls="instructor-greeting"
     >
       {expanded ? "Collapse" : "Expand"}
-      <Icon icon={expanded ? MdExpandLess : MdExpandMore} size={18} />
+      <Icon icon={expanded ? MdExpandLess : MdExpandMore} size={24} />
     </button>
   )
 

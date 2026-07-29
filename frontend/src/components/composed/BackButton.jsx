@@ -7,7 +7,7 @@ import { Icon } from "@/components/ui/icon"
 export function BackButton({ onClick, children = "Back", className }) {
   return (
     <Button variant="ghost" size="sm" onClick={onClick} className={cn("gap-1 pl-2", className)}>
-      <Icon icon={MdArrowBack} size={18} />
+      <Icon icon={MdArrowBack} size={24} />
       {children}
     </Button>
   )

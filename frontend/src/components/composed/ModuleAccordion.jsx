@@ -77,7 +77,7 @@ function SortableModuleRow({ module, number, onEdit, onDelete }) {
           <span>
             {toRoman(number)}. {titleCase(module.module_name)}
           </span>
-          <Icon icon={MdExpandMore} size={18} className={cn("shrink-0 transition-transform", open && "rotate-180")} />
+          <Icon icon={MdExpandMore} size={24} className={cn("shrink-0 transition-transform", open && "rotate-180")} />
         </button>
         <button
           type="button"
@@ -86,7 +86,7 @@ function SortableModuleRow({ module, number, onEdit, onDelete }) {
           {...attributes}
           {...listeners}
         >
-          <Icon icon={MdDragIndicator} size={18} />
+          <Icon icon={MdDragIndicator} size={24} />
         </button>
       </div>
       {/* Slide open/closed via grid-rows 0fr<->1fr (a modern, JS-free height
@@ -254,7 +254,7 @@ export function ModuleAccordion({
                 {...(sortable?.attributes || {})}
                 {...(sortable?.listeners || {})}
               >
-                <Icon icon={MdDragIndicator} size={18} />
+                <Icon icon={MdDragIndicator} size={24} />
               </button>
               <button
                 type="button"
@@ -262,7 +262,7 @@ export function ModuleAccordion({
                 onClick={onAddModule}
                 className="rounded p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <Icon icon={MdAdd} size={18} />
+                <Icon icon={MdAdd} size={24} />
               </button>
               <button
                 type="button"

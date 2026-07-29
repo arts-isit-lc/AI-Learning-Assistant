@@ -22,12 +22,12 @@ export function FileRow({ file, onClick, onDelete, className }) {
         onClick={onClick}
         className="flex min-w-0 items-center gap-2 rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <Icon icon={MdInsertDriveFile} size={18} className="shrink-0 text-muted-foreground" />
+        <Icon icon={MdInsertDriveFile} size={24} className="shrink-0 text-muted-foreground" />
         <span className="truncate text-caption text-foreground">{name}</span>
       </button>
       {onDelete && (
         <Button variant="ghost" size="icon" onClick={onDelete} aria-label={`Delete ${name}`}>
-          <Icon icon={MdDelete} size={18} />
+          <Icon icon={MdDelete} size={24} />
         </Button>
       )}
     </div>

@@ -279,7 +279,7 @@ export function CourseDetail() {
               onClick={() => setAddOpen(true)}
               aria-label="Add instructor"
             >
-              <Icon icon={MdAdd} size={18} />
+              <Icon icon={MdAdd} size={24} />
             </Button>
           </div>
           <span className="text-caption font-semibold text-foreground">OCELIA access</span>

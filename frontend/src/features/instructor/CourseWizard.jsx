@@ -450,7 +450,7 @@ export function CourseWizard() {
                                     aria-label={`Remove ${f.fileName}`}
                                     onClick={() => handleRemoveFile(f.fileId)}
                                   >
-                                    <Icon icon={MdDelete} size={18} />
+                                    <Icon icon={MdDelete} size={24} />
                                   </Button>
                                 </div>
                                 {f.status === "uploading" && <Progress value={f.progress} />}

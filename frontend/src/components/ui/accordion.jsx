@@ -24,7 +24,7 @@ const AccordionTrigger = React.forwardRef(function AccordionTrigger({ className,
         {...props}
       >
         {children}
-        <Icon icon={MdExpandMore} size={18} className="shrink-0 transition-transform duration-fast" />
+        <Icon icon={MdExpandMore} size={24} className="shrink-0 transition-transform duration-fast" />
       </AccordionPrimitive.Trigger>
     </AccordionPrimitive.Header>
   )

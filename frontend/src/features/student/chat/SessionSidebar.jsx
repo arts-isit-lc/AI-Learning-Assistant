@@ -53,7 +53,7 @@ export function SessionSidebar({
           aria-label="New chat"
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm border border-primary text-primary transition-colors hover:bg-primary-subtle disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <Icon icon={MdAddComment} size={18} />
+          <Icon icon={MdAddComment} size={24} />
         </button>
       </div>
 

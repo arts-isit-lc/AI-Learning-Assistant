@@ -20,7 +20,7 @@ const Command = React.forwardRef(function Command({ className, ...props }, ref) 
 const CommandInput = React.forwardRef(function CommandInput({ className, ...props }, ref) {
   return (
     <div className="flex items-center gap-2 border-b border-border px-3">
-      <Icon icon={MdSearch} size={18} className="shrink-0 opacity-60" />
+      <Icon icon={MdSearch} size={24} className="shrink-0 opacity-60" />
       <CommandPrimitive.Input
         ref={ref}
         className={cn(

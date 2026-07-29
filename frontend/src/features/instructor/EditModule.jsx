@@ -337,7 +337,7 @@ export function EditModule() {
                             aria-label={`Remove ${f.fileName}`}
                             onClick={() => setRemovedFiles((prev) => new Set(prev).add(f.fileName))}
                           >
-                            <Icon icon={MdDelete} size={18} />
+                            <Icon icon={MdDelete} size={24} />
                           </Button>
                         </div>
                       </li>
@@ -357,7 +357,7 @@ export function EditModule() {
                             aria-label={`Remove ${f.fileName}`}
                             onClick={() => removeFile(f.fileId)}
                           >
-                            <Icon icon={MdDelete} size={18} />
+                            <Icon icon={MdDelete} size={24} />
                           </Button>
                         </div>
                         {f.status === "uploading" && <Progress value={f.progress} className="mt-2" />}

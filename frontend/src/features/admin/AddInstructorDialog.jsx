@@ -89,7 +89,7 @@ export function AddInstructorDialog() {
                       aria-label={`Remove email ${index + 1}`}
                       onClick={() => removeField(index)}
                     >
-                      <Icon icon={MdClose} size={18} />
+                      <Icon icon={MdClose} size={24} />
                     </Button>
                   )}
                 </div>

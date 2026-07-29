@@ -119,7 +119,7 @@ export default function Gallery() {
             <div className="flex w-full flex-col gap-3">
               {ALERT_VARIANTS.map((v) => (
                 <Alert key={v} variant={v}>
-                  <Icon icon={v === "warning" ? MdWarning : MdInfo} size={18} />
+                  <Icon icon={v === "warning" ? MdWarning : MdInfo} size={24} />
                   <AlertTitle>{v}</AlertTitle>
                   <AlertDescription>A {v} message shown inline.</AlertDescription>
                 </Alert>
