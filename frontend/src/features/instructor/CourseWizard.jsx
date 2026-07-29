@@ -544,7 +544,7 @@ export function CourseWizard() {
                       previously suggested topics, click the &lsquo;Suggest&rsquo; button.
                     </p>
                     <div className="flex gap-4 mb-8">
-                      <Button
+                      <Button className="rounded"
                         variant="outline"
                         onClick={handleRestoreSuggested}
                         loading={isGenerating}
@@ -563,7 +563,7 @@ export function CourseWizard() {
                         }}
                         placeholder="Add new…"
                         aria-label="Add key topic"
-                        className="flex-1"
+                        className="flex-1 rounded"
                       />
                     </div>
                     <EditableTagList values={keyTopics} onChange={setKeyTopics} ariaLabelPrefix="key topic" />
