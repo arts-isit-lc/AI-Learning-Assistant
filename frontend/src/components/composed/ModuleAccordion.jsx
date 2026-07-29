@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   DndContext,
   KeyboardSensor,
@@ -57,6 +57,14 @@ function SortableModuleRow({ module, number, onEdit, onDelete }) {
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }
   const topics = parseKeyTopics(module.key_topics)
 
+  // The panel stays mounted so it can animate BOTH ways (grid-rows 0fr<->1fr).
+  // `inert` while collapsed keeps the hidden Edit/Delete controls out of the tab
+  // order + accessibility tree (otherwise they're focusable but invisible).
+  const panelRef = useRef(null)
+  useEffect(() => {
+    if (panelRef.current) panelRef.current.inert = !open
+  }, [open])
+
   return (
     <div ref={setNodeRef} style={style} className="group/module w-full max-w-[600px] rounded-sm border border-border bg-muted">
       <div className="flex items-center gap-2 py-2 pl-3 pr-2">
@@ -81,29 +89,45 @@ function SortableModuleRow({ module, number, onEdit, onDelete }) {
           <Icon icon={MdDragIndicator} size={18} />
         </button>
       </div>
-      {open && (
-        <div className="border-t border-border bg-background p-3 text-caption">
-          <p className="font-semibold text-foreground">Prompt</p>
-          <p className="mb-3 whitespace-pre-wrap text-muted-foreground">
-            {module.module_prompt || "No prompt set."}
-          </p>
-          {topics.length > 0 && (
-            <div className="mb-3 flex flex-wrap gap-1">
-              {topics.map((t, i) => (
-                <Tag key={i} label={t} />
-              ))}
+      {/* Slide open/closed via grid-rows 0fr<->1fr (a modern, JS-free height
+          animation). The middle wrapper clips the overflow while it animates;
+          the panel also fades. Timing matches the Accordion primitive
+          (var(--transition-normal) + var(--ease-standard)) and honors reduced motion. */}
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows] duration-normal ease-standard motion-reduce:transition-none",
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        )}
+      >
+        <div ref={panelRef} className="overflow-hidden">
+          <div
+            className={cn(
+              "border-t border-border bg-background p-3 text-caption transition-opacity duration-normal ease-standard motion-reduce:transition-none",
+              open ? "opacity-100" : "opacity-0"
+            )}
+          >
+            <p className="font-semibold text-foreground">Prompt</p>
+            <p className="mb-3 whitespace-pre-wrap text-muted-foreground">
+              {module.module_prompt || "No prompt set."}
+            </p>
+            {topics.length > 0 && (
+              <div className="mb-3 flex flex-wrap gap-1">
+                {topics.map((t, i) => (
+                  <Tag key={i} label={t} />
+                ))}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => onEdit(module)}>
+                Edit
+              </Button>
+              <Button size="sm" variant="danger" onClick={() => onDelete(module)}>
+                Delete
+              </Button>
             </div>
-          )}
-          <div className="flex gap-2">
-            <Button size="sm" variant="outline" onClick={() => onEdit(module)}>
-              Edit
-            </Button>
-            <Button size="sm" variant="danger" onClick={() => onDelete(module)}>
-              Delete
-            </Button>
           </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }

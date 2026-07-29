@@ -135,20 +135,23 @@ export default {
           from: { opacity: "0" },
           to: { opacity: "1" },
         },
+        // Slide + subtle fade. Height uses Radix's measured content height var;
+        // opacity adds an elegant fade so content doesn't pop in/out.
         "accordion-down": {
-          from: { height: "0" },
-          to: { height: "var(--radix-accordion-content-height)" },
+          from: { height: "0", opacity: "0" },
+          to: { height: "var(--radix-accordion-content-height)", opacity: "1" },
         },
         "accordion-up": {
-          from: { height: "var(--radix-accordion-content-height)" },
-          to: { height: "0" },
+          from: { height: "var(--radix-accordion-content-height)", opacity: "1" },
+          to: { height: "0", opacity: "0" },
         },
       },
       animation: {
         "indeterminate-progress": "indeterminate-progress 1.5s ease-in-out infinite",
         "fade-in": "fade-in var(--transition-normal) var(--ease-standard)",
-        "accordion-down": "accordion-down var(--transition-fast) var(--ease-standard)",
-        "accordion-up": "accordion-up var(--transition-fast) var(--ease-standard)",
+        // 250ms (normal) reads smoother/more deliberate than the 150ms snap.
+        "accordion-down": "accordion-down var(--transition-normal) var(--ease-standard)",
+        "accordion-up": "accordion-up var(--transition-normal) var(--ease-standard)",
       },
     },
   },
