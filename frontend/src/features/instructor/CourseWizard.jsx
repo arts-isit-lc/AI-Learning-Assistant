@@ -527,7 +527,7 @@ export function CourseWizard() {
                       />
                     </div>
                     {keyTopics.length > 0 && (
-                      <div className="flex flex-wrap mb-16">
+                      <div className="flex flex-wrap gap-1">
                         {keyTopics.map((t) => (
                           <Tag key={t} label={t} onRemove={() => setKeyTopics((prev) => prev.filter((x) => x !== t))} />
                         ))}
