@@ -59,7 +59,8 @@ export function useModuleReferences(moduleId) {
  * its cross-module references (PUT instructor/module_file_references). Sets the
  * module active. Errors are suppressed from the global toast so the wizard can
  * surface the specific 400 (duplicate name) / 409 (files still processing) cases.
- * Variables: `{ moduleId, conceptId, moduleName, moduleNumber, modulePrompt, keyTopics, referencedFileIds }`.
+ * Variables: `{ moduleId, conceptId, moduleName, moduleNumber, modulePrompt, keyTopics,
+ * referencedFileIds, fileDescriptions }` where `fileDescriptions` is `[{ fileName, description }]`.
  */
 export function useFinalizeModule(courseId) {
   const qc = useQueryClient()
@@ -73,6 +74,7 @@ export function useFinalizeModule(courseId) {
       modulePrompt,
       keyTopics,
       referencedFileIds = [],
+      fileDescriptions = [],
     }) => {
       const { email } = await http.getAuth()
       const updated = await http.post(
@@ -92,6 +94,25 @@ export function useFinalizeModule(courseId) {
         { module_id: moduleId },
         { referenced_file_ids: referencedFileIds }
       )
+      // Persist per-file descriptions (PUT instructor/update_metadata merges the
+      // description into each file's metadata, preserving topic_extraction).
+      // Best-effort: ingestion has finished by Publish, and an optional
+      // description must not fail module creation.
+      if (fileDescriptions.length) {
+        await Promise.allSettled(
+          fileDescriptions.map(({ fileName, description }) =>
+            http.put(
+              "instructor/update_metadata",
+              {
+                module_id: moduleId,
+                filename: cleanFileName(removeFileExtension(fileName)),
+                filetype: getFileType(fileName),
+              },
+              { metadata: description }
+            )
+          )
+        )
+      }
       return updated
     },
     onSuccess: () => {

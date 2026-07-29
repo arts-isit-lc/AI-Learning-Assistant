@@ -130,4 +130,40 @@ describe("CourseWizard", () => {
     expect(screen.getByRole("button", { name: "Back" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument()
   })
+
+  it("labels a fully-processed file 'Complete' in green", async () => {
+    trackedFilesResult = { f1: { fileId: "f1", status: "complete" } }
+    const user = userEvent.setup()
+    render(<CourseWizard />)
+    await user.type(screen.getByLabelText("Module name"), "Vectors")
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> references (file list)
+    const label = screen.getByText("Complete")
+    expect(label).toBeInTheDocument()
+    expect(label).toHaveClass("text-success")
+  })
+
+  it("captures a per-file description and sends it to finalize", async () => {
+    const user = userEvent.setup()
+    render(<CourseWizard />)
+    await user.type(screen.getByLabelText("Module name"), "Vectors")
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> references
+    // Expand the file's Description accordion and type into it.
+    await user.click(screen.getByRole("button", { name: /Description \(optional\)/i }))
+    await user.type(screen.getByLabelText("Description for notes.pdf"), "Core reading")
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> prompt & topics
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> review
+    await user.click(screen.getByRole("button", { name: "Publish" }))
+    expect(finalize.mutate).toHaveBeenCalled()
+    const [payload] = finalize.mutate.mock.calls[0]
+    expect(payload.fileDescriptions).toEqual([{ fileName: "notes.pdf", description: "Core reading" }])
+  })
+
+  it("does not offer a description on a failed upload", async () => {
+    trackedFilesResult = { f1: { fileId: "f1", status: "failed" } }
+    const user = userEvent.setup()
+    render(<CourseWizard />)
+    await user.type(screen.getByLabelText("Module name"), "Vectors")
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> references
+    expect(screen.queryByRole("button", { name: /Description \(optional\)/i })).not.toBeInTheDocument()
+  })
 })

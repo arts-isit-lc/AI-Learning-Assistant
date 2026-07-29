@@ -29,6 +29,7 @@ import { Icon } from "@/components/ui/icon"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion"
 import {
   Select,
   SelectTrigger,
@@ -59,7 +60,7 @@ function statusLabel(status) {
     case "processing":
       return "Processing…"
     case "complete":
-      return "Ready"
+      return "Complete"
     case "failed":
       return "Processing failed"
     case "not_found":
@@ -107,6 +108,7 @@ export function CourseWizard() {
   const [keyTopics, setKeyTopics] = useState([])
   const [topicInput, setTopicInput] = useState("")
   const [referencedFileIds, setReferencedFileIds] = useState([])
+  const [fileDescriptions, setFileDescriptions] = useState({}) // fileId -> description
   const [cancelOpen, setCancelOpen] = useState(false)
   const [leaving, setLeaving] = useState(false)
   const autoGenRef = useRef(false)
@@ -202,6 +204,20 @@ export function CourseWizard() {
       prev.includes(fileId) ? prev.filter((id) => id !== fileId) : [...prev, fileId]
     )
 
+  const setFileDescription = (fileId, text) =>
+    setFileDescriptions((prev) => ({ ...prev, [fileId]: text }))
+
+  // Remove a file and drop any description held for it.
+  const handleRemoveFile = (fileId) => {
+    removeFile(fileId)
+    setFileDescriptions((prev) => {
+      if (!(fileId in prev)) return prev
+      const rest = { ...prev }
+      delete rest[fileId]
+      return rest
+    })
+  }
+
   // Leave after a successful publish or a confirmed discard. Navigating from an
   // effect lets the guard see `when=false` first (leaving = true), so neither
   // path double-prompts on top of Publish / the wizard's own Discard confirm.
@@ -225,6 +241,9 @@ export function CourseWizard() {
         modulePrompt,
         keyTopics,
         referencedFileIds,
+        fileDescriptions: fileList
+          .filter((f) => (fileDescriptions[f.fileId] || "").trim())
+          .map((f) => ({ fileName: f.fileName, description: fileDescriptions[f.fileId].trim() })),
       },
       {
         onSuccess: async () => {
@@ -390,8 +409,11 @@ export function CourseWizard() {
                             const tracked = trackedFiles[f.fileId]
                             const status = tracked?.status ?? f.status
                             const failed = status === "upload_failed" || status === "failed"
+                            // Description accordion (Figma node 1162:8419): shown once the file
+                            // has uploaded and isn't in a failed state.
+                            const showDescription = !failed && status !== "uploading"
                             return (
-                              <li key={f.fileId} className="rounded-sm border border-border p-3">
+                              <li key={f.fileId} className="flex flex-col gap-2 rounded-sm border border-border p-3">
                                 <div className="flex items-center justify-between gap-3">
                                   <div className="flex min-w-0 items-center gap-3">
                                     <Icon
@@ -406,7 +428,11 @@ export function CourseWizard() {
                                       <span
                                         className={cn(
                                           "text-caption",
-                                          failed ? "text-destructive" : "text-muted-foreground"
+                                          failed
+                                            ? "text-destructive"
+                                            : status === "complete"
+                                              ? "text-success"
+                                              : "text-muted-foreground"
                                         )}
                                       >
                                         {statusLabel(status)}
@@ -417,12 +443,30 @@ export function CourseWizard() {
                                     size="icon"
                                     variant="ghost"
                                     aria-label={`Remove ${f.fileName}`}
-                                    onClick={() => removeFile(f.fileId)}
+                                    onClick={() => handleRemoveFile(f.fileId)}
                                   >
                                     <Icon icon={MdDelete} size={18} />
                                   </Button>
                                 </div>
-                                {f.status === "uploading" && <Progress value={f.progress} className="mt-2" />}
+                                {f.status === "uploading" && <Progress value={f.progress} />}
+                                {showDescription && (
+                                  <Accordion type="single" collapsible>
+                                    <AccordionItem value="description" className="border-b-0">
+                                      <AccordionTrigger className="py-0 font-normal text-neutral-900 hover:no-underline">
+                                        Description (optional)
+                                      </AccordionTrigger>
+                                      <AccordionContent className="pb-0 pt-2">
+                                        <Textarea
+                                          value={fileDescriptions[f.fileId] || ""}
+                                          onChange={(e) => setFileDescription(f.fileId, e.target.value)}
+                                          rows={3}
+                                          placeholder="Add an optional description for this file…"
+                                          aria-label={`Description for ${f.fileName}`}
+                                        />
+                                      </AccordionContent>
+                                    </AccordionItem>
+                                  </Accordion>
+                                )}
                               </li>
                             )
                           })}
