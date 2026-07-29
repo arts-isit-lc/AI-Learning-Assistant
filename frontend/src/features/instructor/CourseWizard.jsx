@@ -519,30 +519,35 @@ export function CourseWizard() {
             </div>
           </div>
 
-          {/* Fixed footer: divider + right-aligned actions (Figma justify-end,
-              8px gap). Back appears from step 2 onward; the primary action is
-              Next until the final step, where it becomes Publish. */}
+          {/* Fixed footer: divider + actions. Back floats left (from step 2
+              onward); Cancel + the primary action (Next, or Publish on the final
+              step) sit on the right. */}
           <div className="shrink-0 px-9 pb-9">
             <div className="flex flex-col gap-4">
               <div className="h-px w-full bg-border" aria-hidden="true" />
-              <div className="flex items-center justify-end gap-2">
-                {step > 0 && (
-                  <Button variant="ghost" className="text-primary text-base" onClick={() => setStep((s) => s - 1)}>
-                    Back
+              <div className="flex items-center justify-between gap-2">
+                {/* Left slot: Back (empty on step 1 keeps the right group pinned). */}
+                <div>
+                  {step > 0 && (
+                    <Button variant="ghost" className="text-primary text-base" onClick={() => setStep((s) => s - 1)}>
+                      Back
+                    </Button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button className="text-base" variant="outline" onClick={() => setCancelOpen(true)}>
+                    Cancel
                   </Button>
-                )}
-                <Button className="text-base" variant="outline" onClick={() => setCancelOpen(true)}>
-                  Cancel
-                </Button>
-                {step < STEP_COUNT - 1 ? (
-                  <Button className="text-base" onClick={() => setStep((s) => s + 1)} disabled={!canNext}>
-                    Next
-                  </Button>
-                ) : (
-                  <Button className="text-base" onClick={handleSave} loading={finalize.isPending} disabled={!canSave}>
-                    Publish
-                  </Button>
-                )}
+                  {step < STEP_COUNT - 1 ? (
+                    <Button className="text-base" onClick={() => setStep((s) => s + 1)} disabled={!canNext}>
+                      Next
+                    </Button>
+                  ) : (
+                    <Button className="text-base" onClick={handleSave} loading={finalize.isPending} disabled={!canSave}>
+                      Publish
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
