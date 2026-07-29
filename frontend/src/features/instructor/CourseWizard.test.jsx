@@ -8,6 +8,8 @@ const validate = { mutateAsync: vi.fn().mockResolvedValue({ has_conflicts: false
 const navigate = vi.fn()
 // Per-test processing state (step 2 gating). Empty = nothing in flight.
 let trackedFilesResult = {}
+// Per-test auto-suggest result (drives the "Suggest"/restore flow).
+let generateResult = { topics: [] }
 
 vi.mock("./hooks/useDraftModule", () => ({ useDraftModule: () => draft }))
 vi.mock("./hooks/useFileUpload", () => ({
@@ -22,7 +24,7 @@ vi.mock("./hooks/useProcessingPoller", () => ({
   useProcessingPoller: () => ({ trackedFiles: trackedFilesResult, addTrackedFiles: vi.fn() }),
 }))
 vi.mock("./hooks/useModuleTopics", () => ({
-  useModuleTopics: () => ({ generate: vi.fn().mockResolvedValue({ topics: [] }), isGenerating: false }),
+  useModuleTopics: () => ({ generate: vi.fn().mockResolvedValue(generateResult), isGenerating: false }),
 }))
 vi.mock("@/services/queries", () => ({
   useConcepts: () => ({ data: [{ concept_id: "con1", concept_name: "algebra" }] }),
@@ -54,6 +56,7 @@ beforeEach(() => {
   draft.markSaved.mockClear()
   navigate.mockClear()
   trackedFilesResult = {}
+  generateResult = { topics: [] }
 })
 
 async function advance() {
@@ -201,5 +204,26 @@ describe("CourseWizard", () => {
     await user.type(input, "vectors{Enter}")
     expect(screen.getByRole("button", { name: "Edit vectors" })).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Edit vetcors" })).not.toBeInTheDocument()
+  })
+
+  it("keeps Suggest inactive until a suggested topic is removed, then restores it", async () => {
+    trackedFilesResult = { f1: { fileId: "f1", status: "complete" } }
+    generateResult = { topics: ["alpha", "beta"] }
+    const user = userEvent.setup()
+    render(<CourseWizard />)
+    await user.type(screen.getByLabelText("Module name"), "Vectors")
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> references
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> prompt & topics
+    // Auto-suggest populates topics; Suggest starts inactive (nothing to restore).
+    expect(await screen.findByRole("button", { name: "Edit alpha" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Suggest" })).toBeDisabled()
+    // Removing a suggested topic activates Suggest.
+    await user.click(screen.getByRole("button", { name: "Remove alpha" }))
+    expect(screen.queryByRole("button", { name: "Edit alpha" })).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Suggest" })).toBeEnabled()
+    // Clicking Suggest restores the removed topic and goes inactive again.
+    await user.click(screen.getByRole("button", { name: "Suggest" }))
+    expect(await screen.findByRole("button", { name: "Edit alpha" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Suggest" })).toBeDisabled()
   })
 })

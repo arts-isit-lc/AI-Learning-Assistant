@@ -112,6 +112,7 @@ export function CourseWizard() {
   const [conceptId, setConceptId] = useState(searchParams.get("concept") || "")
   const [modulePrompt, setModulePrompt] = useState("")
   const [keyTopics, setKeyTopics] = useState([])
+  const [suggestedTopics, setSuggestedTopics] = useState([]) // snapshot of auto-suggested topics (Suggest restores these)
   const [topicInput, setTopicInput] = useState("")
   const [referencedFileIds, setReferencedFileIds] = useState([])
   const [fileDescriptions, setFileDescriptions] = useState({}) // fileId -> description
@@ -173,8 +174,10 @@ export function CourseWizard() {
         toast.error(result.message || "Failed to generate topics")
       } else if (result?.topics) {
         // No success toast — topic generation runs in the background during the
-        // step-2 wait; the topics just appear (as tags) on step 3.
+        // step-2 wait; the topics just appear (as tags) on step 3. Snapshot the
+        // suggested set so "Suggest" can restore any topic the user removes.
         setKeyTopics((prev) => mergeTopics(prev, result.topics))
+        setSuggestedTopics((prev) => mergeTopics(prev, result.topics))
       }
     } catch {
       toast.error("Failed to generate topics")
@@ -204,6 +207,16 @@ export function CourseWizard() {
     setKeyTopics((prev) => mergeTopics(prev, [t]))
     setTopicInput("")
   }
+
+  // "Suggest" restores auto-suggested topics the user removed. It only activates
+  // once at least one suggested topic is missing (deleted or edited away).
+  const canRestoreSuggested = useMemo(() => {
+    if (suggestedTopics.length === 0) return false
+    const current = new Set(keyTopics.map((t) => t.toLowerCase().trim()))
+    return suggestedTopics.some((t) => !current.has(t.toLowerCase().trim()))
+  }, [suggestedTopics, keyTopics])
+
+  const handleRestoreSuggested = () => setKeyTopics((prev) => mergeTopics(prev, suggestedTopics))
 
   const toggleReference = (fileId) =>
     setReferencedFileIds((prev) =>
@@ -510,7 +523,12 @@ export function CourseWizard() {
                       previously suggested topics, click the &lsquo;Suggest&rsquo; button.
                     </p>
                     <div className="flex gap-4 mb-8">
-                      <Button variant="outline" onClick={handleGenerate} loading={isGenerating}>
+                      <Button
+                        variant="outline"
+                        onClick={handleRestoreSuggested}
+                        loading={isGenerating}
+                        disabled={!canRestoreSuggested}
+                      >
                         Suggest
                       </Button>
                       <Input
