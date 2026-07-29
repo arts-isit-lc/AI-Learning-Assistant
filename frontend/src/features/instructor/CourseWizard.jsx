@@ -483,27 +483,26 @@ export function CourseWizard() {
               )}
 
               {step === 2 && (
-                <div className="flex flex-col gap-8">
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="module-prompt" className="text-body text-neutral-900">Module prompt</Label>
-                      <span className="text-caption text-muted-foreground">(optional)</span>
-                    </div>
-                    <p className="text-caption text-muted-foreground">
-                      Provide any specific instructions for this module, which will be used with the
-                      course-level prompt.
-                    </p>
-                    <Textarea
-                      id="module-prompt"
-                      value={modulePrompt}
-                      onChange={(e) => setModulePrompt(e.target.value)}
-                      rows={5}
-                      placeholder="Module-specific instructions for the assistant…"
-                    />
+                <div className="flex flex-col gap-9">
+                  <div className="flex items-center justify-between gap-1">
+                    <Label htmlFor="module-prompt" className="text-body text-neutral-900">Module prompt</Label>
+                    <span className="text-caption text-muted-foreground">(optional)</span>
                   </div>
-                  <div className="flex flex-col gap-3">
-                    <Label className="text-body text-neutral-900">Key topics</Label>
-                    <p className="text-caption text-muted-foreground">
+                  <p className="text-caption text-muted-foreground mb-1">
+                    Provide any specific instructions for this module, which will be used with the
+                    course-level prompt.
+                  </p>
+                  <Textarea
+                    id="module-prompt"
+                    value={modulePrompt}
+                    onChange={(e) => setModulePrompt(e.target.value)}
+                    rows={5}
+                    placeholder="Module-specific instructions for the assistant…"
+                  />
+
+                  <div className="flex flex-col">
+                    <Label className="text-body text-neutral-900 mb-1">Key topics</Label>
+                    <p className="text-caption text-muted-foreground mb-8">
                       OCELIA automatically suggests key topics based on your uploaded files. You can
                       add/remove a topic or edit an existing one by clicking it below. To restore any
                       previously suggested topics, click the &lsquo;Suggest&rsquo; button.
