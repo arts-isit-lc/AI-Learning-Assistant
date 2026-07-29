@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MultiSelect } from "./MultiSelect"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 
 const OPTIONS = [
   { value: "a@x.com", label: "Alpha" },
@@ -45,5 +46,24 @@ describe("MultiSelect", () => {
     render(<MultiSelect options={[]} value={[]} onChange={() => {}} emptyText="Nothing here" aria-label="Picker" />)
     await userEvent.click(screen.getByRole("button", { name: "Picker" }))
     expect(await screen.findByText("Nothing here")).toBeInTheDocument()
+  })
+
+  it("closes on outside click when rendered inside a modal Dialog", async () => {
+    render(
+      <Dialog open>
+        <DialogContent>
+          <DialogTitle>Add course</DialogTitle>
+          <p>elsewhere in the dialog</p>
+          <MultiSelect options={OPTIONS} value={[]} onChange={() => {}} aria-label="Picker" />
+        </DialogContent>
+      </Dialog>
+    )
+    await userEvent.click(screen.getByRole("button", { name: "Picker" }))
+    expect(await screen.findByRole("button", { name: "Alpha" })).toBeInTheDocument()
+    // Click elsewhere inside the dialog (outside the open dropdown).
+    await userEvent.click(screen.getByText("elsewhere in the dialog"))
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Alpha" })).not.toBeInTheDocument()
+    )
   })
 })

@@ -56,7 +56,15 @@ export function MultiSelect({
           </span>
           <Icon icon={MdExpandMore} size={24} className="shrink-0" />
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-[var(--radix-popover-trigger-width)] p-1">
+        {/* Render in place (not portaled to <body>) so the dropdown stays inside
+            the Dialog's DOM subtree. A portaled popover lands in the region a
+            modal Dialog marks `pointer-events: none`, which blocks both option
+            clicks and outside-click dismissal (CreateCourse). Inline fixes both. */}
+        <PopoverContent
+          portal={false}
+          align="start"
+          className="w-[var(--radix-popover-trigger-width)] p-1"
+        >
           {options.length === 0 ? (
             <p className="px-2 py-3 text-caption text-muted-foreground">{emptyText}</p>
           ) : (
