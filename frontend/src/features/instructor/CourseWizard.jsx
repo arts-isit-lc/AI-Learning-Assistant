@@ -306,7 +306,7 @@ export function CourseWizard() {
 
               {step === 0 && (
                 <div className="flex flex-col gap-9">
-                  <div className="flex flex-col gap-2">
+                  <div className="flex flex-col">
                     <Label htmlFor="module-name" className="text-h4 text-neutral-900">Module name</Label>
                     <Input
                       id="module-name"
@@ -316,11 +316,8 @@ export function CourseWizard() {
                       placeholder="e.g. Vectors and matrices"
                     />
                   </div>
-                  <div className="flex flex-col gap-2">
-                    <div className="flex flex-col gap-0.5">
-                      <Label className="text-h4 text-neutral-900">Concept</Label>
-                      <p className="text-caption text-muted-foreground">Select a Concept for this module.</p>
-                    </div>
+                  <div className="flex flex-col">
+                    <Label className="text-h4 text-neutral-900">Concept</Label>
                     <Select value={conceptId} onValueChange={setConceptId}>
                       <SelectTrigger aria-label="Concept">
                         <SelectValue placeholder="Select a concept" />
@@ -530,19 +527,19 @@ export function CourseWizard() {
               <div className="h-px w-full bg-border" aria-hidden="true" />
               <div className="flex items-center justify-end gap-2">
                 {step > 0 && (
-                  <Button variant="ghost" className="text-primary" onClick={() => setStep((s) => s - 1)}>
+                  <Button variant="ghost" className="text-primary text-base" onClick={() => setStep((s) => s - 1)}>
                     Back
                   </Button>
                 )}
-                <Button variant="outline" onClick={() => setCancelOpen(true)}>
+                <Button className="text-base" variant="outline" onClick={() => setCancelOpen(true)}>
                   Cancel
                 </Button>
                 {step < STEP_COUNT - 1 ? (
-                  <Button onClick={() => setStep((s) => s + 1)} disabled={!canNext}>
+                  <Button className="text-base" onClick={() => setStep((s) => s + 1)} disabled={!canNext}>
                     Next
                   </Button>
                 ) : (
-                  <Button onClick={handleSave} loading={finalize.isPending} disabled={!canSave}>
+                  <Button className="text-base" onClick={handleSave} loading={finalize.isPending} disabled={!canSave}>
                     Publish
                   </Button>
                 )}
