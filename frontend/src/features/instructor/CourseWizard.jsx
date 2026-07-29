@@ -288,8 +288,12 @@ export function CourseWizard() {
           </div>
 
           {/* Scrollable body. Content sits in a 608px column, centred so it
-              clears the modal's 240px side inset at the design width. */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-9 pb-10 pt-10">
+              clears the modal's 240px side inset at the design width.
+              `flex-auto` (flex-basis:auto, not `flex-1`'s basis:0) lets the
+              content height grow the modal between the 640px floor and the 80vh
+              cap; past that, `min-h-0` + `overflow-y-auto` scroll the body while
+              the header/footer stay fixed. */}
+          <div className="min-h-0 flex-auto overflow-y-auto px-9 pb-10 pt-10">
             <div className="mx-auto flex w-full max-w-[608px] flex-col gap-8">
               <h2 className="text-h3 text-neutral-900">{STEP_TITLES[step]}</h2>
 
