@@ -22,6 +22,7 @@ export default {
       fontSize: {
         // OCELIA named type scale: [size, { lineHeight, fontWeight }].
         h2: ["var(--text-h2)", { lineHeight: "var(--text-h2-lh)", fontWeight: "600" }],
+        h3: ["var(--text-h3)", { lineHeight: "var(--text-h3-lh)", fontWeight: "400" }],
         h4: ["var(--text-h4)", { lineHeight: "var(--text-h4-lh)", fontWeight: "600" }],
         body: ["var(--text-body)", { lineHeight: "var(--text-body-lh)", fontWeight: "400" }],
         caption: ["var(--text-caption)", { lineHeight: "var(--text-caption-lh)", fontWeight: "400" }],
@@ -45,6 +46,7 @@ export default {
         // specific neutral (e.g. the inactive Card/Course = #BFBFBF).
         neutral: {
           0: "hsl(var(--neutral-0))",
+          200: "hsl(var(--neutral-200))",
           300: "hsl(var(--neutral-300))",
           500: "hsl(var(--neutral-500))",
           700: "hsl(var(--neutral-700))",

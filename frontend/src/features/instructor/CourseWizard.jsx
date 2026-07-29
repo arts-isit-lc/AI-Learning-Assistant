@@ -269,20 +269,29 @@ export function CourseWizard() {
   return (
     <>
       <UnsavedChangesPrompt when={isDirty && !leaving} onProceed={cleanup} />
-      <Dialog className="px-8 py-10" open onOpenChange={(open) => !open && setCancelOpen(true)}>
-        <DialogContent className="flex max-h-[90vh] w-[min(92vw,1200px)] max-w-none flex-col gap-0 p-0">
-          <div className="pb-3">
-            <DialogTitle className="text-h4 font-semibold text-neutral-900">Create new module</DialogTitle>
-          </div>
-          {/* Full-width bar inset to the modal's 32px gutter via padding (not
-              `mx-8`, which would overflow on top of the Progress base's w-full). */}
+      <Dialog open onOpenChange={(open) => !open && setCancelOpen(true)}>
+        {/* Figma `Modal/Admin/AddModule` (node 1141:6789): min-height 640px,
+            capped at 80vh. The header (title + progress) and footer (actions)
+            stay fixed; only the body between them scrolls. Full-bleed (`p-0`) —
+            each region pads itself to the modal's 36px (px-9) gutter. */}
+        <DialogContent className="flex min-h-[640px] max-h-[80vh] w-[min(92vw,1088px)] max-w-none flex-col gap-0 overflow-hidden p-0">
+          {/* Fixed header: title + divider (pt-14 clears the close control),
+              then the determinate progress bar (16px track, #D9D9D9). */}
           <div className="shrink-0">
-            <Progress value={((step + 1) / STEP_COUNT) * 100} />
+            <div className="flex flex-col gap-2 px-9 pt-14">
+              <DialogTitle className="text-h4 font-semibold text-neutral-900">Create new module</DialogTitle>
+              <div className="h-px w-full bg-border" aria-hidden="true" />
+            </div>
+            <div className="px-9 pt-10">
+              <Progress className="h-4 bg-neutral-200" value={((step + 1) / STEP_COUNT) * 100} />
+            </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto py-8">
-            <div className="mx-auto flex max-w-xl flex-col">
-              <h2 className="text-body mt-[56px] mb-[56px] text-neutral-900">{STEP_TITLES[step]}</h2>
+          {/* Scrollable body. Content sits in a 608px column, centred so it
+              clears the modal's 240px side inset at the design width. */}
+          <div className="flex-1 min-h-0 overflow-y-auto px-9 pb-10 pt-10">
+            <div className="mx-auto flex w-full max-w-[608px] flex-col gap-8">
+              <h2 className="text-h3 text-neutral-900">{STEP_TITLES[step]}</h2>
 
               {reserveError && (
                 <Alert variant="destructive">
@@ -292,9 +301,9 @@ export function CourseWizard() {
               )}
 
               {step === 0 && (
-                <div className="flex flex-col gap-6">
-                  <div className="flex flex-col gap-1">
-                    <Label htmlFor="module-name" className="text-body text-neutral-900 font-semibold">Module name</Label>
+                <div className="flex flex-col gap-9">
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="module-name" className="text-h4 text-neutral-900">Module name</Label>
                     <Input
                       id="module-name"
                       value={moduleName}
@@ -303,9 +312,9 @@ export function CourseWizard() {
                       placeholder="e.g. Vectors and matrices"
                     />
                   </div>
-                  <div className="flex flex-col gap-1">
+                  <div className="flex flex-col gap-2">
                     <div className="flex flex-col gap-0.5">
-                      <Label className="text-body text-neutral-900 font-semibold">Concept</Label>
+                      <Label className="text-h4 text-neutral-900">Concept</Label>
                       <p className="text-caption text-muted-foreground">Select a Concept for this module.</p>
                     </div>
                     <Select value={conceptId} onValueChange={setConceptId}>
@@ -509,27 +518,31 @@ export function CourseWizard() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-2 border-t border-border pt-4">
-            <div>
-              {step > 0 && (
-                <Button variant="ghost" className="text-primary" onClick={() => setStep((s) => s - 1)}>
-                  Back
+          {/* Fixed footer: divider + right-aligned actions (Figma justify-end,
+              8px gap). Back appears from step 2 onward; the primary action is
+              Next until the final step, where it becomes Publish. */}
+          <div className="shrink-0 px-9 pb-9">
+            <div className="flex flex-col gap-4">
+              <div className="h-px w-full bg-border" aria-hidden="true" />
+              <div className="flex items-center justify-end gap-2">
+                {step > 0 && (
+                  <Button variant="ghost" className="text-primary" onClick={() => setStep((s) => s - 1)}>
+                    Back
+                  </Button>
+                )}
+                <Button variant="outline" onClick={() => setCancelOpen(true)}>
+                  Cancel
                 </Button>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setCancelOpen(true)}>
-                Discard
-              </Button>
-              {step < STEP_COUNT - 1 ? (
-                <Button onClick={() => setStep((s) => s + 1)} disabled={!canNext}>
-                  Next
-                </Button>
-              ) : (
-                <Button onClick={handleSave} loading={finalize.isPending} disabled={!canSave}>
-                  Publish
-                </Button>
-              )}
+                {step < STEP_COUNT - 1 ? (
+                  <Button onClick={() => setStep((s) => s + 1)} disabled={!canNext}>
+                    Next
+                  </Button>
+                ) : (
+                  <Button onClick={handleSave} loading={finalize.isPending} disabled={!canSave}>
+                    Publish
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         </DialogContent>

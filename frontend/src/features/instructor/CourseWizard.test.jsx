@@ -99,11 +99,11 @@ describe("CourseWizard", () => {
     expect(screen.getByRole("button", { name: "Next" })).toBeDisabled()
   })
 
-  it("discards the draft from the footer Discard button (with confirm)", async () => {
+  it("discards the draft from the footer Cancel button (with confirm)", async () => {
     const user = userEvent.setup()
     render(<CourseWizard />)
-    // Footer "Discard" opens the confirm modal (the only Discard button so far).
-    await user.click(screen.getByRole("button", { name: "Discard" }))
+    // Footer "Cancel" opens the discard confirm (the only Cancel button until it opens).
+    await user.click(screen.getByRole("button", { name: "Cancel" }))
     expect(await screen.findByText("Discard this module?")).toBeInTheDocument()
     // Now two dialogs exist (wizard + confirm); click the confirm's Discard.
     const confirm = screen
@@ -116,5 +116,18 @@ describe("CourseWizard", () => {
     await waitFor(() =>
       expect(navigate).toHaveBeenCalledWith("/instructor/courses/c1/configuration")
     )
+  })
+
+  it("keeps Cancel on every step and reveals Back only after the first step", async () => {
+    const user = userEvent.setup()
+    render(<CourseWizard />)
+    // Step 0: Cancel present (the footer discard action), Back hidden.
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Back" })).not.toBeInTheDocument()
+    await user.type(screen.getByLabelText("Module name"), "Vectors")
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> references
+    // Step 1: Back now visible, Cancel still present.
+    expect(screen.getByRole("button", { name: "Back" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument()
   })
 })

@@ -38,6 +38,6 @@ test("instructor can log in, open a course, and reach the module wizard", async 
   // The create-module wizard is reachable and renders its first step.
   const base = new URL(page.url()).pathname.replace(/\/configuration$/, "")
   await page.goto(base + "/modules/new")
-  await expect(page.getByRole("heading", { name: "Create module" })).toBeVisible()
-  await expect(page.getByText("Details")).toBeVisible()
+  await expect(page.getByRole("heading", { name: "Create new module" })).toBeVisible()
+  await expect(page.getByText(/Set module name and concept/)).toBeVisible()
 })
