@@ -60,31 +60,48 @@ export function InstructorTabBar() {
   return (
     <div className="border-b border-border bg-background">
       <div className="mx-auto max-w-7xl px-6">
-        {expanded ? (
-          <div className="py-5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h1 className="text-h2 font-semibold uppercase text-foreground">Hi, Instructor!</h1>
-                <p className="mt-1 text-body text-muted-foreground">
-                  Manage your courses, upload materials, and review chat activity and insights.
-                </p>
-              </div>
-              <button type="button" onClick={() => setExpanded(false)} className={toggleClass}>
-                Collapse
-                <Icon icon={MdExpandLess} size={18} />
-              </button>
+        {/* Greeting/subtitle — slides open/closed like the accordions (grid-rows
+            0fr<->1fr + fade, var(--transition-normal) / var(--ease-standard),
+            reduced-motion aware). Kept mounted so it animates BOTH directions;
+            aria-hidden while collapsed keeps it out of the a11y tree (the panel
+            has no focusable content, so no inert/tab-order handling is needed). */}
+        <div
+          id="instructor-greeting"
+          className={cn(
+            "grid transition-[grid-template-rows] duration-normal ease-standard motion-reduce:transition-none",
+            expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+          )}
+        >
+          <div className="overflow-hidden">
+            <div
+              aria-hidden={!expanded}
+              className={cn(
+                "pt-5 transition-opacity duration-normal ease-standard motion-reduce:transition-none",
+                expanded ? "opacity-100" : "opacity-0"
+              )}
+            >
+              <h1 className="text-h2 font-semibold uppercase text-foreground">Hi, Instructor!</h1>
+              <p className="mt-1 text-body text-muted-foreground">
+                Manage your courses, upload materials, and review chat activity and insights.
+              </p>
             </div>
-            <div className="mt-6">{tabs}</div>
           </div>
-        ) : (
-          <div className="flex items-center justify-between py-6">
-            {tabs}
-            <button type="button" onClick={() => setExpanded(true)} className={toggleClass}>
-              Expand
-              <Icon icon={MdExpandMore} size={18} />
-            </button>
-          </div>
-        )}
+        </div>
+
+        {/* Persistent tab row + the Expand/Collapse toggle. */}
+        <div className="flex items-center justify-between py-6">
+          {tabs}
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className={toggleClass}
+            aria-expanded={expanded}
+            aria-controls="instructor-greeting"
+          >
+            {expanded ? "Collapse" : "Expand"}
+            <Icon icon={expanded ? MdExpandLess : MdExpandMore} size={18} />
+          </button>
+        </div>
       </div>
     </div>
   )

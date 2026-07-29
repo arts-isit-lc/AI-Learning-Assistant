@@ -42,4 +42,12 @@ describe("InstructorTabBar", () => {
     expect(screen.queryByRole("heading", { name: /hi, instructor/i })).toBeNull()
     expect(screen.getByRole("button", { name: /expand/i })).toBeInTheDocument()
   })
+
+  it("exposes the collapse state via aria-expanded on the toggle (disclosure)", async () => {
+    const user = userEvent.setup()
+    renderAt("/instructor/courses")
+    expect(screen.getByRole("button", { name: /collapse/i })).toHaveAttribute("aria-expanded", "true")
+    await user.click(screen.getByRole("button", { name: /collapse/i }))
+    expect(screen.getByRole("button", { name: /expand/i })).toHaveAttribute("aria-expanded", "false")
+  })
 })
