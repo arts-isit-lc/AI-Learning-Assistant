@@ -519,7 +519,7 @@ export function CourseWizard() {
               )}
 
               {step === 2 && (
-                <div className="flex flex-col gap-9">
+                <div className="flex flex-col">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="module-prompt" className="text-body text-neutral-900">Module prompt</Label>
                     <span className="text-caption text-muted-foreground">(optional)</span>
@@ -536,7 +536,7 @@ export function CourseWizard() {
                     placeholder="Module-specific instructions for the assistant…"
                   />
 
-                  <div className="flex flex-col">
+                  <div className="flex flex-col mt-9">
                     <Label className="text-body text-neutral-900">Key topics</Label>
                     <p className="text-caption text-muted-foreground mb-8">
                       OCELIA automatically suggests key topics based on your uploaded files. You can
@@ -544,7 +544,10 @@ export function CourseWizard() {
                       previously suggested topics, click the &lsquo;Suggest&rsquo; button.
                     </p>
                     <div className="flex gap-4 mb-8">
-                      <Button className="rounded"
+                      {/* Inactive: #808080 border+text (solid, not faded). Active:
+                          the outline variant's #6829C2 border+text. */}
+                      <Button
+                        className="rounded disabled:border-neutral-500 disabled:text-neutral-500 disabled:opacity-100"
                         variant="outline"
                         onClick={handleRestoreSuggested}
                         loading={isGenerating}

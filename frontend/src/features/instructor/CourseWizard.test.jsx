@@ -220,7 +220,10 @@ describe("CourseWizard", () => {
     await user.click(screen.getByRole("button", { name: "Next" })) // -> prompt & topics
     // Auto-suggest populates topics; Suggest starts inactive (nothing to restore).
     expect(await screen.findByRole("button", { name: "Edit alpha" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Suggest" })).toBeDisabled()
+    const suggest = screen.getByRole("button", { name: "Suggest" })
+    expect(suggest).toBeDisabled()
+    // Inactive styling: #808080 (neutral-500) border+text, not the faded-purple default.
+    expect(suggest).toHaveClass("disabled:text-neutral-500", "disabled:border-neutral-500")
     // Removing a suggested topic activates Suggest.
     await user.click(screen.getByRole("button", { name: "Remove alpha" }))
     expect(screen.queryByRole("button", { name: "Edit alpha" })).not.toBeInTheDocument()
