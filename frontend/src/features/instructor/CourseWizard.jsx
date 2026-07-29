@@ -270,11 +270,12 @@ export function CourseWizard() {
     <>
       <UnsavedChangesPrompt when={isDirty && !leaving} onProceed={cleanup} />
       <Dialog open onOpenChange={(open) => !open && setCancelOpen(true)}>
-        {/* Figma `Modal/Admin/AddModule` (node 1141:6789): min-height 640px,
-            capped at 80vh. The header (title + progress) and footer (actions)
-            stay fixed; only the body between them scrolls. Full-bleed (`p-0`) —
-            each region pads itself to the modal's 36px (px-9) gutter. */}
-        <DialogContent className="flex min-h-[640px] max-h-[80vh] w-[min(92vw,1088px)] max-w-none flex-col gap-0 overflow-hidden p-0">
+        {/* Figma `Modal/Admin/AddModule` (node 1141:6789): explicit height 80vh
+            (floored at 640px, capped at 80vh). The header (title + progress) and
+            footer (actions) stay fixed; only the body between them scrolls.
+            Full-bleed (`p-0`) — each region pads itself to the modal's 36px
+            (px-9) gutter. */}
+        <DialogContent className="flex h-[80vh] min-h-[640px] max-h-[80vh] w-[min(92vw,1088px)] max-w-none flex-col gap-0 overflow-hidden p-0">
           {/* Fixed header: title + divider (pt-14 clears the close control),
               then the determinate progress bar (16px track, #D9D9D9). */}
           <div className="shrink-0">
@@ -288,12 +289,11 @@ export function CourseWizard() {
           </div>
 
           {/* Scrollable body. Content sits in a 608px column, centred so it
-              clears the modal's 240px side inset at the design width.
-              `flex-auto` (flex-basis:auto, not `flex-1`'s basis:0) lets the
-              content height grow the modal between the 640px floor and the 80vh
-              cap; past that, `min-h-0` + `overflow-y-auto` scroll the body while
-              the header/footer stay fixed. */}
-          <div className="min-h-0 flex-auto overflow-y-auto px-9 pb-10 pt-10">
+              clears the modal's 240px side inset at the design width. `flex-1`
+              fills the space left by the fixed header/footer; `min-h-0` +
+              `overflow-y-auto` scroll the overflow within the modal's fixed
+              height. */}
+          <div className="flex-1 min-h-0 overflow-y-auto px-9 pb-10 pt-10">
             <div className="mx-auto flex w-full max-w-[608px] flex-col gap-8">
               <h2 className="text-h3 text-neutral-900">{STEP_TITLES[step]}</h2>
 
