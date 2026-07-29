@@ -57,50 +57,62 @@ export function InstructorTabBar() {
     </nav>
   )
 
+  // One button, rendered in whichever slot the current state uses (top-right when
+  // expanded, inline with the tabs when collapsed) — matches the frames.
+  const toggleButton = (
+    <button
+      type="button"
+      onClick={() => setExpanded((v) => !v)}
+      className={toggleClass}
+      aria-expanded={expanded}
+      aria-controls="instructor-greeting"
+    >
+      {expanded ? "Collapse" : "Expand"}
+      <Icon icon={expanded ? MdExpandLess : MdExpandMore} size={18} />
+    </button>
+  )
+
   return (
     <div className="border-b border-border bg-background">
       <div className="mx-auto max-w-7xl px-6">
-        {/* Greeting/subtitle — slides open/closed like the accordions (grid-rows
+        {/* Top row: greeting/subtitle with the Collapse toggle pinned top-right
+            while expanded. The greeting animates like the accordions (grid-rows
             0fr<->1fr + fade, var(--transition-normal) / var(--ease-standard),
-            reduced-motion aware). Kept mounted so it animates BOTH directions;
-            aria-hidden while collapsed keeps it out of the a11y tree (the panel
-            has no focusable content, so no inert/tab-order handling is needed). */}
-        <div
-          id="instructor-greeting"
-          className={cn(
-            "grid transition-[grid-template-rows] duration-normal ease-standard motion-reduce:transition-none",
-            expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-          )}
-        >
-          <div className="overflow-hidden">
-            <div
-              aria-hidden={!expanded}
-              className={cn(
-                "pt-5 transition-opacity duration-normal ease-standard motion-reduce:transition-none",
-                expanded ? "opacity-100" : "opacity-0"
-              )}
-            >
-              <h1 className="text-h2 font-semibold uppercase text-foreground">Hi, Instructor!</h1>
-              <p className="mt-1 text-body text-muted-foreground">
-                Manage your courses, upload materials, and review chat activity and insights.
-              </p>
+            reduced-motion aware). It stays mounted so it animates BOTH ways and
+            is aria-hidden while collapsed (no focusable content inside, so no
+            inert/tab-order handling is needed). When collapsed the greeting
+            column is height 0, so this row disappears and only the tab row shows. */}
+        <div className="flex items-start justify-between gap-4">
+          <div
+            id="instructor-greeting"
+            className={cn(
+              "grid flex-1 transition-[grid-template-rows] duration-normal ease-standard motion-reduce:transition-none",
+              expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+            )}
+          >
+            <div className="overflow-hidden">
+              <div
+                aria-hidden={!expanded}
+                className={cn(
+                  "pt-5 transition-opacity duration-normal ease-standard motion-reduce:transition-none",
+                  expanded ? "opacity-100" : "opacity-0"
+                )}
+              >
+                <h1 className="text-h2 font-semibold uppercase text-foreground">Hi, Instructor!</h1>
+                <p className="mt-1 text-body text-muted-foreground">
+                  Manage your courses, upload materials, and review chat activity and insights.
+                </p>
+              </div>
             </div>
           </div>
+          {expanded && <div className="shrink-0 pt-5">{toggleButton}</div>}
         </div>
 
-        {/* Persistent tab row + the Expand/Collapse toggle. */}
+        {/* Tab row (persistent). Collapsed: the toggle moves inline with the tabs
+            for the compact single-row layout. */}
         <div className="flex items-center justify-between py-6">
           {tabs}
-          <button
-            type="button"
-            onClick={() => setExpanded((v) => !v)}
-            className={toggleClass}
-            aria-expanded={expanded}
-            aria-controls="instructor-greeting"
-          >
-            {expanded ? "Collapse" : "Expand"}
-            <Icon icon={expanded ? MdExpandLess : MdExpandMore} size={18} />
-          </button>
+          {!expanded && toggleButton}
         </div>
       </div>
     </div>
