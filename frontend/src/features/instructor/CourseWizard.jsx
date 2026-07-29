@@ -360,7 +360,7 @@ export function CourseWizard() {
 
               {step === 1 && (
                 <div className="flex flex-col gap-8">
-                  <div className="flex flex-col gap-2">
+                  <div className="flex flex-col">
                     <div className="flex items-center justify-between">
                       <Label className="text-body text-neutral-900">Attach existing references</Label>
                       <span className="text-caption text-muted-foreground">(optional)</span>
@@ -397,18 +397,18 @@ export function CourseWizard() {
                     )}
                   </div>
 
-                  <div className="flex flex-col gap-2">
+                  <div className="flex flex-col">
                     <div className="flex items-center justify-between">
                       <Label className="text-body text-neutral-900">Upload files</Label>
                     </div>
-                    <p className="text-caption text-muted-foreground">
+                    <p className="text-caption text-muted-foreground mb-2">
                       To add new references, upload your files below.
                     </p>
                     <FileUpload onFiles={handleUpload} disabled={!moduleId || isReserving} />
 
                     {fileList.length > 0 && (
-                      <div className="mt-2 flex flex-col gap-2">
-                        <p className="text-caption font-semibold text-neutral-900">Uploaded files</p>
+                      <div className="mt-8 flex flex-col">
+                        <p className="text-lg leading-7 font-semibold text-neutral-900">Uploaded files</p>
                         <ul className="flex flex-col gap-2">
                           {fileList.map((f) => {
                             const tracked = trackedFiles[f.fileId]
@@ -418,7 +418,7 @@ export function CourseWizard() {
                             // has uploaded and isn't in a failed state.
                             const showDescription = !failed && status !== "uploading"
                             return (
-                              <li key={f.fileId} className="flex flex-col gap-2 rounded-sm border border-border p-3">
+                              <li key={f.fileId} className="flex flex-col gap-2 rounded-sm border border-border p-2.5">
                                 <div className="flex items-center justify-between gap-3">
                                   <div className="flex min-w-0 items-center gap-3">
                                     <Icon
@@ -427,12 +427,12 @@ export function CourseWizard() {
                                       className="shrink-0 text-muted-foreground"
                                     />
                                     <div className="flex min-w-0 flex-col">
-                                      <span className="truncate text-caption font-semibold text-neutral-900">
+                                      <span className="truncate text-xs leading-7 font-semibold text-neutral-900">
                                         {f.fileName}
                                       </span>
                                       <span
                                         className={cn(
-                                          "text-caption",
+                                          "text-xs leading-7",
                                           failed
                                             ? "text-destructive"
                                             : status === "complete"
@@ -450,14 +450,14 @@ export function CourseWizard() {
                                     aria-label={`Remove ${f.fileName}`}
                                     onClick={() => handleRemoveFile(f.fileId)}
                                   >
-                                    <Icon icon={MdDelete} size={24} />
+                                    <Icon className="gap-0" icon={MdDelete} size={24} />
                                   </Button>
                                 </div>
                                 {f.status === "uploading" && <Progress value={f.progress} />}
                                 {showDescription && (
                                   <Accordion type="single" collapsible>
                                     <AccordionItem value="description" className="border-b-0">
-                                      <AccordionTrigger className="py-0 font-normal text-neutral-900 hover:no-underline">
+                                      <AccordionTrigger className="py-0 font-normal leading-7 text-neutral-900 hover:no-underline">
                                         Description (optional)
                                       </AccordionTrigger>
                                       <AccordionContent className="pb-0 pt-2">
