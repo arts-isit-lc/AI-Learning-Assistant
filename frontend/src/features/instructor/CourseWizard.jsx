@@ -317,7 +317,7 @@ export function CourseWizard() {
               fills the space left by the fixed header/footer; `min-h-0` +
               `overflow-y-auto` scroll the overflow within the modal's fixed
               height. */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-9 pb-10 pt-10">
+          <div className="flex-1 min-h-0 overflow-y-auto px-9 pb-16 pt-14">
             <div className="mx-auto flex w-full max-w-[608px] flex-col gap-8">
               <h2 className="text-h3 text-neutral-900">{STEP_TITLES[step]}</h2>
 
