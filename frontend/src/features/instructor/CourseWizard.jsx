@@ -484,11 +484,11 @@ export function CourseWizard() {
 
               {step === 2 && (
                 <div className="flex flex-col gap-9">
-                  <div className="flex items-center justify-between gap-1">
+                  <div className="flex items-center justify-between">
                     <Label htmlFor="module-prompt" className="text-body text-neutral-900">Module prompt</Label>
                     <span className="text-caption text-muted-foreground">(optional)</span>
                   </div>
-                  <p className="text-caption text-muted-foreground mb-1">
+                  <p className="text-caption text-muted-foreground">
                     Provide any specific instructions for this module, which will be used with the
                     course-level prompt.
                   </p>
@@ -501,13 +501,13 @@ export function CourseWizard() {
                   />
 
                   <div className="flex flex-col">
-                    <Label className="text-body text-neutral-900 mb-1">Key topics</Label>
+                    <Label className="text-body text-neutral-900">Key topics</Label>
                     <p className="text-caption text-muted-foreground mb-8">
                       OCELIA automatically suggests key topics based on your uploaded files. You can
                       add/remove a topic or edit an existing one by clicking it below. To restore any
                       previously suggested topics, click the &lsquo;Suggest&rsquo; button.
                     </p>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 mb-8">
                       <Button variant="outline" onClick={handleGenerate} loading={isGenerating}>
                         Suggest
                       </Button>
@@ -526,7 +526,7 @@ export function CourseWizard() {
                       />
                     </div>
                     {keyTopics.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
+                      <div className="flex flex-wrap mb-16">
                         {keyTopics.map((t) => (
                           <Tag key={t} label={t} onRemove={() => setKeyTopics((prev) => prev.filter((x) => x !== t))} />
                         ))}
