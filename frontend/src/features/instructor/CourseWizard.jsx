@@ -21,6 +21,7 @@ import { FileUpload } from "@/components/composed/FileUpload"
 import { ConfirmDialog } from "@/components/composed/ConfirmDialog"
 import { UnsavedChangesPrompt } from "@/components/composed/UnsavedChangesPrompt"
 import { Tag } from "@/components/composed/Tag"
+import { EditableTagList } from "@/components/composed/EditableTagList"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -385,7 +386,7 @@ export function CourseWizard() {
                       </SelectContent>
                     </Select>
                     {referencedFileIds.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
+                      <div className="flex flex-wrap gap-2">
                         {referencedFileIds.map((id) => (
                           <Tag
                             key={id}
@@ -508,7 +509,7 @@ export function CourseWizard() {
                       add/remove a topic or edit an existing one by clicking it below. To restore any
                       previously suggested topics, click the &lsquo;Suggest&rsquo; button.
                     </p>
-                    <div className="flex gap-2 mb-8">
+                    <div className="flex gap-4 mb-8">
                       <Button variant="outline" onClick={handleGenerate} loading={isGenerating}>
                         Suggest
                       </Button>
@@ -526,13 +527,7 @@ export function CourseWizard() {
                         className="flex-1"
                       />
                     </div>
-                    {keyTopics.length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {keyTopics.map((t) => (
-                          <Tag key={t} label={t} onRemove={() => setKeyTopics((prev) => prev.filter((x) => x !== t))} />
-                        ))}
-                      </div>
-                    )}
+                    <EditableTagList values={keyTopics} onChange={setKeyTopics} ariaLabelPrefix="key topic" />
                   </div>
                 </div>
               )}

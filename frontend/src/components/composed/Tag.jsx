@@ -5,9 +5,10 @@ import { Icon } from "@/components/ui/icon"
 /**
  * Key-topic / category tag — Figma `Tag/Editable`: a fully-rounded pill with a
  * purple outline + purple text (distinct from the status `Badge`). Optional
- * `onRemove` renders the dismiss (×) button.
+ * `onRemove` renders the dismiss (×) button; optional `onClick` makes the label
+ * a button (e.g. click-to-edit).
  */
-export function Tag({ label, onRemove, className }) {
+export function Tag({ label, onRemove, onClick, className }) {
   return (
     <span
       className={cn(
@@ -15,7 +16,18 @@ export function Tag({ label, onRemove, className }) {
         className
       )}
     >
-      {label}
+      {onClick ? (
+        <button
+          type="button"
+          onClick={onClick}
+          aria-label={`Edit ${label}`}
+          className="rounded-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {label}
+        </button>
+      ) : (
+        label
+      )}
       {onRemove && (
         <button
           type="button"

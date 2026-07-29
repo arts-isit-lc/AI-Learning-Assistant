@@ -22,6 +22,7 @@ import { parseKeyTopics } from "@/components/composed/ModuleAccordion"
 import { ConfirmDialog } from "@/components/composed/ConfirmDialog"
 import { UnsavedChangesPrompt } from "@/components/composed/UnsavedChangesPrompt"
 import { Tag } from "@/components/composed/Tag"
+import { EditableTagList } from "@/components/composed/EditableTagList"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -396,13 +397,7 @@ export function EditModule() {
                       className="flex-1"
                     />
                   </div>
-                  {keyTopics.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {keyTopics.map((t) => (
-                        <Tag key={t} label={t} onRemove={() => setKeyTopics((prev) => prev.filter((x) => x !== t))} />
-                      ))}
-                    </div>
-                  )}
+                  <EditableTagList values={keyTopics} onChange={setKeyTopics} ariaLabelPrefix="key topic" />
                 </div>
               </>
             )}

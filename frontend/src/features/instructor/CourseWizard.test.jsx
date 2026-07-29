@@ -186,4 +186,20 @@ describe("CourseWizard", () => {
     // 'enriching' is a blocking status, so the user can't advance until 'complete'.
     expect(screen.getByRole("button", { name: "Next" })).toBeDisabled()
   })
+
+  it("lets you edit a key topic by clicking it", async () => {
+    const user = userEvent.setup()
+    render(<CourseWizard />)
+    await user.type(screen.getByLabelText("Module name"), "Vectors")
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> references
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> prompt & topics
+    // Add a topic with a typo, then click it to fix it in place.
+    await user.type(screen.getByLabelText("Add key topic"), "vetcors{Enter}")
+    await user.click(screen.getByRole("button", { name: "Edit vetcors" }))
+    const input = screen.getByRole("textbox", { name: "Edit key topic" })
+    await user.clear(input)
+    await user.type(input, "vectors{Enter}")
+    expect(screen.getByRole("button", { name: "Edit vectors" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Edit vetcors" })).not.toBeInTheDocument()
+  })
 })
