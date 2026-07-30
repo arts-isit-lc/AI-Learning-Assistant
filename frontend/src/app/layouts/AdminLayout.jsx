@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom"
-import { MdAdd, MdContentCopy } from "react-icons/md"
+import { MdAdd, MdAddToPhotos } from "react-icons/md"
 import { AppHeader } from "@/components/composed/AppHeader"
 import { AddInstructorDialog } from "@/features/admin/AddInstructorDialog"
 import { Button } from "@/components/ui/button"
