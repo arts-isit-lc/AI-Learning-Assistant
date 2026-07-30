@@ -75,4 +75,9 @@ describe("ModuleAccordion", () => {
     expect(moduleRow).toHaveClass("w-full", "max-w-[600px]")
     expect(moduleRow.parentElement).toHaveClass("items-end")
   })
+
+  it("shows the module reorder handle by default (not hidden until hover)", () => {
+    renderAccordion()
+    expect(screen.getByRole("button", { name: "Reorder vectors" })).not.toHaveClass("opacity-0")
+  })
 })

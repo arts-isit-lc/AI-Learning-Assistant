@@ -46,8 +46,8 @@ export function parseKeyTopics(value) {
 /**
  * One module: an indented, sortable box (Figma 365:2504) showing `i. Name` + a
  * disclosure chevron, expanding to a read-only summary + Edit/Delete. The drag
- * handle is revealed on hover/focus so the row reads clean at rest like the
- * mockup. `number` is the module's 1-based position (rendered as a roman numeral).
+ * handle is always visible so the row's reorderability is discoverable at rest.
+ * `number` is the module's 1-based position (rendered as a roman numeral).
  */
 function SortableModuleRow({ module, number, onEdit, onDelete }) {
   const [open, setOpen] = useState(false)
@@ -71,7 +71,7 @@ function SortableModuleRow({ module, number, onEdit, onDelete }) {
         <button
           type="button"
           aria-label={`Reorder ${module.module_name}`}
-          className="cursor-grab touch-none rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover/module:opacity-100"
+          className="cursor-grab touch-none rounded p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           {...attributes}
           {...listeners}
         >
