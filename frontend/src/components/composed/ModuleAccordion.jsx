@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useState } from "react"
 import {
   DndContext,
   KeyboardSensor,
@@ -15,6 +15,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
+import * as AccordionPrimitive from "@radix-ui/react-accordion"
 import { MdDragIndicator, MdEdit, MdDelete, MdCheck, MdClose, MdExpandMore } from "react-icons/md"
 import { cn } from "@/lib/utils"
 import { titleCase, toRoman } from "@/utils/formatters"
@@ -81,92 +82,81 @@ function SortableModuleRow({ module, number, courseId, conceptName, onEdit, onDe
       ? referenceIds.map((id) => fileNameById.get(id) || id).join(", ")
       : "None"
 
-  // The panel stays mounted so it can animate BOTH ways (grid-rows 0fr<->1fr).
-  // `inert` while collapsed keeps the hidden Edit/Delete controls out of the tab
-  // order + accessibility tree (otherwise they're focusable but invisible).
-  const panelRef = useRef(null)
-  useEffect(() => {
-    if (panelRef.current) panelRef.current.inert = !open
-  }, [open])
-
   return (
     <div ref={setNodeRef} style={style} className="group/module w-full max-w-[600px] rounded-sm border border-border bg-muted">
-      <div className="flex items-center gap-2 py-1 px-2">
-        <button
-          type="button"
-          aria-label={`Reorder ${module.module_name}`}
-          className="cursor-grab touch-none rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          {...attributes}
-          {...listeners}
-        >
-          <Icon icon={MdDragIndicator} size={24} />
-        </button>
-        <button
-          type="button"
-          aria-expanded={open}
-          onClick={() => setOpen((o) => !o)}
-          className="flex flex-1 items-center justify-between gap-2 rounded text-left text-caption text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <span>
-            {toRoman(number)}. {titleCase(module.module_name)}
-          </span>
-          <Icon icon={MdExpandMore} size={24} className={cn("shrink-0 transition-transform", open && "rotate-180")} />
-        </button>
-      </div>
-      {/* Slide open/closed via grid-rows 0fr<->1fr (a modern, JS-free height
-          animation). The middle wrapper clips the overflow while it animates;
-          the panel also fades. Timing matches the Accordion primitive
-          (var(--transition-normal) + var(--ease-standard)) and honors reduced motion. */}
-      <div
-        className={cn(
-          "grid transition-[grid-template-rows] duration-normal ease-standard motion-reduce:transition-none",
-          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-        )}
+      {/* Expand/collapse via the shared Radix Accordion primitive so the slide +
+          fade matches every other accordion (animate-accordion-down/up). Controlled
+          so `open` also gates the lazy reference/file fetches above. */}
+      <AccordionPrimitive.Root
+        type="single"
+        collapsible
+        value={open ? "module" : ""}
+        onValueChange={(v) => setOpen(v === "module")}
       >
-        <div ref={panelRef} className="overflow-hidden">
-          <div
-            className={cn(
-              "border-t border-border bg-background text-caption leading-7 text-foreground transition-opacity duration-normal ease-standard motion-reduce:transition-none",
-              open ? "opacity-100" : "opacity-0"
-            )}
-          >
-            {/* Read-only module summary (Figma 859:7479). */}
-            <div className="flex flex-col gap-2.5 px-6 py-4">
-              <SummaryRow label="Module name">{titleCase(module.module_name)}</SummaryRow>
-              <SummaryRow label="Concept">{conceptName ? titleCase(conceptName) : "—"}</SummaryRow>
-              <SummaryRow label="Reference">{referenceValue}</SummaryRow>
-              <div className="flex flex-col">
-                <p className="font-semibold text-foreground">Uploaded files</p>
-                {filesQuery.isLoading ? (
-                  <p className="text-foreground">Loading…</p>
-                ) : uploadedFiles.length ? (
-                  <div className="text-sm leading-7 text-foreground">
-                    {uploadedFiles.map((f) => (
-                      <p key={f.file_id ?? f.fileName}>{f.fileName}</p>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-foreground">None</p>
-                )}
-              </div>
-              <div className="flex flex-col">
-                <p className="font-semibold text-foreground">Module prompt</p>
-                <p className="whitespace-pre-wrap text-foreground">{module.module_prompt || "No prompt set."}</p>
-              </div>
-              <SummaryRow label="Key topics">{topics.length ? topics.join("; ") : "None"}</SummaryRow>
-            </div>
-            {/* Footer: Delete module (left) / Edit (right), per the mockup. */}
-            <div className="flex items-center justify-between border-t border-border px-6 py-2">
-              <Button variant="link" className="p-0 text-destructive" onClick={() => onDelete(module)}>
-                Delete module
-              </Button>
-              <Button variant="link" className="p-0" onClick={() => onEdit(module)}>
-                Edit
-              </Button>
-            </div>
+        <AccordionPrimitive.Item value="module" className="border-0">
+          <div className="flex items-center gap-2 py-1 px-2">
+            <button
+              type="button"
+              aria-label={`Reorder ${module.module_name}`}
+              className="cursor-grab touch-none rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              {...attributes}
+              {...listeners}
+            >
+              <Icon icon={MdDragIndicator} size={24} />
+            </button>
+            <AccordionPrimitive.Header className="flex flex-1">
+              <AccordionPrimitive.Trigger className="flex flex-1 items-center justify-between gap-2 rounded text-left text-caption text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <span>
+                  {toRoman(number)}. {titleCase(module.module_name)}
+                </span>
+                <Icon
+                  icon={MdExpandMore}
+                  size={24}
+                  className={cn("shrink-0 transition-transform duration-fast", open && "rotate-180")}
+                />
+              </AccordionPrimitive.Trigger>
+            </AccordionPrimitive.Header>
           </div>
-        </div>
-      </div>
+          <AccordionPrimitive.Content className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down motion-reduce:animate-none">
+            <div className="border-t border-border bg-background text-caption leading-7 text-foreground">
+              {/* Read-only module summary (Figma 859:7479). */}
+              <div className="flex flex-col gap-2.5 px-6 py-4">
+                <SummaryRow label="Module name">{titleCase(module.module_name)}</SummaryRow>
+                <SummaryRow label="Concept">{conceptName ? titleCase(conceptName) : "—"}</SummaryRow>
+                <SummaryRow label="Reference">{referenceValue}</SummaryRow>
+                <div className="flex flex-col">
+                  <p className="font-semibold text-foreground">Uploaded files</p>
+                  {filesQuery.isLoading ? (
+                    <p className="text-foreground">Loading…</p>
+                  ) : uploadedFiles.length ? (
+                    <div className="text-sm leading-7 text-foreground">
+                      {uploadedFiles.map((f) => (
+                        <p key={f.file_id ?? f.fileName}>{f.fileName}</p>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-foreground">None</p>
+                  )}
+                </div>
+                <div className="flex flex-col">
+                  <p className="font-semibold text-foreground">Module prompt</p>
+                  <p className="whitespace-pre-wrap text-foreground">{module.module_prompt || "No prompt set."}</p>
+                </div>
+                <SummaryRow label="Key topics">{topics.length ? topics.join("; ") : "None"}</SummaryRow>
+              </div>
+              {/* Footer: Delete module (left) / Edit (right), per the mockup. */}
+              <div className="flex items-center justify-between border-t border-border rounded-b px-6 py-2">
+                <Button variant="link" className="p-0 text-destructive" onClick={() => onDelete(module)}>
+                  Delete module
+                </Button>
+                <Button variant="link" className="p-0" onClick={() => onEdit(module)}>
+                  Edit
+                </Button>
+              </div>
+            </div>
+          </AccordionPrimitive.Content>
+        </AccordionPrimitive.Item>
+      </AccordionPrimitive.Root>
     </div>
   )
 }
