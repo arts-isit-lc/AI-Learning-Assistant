@@ -9,10 +9,10 @@ import { LanguageModelDropdown } from "@/components/composed/LanguageModelDropdo
 import { PromptHistory } from "@/components/composed/PromptHistory"
 import { ConfirmDialog } from "@/components/composed/ConfirmDialog"
 import { ConflictList } from "@/components/composed/ConflictList"
+import { ConflictWarning } from "@/components/composed/ConflictWarning"
 import { UnsavedChangesPrompt } from "@/components/composed/UnsavedChangesPrompt"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   Accordion,
   AccordionItem,
@@ -141,11 +141,7 @@ export function SettingsTab() {
           area below can significantly impact the quality and accuracy of the responses.
         </p>
 
-        {hasConflicts && (
-          <Alert variant="destructive" className="mt-3">
-            <AlertDescription>There are conflicts. Please resolve below.</AlertDescription>
-          </Alert>
-        )}
+        {hasConflicts && <ConflictWarning className="mt-3" />}
 
         <Textarea
           className="mt-3"

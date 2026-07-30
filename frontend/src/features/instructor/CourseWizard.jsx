@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { toast } from "react-toastify"
-import { MdDelete, MdInsertDriveFile, MdErrorOutline } from "react-icons/md"
+import { MdDelete, MdInsertDriveFile } from "react-icons/md"
 import {
   useConcepts,
   useModules,
@@ -23,6 +23,7 @@ import { UnsavedChangesPrompt } from "@/components/composed/UnsavedChangesPrompt
 import { Tag } from "@/components/composed/Tag"
 import { EditableTagList } from "@/components/composed/EditableTagList"
 import { ConflictList } from "@/components/composed/ConflictList"
+import { ConflictWarning } from "@/components/composed/ConflictWarning"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -570,14 +571,7 @@ export function CourseWizard() {
                       prompt, red-bordered textarea, and the collapsible conflict
                       rows below. */}
                   <div className="flex flex-col gap-2">
-                    {promptConflictReport && (
-                      <Alert variant="destructive">
-                        <Icon icon={MdErrorOutline} size={18} className="text-destructive" />
-                        <AlertDescription className="text-destructive">
-                          There are conflicts. Please resolve below.
-                        </AlertDescription>
-                      </Alert>
-                    )}
+                    {promptConflictReport && <ConflictWarning />}
                     <Textarea
                       id="module-prompt"
                       value={modulePrompt}

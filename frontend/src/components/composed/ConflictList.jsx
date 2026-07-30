@@ -74,7 +74,7 @@ export function ConflictList({ report, className }) {
                   className={cn(
                     // All severity pills use a white label on a solid fill; only
                     // the fill differs by type (destructive red vs warning mustard).
-                    "shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase text-white",
+                    "shrink-0 rounded-full leading-6 px-2.5 py-0.5 text-xs font-semibold uppercase text-white",
                     c.type === "HARD_CONTRADICTION" ? "bg-destructive" : "bg-warning"
                   )}
                 >
