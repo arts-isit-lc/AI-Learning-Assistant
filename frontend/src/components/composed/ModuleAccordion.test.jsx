@@ -3,6 +3,14 @@ import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { ModuleAccordion, parseKeyTopics } from "./ModuleAccordion"
 
+// The expanded row lazily fetches its Reference + Uploaded files. Stub the hooks
+// with deterministic data (no network) so the summary renders predictably.
+vi.mock("@/services/queries", () => ({
+  useCourseFiles: () => ({ data: [{ file_id: "file-1", filename: "syllabus.pdf" }] }),
+  useModuleReferences: () => ({ data: ["file-1"] }),
+  useModuleAllFiles: () => ({ data: [{ file_id: "u1", fileName: "notes.pdf" }] }),
+}))
+
 const concept = { concept_id: "con1", concept_name: "algebra", concept_number: 1 }
 const modules = [
   { module_id: "m1", module_name: "vectors", module_prompt: "Explain vectors", key_topics: ["dot product"] },
@@ -38,13 +46,28 @@ describe("ModuleAccordion", () => {
     expect(screen.getByRole("button", { name: "i. Vectors" })).toBeInTheDocument()
   })
 
-  it("expands a module to a read-only summary with Edit/Delete", async () => {
-    const { onEditModule } = renderAccordion()
+  it("expands a module to the full read-only summary (all six fields) with Edit/Delete", async () => {
+    const { onEditModule, onDeleteModule } = renderAccordion()
     await userEvent.click(screen.getByRole("button", { name: "i. Vectors" }))
+
+    // Six labeled fields per the Figma summary (859:7479).
+    expect(screen.getByText("Module name")).toBeInTheDocument()
+    expect(screen.getByText("Vectors")).toBeInTheDocument()
+    expect(screen.getByText("Concept")).toBeInTheDocument()
+    expect(screen.getByText("Algebra")).toBeInTheDocument()
+    expect(screen.getByText("Reference")).toBeInTheDocument()
+    expect(screen.getByText("syllabus.pdf")).toBeInTheDocument() // reference id resolved to a name
+    expect(screen.getByText("Uploaded files")).toBeInTheDocument()
+    expect(screen.getByText("notes.pdf")).toBeInTheDocument()
+    expect(screen.getByText("Module prompt")).toBeInTheDocument()
     expect(screen.getByText("Explain vectors")).toBeInTheDocument()
+    expect(screen.getByText("Key topics")).toBeInTheDocument()
     expect(screen.getByText("dot product")).toBeInTheDocument()
+
     await userEvent.click(screen.getByRole("button", { name: "Edit" }))
     expect(onEditModule).toHaveBeenCalledWith(modules[0])
+    await userEvent.click(screen.getByRole("button", { name: "Delete module" }))
+    expect(onDeleteModule).toHaveBeenCalledWith(modules[0])
   })
 
   it("renames the concept via the inline editor", async () => {
@@ -57,10 +80,11 @@ describe("ModuleAccordion", () => {
     expect(onRename).toHaveBeenCalledWith("Linear Algebra")
   })
 
-  it("fires add-module and delete-concept callbacks", async () => {
-    const { onAddModule, onDelete } = renderAccordion()
-    await userEvent.click(screen.getByRole("button", { name: /add module/i }))
-    expect(onAddModule).toHaveBeenCalled()
+  // The per-concept "Add module" button was removed in commit 227447b (module
+  // creation now lives in the Configuration header), so the concept box only
+  // fires delete-concept.
+  it("fires the delete-concept callback", async () => {
+    const { onDelete } = renderAccordion()
     await userEvent.click(screen.getByRole("button", { name: "Delete concept" }))
     expect(onDelete).toHaveBeenCalled()
   })

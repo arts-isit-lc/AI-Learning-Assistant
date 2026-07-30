@@ -15,21 +15,13 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import {
-  MdDragIndicator,
-  MdEdit,
-  MdAdd,
-  MdDelete,
-  MdCheck,
-  MdClose,
-  MdExpandMore,
-} from "react-icons/md"
+import { MdDragIndicator, MdEdit, MdDelete, MdCheck, MdClose, MdExpandMore } from "react-icons/md"
 import { cn } from "@/lib/utils"
 import { titleCase, toRoman } from "@/utils/formatters"
 import { Icon } from "@/components/ui/icon"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Tag } from "@/components/composed/Tag"
+import { useCourseFiles, useModuleReferences, useModuleAllFiles } from "@/services/queries"
 
 /** key_topics may arrive as a JSON string or an array (legacy). */
 export function parseKeyTopics(value) {
@@ -43,19 +35,51 @@ export function parseKeyTopics(value) {
   }
 }
 
+/** A label-over-value summary row in the expanded module panel (Figma 859:7479). */
+function SummaryRow({ label, children }) {
+  return (
+    <div className="flex flex-col">
+      <p className="font-semibold text-foreground">{label}</p>
+      <p className="text-foreground">{children}</p>
+    </div>
+  )
+}
+
 /**
  * One module: an indented, sortable box (Figma 365:2504) showing `i. Name` + a
- * disclosure chevron, expanding to a read-only summary + Edit/Delete. The drag
- * handle is always visible so the row's reorderability is discoverable at rest.
- * `number` is the module's 1-based position (rendered as a roman numeral).
+ * disclosure chevron, expanding to the read-only module summary (Figma 859:7479):
+ * name, concept, reference, uploaded files, prompt, and key topics over a
+ * Delete/Edit footer. The drag handle is always visible so the row's
+ * reorderability is discoverable at rest. `number` is the module's 1-based
+ * position (rendered as a roman numeral); `conceptName` labels the Concept field.
  */
-function SortableModuleRow({ module, number, onEdit, onDelete }) {
+function SortableModuleRow({ module, number, courseId, conceptName, onEdit, onDelete }) {
   const [open, setOpen] = useState(false)
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: module.module_id,
   })
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }
   const topics = parseKeyTopics(module.key_topics)
+
+  // Reference + uploaded files aren't part of the Configuration tree data, so
+  // fetch them lazily — only once the row is expanded (passing `undefined` while
+  // collapsed disables the queries). TanStack Query caches, so re-opening is
+  // instant and collapsed rows fetch nothing.
+  const { data: courseFiles = [] } = useCourseFiles(open ? courseId : undefined)
+  const referencesQuery = useModuleReferences(open ? module.module_id : undefined)
+  const filesQuery = useModuleAllFiles(
+    open ? courseId : undefined,
+    open ? module.module_id : undefined,
+    open ? module.module_name : undefined
+  )
+  const referenceIds = referencesQuery.data ?? []
+  const uploadedFiles = filesQuery.data ?? []
+  const fileNameById = new Map(courseFiles.map((f) => [f.file_id, f.filename || f.file_id]))
+  const referenceValue = referencesQuery.isLoading
+    ? "Loading…"
+    : referenceIds.length
+      ? referenceIds.map((id) => fileNameById.get(id) || id).join(", ")
+      : "None"
 
   // The panel stays mounted so it can animate BOTH ways (grid-rows 0fr<->1fr).
   // `inert` while collapsed keeps the hidden Edit/Delete controls out of the tab
@@ -102,27 +126,42 @@ function SortableModuleRow({ module, number, onEdit, onDelete }) {
         <div ref={panelRef} className="overflow-hidden">
           <div
             className={cn(
-              "border-t border-border bg-background p-3 text-caption transition-opacity duration-normal ease-standard motion-reduce:transition-none",
+              "border-t border-border bg-background text-caption leading-7 text-foreground transition-opacity duration-normal ease-standard motion-reduce:transition-none",
               open ? "opacity-100" : "opacity-0"
             )}
           >
-            <p className="font-semibold text-foreground">Prompt</p>
-            <p className="mb-3 whitespace-pre-wrap text-muted-foreground">
-              {module.module_prompt || "No prompt set."}
-            </p>
-            {topics.length > 0 && (
-              <div className="mb-3 flex flex-wrap gap-1">
-                {topics.map((t, i) => (
-                  <Tag key={i} label={t} />
-                ))}
+            {/* Read-only module summary (Figma 859:7479). */}
+            <div className="flex flex-col gap-2.5 px-6 py-4">
+              <SummaryRow label="Module name">{titleCase(module.module_name)}</SummaryRow>
+              <SummaryRow label="Concept">{conceptName ? titleCase(conceptName) : "—"}</SummaryRow>
+              <SummaryRow label="Reference">{referenceValue}</SummaryRow>
+              <div className="flex flex-col">
+                <p className="font-semibold text-foreground">Uploaded files</p>
+                {filesQuery.isLoading ? (
+                  <p className="text-foreground">Loading…</p>
+                ) : uploadedFiles.length ? (
+                  <div className="text-xs leading-normal text-foreground">
+                    {uploadedFiles.map((f) => (
+                      <p key={f.file_id ?? f.fileName}>{f.fileName}</p>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-foreground">None</p>
+                )}
               </div>
-            )}
-            <div className="flex gap-2">
-              <Button size="sm" variant="outline" onClick={() => onEdit(module)}>
-                Edit
+              <div className="flex flex-col">
+                <p className="font-semibold text-foreground">Module prompt</p>
+                <p className="whitespace-pre-wrap text-foreground">{module.module_prompt || "No prompt set."}</p>
+              </div>
+              <SummaryRow label="Key topics">{topics.length ? topics.join("; ") : "None"}</SummaryRow>
+            </div>
+            {/* Footer: Delete module (left) / Edit (right), per the mockup. */}
+            <div className="flex items-center justify-between border-t border-border px-6 py-2">
+              <Button variant="link" className="p-0 text-destructive" onClick={() => onDelete(module)}>
+                Delete module
               </Button>
-              <Button size="sm" variant="danger" onClick={() => onDelete(module)}>
-                Delete
+              <Button variant="link" className="p-0" onClick={() => onEdit(module)}>
+                Edit
               </Button>
             </div>
           </div>
@@ -135,9 +174,9 @@ function SortableModuleRow({ module, number, onEdit, onDelete }) {
 /**
  * Configuration tree entry for ONE concept (Figma 365:2504): a clean concept
  * box — `N. Name` + an inline rename pencil — over its module boxes, which sit
- * indented BELOW the concept box (not nested inside it). Management controls
- * (reorder handle, add-module, delete) are revealed on hover/focus so the row
- * reads clean at rest like the mockup. The concept-level drag handle is wired by
+ * indented BELOW the concept box (not nested inside it). The concept drag handle
+ * sits up front (always visible for discoverability); rename is inline, and
+ * delete is revealed on hover/focus. The concept-level drag handle is wired by
  * the parent via `sortable` (from its `useSortable`); module reordering is
  * self-contained here.
  *
@@ -145,10 +184,10 @@ function SortableModuleRow({ module, number, onEdit, onDelete }) {
  *   concept: { concept_id: string, concept_name: string, concept_number?: number },
  *   modules?: Array<object>,
  *   number?: number,
+ *   courseId?: string,
  *   sortable?: { setNodeRef?: Function, style?: object, attributes?: object, listeners?: object, isDragging?: boolean },
  *   onRename: (name: string) => void,
  *   onDelete: () => void,
- *   onAddModule: () => void,
  *   onReorderModules: (ordered: Array<object>) => void,
  *   onEditModule: (module: object) => void,
  *   onDeleteModule: (module: object) => void,
@@ -158,10 +197,10 @@ export function ModuleAccordion({
   concept,
   modules = [],
   number,
+  courseId,
   sortable,
   onRename,
   onDelete,
-  onAddModule,
   onReorderModules,
   onEditModule,
   onDeleteModule,
@@ -280,6 +319,8 @@ export function ModuleAccordion({
                   key={m.module_id}
                   module={m}
                   number={i + 1}
+                  courseId={courseId}
+                  conceptName={concept.concept_name}
                   onEdit={onEditModule}
                   onDelete={onDeleteModule}
                 />

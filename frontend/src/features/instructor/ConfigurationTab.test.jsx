@@ -23,6 +23,10 @@ vi.mock("@/services/queries", () => ({
   useDeleteModule: () => deleteModule,
   useReorderConcepts: () => reorderConcepts,
   useReorderModules: () => reorderModules,
+  // Lazy per-module fetches used by the expanded ModuleAccordion row.
+  useCourseFiles: () => ({ data: [] }),
+  useModuleReferences: () => ({ data: [] }),
+  useModuleAllFiles: () => ({ data: [] }),
 }))
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal()

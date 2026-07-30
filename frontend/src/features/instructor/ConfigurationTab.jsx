@@ -53,7 +53,7 @@ export function groupConceptTree(concepts, modules) {
 }
 
 /** Wraps a concept in `useSortable` and hands the drag bits to ModuleAccordion. */
-function SortableConceptSection({ concept, modules, number, ...handlers }) {
+function SortableConceptSection({ concept, modules, number, courseId, ...handlers }) {
   const s = useSortable({ id: concept.concept_id })
   const style = { transform: CSS.Transform.toString(s.transform), transition: s.transition }
   return (
@@ -61,6 +61,7 @@ function SortableConceptSection({ concept, modules, number, ...handlers }) {
       concept={concept}
       modules={modules}
       number={number}
+      courseId={courseId}
       sortable={{
         setNodeRef: s.setNodeRef,
         style,
@@ -242,6 +243,7 @@ export function ConfigurationTab() {
                   concept={concept}
                   modules={conceptModules}
                   number={i + 1}
+                  courseId={courseId}
                   {...conceptHandlers(concept, conceptModules)}
                 />
               ))}
