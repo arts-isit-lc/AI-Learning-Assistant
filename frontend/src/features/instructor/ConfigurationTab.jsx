@@ -236,7 +236,7 @@ export function ConfigurationTab() {
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleConceptDragEnd}>
           <SortableContext items={conceptIds} strategy={verticalListSortingStrategy}>
-            <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-6 mb-6">
               {tree.map(({ concept, modules: conceptModules }, i) => (
                 <SortableConceptSection
                   key={concept.concept_id}
@@ -255,7 +255,7 @@ export function ConfigurationTab() {
       {/* Footer (Figma 365:2622) — shown in every state, incl. empty: Student view
           (left) previews the course as a student; Save changes (right) is disabled
           because configuration edits (add/rename/delete/reorder) persist immediately. */}
-      <div className="flex items-center justify-between gap-4 border-t border-border pt-4">
+      <div className="flex items-center justify-between gap-4 border-t border-border pt-6">
         <Button variant="link" className="p-0" onClick={openStudentView}>
           Student view
         </Button>
