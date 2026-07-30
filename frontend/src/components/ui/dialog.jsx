@@ -25,10 +25,12 @@ const DialogContent = React.forwardRef(function DialogContent({ className, child
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
-          // Standard modal padding (Figma): 36px left/right/bottom, 56px top
-          // (the extra top room clears the close control). Full-bleed modals
-          // (CourseWizard / EditModule) opt out with `p-0` and pad internally.
-          "fixed left-1/2 top-1/2 z-modal grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-sm border border-border bg-background px-9 pb-9 pt-14 shadow-modal animate-fade-in",
+          // Standard modal chrome (Figma): 36px left/right/bottom padding, 56px
+          // top (the extra top room clears the close control), and a uniform
+          // 32px (gap-8) vertical rhythm between sections (header / body /
+          // footer). Full-bleed modals (CourseWizard / EditModule) opt out with
+          // `gap-0 p-0` and space/pad themselves.
+          "fixed left-1/2 top-1/2 z-modal flex w-full max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col gap-8 rounded-sm border border-border bg-background px-9 pb-9 pt-14 shadow-modal animate-fade-in",
           className
         )}
         {...props}
@@ -42,12 +44,29 @@ const DialogContent = React.forwardRef(function DialogContent({ className, child
   )
 })
 
+// Standard modal header (Figma): the title sits over a full-width divider, with
+// 8px (pb-2) between them. Opt out with `border-b-0` / `pb-0` when a dialog
+// wants no divider.
 function DialogHeader({ className, ...props }) {
-  return <div className={cn("flex flex-col gap-1.5 text-left", className)} {...props} />
+  return (
+    <div className={cn("flex flex-col gap-1.5 border-b border-border pb-2 text-left", className)} {...props} />
+  )
 }
 
+// Standard modal footer (Figma): a full-width divider over the action row, with
+// 16px (pt-4) between the divider and the buttons. Action buttons render at the
+// Figma 16px (`text-base`) — set here so dialogs don't size each button by hand
+// (the Button default is `text-caption`/14px).
 function DialogFooter({ className, ...props }) {
-  return <div className={cn("flex flex-col-reverse gap-2 sm:flex-row sm:justify-end", className)} {...props} />
+  return (
+    <div
+      className={cn(
+        "flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:justify-end [&>button]:text-base",
+        className
+      )}
+      {...props}
+    />
+  )
 }
 
 const DialogTitle = React.forwardRef(function DialogTitle({ className, ...props }, ref) {
@@ -62,7 +81,7 @@ const DialogTitle = React.forwardRef(function DialogTitle({ className, ...props 
 
 const DialogDescription = React.forwardRef(function DialogDescription({ className, ...props }, ref) {
   return (
-    <DialogPrimitive.Description ref={ref} className={cn("text-caption text-muted-foreground", className)} {...props} />
+    <DialogPrimitive.Description ref={ref} className={cn("text-body text-foreground", className)} {...props} />
   )
 })
 

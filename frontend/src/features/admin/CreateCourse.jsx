@@ -125,12 +125,12 @@ export function CreateCourse() {
 
   return (
     <Dialog open onOpenChange={(o) => !o && close()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent>
         <UnsavedChangesPrompt when={isDirty && !leaveTo} />
-        <DialogHeader className="border-b border-border pb-2">
+        <DialogHeader>
           <DialogTitle>Add course</DialogTitle>
         </DialogHeader>
-        <DialogDescription className="mt-8 mb-6">
+        <DialogDescription>
           To add a new course to the OCELIA system please fill out the following fields. Fields marked
           with <span className="text-destructive">*</span> are mandatory for course creation.
         </DialogDescription>
@@ -236,16 +236,11 @@ export function CreateCourse() {
           </div>
         </div>
 
-        <DialogFooter className="border-t border-border pt-4">
-          <Button variant="outline" className="text-[16px]" onClick={close}>
+        <DialogFooter>
+          <Button variant="outline" onClick={close}>
             Cancel
           </Button>
-          <Button
-            className="text-[16px]"
-            onClick={handleCreate}
-            loading={create.isPending}
-            disabled={!canCreate}
-          >
+          <Button onClick={handleCreate} loading={create.isPending} disabled={!canCreate}>
             Add course
           </Button>
         </DialogFooter>

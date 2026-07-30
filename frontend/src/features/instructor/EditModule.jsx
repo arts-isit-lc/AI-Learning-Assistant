@@ -229,7 +229,7 @@ export function EditModule() {
       <DialogContent className="flex max-h-[90vh] w-[min(92vw,64rem)] max-w-none flex-col gap-0 p-0">
         <UnsavedChangesPrompt when={isDirty && !leaving} />
         <div className="border-b border-border px-8 pb-4 pt-6">
-          <DialogTitle className="text-h4 font-semibold text-neutral-900">Edit module</DialogTitle>
+          <DialogTitle>Edit module</DialogTitle>
         </div>
 
         <div className="flex-1 overflow-y-auto px-8 py-8">
@@ -404,7 +404,7 @@ export function EditModule() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-2 border-t border-border px-8 py-4">
+        <div className="flex items-center justify-between gap-2 border-t border-border px-8 py-4 [&_button]:text-base">
           <Button variant="danger" onClick={() => setDeleteOpen(true)} disabled={deleteModule.isPending}>
             Delete module
           </Button>

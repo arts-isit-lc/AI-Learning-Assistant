@@ -197,8 +197,8 @@ export default function Gallery() {
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Confirm action</DialogTitle>
-                  <DialogDescription>This is a dialog rendered from the primitive.</DialogDescription>
                 </DialogHeader>
+                <DialogDescription>This is a dialog rendered from the primitive.</DialogDescription>
                 <DialogFooter>
                   <DialogClose asChild>
                     <Button variant="ghost">Cancel</Button>

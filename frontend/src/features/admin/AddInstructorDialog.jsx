@@ -59,11 +59,11 @@ export function AddInstructorDialog() {
       </Button>
       <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : close())}>
         <DialogContent>
-          <form onSubmit={submit} className="flex flex-col gap-6">
-            <DialogHeader className="border-b border-border pb-3">
-              <DialogTitle className="mt-2">Add instructor(s)</DialogTitle>
+          <form onSubmit={submit} className="flex flex-col gap-8">
+            <DialogHeader>
+              <DialogTitle>Add instructor(s)</DialogTitle>
             </DialogHeader>
-            <DialogDescription className="text-body text-foreground">
+            <DialogDescription>
               To add an instructor, enter their email address below. They get instructor access the
               next time they sign in.
             </DialogDescription>
@@ -94,17 +94,16 @@ export function AddInstructorDialog() {
                   )}
                 </div>
               ))}
+              <button
+                type="button"
+                onClick={addField}
+                className="self-start text-body text-foreground transition-colors duration-fast hover:text-primary"
+              >
+                multi-add +
+              </button>
             </div>
 
-            <button
-              type="button"
-              onClick={addField}
-              className="self-start text-body text-foreground transition-colors duration-fast hover:text-primary"
-            >
-              multi-add +
-            </button>
-
-            <DialogFooter className="border-t border-border pt-4">
+            <DialogFooter>
               <Button type="button" variant="outline" onClick={close}>
                 Cancel
               </Button>

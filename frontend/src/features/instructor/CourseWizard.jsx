@@ -370,7 +370,7 @@ export function CourseWizard() {
               then the determinate progress bar (16px track, #D9D9D9). */}
           <div className="shrink-0">
             <div className="flex flex-col gap-2 px-9 pt-14">
-              <DialogTitle className="text-h4 font-semibold text-neutral-900">Create new module</DialogTitle>
+              <DialogTitle>Create new module</DialogTitle>
               <div className="h-px w-full bg-border" aria-hidden="true" />
             </div>
             <div className="px-9 pt-10">

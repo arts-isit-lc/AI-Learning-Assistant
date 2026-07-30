@@ -295,7 +295,7 @@ export function InstructorDetail() {
       {/* Assign-course picker (staged — commits on Save changes). */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent>
-          <DialogHeader className="border-b border-border pb-3">
+          <DialogHeader>
             <DialogTitle>Assign a course</DialogTitle>
           </DialogHeader>
           <DialogDescription>Give this instructor access to a course.</DialogDescription>

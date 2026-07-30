@@ -124,12 +124,12 @@ export function DuplicateCourse() {
 
   return (
     <Dialog open onOpenChange={(o) => !o && close()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent>
         <UnsavedChangesPrompt when={isDirty && !leaveTo} />
-        <DialogHeader className="border-b border-border pb-2">
+        <DialogHeader>
           <DialogTitle>Duplicate course</DialogTitle>
         </DialogHeader>
-        <DialogDescription className="mt-8 mb-6">
+        <DialogDescription>
           Review and update the fields below before duplicating your course.
         </DialogDescription>
 
@@ -221,16 +221,11 @@ export function DuplicateCourse() {
           </div>
         </div>
 
-        <DialogFooter className="border-t border-border pt-4">
-          <Button variant="outline" className="text-[16px]" onClick={close}>
+        <DialogFooter>
+          <Button variant="outline" onClick={close}>
             Cancel
           </Button>
-          <Button
-            className="text-[16px]"
-            onClick={handleDuplicate}
-            loading={duplicate.isPending}
-            disabled={!canDuplicate}
-          >
+          <Button onClick={handleDuplicate} loading={duplicate.isPending} disabled={!canDuplicate}>
             Duplicate course
           </Button>
         </DialogFooter>

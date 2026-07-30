@@ -78,8 +78,8 @@ export function DuplicateCourseDialog({ course }) {
       </Button>
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent>
-          <form onSubmit={submit} className="flex flex-col gap-4">
-            <DialogHeader className="border-b border-border pb-3">
+          <form onSubmit={submit} className="flex flex-col gap-8">
+            <DialogHeader>
               <DialogTitle>Duplicate course</DialogTitle>
             </DialogHeader>
             <DialogDescription>
@@ -119,7 +119,7 @@ export function DuplicateCourseDialog({ course }) {
                 </div>
               </div>
             </div>
-            <DialogFooter className="border-t border-border pt-4">
+            <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 Cancel
               </Button>
