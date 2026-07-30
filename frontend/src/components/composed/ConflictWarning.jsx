@@ -21,7 +21,7 @@ export function ConflictWarning({ className, children = "There are conflicts. Pl
         className
       )}
     >
-      <Icon icon={MdErrorOutline} size={18} />
+      <Icon icon={MdErrorOutline} size={14} />
       {children}
     </div>
   )
