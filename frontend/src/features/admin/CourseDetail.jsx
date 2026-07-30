@@ -226,7 +226,7 @@ export function CourseDetail() {
     <div className="flex flex-col">
       <UnsavedChangesPrompt when={isDirty && !deleted} />
       {/* Header: code + Active/Inactive toggle, name, then term|section + access code. */}
-      <div className="flex flex-col gap-1 border-b border-border pb-6">
+      <div className="flex flex-col border-b border-border pb-6">
         <div className="flex items-start justify-between gap-4">
           <h1 className="text-[24px] font-semibold text-neutral-900">{courseCode(course)}</h1>
           <div className="flex shrink-0 items-center gap-2 text-caption">
@@ -240,9 +240,9 @@ export function CourseDetail() {
           </div>
         </div>
         {course.course_name && <p className="text-body text-foreground">{course.course_name}</p>}
-        <div className="mt-1 flex items-end justify-between gap-4">
+        <div className="mt-4 flex items-end justify-between gap-4">
           {/* term | section — forward-compatible (no schema columns today). */}
-          <div className="text-caption text-foreground">
+          <div className="text-lg leading-7 text-foreground">
             {course.term && (
               <span>
                 {course.term}
@@ -269,20 +269,20 @@ export function CourseDetail() {
 
       {/* Instructors: assigned list with Remove + per-instructor OCELIA access. */}
       <div>
-        <div className="flex items-center justify-between gap-4 mt-2 mb-6">
+        <div className="flex items-center justify-between gap-4 mt-2.5 mb-6">
           <div className="flex items-center gap-1">
-            <h2 className="text-caption font-semibold text-foreground">Instructor(s)</h2>
+            <h2 className="text-caption leading-7 mr-4 font-semibold text-foreground">Instructor(s)</h2>
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7"
+              className="h-7 w-7 gap-0"
               onClick={() => setAddOpen(true)}
               aria-label="Add instructor"
             >
               <Icon icon={MdAdd} size={24} />
             </Button>
           </div>
-          <span className="text-caption font-semibold text-foreground">OCELIA access</span>
+          <span className="text-caption leading-7 font-semibold text-foreground">OCELIA access</span>
         </div>
 
         <div className="mt-2 flex flex-col">
