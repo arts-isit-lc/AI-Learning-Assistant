@@ -290,9 +290,9 @@ export function ModuleAccordion({
                 setName(concept.concept_name)
                 setEditing(true)
               }}
-              className="rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="leading-4 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <Icon icon={MdEdit} size={16} />
+              <Icon icon={MdEdit} size={18} />
             </button>
             <div className="ml-auto flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
               <button
