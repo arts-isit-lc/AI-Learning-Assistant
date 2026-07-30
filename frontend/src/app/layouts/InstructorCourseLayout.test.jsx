@@ -54,7 +54,8 @@ describe("InstructorCourseLayout", () => {
   it("shows the course access code (with a copy control) in the header", () => {
     renderLayout()
     expect(screen.getByText("65XH19000jo12")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /copy access code/i })).toBeInTheDocument()
+    // The copy control uses the brand primary colour (#6829C2 = text-primary).
+    expect(screen.getByRole("button", { name: /copy access code/i })).toHaveClass("text-primary")
   })
 
   it("flags the Settings tab with a dot when there is an unresolved prompt conflict", () => {
