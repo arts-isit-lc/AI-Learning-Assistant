@@ -74,26 +74,26 @@ export function ConflictList({ report, className }) {
                   className={cn(
                     // All severity pills use a white label on a solid fill; only
                     // the fill differs by type (destructive red vs warning mustard).
-                    "shrink-0 rounded-full px-2.5 py-0.5 text-caption font-semibold uppercase text-white",
+                    "shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase text-white",
                     c.type === "HARD_CONTRADICTION" ? "bg-destructive" : "bg-warning"
                   )}
                 >
                   {severityLabel(c)}
                 </span>
-                <span className="text-caption text-foreground">
+                <span className="text-xs leading-7 text-foreground">
                   Conflicts with: <span className="font-semibold">{conflictWith(c)}</span>
                 </span>
               </span>
             </AccordionTrigger>
             <AccordionContent>
-              {c.explanation && <p className="mb-2 text-caption text-foreground">{c.explanation}</p>}
+              {c.explanation && <p className="mb-2 text-xs leading-7 text-foreground">{c.explanation}</p>}
               {c.prompt_a_text && (
-                <p className="text-caption text-muted-foreground">
+                <p className="text-xs leading-7 text-muted-foreground">
                   <span className="font-semibold">{sourceLabel(c.prompt_a_source)}:</span> {c.prompt_a_text}
                 </p>
               )}
               {c.prompt_b_text && (
-                <p className="text-caption text-muted-foreground">
+                <p className="text-xs leading-7 text-muted-foreground">
                   <span className="font-semibold">{sourceLabel(c.prompt_b_source)}:</span> {c.prompt_b_text}
                 </p>
               )}
