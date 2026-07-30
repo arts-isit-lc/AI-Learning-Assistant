@@ -155,7 +155,7 @@ export function ConfigurationTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-2 mb-6">
         <h2 className="text-xs leading-7 font-semibold text-neutral-900">Course configuration</h2>
         <div className="flex gap-2">
           {/* Figma `Button/UI/Desktop/Secondary with Icon` (node 1099:6534): outline
