@@ -236,7 +236,7 @@ export function ConfigurationTab() {
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleConceptDragEnd}>
           <SortableContext items={conceptIds} strategy={verticalListSortingStrategy}>
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-6">
               {tree.map(({ concept, modules: conceptModules }, i) => (
                 <SortableConceptSection
                   key={concept.concept_id}
