@@ -145,11 +145,11 @@ function SortableModuleRow({ module, number, courseId, conceptName, onEdit, onDe
                 <SummaryRow label="Key topics">{topics.length ? topics.join("; ") : "None"}</SummaryRow>
               </div>
               {/* Footer: Delete module (left) / Edit (right), per the mockup. */}
-              <div className="flex items-center justify-between border-t border-border rounded-b px-6 py-2">
-                <Button variant="link" className="p-0 text-destructive" onClick={() => onDelete(module)}>
+              <div className="flex items-center justify-between border-t border-border rounded-b px-6 py-0.5">
+                <Button variant="link" className="p-0 text-destructive leading-7" onClick={() => onDelete(module)}>
                   Delete module
                 </Button>
-                <Button variant="link" className="p-0" onClick={() => onEdit(module)}>
+                <Button variant="link" className="p-0 leading-7" onClick={() => onEdit(module)}>
                   Edit
                 </Button>
               </div>
