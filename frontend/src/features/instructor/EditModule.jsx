@@ -245,7 +245,7 @@ export function EditModule() {
               <p className="text-caption text-muted-foreground">Loading module…</p>
             ) : (
               <>
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col">
                   <Label htmlFor="edit-module-name" className="text-lg leading-7 text-neutral-900">Module name</Label>
                   <Input
                     id="edit-module-name"
@@ -256,7 +256,7 @@ export function EditModule() {
                   />
                 </div>
 
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col">
                   <Label className="text-lg leading-7 text-neutral-900">Concept</Label>
                   <Select value={conceptId} onValueChange={setConceptId}>
                     <SelectTrigger aria-label="Concept">
@@ -272,7 +272,7 @@ export function EditModule() {
                   </Select>
                 </div>
 
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col">
                   <Label className="text-lg leading-7 text-neutral-900">Reference</Label>
                   <Select
                     value=""
@@ -303,7 +303,7 @@ export function EditModule() {
                   )}
                 </div>
 
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col">
                   <div className="flex items-center justify-between">
                     <Label className="text-lg leading-7 text-neutral-900">Uploaded files</Label>
                     <button
@@ -371,7 +371,7 @@ export function EditModule() {
                   </ul>
                 </div>
 
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col">
                   <Label htmlFor="edit-module-prompt" className="text-lg leading-7 text-neutral-900">Module prompt</Label>
                   <Textarea
                     id="edit-module-prompt"
@@ -381,7 +381,7 @@ export function EditModule() {
                   />
                 </div>
 
-                <div className="flex flex-col gap-3">
+                <div className="flex flex-col">
                   <Label className="text-lg leading-7 text-neutral-900">Key topics</Label>
                   <div className="flex gap-2">
                     <Button variant="outline" onClick={handleGenerate} loading={isGenerating}>
