@@ -60,7 +60,7 @@ export default function AdminLayout() {
             <div className="flex items-center justify-end gap-2">
               <Button asChild variant="outline" size="sm" className="h-7 gap-4 rounded-sm px-6">
                 <Link to="/admin/courses/duplicate">
-                  Duplicate course <Icon icon={MdContentCopy} size={20} />
+                  Duplicate course <Icon icon={MdAddToPhotos} size={20} />
                 </Link>
               </Button>
               <Button asChild variant="outline" size="sm" className="h-7 gap-4 rounded-sm px-6">

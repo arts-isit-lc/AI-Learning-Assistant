@@ -59,7 +59,7 @@ export function EditableTagList({ values, onChange, ariaLabelPrefix = "item", cl
   }
 
   return (
-    <div className={cn("flex flex-wrap items-center gap-1", className)}>
+    <div className={cn("flex flex-wrap items-center gap-1 mt-8", className)}>
       {values.map((value) =>
         editing === value ? (
           <Input
