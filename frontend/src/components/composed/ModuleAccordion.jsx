@@ -118,7 +118,7 @@ function SortableModuleRow({ module, number, courseId, conceptName, onEdit, onDe
             </AccordionPrimitive.Header>
           </div>
           <AccordionPrimitive.Content className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down motion-reduce:animate-none">
-            <div className="border-t border-border bg-background text-caption leading-7 text-foreground">
+            <div className="border-t border-border rounded-b bg-background text-caption leading-7 text-foreground">
               {/* Read-only module summary (Figma 859:7479). */}
               <div className="flex flex-col gap-2.5 px-6 py-4">
                 <SummaryRow label="Module name">{titleCase(module.module_name)}</SummaryRow>
@@ -145,7 +145,7 @@ function SortableModuleRow({ module, number, courseId, conceptName, onEdit, onDe
                 <SummaryRow label="Key topics">{topics.length ? topics.join("; ") : "None"}</SummaryRow>
               </div>
               {/* Footer: Delete module (left) / Edit (right), per the mockup. */}
-              <div className="flex items-center justify-between border-t border-border rounded-b px-6 py-0.5">
+              <div className="flex items-center justify-between border-t border-border px-6 py-0.5">
                 <Button variant="link" className="p-0 text-destructive leading-7" onClick={() => onDelete(module)}>
                   Delete module
                 </Button>
