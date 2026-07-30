@@ -140,7 +140,7 @@ function SortableModuleRow({ module, number, courseId, conceptName, onEdit, onDe
                 {filesQuery.isLoading ? (
                   <p className="text-foreground">Loading…</p>
                 ) : uploadedFiles.length ? (
-                  <div className="text-xs leading-normal text-foreground">
+                  <div className="text-sm leading-7 text-foreground">
                     {uploadedFiles.map((f) => (
                       <p key={f.file_id ?? f.fileName}>{f.fileName}</p>
                     ))}
