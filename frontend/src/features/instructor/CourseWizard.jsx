@@ -98,8 +98,8 @@ function statusLabel(status) {
 function ReviewRow({ label, children }) {
   return (
     <div className="flex flex-col gap-1">
-      <dt className="text-caption font-semibold text-neutral-900">{label}</dt>
-      <dd className="whitespace-pre-wrap text-caption text-foreground">{children}</dd>
+      <dt className="text-lg leading-7 font-semibold text-neutral-900">{label}</dt>
+      <dd className="whitespace-pre-wrap text-caption leading-7 text-foreground">{children}</dd>
     </div>
   )
 }
