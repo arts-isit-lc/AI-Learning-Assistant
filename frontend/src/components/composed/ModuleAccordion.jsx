@@ -70,6 +70,15 @@ function SortableModuleRow({ module, number, onEdit, onDelete }) {
       <div className="flex items-center gap-2 py-2 pl-3 pr-2">
         <button
           type="button"
+          aria-label={`Reorder ${module.module_name}`}
+          className="cursor-grab touch-none rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover/module:opacity-100"
+          {...attributes}
+          {...listeners}
+        >
+          <Icon icon={MdDragIndicator} size={24} />
+        </button>
+        <button
+          type="button"
           aria-expanded={open}
           onClick={() => setOpen((o) => !o)}
           className="flex flex-1 items-center justify-between gap-2 rounded py-1 text-left text-caption text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -78,15 +87,6 @@ function SortableModuleRow({ module, number, onEdit, onDelete }) {
             {toRoman(number)}. {titleCase(module.module_name)}
           </span>
           <Icon icon={MdExpandMore} size={24} className={cn("shrink-0 transition-transform", open && "rotate-180")} />
-        </button>
-        <button
-          type="button"
-          aria-label={`Reorder ${module.module_name}`}
-          className="cursor-grab touch-none rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover/module:opacity-100"
-          {...attributes}
-          {...listeners}
-        >
-          <Icon icon={MdDragIndicator} size={24} />
         </button>
       </div>
       {/* Slide open/closed via grid-rows 0fr<->1fr (a modern, JS-free height
