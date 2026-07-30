@@ -231,6 +231,15 @@ export function ModuleAccordion({
           </div>
         ) : (
           <>
+            <button
+              type="button"
+              aria-label={`Reorder ${concept.concept_name}`}
+              className="cursor-grab touch-none rounded p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              {...(sortable?.attributes || {})}
+              {...(sortable?.listeners || {})}
+            >
+              <Icon icon={MdDragIndicator} size={24} />
+            </button>
             <h3 className="text-caption leading-7 text-neutral-900">
               {displayNumber != null ? `${displayNumber}. ` : ""}
               {titleCase(concept.concept_name)}
@@ -247,23 +256,6 @@ export function ModuleAccordion({
               <Icon icon={MdEdit} size={16} />
             </button>
             <div className="ml-auto flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
-              <button
-                type="button"
-                aria-label={`Reorder ${concept.concept_name}`}
-                className="cursor-grab touch-none rounded p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                {...(sortable?.attributes || {})}
-                {...(sortable?.listeners || {})}
-              >
-                <Icon icon={MdDragIndicator} size={24} />
-              </button>
-              <button
-                type="button"
-                aria-label="Add module"
-                onClick={onAddModule}
-                className="rounded p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <Icon icon={MdAdd} size={24} />
-              </button>
               <button
                 type="button"
                 aria-label="Delete concept"
