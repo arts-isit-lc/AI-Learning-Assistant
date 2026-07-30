@@ -519,7 +519,7 @@ export function CourseWizard() {
                                     </div>
                                   </div>
                                   <Button
-                                    className="gap-0"
+                                    className="gap-0 w-6 h-6"
                                     size="icon"
                                     variant="ghost"
                                     aria-label={`Remove ${f.fileName}`}
@@ -563,7 +563,7 @@ export function CourseWizard() {
                     <Label htmlFor="module-prompt" className="text-body text-neutral-900">Module prompt</Label>
                     <span className="text-caption text-muted-foreground">(optional)</span>
                   </div>
-                  <p className="text-caption text-muted-foreground">
+                  <p className="text-caption leading-7 text-muted-foreground">
                     Provide any specific instructions for this module, which will be used with the
                     course-level prompt.
                   </p>
@@ -585,7 +585,7 @@ export function CourseWizard() {
 
                   <div className="flex flex-col mt-9">
                     <Label className="text-body text-neutral-900">Key topics</Label>
-                    <p className="text-caption text-muted-foreground mb-8">
+                    <p className="text-caption leading-7 text-muted-foreground mb-8">
                       OCELIA automatically suggests key topics based on your uploaded files. You can
                       add/remove a topic or edit an existing one by clicking it below. To restore any
                       previously suggested topics, click the &lsquo;Suggest&rsquo; button.

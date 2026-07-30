@@ -82,7 +82,7 @@ export default function InstructorCourseLayout() {
 
   return (
     <div className="flex flex-col">
-      <div className="border-b border-border pb-4">
+      <div className="border-b border-border pb-6">
         <div className="flex items-start justify-between gap-4">
           <h1 className="text-2xl leading-normal font-semibold text-neutral-900">{code}</h1>
           {course && (
