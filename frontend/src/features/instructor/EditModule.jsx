@@ -226,14 +226,17 @@ export function EditModule() {
 
   return (
     <Dialog open onOpenChange={(open) => !open && goToConfiguration()}>
-      <DialogContent className="flex max-h-[90vh] w-[min(92vw,64rem)] max-w-none flex-col gap-0 p-0">
+      <DialogContent className="flex max-h-[90vh] w-[min(92vw,1088px)] max-w-none flex-col gap-0 overflow-hidden p-0">
         <UnsavedChangesPrompt when={isDirty && !leaving} />
-        <div className="border-b border-border px-8 pb-4 pt-6">
+        {/* Fixed header: title + divider (pt-14 clears the close control) — matches
+            the Create-module modal's chrome (px-9 gutter). */}
+        <div className="shrink-0 flex flex-col gap-2 px-9 pt-14">
           <DialogTitle>Edit module</DialogTitle>
+          <div className="h-px w-full bg-border" aria-hidden="true" />
         </div>
 
-        <div className="flex-1 overflow-y-auto px-8 py-8">
-          <div className="mx-auto flex max-w-xl flex-col gap-6">
+        <div className="flex-1 min-h-0 overflow-y-auto px-9 pb-16 pt-14">
+          <div className="mx-auto flex w-full max-w-[608px] flex-col gap-8">
             <p className="text-caption text-muted-foreground">
               Changes made below are not updated unless Save is pressed once finished.
             </p>
@@ -404,17 +407,23 @@ export function EditModule() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-2 border-t border-border px-8 py-4 [&_button]:text-base">
-          <Button variant="danger" onClick={() => setDeleteOpen(true)} disabled={deleteModule.isPending}>
-            Delete module
-          </Button>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={goToConfiguration}>
-              Cancel
-            </Button>
-            <Button onClick={handleSave} loading={editModule.isPending} disabled={!canSave}>
-              Save changes
-            </Button>
+        {/* Fixed footer: divider + actions — matches the Create-module modal. */}
+        <div className="shrink-0 px-9 pb-9">
+          <div className="flex flex-col gap-4">
+            <div className="h-px w-full bg-border" aria-hidden="true" />
+            <div className="flex items-center justify-between gap-2 [&_button]:text-base">
+              <Button variant="danger" onClick={() => setDeleteOpen(true)} disabled={deleteModule.isPending}>
+                Delete module
+              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={goToConfiguration}>
+                  Cancel
+                </Button>
+                <Button onClick={handleSave} loading={editModule.isPending} disabled={!canSave}>
+                  Save changes
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       </DialogContent>
