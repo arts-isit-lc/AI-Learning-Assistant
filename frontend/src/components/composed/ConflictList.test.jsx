@@ -37,6 +37,30 @@ describe("ConflictList", () => {
     expect(await screen.findByText("Clash on summaries.")).toBeInTheDocument()
   })
 
+  it("renders every conflict-type label in white on its severity colour", () => {
+    const multi = {
+      has_conflicts: true,
+      conflicts: [
+        { type: "HARD_CONTRADICTION", prompt_a_source: "system_prompt", prompt_b_source: "course_prompt" },
+        { type: "BEHAVIORAL_INCOMPATIBILITY", prompt_a_source: "system_prompt", prompt_b_source: "course_prompt" },
+        { type: "CONSTRAINT_COLLISION", prompt_a_source: "system_prompt", prompt_b_source: "course_prompt" },
+        { type: "HIERARCHY_VIOLATION", prompt_a_source: "system_prompt", prompt_b_source: "course_prompt" },
+      ],
+    }
+    render(<ConflictList report={multi} />)
+
+    // Hard contradiction: white label on the destructive (red) pill.
+    expect(screen.getByText("HARD CONTRADICTION")).toHaveClass("text-white", "bg-destructive")
+
+    // The other three types: white label on the warning (mustard) pill — not the
+    // dark warning-foreground token (the reported bug).
+    for (const label of ["BEHAVIOURAL INCOMPATIBILITY", "CONSTRAINT COLLISION", "HIERARCHY VIOLATION"]) {
+      const pill = screen.getByText(label)
+      expect(pill).toHaveClass("text-white", "bg-warning")
+      expect(pill).not.toHaveClass("text-warning-foreground")
+    }
+  })
+
   it("hides low-confidence conflicts behind a toggle", async () => {
     const user = userEvent.setup()
     const lowConf = {

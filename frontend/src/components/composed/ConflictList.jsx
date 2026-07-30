@@ -72,10 +72,10 @@ export function ConflictList({ report, className }) {
               <span className="flex flex-1 items-center gap-3 text-left">
                 <span
                   className={cn(
-                    "shrink-0 rounded-full px-2.5 py-0.5 text-caption font-semibold uppercase",
-                    c.type === "HARD_CONTRADICTION"
-                      ? "bg-destructive text-destructive-foreground"
-                      : "bg-warning text-warning-foreground"
+                    // All severity pills use a white label on a solid fill; only
+                    // the fill differs by type (destructive red vs warning mustard).
+                    "shrink-0 rounded-full px-2.5 py-0.5 text-caption font-semibold uppercase text-white",
+                    c.type === "HARD_CONTRADICTION" ? "bg-destructive" : "bg-warning"
                   )}
                 >
                   {severityLabel(c)}
