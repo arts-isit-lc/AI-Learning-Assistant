@@ -68,15 +68,25 @@ describe("EditModule", () => {
     expect(screen.getByText("notes.pdf")).toBeInTheDocument()
   })
 
+  it("keeps Save changes disabled until an edit is made", async () => {
+    render(<EditModule />)
+    // Nothing changed yet — saving is a no-op, so the button is inactive.
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled()
+    await userEvent.type(screen.getByLabelText("Module name"), " II")
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled()
+  })
+
   it("saves the collected values", async () => {
     render(<EditModule />)
+    // An edit is required before Save is enabled.
+    await userEvent.type(screen.getByLabelText("Module name"), " II")
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }))
     expect(editModule.mutate).toHaveBeenCalled()
     const [payload] = editModule.mutate.mock.calls[0]
     expect(payload).toMatchObject({
       moduleId: "m1",
       conceptId: "con1",
-      moduleName: "Vectors",
+      moduleName: "Vectors II",
       modulePrompt: "Explain vectors",
       removedFiles: [],
     })

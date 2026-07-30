@@ -419,7 +419,11 @@ export function EditModule() {
                 <Button variant="outline" onClick={goToConfiguration}>
                   Cancel
                 </Button>
-                <Button onClick={handleSave} loading={editModule.isPending} disabled={!canSave}>
+                <Button
+                  onClick={handleSave}
+                  loading={editModule.isPending}
+                  disabled={!canSave || !isDirty}
+                >
                   Save changes
                 </Button>
               </div>
