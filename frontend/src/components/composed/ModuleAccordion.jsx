@@ -95,7 +95,7 @@ function SortableModuleRow({ module, number, courseId, conceptName, onEdit, onDe
         <button
           type="button"
           aria-label={`Reorder ${module.module_name}`}
-          className="cursor-grab touch-none rounded p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="cursor-grab touch-none rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           {...attributes}
           {...listeners}
         >
@@ -273,7 +273,7 @@ export function ModuleAccordion({
             <button
               type="button"
               aria-label={`Reorder ${concept.concept_name}`}
-              className="cursor-grab touch-none rounded p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="cursor-grab touch-none rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               {...(sortable?.attributes || {})}
               {...(sortable?.listeners || {})}
             >
