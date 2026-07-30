@@ -163,7 +163,7 @@ export function ConfigurationTab() {
           <Button
             variant="outline"
             size="sm"
-            className="h-7 gap-2 rounded-sm px-2"
+            className="h-7 gap-2 rounded-sm px-2 cursor-pointer"
             aria-label="Add concept"
             onClick={() => setAddingConcept(true)}
           >
@@ -172,7 +172,7 @@ export function ConfigurationTab() {
           <Button
             variant="outline"
             size="sm"
-            className="h-7 gap-2 rounded-sm px-2"
+            className="h-7 gap-2 rounded-sm px-2 cursor-pointer"
             aria-label="Add module"
             onClick={() => navigate(`${moduleBasePath}/new`)}
             disabled={concepts.length === 0}
