@@ -91,7 +91,7 @@ function SortableModuleRow({ module, number, courseId, conceptName, onEdit, onDe
 
   return (
     <div ref={setNodeRef} style={style} className="group/module w-full max-w-[600px] rounded-sm border border-border bg-muted">
-      <div className="flex items-center gap-2 py-2 pl-3 pr-2">
+      <div className="flex items-center gap-2 py-1 px-2">
         <button
           type="button"
           aria-label={`Reorder ${module.module_name}`}
@@ -105,7 +105,7 @@ function SortableModuleRow({ module, number, courseId, conceptName, onEdit, onDe
           type="button"
           aria-expanded={open}
           onClick={() => setOpen((o) => !o)}
-          className="flex flex-1 items-center justify-between gap-2 rounded py-1 text-left text-caption text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex flex-1 items-center justify-between gap-2 rounded text-left text-caption text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <span>
             {toRoman(number)}. {titleCase(module.module_name)}
