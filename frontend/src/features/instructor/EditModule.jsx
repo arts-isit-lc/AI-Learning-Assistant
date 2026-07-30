@@ -237,7 +237,7 @@ export function EditModule() {
 
         <div className="flex-1 min-h-0 overflow-y-auto px-9 pb-16 pt-14">
           <div className="mx-auto flex w-full max-w-[608px] flex-col gap-8">
-            <p className="text-caption text-muted-foreground">
+            <p className="text-lg leading-7">
               Changes made below are not updated unless Save is pressed once finished.
             </p>
 
@@ -246,17 +246,18 @@ export function EditModule() {
             ) : (
               <>
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="edit-module-name" className="text-neutral-900">Module name</Label>
+                  <Label htmlFor="edit-module-name" className="text-lg leading-7 text-neutral-900">Module name</Label>
                   <Input
                     id="edit-module-name"
                     value={moduleName}
                     onChange={(e) => setModuleName(e.target.value)}
                     maxLength={100}
+                    className="leading-7"
                   />
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <Label className="text-neutral-900">Concept</Label>
+                  <Label className="text-lg leading-7 text-neutral-900">Concept</Label>
                   <Select value={conceptId} onValueChange={setConceptId}>
                     <SelectTrigger aria-label="Concept">
                       <SelectValue placeholder="Select a concept" />
@@ -272,7 +273,7 @@ export function EditModule() {
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <Label className="text-neutral-900">Reference</Label>
+                  <Label className="text-lg leading-7 text-neutral-900">Reference</Label>
                   <Select
                     value=""
                     onValueChange={toggleReference}
@@ -304,7 +305,7 @@ export function EditModule() {
 
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center justify-between">
-                    <Label className="text-neutral-900">Uploaded files</Label>
+                    <Label className="text-lg leading-7 text-neutral-900">Uploaded files</Label>
                     <button
                       type="button"
                       onClick={() => uploadInputRef.current?.click()}
@@ -371,7 +372,7 @@ export function EditModule() {
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="edit-module-prompt" className="text-neutral-900">Module prompt</Label>
+                  <Label htmlFor="edit-module-prompt" className="text-lg leading-7 text-neutral-900">Module prompt</Label>
                   <Textarea
                     id="edit-module-prompt"
                     value={modulePrompt}
@@ -381,7 +382,7 @@ export function EditModule() {
                 </div>
 
                 <div className="flex flex-col gap-3">
-                  <Label className="text-neutral-900">Key topics</Label>
+                  <Label className="text-lg leading-7 text-neutral-900">Key topics</Label>
                   <div className="flex gap-2">
                     <Button variant="outline" onClick={handleGenerate} loading={isGenerating}>
                       Suggest
@@ -397,7 +398,7 @@ export function EditModule() {
                       }}
                       placeholder="Add new…"
                       aria-label="Add key topic"
-                      className="flex-1"
+                      className="flex-1 leading-7"
                     />
                   </div>
                   <EditableTagList values={keyTopics} onChange={setKeyTopics} ariaLabelPrefix="key topic" />
