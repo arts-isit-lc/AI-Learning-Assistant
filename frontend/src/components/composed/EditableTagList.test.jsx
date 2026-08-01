@@ -79,4 +79,25 @@ describe("EditableTagList", () => {
     expect(screen.queryByRole("button", { name: "Edit algebra" })).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Edit vectors" })).toBeInTheDocument()
   })
+
+  it("renders static, non-interactive tags when disabled", async () => {
+    const user = userEvent.setup()
+    const onChange = vi.fn()
+    render(
+      <EditableTagList
+        values={["algebra", "vectors"]}
+        onChange={onChange}
+        ariaLabelPrefix="key topic"
+        disabled
+      />
+    )
+    // Labels still show, but there's no edit affordance and no remove button.
+    expect(screen.getByText("algebra")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Edit algebra" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Remove algebra" })).not.toBeInTheDocument()
+    // Clicking a pill does nothing — no inline editor opens, no onChange.
+    await user.click(screen.getByText("algebra"))
+    expect(screen.queryByRole("textbox", { name: "Edit key topic" })).not.toBeInTheDocument()
+    expect(onChange).not.toHaveBeenCalled()
+  })
 })

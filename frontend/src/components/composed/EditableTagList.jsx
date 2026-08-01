@@ -12,14 +12,18 @@ import { Input } from "@/components/ui/input"
  * duplicate of another value merges away (the edited one is dropped); otherwise
  * the value is replaced in place (order preserved). Renders nothing when empty.
  *
+ * When `disabled`, tags render as static, non-interactive pills (no click-to-edit,
+ * no remove) — used to freeze the list while a step is validating.
+ *
  * @param {{
  *   values: string[],
  *   onChange: (next: string[]) => void,
  *   ariaLabelPrefix?: string,
+ *   disabled?: boolean,
  *   className?: string,
  * }} props
  */
-export function EditableTagList({ values, onChange, ariaLabelPrefix = "item", className }) {
+export function EditableTagList({ values, onChange, ariaLabelPrefix = "item", disabled = false, className }) {
   const [editing, setEditing] = useState(null) // the original value currently being edited
   const [draft, setDraft] = useState("")
   // Escape sets this so the blur it triggers doesn't re-commit the edit.
@@ -61,7 +65,7 @@ export function EditableTagList({ values, onChange, ariaLabelPrefix = "item", cl
   return (
     <div className={cn("flex flex-wrap items-center gap-1 mt-8", className)}>
       {values.map((value) =>
-        editing === value ? (
+        !disabled && editing === value ? (
           <Input
             key={value}
             value={draft}
@@ -84,8 +88,8 @@ export function EditableTagList({ values, onChange, ariaLabelPrefix = "item", cl
           <Tag
             key={value}
             label={value}
-            onClick={() => startEdit(value)}
-            onRemove={() => onChange(values.filter((v) => v !== value))}
+            onClick={disabled ? undefined : () => startEdit(value)}
+            onRemove={disabled ? undefined : () => onChange(values.filter((v) => v !== value))}
           />
         )
       )}

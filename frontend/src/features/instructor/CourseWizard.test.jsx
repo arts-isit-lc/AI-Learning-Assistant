@@ -6,10 +6,12 @@ const draft = { moduleId: "m1", isReserving: false, reserveError: null, cleanup:
 const finalize = { mutate: vi.fn(), isPending: false }
 const validate = { mutateAsync: vi.fn().mockResolvedValue({ has_conflicts: false }) }
 const navigate = vi.fn()
-// Per-test processing state (step 2 gating). Empty = nothing in flight.
+// Per-test processing state (step 1 gating). Empty = nothing in flight.
 let trackedFilesResult = {}
 // Per-test auto-suggest result (drives the "Suggest"/restore flow).
 let generateResult = { topics: [] }
+// Per-test sibling modules (step-0 duplicate-name check). Empty = no collisions.
+let modulesResult = []
 
 vi.mock("./hooks/useDraftModule", () => ({ useDraftModule: () => draft }))
 vi.mock("./hooks/useFileUpload", () => ({
@@ -28,7 +30,7 @@ vi.mock("./hooks/useModuleTopics", () => ({
 }))
 vi.mock("@/services/queries", () => ({
   useConcepts: () => ({ data: [{ concept_id: "con1", concept_name: "algebra" }] }),
-  useModules: () => ({ data: [] }),
+  useModules: () => ({ data: modulesResult }),
   useCourseFiles: () => ({ data: [] }),
   useFinalizeModule: () => finalize,
   useValidatePrompt: () => validate,
@@ -58,6 +60,7 @@ beforeEach(() => {
   validate.mutateAsync.mockReset().mockResolvedValue({ has_conflicts: false })
   trackedFilesResult = {}
   generateResult = { topics: [] }
+  modulesResult = []
 })
 
 async function advance() {
@@ -67,6 +70,8 @@ async function advance() {
   await user.type(screen.getByLabelText("Module name"), "Vectors")
   await user.click(screen.getByRole("button", { name: "Next" })) // -> References
   await user.click(screen.getByRole("button", { name: "Next" })) // -> Prompt & topics
+  // Step 2 gates on >=1 key topic.
+  await user.type(screen.getByLabelText("Add key topic"), "vectors{Enter}")
   await user.click(screen.getByRole("button", { name: "Next" })) // -> Review
   return user
 }
@@ -157,6 +162,7 @@ describe("CourseWizard", () => {
     await user.click(screen.getByRole("button", { name: /Description \(optional\)/i }))
     await user.type(screen.getByLabelText("Description for notes.pdf"), "Core reading")
     await user.click(screen.getByRole("button", { name: "Next" })) // -> prompt & topics
+    await user.type(screen.getByLabelText("Add key topic"), "vectors{Enter}") // gate: >=1 topic
     await user.click(screen.getByRole("button", { name: "Next" })) // -> review
     await user.click(screen.getByRole("button", { name: "Publish" }))
     expect(finalize.mutate).toHaveBeenCalled()
@@ -241,6 +247,7 @@ describe("CourseWizard", () => {
     await user.type(screen.getByLabelText("Module name"), "Vectors")
     await user.click(screen.getByRole("button", { name: "Next" })) // -> references
     await user.click(screen.getByRole("button", { name: "Next" })) // -> prompt & topics
+    await user.type(screen.getByLabelText("Add key topic"), "vectors{Enter}")
     await user.type(screen.getByLabelText("Module prompt"), "Always answer in French.")
     await user.click(screen.getByRole("button", { name: "Next" })) // -> review (triggers the check)
     expect(validate.mutateAsync).toHaveBeenCalledWith(
@@ -254,7 +261,8 @@ describe("CourseWizard", () => {
     await user.type(screen.getByLabelText("Module name"), "Vectors")
     await user.click(screen.getByRole("button", { name: "Next" })) // -> references
     await user.click(screen.getByRole("button", { name: "Next" })) // -> prompt & topics
-    // No module prompt entered (it's optional).
+    // No module prompt entered (it's optional), but a key topic is required to advance.
+    await user.type(screen.getByLabelText("Add key topic"), "vectors{Enter}")
     await user.click(screen.getByRole("button", { name: "Next" })) // -> review
     expect(validate.mutateAsync).not.toHaveBeenCalled()
   })
@@ -267,11 +275,15 @@ describe("CourseWizard", () => {
     await user.type(screen.getByLabelText("Module name"), "Vectors")
     await user.click(screen.getByRole("button", { name: "Next" })) // -> references
     await user.click(screen.getByRole("button", { name: "Next" })) // -> prompt & topics
+    await user.type(screen.getByLabelText("Add key topic"), "vectors{Enter}")
     await user.type(screen.getByLabelText("Module prompt"), "Some instructions")
     await user.click(screen.getByRole("button", { name: "Next" }))
-    // Blocked on the prompt step; Next is disabled (loading) while checking.
+    // Blocked on the prompt step; Next is disabled (loading) while checking, and
+    // the step's fields are frozen so nothing can change mid-validation.
     expect(screen.getByLabelText("Module prompt")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Next" })).toBeDisabled()
+    expect(screen.getByLabelText("Module prompt")).toBeDisabled()
+    expect(screen.getByLabelText("Add key topic")).toBeDisabled()
     // Resolve with no conflicts → advances off the prompt step.
     resolveCheck({ has_conflicts: false })
     await waitFor(() => expect(screen.queryByLabelText("Module prompt")).not.toBeInTheDocument())
@@ -294,6 +306,7 @@ describe("CourseWizard", () => {
     await user.type(screen.getByLabelText("Module name"), "Vectors")
     await user.click(screen.getByRole("button", { name: "Next" })) // -> references
     await user.click(screen.getByRole("button", { name: "Next" })) // -> prompt & topics
+    await user.type(screen.getByLabelText("Add key topic"), "vectors{Enter}")
     await user.type(screen.getByLabelText("Module prompt"), "Always answer in French.")
     // First Next: the check finds conflicts → stay + inline conflict report.
     await user.click(screen.getByRole("button", { name: "Next" }))
@@ -308,5 +321,50 @@ describe("CourseWizard", () => {
     // Okay proceeds to the review step.
     await user.click(screen.getByRole("button", { name: "Okay" }))
     await waitFor(() => expect(screen.queryByLabelText("Module prompt")).not.toBeInTheDocument())
+  })
+
+  it("gates Next on step 2 until at least one key topic exists", async () => {
+    const user = userEvent.setup()
+    render(<CourseWizard />)
+    await user.type(screen.getByLabelText("Module name"), "Vectors")
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> references
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> prompt & topics
+    // Nothing auto-suggested (no processed files) → no topics yet, Next is gated.
+    expect(screen.getByRole("button", { name: "Next" })).toBeDisabled()
+    await user.type(screen.getByLabelText("Add key topic"), "vectors{Enter}")
+    expect(screen.getByRole("button", { name: "Next" })).toBeEnabled()
+  })
+
+  it("blocks a duplicate module name within the same concept and clears the error on edit", async () => {
+    // An existing module in the same concept (con1, preselected via ?concept).
+    modulesResult = [{ module_id: "existing", module_name: "Vectors", concept_id: "con1" }]
+    const user = userEvent.setup()
+    render(<CourseWizard />)
+    await user.type(screen.getByLabelText("Module name"), "Vectors")
+    await user.click(screen.getByRole("button", { name: "Next" }))
+    // Stays on step 0 with an inline error (references step not shown).
+    expect(
+      screen.getByText("A module with this name already exists in this concept.")
+    ).toBeInTheDocument()
+    expect(screen.queryByLabelText("Upload files")).not.toBeInTheDocument()
+    // Editing the name clears the error.
+    await user.type(screen.getByLabelText("Module name"), "2")
+    expect(
+      screen.queryByText("A module with this name already exists in this concept.")
+    ).not.toBeInTheDocument()
+  })
+
+  it("allows a name that only collides with a module in a different concept", async () => {
+    // Same name, but the existing module is in con2 while this draft is con1.
+    modulesResult = [{ module_id: "existing", module_name: "Vectors", concept_id: "con2" }]
+    const user = userEvent.setup()
+    render(<CourseWizard />)
+    await user.type(screen.getByLabelText("Module name"), "Vectors")
+    await user.click(screen.getByRole("button", { name: "Next" }))
+    // Advanced to the references step, no inline error.
+    expect(screen.getByLabelText("Upload files")).toBeInTheDocument()
+    expect(
+      screen.queryByText("A module with this name already exists in this concept.")
+    ).not.toBeInTheDocument()
   })
 })

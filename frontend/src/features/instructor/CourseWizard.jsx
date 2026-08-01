@@ -134,7 +134,8 @@ export function CourseWizard() {
   const [fileDescriptions, setFileDescriptions] = useState({}) // fileId -> description
   const [cancelOpen, setCancelOpen] = useState(false)
   const [leaving, setLeaving] = useState(false)
-  const [checkingConflicts, setCheckingConflicts] = useState(false) // module-prompt conflict check in flight
+  const [validating, setValidating] = useState(false) // on-click step validation in flight (freezes the step's fields)
+  const [nameError, setNameError] = useState("") // step-0 inline error (duplicate module name within the concept)
   const [lastPromptCheck, setLastPromptCheck] = useState(null) // { prompt, hasConflicts } for the last checked prompt
   const [conflictWarnOpen, setConflictWarnOpen] = useState(false) // "proceed despite conflicts?" dialog
   const autoGenRef = useRef(false)
@@ -168,6 +169,24 @@ export function CourseWizard() {
     return map
   }, [otherFiles])
   const attachableFiles = otherFiles.filter((f) => !referencedFileIds.includes(f.file_id))
+
+  // Step-0 validation: does another module in the SAME concept already use this
+  // name? Run on Next (not as a gate) so the user gets an inline reason. Checked
+  // client-side against the loaded modules list — case-insensitive, trimmed,
+  // excluding this draft. Some records carry only concept_name (no id), so fall
+  // back to matching that. The server still enforces uniqueness on finalize.
+  const selectedConceptName = concepts.find((c) => c.concept_id === conceptId)?.concept_name
+  const isDuplicateName = useMemo(() => {
+    const name = moduleName.trim().toLowerCase()
+    if (!name) return false
+    return modules.some((m) => {
+      if (m.module_id === moduleId) return false
+      const sameConcept = m.concept_id
+        ? m.concept_id === conceptId
+        : Boolean(selectedConceptName && m.concept_name === selectedConceptName)
+      return sameConcept && (m.module_name || "").trim().toLowerCase() === name
+    })
+  }, [modules, moduleName, conceptId, moduleId, selectedConceptName])
 
   // Unsaved work in the draft. A pre-filled concept (from the ?concept= link)
   // isn't user input, so it only counts once changed. Uploaded files count —
@@ -300,36 +319,56 @@ export function CourseWizard() {
     )
   }
 
-  // Advancing past the module-prompt step (2) BLOCKS on the conflict check (only
-  // when a prompt was entered — it's optional). No conflicts → advance. Conflicts
-  // → stay and surface an inline warning; a second Next (still unresolved) opens a
-  // confirm dialog whose "Okay" proceeds anyway.
+  // On Next the required-fields gate (`canNext`) has already passed; we then run
+  // the step's validation with that step's fields frozen (`validating`):
+  //   • Step 0 — block on a duplicate module name within the same concept.
+  //   • Step 2 — block on the module-prompt conflict check (only when a prompt was
+  //     entered — it's optional). No conflicts → advance. Conflicts → stay and
+  //     surface an inline warning; a second Next (still unresolved) opens a confirm
+  //     dialog whose "Okay" proceeds anyway.
+  // Other steps have no post-gate validation, so they just advance.
   const handleNext = async () => {
-    const trimmed = modulePrompt.trim()
-    if (step !== 2 || !trimmed || !moduleId) {
-      setStep((s) => s + 1)
-      return
-    }
-
-    // Same prompt already checked — reuse the result (no repeat LLM call).
-    if (lastPromptCheck && lastPromptCheck.prompt === trimmed) {
-      if (lastPromptCheck.report?.has_conflicts) setConflictWarnOpen(true)
-      else setStep((s) => s + 1)
-      return
-    }
-
-    // New/changed prompt → run the check. Next shows a spinner and blocks.
-    setCheckingConflicts(true)
+    setValidating(true)
     try {
-      const report = await validate.mutateAsync({ prompt: trimmed, scope: "module", moduleId })
-      setLastPromptCheck({ prompt: trimmed, report })
-      if (!report?.has_conflicts) setStep((s) => s + 1)
-      // else: stay — the inline Alert appears; a re-click opens the confirm dialog.
-    } catch {
-      // Advisory only — a validation failure must not trap the user on the step.
+      if (step === 0) {
+        if (isDuplicateName) {
+          setNameError("A module with this name already exists in this concept.")
+          return
+        }
+        setNameError("")
+        setStep((s) => s + 1)
+        return
+      }
+
+      if (step === 2) {
+        const trimmed = modulePrompt.trim()
+        if (!trimmed || !moduleId) {
+          setStep((s) => s + 1)
+          return
+        }
+        // Same prompt already checked — reuse the result (no repeat LLM call).
+        if (lastPromptCheck && lastPromptCheck.prompt === trimmed) {
+          if (lastPromptCheck.report?.has_conflicts) setConflictWarnOpen(true)
+          else setStep((s) => s + 1)
+          return
+        }
+        // New/changed prompt → run the check. Next shows a spinner and blocks.
+        try {
+          const report = await validate.mutateAsync({ prompt: trimmed, scope: "module", moduleId })
+          setLastPromptCheck({ prompt: trimmed, report })
+          if (!report?.has_conflicts) setStep((s) => s + 1)
+          // else: stay — the inline Alert appears; a re-click opens the confirm dialog.
+        } catch {
+          // Advisory only — a validation failure must not trap the user on the step.
+          setStep((s) => s + 1)
+        }
+        return
+      }
+
+      // Step 1 (and any others): the required-fields gate is the only requirement.
       setStep((s) => s + 1)
     } finally {
-      setCheckingConflicts(false)
+      setValidating(false)
     }
   }
 
@@ -339,16 +378,22 @@ export function CourseWizard() {
     setStep((s) => s + 1)
   }
 
-  // Step 1 (references): keep the user here until ingestion finishes — Next stays
-  // disabled while any file is still uploading/processing. This is the whole point
-  // of the wizard: the file ingests + topics auto-generate during this wait, so
-  // step 3 opens with topics ready and the user only waits once, here.
+  // Required-fields gate — Next stays disabled until the current step's required
+  // inputs are present. Post-gate validation (duplicate name, prompt conflicts)
+  // runs in handleNext once the button is clicked.
+  //   • Step 0 — a module name and a selected concept.
+  //   • Step 1 — at least one uploaded file, none still processing. Keeps the user
+  //     here until ingestion finishes (files ingest + topics auto-generate during
+  //     this wait, so step 3 opens with topics ready and the user waits only once).
+  //   • Step 2 — at least one key topic.
   const canNext =
     step === 0
       ? Boolean(moduleName.trim() && conceptId)
       : step === 1
         ? uploadedCount > 0 && !isProcessingBlocking
-        : true
+        : step === 2
+          ? keyTopics.length > 0
+          : true
 
   // Conflicts from the last check, but only while they still describe the prompt
   // currently in the textarea (editing invalidates them → re-check on next Next).
@@ -402,14 +447,32 @@ export function CourseWizard() {
                     <Input
                       id="module-name"
                       value={moduleName}
-                      onChange={(e) => setModuleName(e.target.value)}
+                      onChange={(e) => {
+                        setModuleName(e.target.value)
+                        if (nameError) setNameError("")
+                      }}
                       maxLength={100}
                       placeholder="e.g. Vectors and matrices"
+                      disabled={validating}
+                      aria-invalid={nameError ? true : undefined}
+                      aria-describedby={nameError ? "module-name-error" : undefined}
                     />
+                    {nameError && (
+                      <p id="module-name-error" className="mt-1 text-caption text-destructive">
+                        {nameError}
+                      </p>
+                    )}
                   </div>
                   <div className="flex flex-col">
                     <Label className="text-h4 text-neutral-900">Concept</Label>
-                    <Select value={conceptId} onValueChange={setConceptId}>
+                    <Select
+                      value={conceptId}
+                      onValueChange={(v) => {
+                        setConceptId(v)
+                        if (nameError) setNameError("")
+                      }}
+                      disabled={validating}
+                    >
                       <SelectTrigger aria-label="Concept">
                         <SelectValue placeholder="Select a concept" />
                       </SelectTrigger>
@@ -435,7 +498,11 @@ export function CourseWizard() {
                     <p className="text-caption text-muted-foreground">
                       Reference files from this course&rsquo;s other modules.
                     </p>
-                    <Select value="" onValueChange={toggleReference} disabled={attachableFiles.length === 0}>
+                    <Select
+                      value=""
+                      onValueChange={toggleReference}
+                      disabled={validating || attachableFiles.length === 0}
+                    >
                       <SelectTrigger aria-label="Attach existing reference">
                         <SelectValue
                           placeholder={
@@ -471,7 +538,7 @@ export function CourseWizard() {
                     <p className="text-caption text-muted-foreground mb-2">
                       To add new references, upload your files below.
                     </p>
-                    <FileUpload onFiles={handleUpload} disabled={!moduleId || isReserving} />
+                    <FileUpload onFiles={handleUpload} disabled={validating || !moduleId || isReserving} />
 
                     {fileList.length > 0 && (
                       <div className="mt-8 flex flex-col">
@@ -577,6 +644,7 @@ export function CourseWizard() {
                       value={modulePrompt}
                       onChange={(e) => setModulePrompt(e.target.value)}
                       rows={5}
+                      disabled={validating}
                       aria-invalid={promptConflictReport ? true : undefined}
                       placeholder="Module-specific instructions for the assistant…"
                     />
@@ -598,7 +666,7 @@ export function CourseWizard() {
                         variant="outline"
                         onClick={handleRestoreSuggested}
                         loading={isGenerating}
-                        disabled={!canRestoreSuggested}
+                        disabled={validating || !canRestoreSuggested}
                       >
                         Suggest
                       </Button>
@@ -614,9 +682,15 @@ export function CourseWizard() {
                         placeholder="Add new…"
                         aria-label="Add key topic"
                         className="flex-1 rounded"
+                        disabled={validating}
                       />
                     </div>
-                    <EditableTagList values={keyTopics} onChange={setKeyTopics} ariaLabelPrefix="key topic" />
+                    <EditableTagList
+                      values={keyTopics}
+                      onChange={setKeyTopics}
+                      ariaLabelPrefix="key topic"
+                      disabled={validating}
+                    />
                   </div>
                 </div>
               )}
@@ -665,7 +739,7 @@ export function CourseWizard() {
                     <Button
                       variant="ghost"
                       className="text-primary text-base"
-                      disabled={checkingConflicts}
+                      disabled={validating}
                       onClick={() => setStep((s) => s - 1)}
                     >
                       Back
@@ -677,7 +751,7 @@ export function CourseWizard() {
                     Cancel
                   </Button>
                   {step < STEP_COUNT - 1 ? (
-                    <Button className="text-base" onClick={handleNext} loading={checkingConflicts} disabled={!canNext}>
+                    <Button className="text-base" onClick={handleNext} loading={validating} disabled={!canNext}>
                       Next
                     </Button>
                   ) : (
