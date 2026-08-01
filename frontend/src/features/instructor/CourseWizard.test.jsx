@@ -12,12 +12,13 @@ let trackedFilesResult = {}
 let generateResult = { topics: [] }
 // Per-test sibling modules (step-0 duplicate-name check). Empty = no collisions.
 let modulesResult = []
+// Per-test upload state. Default: one already-uploaded file so step 1 can advance.
+let fileStatesResult = { f1: { fileId: "f1", fileName: "notes.pdf", status: "upload_complete", progress: 100 } }
 
 vi.mock("./hooks/useDraftModule", () => ({ useDraftModule: () => draft }))
 vi.mock("./hooks/useFileUpload", () => ({
   useFileUpload: () => ({
-    // one already-uploaded file so step 1 can advance / Save is allowed
-    fileStates: { f1: { fileId: "f1", fileName: "notes.pdf", status: "upload_complete", progress: 100 } },
+    fileStates: fileStatesResult,
     uploadFiles: vi.fn().mockResolvedValue([{ fileId: "f1", fileName: "notes.pdf" }]),
     removeFile: vi.fn(),
   }),
@@ -61,6 +62,7 @@ beforeEach(() => {
   trackedFilesResult = {}
   generateResult = { topics: [] }
   modulesResult = []
+  fileStatesResult = { f1: { fileId: "f1", fileName: "notes.pdf", status: "upload_complete", progress: 100 } }
 })
 
 async function advance() {
@@ -149,8 +151,8 @@ describe("CourseWizard", () => {
     const label = screen.getByText("Complete")
     expect(label).toBeInTheDocument()
     expect(label).toHaveClass("text-success")
-    // Terminal states are static — no animated ellipsis.
-    expect(screen.queryByTestId("animated-ellipsis")).not.toBeInTheDocument()
+    // Terminal states are static — no glow.
+    expect(label).not.toHaveClass("animate-pulse-glow")
   })
 
   it("captures a per-file description and sends it to finalize", async () => {
@@ -179,15 +181,29 @@ describe("CourseWizard", () => {
     expect(screen.queryByRole("button", { name: /Description \(optional\)/i })).not.toBeInTheDocument()
   })
 
-  it("animates the status label while a file is ingesting", async () => {
+  it("makes the in-progress status label glow while a file is ingesting", async () => {
     trackedFilesResult = { f1: { fileId: "f1", status: "ingesting" } }
     const user = userEvent.setup()
     render(<CourseWizard />)
     await user.type(screen.getByLabelText("Module name"), "Vectors")
     await user.click(screen.getByRole("button", { name: "Next" })) // -> references
-    expect(screen.getByText("Reading document")).toBeInTheDocument()
-    // In-progress states get an animated ellipsis.
-    expect(screen.getByTestId("animated-ellipsis")).toBeInTheDocument()
+    // The whole label glows (replacing the old animated ellipsis) with a trailing "…".
+    const label = screen.getByText(/Reading document/)
+    expect(label).toBeInTheDocument()
+    expect(label).toHaveClass("animate-pulse-glow")
+    expect(screen.queryByTestId("animated-ellipsis")).not.toBeInTheDocument()
+  })
+
+  it("glows the status and shows no progress bar while a file is uploading", async () => {
+    fileStatesResult = { f1: { fileId: "f1", fileName: "notes.pdf", status: "uploading", progress: 40 } }
+    const user = userEvent.setup()
+    render(<CourseWizard />)
+    await user.type(screen.getByLabelText("Module name"), "Vectors")
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> references
+    const label = screen.getByText(/Uploading/)
+    expect(label).toHaveClass("animate-pulse-glow")
+    // The per-file upload bar is gone; only the wizard's step progress bar remains.
+    expect(screen.getAllByRole("progressbar")).toHaveLength(1)
   })
 
   it("shows 'Analyzing content…' while enriching and keeps Publish gated", async () => {
@@ -196,7 +212,9 @@ describe("CourseWizard", () => {
     render(<CourseWizard />)
     await user.type(screen.getByLabelText("Module name"), "Vectors")
     await user.click(screen.getByRole("button", { name: "Next" })) // -> references
-    expect(screen.getByText("Analyzing content")).toBeInTheDocument()
+    const label = screen.getByText(/Analyzing content/)
+    expect(label).toBeInTheDocument()
+    expect(label).toHaveClass("animate-pulse-glow")
     // 'enriching' is a blocking status, so the user can't advance until 'complete'.
     expect(screen.getByRole("button", { name: "Next" })).toBeDisabled()
   })

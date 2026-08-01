@@ -153,6 +153,14 @@ export default {
           "0%, 80%, 100%": { opacity: "0.2" },
           "40%": { opacity: "1" },
         },
+        // Breathing "glow" for in-progress file status labels (uploading /
+        // ingesting / enriching …). Pulses opacity plus a soft same-colour halo
+        // (currentColor) so the label reads as live. Base state (animation off)
+        // is a normal, fully-opaque label, so motion-reduce leaves it legible.
+        "pulse-glow": {
+          "0%, 100%": { opacity: "1", textShadow: "0 0 6px currentColor" },
+          "50%": { opacity: "0.55", textShadow: "0 0 1px currentColor" },
+        },
       },
       animation: {
         "indeterminate-progress": "indeterminate-progress 1.5s ease-in-out infinite",
@@ -161,6 +169,7 @@ export default {
         "accordion-down": "accordion-down var(--transition-normal) var(--ease-standard)",
         "accordion-up": "accordion-up var(--transition-normal) var(--ease-standard)",
         "ellipsis-bounce": "ellipsis-bounce 1.4s ease-in-out infinite both",
+        "pulse-glow": "pulse-glow 1.8s ease-in-out infinite",
       },
     },
   },

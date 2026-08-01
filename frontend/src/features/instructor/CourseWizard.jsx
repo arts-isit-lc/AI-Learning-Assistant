@@ -30,7 +30,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Icon } from "@/components/ui/icon"
 import { Progress } from "@/components/ui/progress"
-import { AnimatedEllipsis } from "@/components/ui/animated-ellipsis"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion"
@@ -64,7 +63,8 @@ const IN_PROGRESS_STATUSES = new Set([
 ])
 
 /** Human-readable label for a per-file status. In-progress labels omit the
- *  trailing ellipsis — an animated one (`AnimatedEllipsis`) is appended instead. */
+ *  trailing ellipsis — a static "…" is appended and the whole label glows
+ *  (`animate-pulse-glow`) while work is ongoing. */
 function statusLabel(status) {
   switch (status) {
     case "uploading":
@@ -571,17 +571,14 @@ export function CourseWizard() {
                                             ? "text-destructive"
                                             : status === "complete"
                                               ? "text-success"
-                                              : "text-muted-foreground"
+                                              : "text-muted-foreground",
+                                          IN_PROGRESS_STATUSES.has(status) &&
+                                            "animate-pulse-glow motion-reduce:animate-none"
                                         )}
                                       >
-                                        {IN_PROGRESS_STATUSES.has(status) ? (
-                                          <>
-                                            <span>{statusLabel(status)}</span>
-                                            <AnimatedEllipsis />
-                                          </>
-                                        ) : (
-                                          statusLabel(status)
-                                        )}
+                                        {IN_PROGRESS_STATUSES.has(status)
+                                          ? `${statusLabel(status)}…`
+                                          : statusLabel(status)}
                                       </span>
                                     </div>
                                   </div>
@@ -595,7 +592,6 @@ export function CourseWizard() {
                                     <Icon  icon={MdDelete} size={24} />
                                   </Button>
                                 </div>
-                                {f.status === "uploading" && <Progress value={f.progress} />}
                                 {showDescription && (
                                   <Accordion type="single" collapsible>
                                     <AccordionItem value="description" className="border-b-0">
