@@ -81,7 +81,7 @@ const SHADOWS = [
   { name: "shadow-dropdown", cls: "shadow-dropdown" },
   { name: "shadow-modal", cls: "shadow-modal" },
 ]
-const ZINDEX = ["base", "dropdown", "sticky", "overlay", "modal", "toast"]
+const ZINDEX = ["base", "dropdown", "sticky", "overlay", "modal", "top"]
 
 function ColorSwatch({ token, bg, fg, ring }) {
   return (

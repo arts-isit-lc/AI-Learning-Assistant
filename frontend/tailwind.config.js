@@ -125,7 +125,7 @@ export default {
         sticky: "var(--z-sticky)",
         overlay: "var(--z-overlay)",
         modal: "var(--z-modal)",
-        toast: "var(--z-toast)",
+        top: "var(--z-top)",
       },
       keyframes: {
         "indeterminate-progress": {

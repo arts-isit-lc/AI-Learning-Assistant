@@ -3,7 +3,7 @@ import { cva } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 /**
- * Inline, persistent status callout (distinct from the transient toast). An
+ * Inline, persistent status callout for errors, warnings, and info. An
  * optional leading `<svg>`/`<Icon>` is positioned automatically.
  */
 const alertVariants = cva(

@@ -47,7 +47,7 @@ describe("useCourses", () => {
   })
 
   // Error/normalization behavior is covered where it's implemented — the http
-  // wrapper (http.test.js: 401 refresh, 403 inline, 500 toast) and the
+  // wrapper (http.test.js: 401 refresh, 403 inline, 500 surfaced globally) and the
   // QueryClient retry policy (queryClient.test.js). Hooks just pass RQ's result
   // through, so we don't re-test rejection here.
 })

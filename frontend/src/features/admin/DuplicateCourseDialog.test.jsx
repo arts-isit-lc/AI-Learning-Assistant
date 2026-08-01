@@ -18,7 +18,6 @@ vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal()
   return { ...actual, useNavigate: () => navigate }
 })
-vi.mock("react-toastify", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 import { DuplicateCourseDialog } from "./DuplicateCourseDialog"
 

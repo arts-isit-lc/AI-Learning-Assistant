@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react"
 import { useParams, useSearchParams } from "react-router-dom"
-import { toast } from "react-toastify"
+import { toUserMessage } from "@/services/apiError"
 import { MdClose, MdPeople } from "react-icons/md"
 import { useStudents, useDeleteStudent } from "@/services/queries"
 import { titleCase } from "@/utils/formatters"
@@ -151,7 +151,12 @@ export function StudentsTab() {
 
       <ConfirmDialog
         open={Boolean(removeTarget)}
-        onOpenChange={(open) => !open && setRemoveTarget(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRemoveTarget(null)
+            deleteStudent.reset?.()
+          }
+        }}
         title="Delete student?"
         description={
           removeTarget
@@ -161,12 +166,10 @@ export function StudentsTab() {
         confirmLabel="Delete student"
         variant="danger"
         loading={deleteStudent.isPending}
+        error={deleteStudent.isError ? toUserMessage(deleteStudent.error) : undefined}
         onConfirm={() =>
           deleteStudent.mutate(removeTarget.user_email, {
-            onSuccess: () => {
-              setRemoveTarget(null)
-              toast.success("Student removed")
-            },
+            onSuccess: () => setRemoveTarget(null),
           })
         }
       />

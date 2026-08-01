@@ -11,7 +11,7 @@ export function useEnrollCourse() {
   const qc = useQueryClient()
   return useMutation({
     // Enrollment errors (bad/duplicate code) are shown inline in the join modal,
-    // so opt out of the global error toast.
+    // so opt out of the global error handler.
     meta: { suppressGlobalError: true },
     mutationFn: async (accessCode) => {
       const { email } = await http.getAuth()

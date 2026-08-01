@@ -22,7 +22,7 @@ Never hardcode these — use the token utilities (values in `index.css`):
 - **Radius:** `rounded-sm` (6px) · `rounded-md` (8px) · `rounded-lg` (12px).
 - **Shadow:** `shadow-card` · `shadow-dropdown` · `shadow-modal` — match elevation to purpose.
 - **Motion:** `duration-fast` (150ms) · `duration-normal` (250ms) with `ease-standard`; animations `animate-fade-in`, `animate-accordion-down/up`, `animate-indeterminate-progress`. Respect `prefers-reduced-motion`.
-- **Z-index:** `z-base` · `z-dropdown` · `z-sticky` · `z-overlay` · `z-modal` · `z-toast` — never invent raw z-index values.
+- **Z-index:** `z-base` · `z-dropdown` · `z-sticky` · `z-overlay` · `z-modal` · `z-top` — never invent raw z-index values.
 
 ## Typography Scale
 Font routes through **`--font-sans`** (Tailwind `font-sans`). Brand face is **Whitney**, assumed unavailable → fallback **Inter**; Whitney→Inter weight map: **Book → 400 (`font-book`)**, **Semibold → 600 (`font-semibold`)**. Swap point: one `@font-face` + the `--font-sans` value in `index.css` — no component edits.
@@ -88,7 +88,7 @@ Every interactive element ships its **full, token-driven state set** (not just b
 - **Disabled / inactive** — `disabled:opacity-50 disabled:pointer-events-none`
 - **Loading** (where applicable) — spinner/`Skeleton`, control disabled to block double-submit; never a blank space
 - **Selected / checked** (where applicable) — toggles, tabs, nav items, cards
-- **Error / invalid** (inputs) — inline via `FormField`, never a toast
+- **Error / invalid** (inputs) — inline via `FormField`, never global
 - **Read-only** (where applicable)
 
 State styles derive from **tokens** (no hardcoded hover/active colours) so they stay consistent everywhere. Where the Figma doesn't draw a state, apply the token-based default rather than leaving it ad-hoc.

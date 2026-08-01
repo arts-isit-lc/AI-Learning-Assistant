@@ -5,7 +5,7 @@ import { notifyUnauthorized } from "./authBridge"
 
 /**
  * Normalize a thrown error from `apiClient` into an `ApiError`. 403 becomes an
- * inline error (rendered in place, never toasted).
+ * inline error (rendered in place by the screen, not the global handler).
  * @param {any} error
  * @returns {ApiError}
  */
@@ -23,8 +23,8 @@ function normalize(error) {
  * Run an `apiClient` call through the OCELIA auth/error interceptor:
  * - **401** → force a token refresh and retry once; if it still fails, clear
  *   auth (→ redirect to /login via `RequireAuth`) and throw a silent inline error.
- * - **403** → throw an inline `ApiError` (screen renders it; no toast, no redirect).
- * - anything else → throw a normalized `ApiError` (the QueryClient toasts it).
+ * - **403** → throw an inline `ApiError` (screen renders it; not global, no redirect).
+ * - anything else → throw a normalized `ApiError` (the global error seam logs it).
  *
  * Lives in this data-layer wrapper, NOT in the shared `api.js`, so legacy pages
  * keep their existing behavior.

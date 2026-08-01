@@ -57,8 +57,9 @@ export function useModuleReferences(moduleId) {
 /**
  * Finalize a reserved draft module (POST instructor/finalize_module) then persist
  * its cross-module references (PUT instructor/module_file_references). Sets the
- * module active. Errors are suppressed from the global toast so the wizard can
- * surface the specific 400 (duplicate name) / 409 (files still processing) cases.
+ * module active. Errors are kept off the global error handler so the wizard owns
+ * the specific 400 (duplicate name) / 409 (files still processing) cases inline
+ * (the inline surface is a follow-up).
  * Variables: `{ moduleId, conceptId, moduleName, moduleNumber, modulePrompt, keyTopics,
  * referencedFileIds, fileDescriptions }` where `fileDescriptions` is `[{ fileName, description }]`.
  */
@@ -141,8 +142,9 @@ export function useModuleAllFiles(courseId, moduleId, moduleName) {
 
 /**
  * Save an existing module (PUT instructor/edit_module) + delete removed files +
- * persist references. Errors suppressed from the global toast so the editor can
- * surface the 400 duplicate-name case. Variables:
+ * persist references. Errors are kept off the global error handler so the editor
+ * owns the 400 duplicate-name case inline (the inline surface is a follow-up).
+ * Variables:
  * `{ moduleId, conceptId, moduleName, modulePrompt, keyTopics, referencedFileIds, removedFiles }`.
  */
 export function useEditModule(courseId) {

@@ -21,7 +21,6 @@ vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal()
   return { ...actual, useParams: () => ({ courseId: "c1" }) }
 })
-vi.mock("react-toastify", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }))
 
 import { ChatHistoryTab } from "./ChatHistoryTab"
 

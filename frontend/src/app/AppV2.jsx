@@ -1,8 +1,6 @@
 import { lazy, Suspense, useState } from "react"
 import { createBrowserRouter, RouterProvider } from "react-router-dom"
 import { QueryClientProvider } from "@tanstack/react-query"
-import { ToastContainer } from "react-toastify"
-import "react-toastify/dist/ReactToastify.css"
 import ErrorBoundary from "@/components/ErrorBoundary"
 import { AuthProvider } from "@/context/AuthContext"
 import { NotificationProvider } from "@/context/NotificationContext"
@@ -47,9 +45,10 @@ function GlobalErrorFallback() {
 
 /**
  * OCELIA app shell — the application root, rendered directly by `main.jsx`.
- * Wires the global contexts (Auth / Notification), the data router, global
- * toasts, and a top-level error boundary. CourseProvider lives inside the
- * router (RootLayout) since it reads the location.
+ * Wires the global contexts (Auth / Notification), the data router, and a
+ * top-level error boundary. CourseProvider lives inside the router (RootLayout)
+ * since it reads the location. Errors surface inline (Alert / ErrorState /
+ * in-dialog), not as transient notifications.
  */
 export default function AppV2() {
   // One client per mount (stable across re-renders).
@@ -61,12 +60,6 @@ export default function AppV2() {
         <AuthProvider>
           <NotificationProvider>
             <OfflineBanner />
-            <ToastContainer
-              position="top-center"
-              autoClose={2000}
-              theme="colored"
-              newestOnTop
-            />
             <RouterProvider router={router} />
           </NotificationProvider>
         </AuthProvider>

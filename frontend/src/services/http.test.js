@@ -53,7 +53,7 @@ describe("withAuth interceptor", () => {
     expect(fetchAuthSession).not.toHaveBeenCalled()
   })
 
-  it("normalizes other errors (500) as non-inline for a toast", async () => {
+  it("normalizes other errors (500) as non-inline (surfaced by the global handler)", async () => {
     const call = vi.fn().mockRejectedValue(err(500))
     await expect(withAuth(call)).rejects.toMatchObject({ status: 500, inline: false })
   })

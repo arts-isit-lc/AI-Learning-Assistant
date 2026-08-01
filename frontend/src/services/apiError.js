@@ -1,8 +1,8 @@
 /**
  * Normalized error thrown by the OCELIA data layer. Carries the HTTP `status`
  * and an `inline` flag: inline errors (e.g. 403 forbidden, expired session) are
- * handled in place by the consuming screen / redirect and are NOT surfaced as a
- * global toast (plan §10).
+ * handled in place by the consuming screen / redirect and are NOT passed to the
+ * global error handler (plan §10).
  */
 export class ApiError extends Error {
   /**
@@ -19,7 +19,8 @@ export class ApiError extends Error {
 }
 
 /**
- * Map an error to a short, user-facing message for a global toast.
+ * Map an error to a short, user-facing message for an inline error surface
+ * (an `Alert`, the `ErrorState` component, or a confirm-dialog message).
  * @param {{ status?: number|null, message?: string }} error
  * @returns {string}
  */

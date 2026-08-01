@@ -18,7 +18,7 @@ export function OfflineBanner() {
     <div
       role="status"
       aria-live="polite"
-      className="fixed inset-x-0 top-0 z-toast bg-warning px-4 py-2 text-center text-caption font-semibold text-warning-foreground"
+      className="fixed inset-x-0 top-0 z-top bg-warning px-4 py-2 text-center text-caption font-semibold text-warning-foreground"
     >
       You&rsquo;re offline. Changes are paused until your connection returns.
     </div>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { toast } from "react-toastify"
+import { toUserMessage } from "@/services/apiError"
 import { MdAdd, MdContentCopy } from "react-icons/md"
 import {
   useAdminCourses,
@@ -200,9 +200,9 @@ export function CourseDetail() {
       setPendingAccess({})
       setPendingAdds(new Set())
       setPendingRemoves(new Set())
-      toast.success("Changes saved")
     } catch {
-      toast.error("Couldn't save all changes")
+      // Partial-save failures are logged by the global error seam; surfacing
+      // them inline is a follow-up (see the error-handling spec).
     } finally {
       setSaving(false)
     }
@@ -212,9 +212,8 @@ export function CourseDetail() {
     if (!course?.course_access_code) return
     try {
       await navigator.clipboard.writeText(course.course_access_code)
-      toast.success("Access code copied")
     } catch {
-      toast.error("Couldn't copy the code")
+      // Clipboard copy is best-effort.
     }
   }
 
@@ -374,17 +373,20 @@ export function CourseDetail() {
 
       <ConfirmDialog
         open={deleteOpen}
-        onOpenChange={setDeleteOpen}
+        onOpenChange={(open) => {
+          setDeleteOpen(open)
+          if (!open) del.reset?.()
+        }}
         title="Delete course?"
         description={`You are about to delete ${courseCode(course)} from the OCELIA system. This change is permanent and removes all of the course's content. This can't be undone.`}
         confirmLabel="Delete course"
         variant="danger"
         loading={del.isPending}
+        error={del.isError ? toUserMessage(del.error) : undefined}
         onConfirm={() =>
           del.mutate(courseId, {
             onSuccess: () => {
               setDeleteOpen(false)
-              toast.success("Course deleted")
               setDeleted(true)
             },
           })

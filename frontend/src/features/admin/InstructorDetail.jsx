@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { toast } from "react-toastify"
+import { toUserMessage } from "@/services/apiError"
 import { MdAdd } from "react-icons/md"
 import {
   useAdminInstructors,
@@ -201,9 +201,9 @@ export function InstructorDetail() {
       setPendingAccess({})
       setPendingAdds(new Set())
       setPendingRemoves(new Set())
-      toast.success("Changes saved")
     } catch {
-      toast.error("Couldn't save all changes")
+      // Partial-save failures are logged by the global error seam; surfacing
+      // them inline is a follow-up (see the error-handling spec).
     } finally {
       setSaving(false)
     }
@@ -322,17 +322,20 @@ export function InstructorDetail() {
 
       <ConfirmDialog
         open={removeOpen}
-        onOpenChange={setRemoveOpen}
+        onOpenChange={(open) => {
+          setRemoveOpen(open)
+          if (!open) lower.reset?.()
+        }}
         title="Delete instructor?"
         description={`Remove ${instructor ? instructorLabel(instructor) : email} as an instructor? Their instructor role and course assignments are removed. Their account and any student data are unaffected.`}
         confirmLabel="Delete instructor"
         variant="danger"
         loading={lower.isPending}
+        error={lower.isError ? toUserMessage(lower.error) : undefined}
         onConfirm={() =>
           lower.mutate(email, {
             onSuccess: () => {
               setRemoveOpen(false)
-              toast.success("Instructor removed")
               setDeleted(true)
             },
           })

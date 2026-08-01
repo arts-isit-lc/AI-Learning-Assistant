@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { toast } from "react-toastify"
 import { MdContentCopy } from "react-icons/md"
 import { useAdminInstructors, useCreateCourse } from "@/services/queries"
 import { COURSE_TERMS } from "@/constants/courseTerms"
@@ -94,9 +93,8 @@ export function CreateCourse() {
   const copyCode = async () => {
     try {
       await navigator.clipboard.writeText(accessCode)
-      toast.success("Access code copied")
     } catch {
-      toast.error("Couldn't copy the code")
+      // Clipboard copy is best-effort.
     }
   }
 
@@ -115,10 +113,8 @@ export function CreateCourse() {
       },
       {
         onSuccess: (data) => {
-          toast.success("Course created")
           setLeaveTo(`/admin/courses/${data.course_id}`)
         },
-        onError: () => toast.error("Failed to create course"),
       }
     )
   }

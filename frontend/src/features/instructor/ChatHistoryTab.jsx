@@ -1,6 +1,5 @@
 import { useState } from "react"
 import { useParams } from "react-router-dom"
-import { toast } from "react-toastify"
 import { MdForum } from "react-icons/md"
 import { useCourseMessages, useChatlogs, useChatlogStatus } from "@/services/queries"
 import { http } from "@/services/http"
@@ -60,7 +59,6 @@ export function ChatHistoryTab() {
           const newest = Array.isArray(logs) && logs.length ? logs[0] : null
           if (newest?.url) window.open(newest.url, "_blank")
           setExporting(false)
-          toast.success("Chat logs exported")
         },
       })
       await http.post(
@@ -68,10 +66,8 @@ export function ChatHistoryTab() {
         {},
         { course_id: courseId, instructor_email: email, request_id: requestId }
       )
-      toast.info("Generating chat logs — you'll be notified when they're ready.")
     } catch {
       setExporting(false)
-      toast.error("Couldn't start the export")
     }
   }
 

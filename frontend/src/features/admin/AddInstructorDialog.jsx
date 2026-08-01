@@ -1,5 +1,4 @@
 import { useState } from "react"
-import { toast } from "react-toastify"
 import { MdAdd, MdClose } from "react-icons/md"
 import { useElevateInstructor } from "@/services/queries"
 import { Button } from "@/components/ui/button"
@@ -42,13 +41,6 @@ export function AddInstructorDialog() {
     if (values.length === 0) return
     const results = await Promise.allSettled(values.map((email) => elevate.mutateAsync(email)))
     const added = results.filter((r) => r.status === "fulfilled").length
-    const failed = results.length - added
-    if (added > 0) {
-      toast.success(added === 1 ? "Instructor added" : `${added} instructors added`)
-    }
-    if (failed > 0) {
-      toast.error(`${failed} ${failed === 1 ? "invite" : "invites"} could not be sent`)
-    }
     if (added > 0) close()
   }
 

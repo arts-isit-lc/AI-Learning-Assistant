@@ -9,7 +9,6 @@ import {
   resetPassword,
   confirmResetPassword,
 } from "aws-amplify/auth"
-import { toast } from "react-toastify"
 import apiClient from "@/services/api"
 import { useAuth } from "@/context/AuthContext"
 import { Button } from "@/components/ui/button"
@@ -130,7 +129,6 @@ export function Login() {
       })
       if (!isSignUpComplete && nextStep?.signUpStep === "CONFIRM_SIGN_UP") {
         switchMode("confirmSignUp")
-        toast.success("Account created. Check your email for the confirmation code.")
       } else if (isSignUpComplete) {
         switchMode("signIn")
       }
@@ -180,7 +178,6 @@ export function Login() {
     setError("")
     try {
       await resendSignUpCode({ username: email })
-      toast.success("A new confirmation code has been sent.")
     } catch (err) {
       setError(err?.message || "Couldn't resend the code.")
     }

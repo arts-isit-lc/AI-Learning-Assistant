@@ -4,7 +4,7 @@ import { Label } from "@/components/ui/label"
 
 /**
  * Label + control + inline error/hint wrapper for RHF + Zod forms. Field errors
- * render inline here — never as a toast. Clones the child control to wire
+ * render inline here (never globally). Clones the child control to wire
  * `id` / `aria-invalid` / `aria-describedby` for accessibility.
  *
  * @param {{ label?: string, error?: string, hint?: string, required?: boolean, children: React.ReactNode, className?: string }} props

@@ -49,7 +49,6 @@ vi.mock("react-router-dom", async (importOriginal) => {
     useBlocker: () => ({ state: "unblocked", proceed: vi.fn(), reset: vi.fn() }),
   }
 })
-vi.mock("react-toastify", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 import { CourseDetail } from "./CourseDetail"
 

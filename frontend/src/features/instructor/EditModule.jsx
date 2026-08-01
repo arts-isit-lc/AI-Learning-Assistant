@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useLocation, useNavigate, useParams } from "react-router-dom"
-import { toast } from "react-toastify"
+import { toUserMessage } from "@/services/apiError"
 import { MdDelete, MdInsertDriveFile } from "react-icons/md"
 import {
   useConcepts,
@@ -10,7 +10,6 @@ import {
   useModuleAllFiles,
   useEditModule,
   useDeleteModule,
-  useValidatePrompt,
 } from "@/services/queries"
 import { useFileUpload } from "./hooks/useFileUpload"
 import { useProcessingPoller } from "./hooks/useProcessingPoller"
@@ -76,7 +75,6 @@ export function EditModule() {
   const { generate: generateTopics, isGenerating } = useModuleTopics(moduleId)
   const editModule = useEditModule(courseId)
   const deleteModule = useDeleteModule(courseId)
-  const validate = useValidatePrompt(courseId)
 
   // Seed form fields once the module record is available.
   useEffect(() => {
@@ -163,18 +161,11 @@ export function EditModule() {
   const handleGenerate = async () => {
     try {
       const result = await generateTopics()
-      if (result?.status === "processing") {
-        toast.info(`Topics still processing (${result.ready}/${result.total} files).`)
-      } else if (result?.status === "no_files") {
-        toast.info("No files uploaded yet.")
-      } else if (result?.status === "error") {
-        toast.error(result.message || "Failed to generate topics")
-      } else if (result?.topics) {
+      if (result?.topics) {
         setKeyTopics((prev) => mergeTopics(prev, result.topics))
-        toast.success("Topics generated")
       }
     } catch {
-      toast.error("Failed to generate topics")
+      // Advisory only — topic generation failures are non-blocking.
     }
   }
 
@@ -202,23 +193,8 @@ export function EditModule() {
         removedFiles: [...removedFiles],
       },
       {
-        onSuccess: async () => {
-          if (modulePrompt.trim()) {
-            try {
-              const report = await validate.mutateAsync({ prompt: modulePrompt, scope: "module", moduleId })
-              if (report?.has_conflicts) {
-                toast.info("Module saved. Prompt conflicts were detected — review them in Settings.")
-              }
-            } catch {
-              // non-blocking
-            }
-          }
-          toast.success("Module updated")
+        onSuccess: () => {
           setLeaving(true)
-        },
-        onError: (err) => {
-          if (err?.status === 400) toast.error("A module with this name already exists")
-          else toast.error("Failed to update module")
         },
       }
     )
@@ -435,17 +411,20 @@ export function EditModule() {
 
       <ConfirmDialog
         open={deleteOpen}
-        onOpenChange={setDeleteOpen}
+        onOpenChange={(open) => {
+          setDeleteOpen(open)
+          if (!open) deleteModule.reset?.()
+        }}
         title="Delete module?"
         description={moduleData ? `Delete "${moduleData.module_name}" and its files? This can't be undone.` : ""}
         confirmLabel="Delete"
         variant="danger"
         loading={deleteModule.isPending}
+        error={deleteModule.isError ? toUserMessage(deleteModule.error) : undefined}
         onConfirm={() =>
           deleteModule.mutate(moduleData, {
             onSuccess: () => {
               setDeleteOpen(false)
-              toast.success("Module deleted")
               setLeaving(true)
             },
           })

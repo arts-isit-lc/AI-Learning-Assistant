@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useParams, useSearchParams } from "react-router-dom"
-import { toast } from "react-toastify"
 import { MdDelete, MdInsertDriveFile } from "react-icons/md"
 import {
   useConcepts,
@@ -204,21 +203,15 @@ export function CourseWizard() {
   const handleGenerate = async () => {
     try {
       const result = await generateTopics()
-      if (result?.status === "processing") {
-        toast.info(`Topics still processing (${result.ready}/${result.total} files). Try again shortly.`)
-      } else if (result?.status === "no_files") {
-        toast.info("No files uploaded yet.")
-      } else if (result?.status === "error") {
-        toast.error(result.message || "Failed to generate topics")
-      } else if (result?.topics) {
-        // No success toast — topic generation runs in the background during the
-        // step-2 wait; the topics just appear (as tags) on step 3. Snapshot the
-        // suggested set so "Suggest" can restore any topic the user removes.
+      if (result?.topics) {
+        // Topics generate in the background during the step-2 wait and just
+        // appear (as tags) on step 3. Snapshot the suggested set so "Suggest"
+        // can restore any topic the user removes.
         setKeyTopics((prev) => mergeTopics(prev, result.topics))
         setSuggestedTopics((prev) => mergeTopics(prev, result.topics))
       }
     } catch {
-      toast.error("Failed to generate topics")
+      // Advisory only — topic generation failures are non-blocking.
     }
   }
 
@@ -307,13 +300,7 @@ export function CourseWizard() {
           // The module-prompt conflict check runs earlier, on Next off the
           // prompt step (see handleNext) — not here.
           markSaved()
-          toast.success("Module created")
           setLeaving(true)
-        },
-        onError: (err) => {
-          if (err?.status === 400) toast.error("A module with this name already exists")
-          else if (err?.status === 409) toast.error("Files are still being processed")
-          else toast.error("Failed to create module")
         },
       }
     )

@@ -1,18 +1,21 @@
 import { QueryClient, QueryCache, MutationCache } from "@tanstack/react-query"
-import { toast } from "react-toastify"
-import { toUserMessage } from "./apiError"
 
 /**
- * Centralized error → toast (plan §10). Skips:
+ * Centralized error-observability seam. OCELIA surfaces user-facing errors
+ * inline at the point of action (Alert / ErrorState / in-dialog message), never
+ * as a transient notification — so this deliberately shows the user nothing. It
+ * keeps a console breadcrumb (and a single spot to wire telemetry later) so the
+ * failures that would otherwise be silent stay diagnosable. Skips:
  * - inline errors (403 forbidden, expired-session redirect) — screens render those;
  * - anything a query/mutation opts out of via `meta.suppressGlobalError` (e.g.
- *   forms that show field errors inline).
+ *   forms/dialogs that show the error in place).
  * Fires only after a query's retries are exhausted.
  */
 function handleGlobalError(error, meta) {
   if (error?.inline) return
   if (meta?.suppressGlobalError) return
-  toast.error(toUserMessage(error))
+  // TODO(telemetry): forward to the error-reporting sink once one is wired.
+  console.error("[query]", error)
 }
 
 /**

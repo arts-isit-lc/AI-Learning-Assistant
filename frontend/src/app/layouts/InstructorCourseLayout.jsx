@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { NavLink, Outlet, useNavigate, useParams } from "react-router-dom"
 import { MdContentCopy } from "react-icons/md"
-import { toast } from "react-toastify"
+import { toUserMessage } from "@/services/apiError"
 import { cn } from "@/lib/utils"
 import {
   useInstructorCourses,
@@ -66,17 +66,14 @@ export default function InstructorCourseLayout() {
   const copyAccessCode = () => {
     if (!accessCode) return
     navigator.clipboard?.writeText(accessCode)
-    toast.success("Access code copied")
   }
 
   const handleDelete = () => {
     deleteCourse.mutate(undefined, {
       onSuccess: () => {
         setDeleteOpen(false)
-        toast.success("Course deleted")
         navigate("/instructor/courses")
       },
-      onError: () => toast.error("Couldn't delete the course."),
     })
   }
 
@@ -175,12 +172,16 @@ export default function InstructorCourseLayout() {
 
       <ConfirmDialog
         open={deleteOpen}
-        onOpenChange={setDeleteOpen}
+        onOpenChange={(open) => {
+          setDeleteOpen(open)
+          if (!open) deleteCourse.reset?.()
+        }}
         title="Delete course?"
         description={`Delete "${code}" and all its concepts, modules, files, and student data? This can't be undone.`}
         confirmLabel="Delete course"
         variant="danger"
         loading={deleteCourse.isPending}
+        error={deleteCourse.isError ? toUserMessage(deleteCourse.error) : undefined}
         onConfirm={handleDelete}
       />
     </div>

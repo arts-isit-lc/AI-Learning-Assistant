@@ -4,7 +4,6 @@ import userEvent from "@testing-library/user-event"
 
 const elevate = { mutateAsync: vi.fn().mockResolvedValue({}), isPending: false }
 vi.mock("@/services/queries", () => ({ useElevateInstructor: () => elevate }))
-vi.mock("react-toastify", () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 import { AddInstructorDialog } from "./AddInstructorDialog"
 

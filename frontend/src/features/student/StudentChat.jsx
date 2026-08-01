@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useParams, useSearchParams } from "react-router-dom"
-import { toast } from "react-toastify"
 import {
   useModuleSessions,
   useSessionMessages,
@@ -82,7 +81,6 @@ export function StudentChat() {
         setActiveSessionId(session.session_id)
         stream.runTurn({ session, messageContent: null, source: "newChat" })
       },
-      onError: () => toast.error("Couldn't start a new chat."),
     })
   }
 

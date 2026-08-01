@@ -1,7 +1,6 @@
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { toast } from "react-toastify"
 import { useEnrollCourse } from "@/services/queries"
 import {
   Dialog,
@@ -22,7 +21,7 @@ const schema = z.object({
  * Join-by-code modal — Figma `Modal/Join course` (859:6784): title over a
  * divider, instructions, a course-code input, a privacy notice, and Cancel /
  * Join course actions. RHF + Zod → `useEnrollCourse`; validation + enrollment
- * errors render inline; success closes and toasts. (Copy reworded off the frame's
+ * errors render inline; success closes the modal. (Copy reworded off the frame's
  * "6-digit" — the access code is the 16-char code, per decision B3.)
  */
 export function JoinCourseDialog({ open, onOpenChange }) {
@@ -43,7 +42,6 @@ export function JoinCourseDialog({ open, onOpenChange }) {
   const onSubmit = ({ code }) => {
     enroll.mutate(code, {
       onSuccess: () => {
-        toast.success("Joined course!")
         reset()
         onOpenChange(false)
       },

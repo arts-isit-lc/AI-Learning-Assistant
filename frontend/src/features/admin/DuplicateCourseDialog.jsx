@@ -1,6 +1,5 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { toast } from "react-toastify"
 import { useDuplicateCourse } from "@/services/queries"
 import { generateAccessCode } from "./CreateCourse"
 import { Button } from "@/components/ui/button"
@@ -63,10 +62,8 @@ export function DuplicateCourseDialog({ course }) {
       {
         onSuccess: (data) => {
           setOpen(false)
-          toast.success("Course duplicated")
           navigate(`/admin/courses/${data.course_id}`)
         },
-        onError: () => toast.error("Failed to duplicate course"),
       }
     )
   }

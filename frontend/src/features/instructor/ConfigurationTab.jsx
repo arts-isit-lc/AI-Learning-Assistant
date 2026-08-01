@@ -28,6 +28,7 @@ import {
   useReorderConcepts,
   useReorderModules,
 } from "@/services/queries"
+import { toUserMessage } from "@/services/apiError"
 import { ModuleAccordion } from "@/components/composed/ModuleAccordion"
 import { EmptyState } from "@/components/composed/EmptyState"
 import { ConfirmDialog } from "@/components/composed/ConfirmDialog"
@@ -266,12 +267,18 @@ export function ConfigurationTab() {
 
       <ConfirmDialog
         open={Boolean(deleteConceptTarget)}
-        onOpenChange={(open) => !open && setDeleteConceptTarget(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteConceptTarget(null)
+            deleteConcept.reset?.()
+          }
+        }}
         title="Delete concept?"
         description="This also deletes the concept's modules and their files. This can't be undone."
         confirmLabel="Delete"
         variant="danger"
         loading={deleteConcept.isPending}
+        error={deleteConcept.isError ? toUserMessage(deleteConcept.error) : undefined}
         onConfirm={() =>
           deleteConcept.mutate(deleteConceptTarget, {
             onSuccess: () => setDeleteConceptTarget(null),
@@ -281,7 +288,12 @@ export function ConfigurationTab() {
 
       <ConfirmDialog
         open={Boolean(deleteModuleTarget)}
-        onOpenChange={(open) => !open && setDeleteModuleTarget(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteModuleTarget(null)
+            deleteModule.reset?.()
+          }
+        }}
         title="Delete module?"
         description={
           deleteModuleTarget ? `Delete "${deleteModuleTarget.module_name}" and its files? This can't be undone.` : ""
@@ -289,6 +301,7 @@ export function ConfigurationTab() {
         confirmLabel="Delete"
         variant="danger"
         loading={deleteModule.isPending}
+        error={deleteModule.isError ? toUserMessage(deleteModule.error) : undefined}
         onConfirm={() =>
           deleteModule.mutate(deleteModuleTarget, {
             onSuccess: () => setDeleteModuleTarget(null),

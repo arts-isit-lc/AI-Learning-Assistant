@@ -7,11 +7,15 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 /**
  * Confirmation modal for destructive/important actions (delete course, discard,
  * prompt-conflict override, ...). Controlled via `open` / `onOpenChange`. The
  * confirm button shows a loading spinner while the action runs.
+ *
+ * Pass `error` (a user-facing string) when the confirmed action fails: it shows
+ * inline and the dialog stays open so the user can retry or cancel.
  */
 export function ConfirmDialog({
   open,
@@ -24,6 +28,7 @@ export function ConfirmDialog({
   onCancel,
   variant = "danger",
   loading = false,
+  error,
 }) {
   const handleCancel = () => {
     onCancel?.()
@@ -37,6 +42,11 @@ export function ConfirmDialog({
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         {description && <DialogDescription>{description}</DialogDescription>}
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
         <DialogFooter>
           <Button variant="outline" onClick={handleCancel} disabled={loading}>
             {cancelLabel}

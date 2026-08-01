@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react"
 import { useParams } from "react-router-dom"
-import { toast } from "react-toastify"
 import { useCoursePrompt, usePreviousPrompts, useValidatePrompt, useSavePrompt } from "@/services/queries"
 import { LLM_MODELS, DEFAULT_LLM_MODEL_ID } from "@/constants/llmModels"
 import { SYSTEM_LEVEL_PROMPT } from "@/constants/systemPrompt"
@@ -77,9 +76,8 @@ export function SettingsTab() {
     try {
       const report = await validate.mutateAsync({ prompt: userPrompt, scope: "course" })
       setConflictReport(report)
-      if (!report?.has_conflicts) toast.success("No conflicts found")
     } catch {
-      toast.error("Couldn't check for conflicts. You can still save.")
+      // Best-effort — a failed conflict check must not block saving.
     }
   }
 
@@ -88,7 +86,6 @@ export function SettingsTab() {
     setStoredConflicts(metadata?.has_conflicts ? metadata : null)
     setConflictReport(null)
     setOverrideOpen(false)
-    toast.success("Settings saved")
   }
 
   const handleSave = () => {

@@ -20,4 +20,21 @@ describe("ConfirmDialog", () => {
     await userEvent.click(screen.getByRole("button", { name: "Delete" }))
     expect(onConfirm).toHaveBeenCalledOnce()
   })
+
+  it("shows an inline error and stays open when `error` is set", () => {
+    render(
+      <ConfirmDialog
+        open
+        title="Delete course?"
+        description="This cannot be undone."
+        confirmLabel="Delete"
+        error="Something went wrong on our end. Please try again."
+        onConfirm={vi.fn()}
+      />
+    )
+    expect(
+      screen.getByText("Something went wrong on our end. Please try again.")
+    ).toBeInTheDocument()
+    expect(screen.getByRole("dialog")).toBeInTheDocument()
+  })
 })

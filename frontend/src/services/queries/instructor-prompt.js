@@ -22,7 +22,7 @@ export function usePreviousPrompts(courseId) {
 /**
  * Validate a prompt for conflicts (POST instructor/validate_prompt). Used on
  * Save (course scope) and by the module editor/wizard (module scope). Errors are
- * suppressed from the global toast — the caller degrades gracefully (save is
+ * suppressed from the global error handler — the caller degrades gracefully (save is
  * still allowed if validation is unavailable, matching the legacy behavior).
  * Variables: `{ prompt, scope?: "course"|"module", moduleId? }`.
  */

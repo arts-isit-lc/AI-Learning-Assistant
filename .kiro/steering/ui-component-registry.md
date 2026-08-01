@@ -8,7 +8,7 @@ inclusion: manual
 
 > **Reconciled to the OCELIA designs (Phase 0 → Phase 1).** Navigation is a **top-nav `AppHeader` per role** — the left `AppSidebar` is retired. The missing primitives/composed components from the four design sets were added below (icons, toggle, alert, tags, course card, module accordion, wizard stepper, file upload, searchbar, model dropdown, …). Token/state rules for these live in `ui-design-system.md`. This registry is the naming contract.
 
-> **Build status (Phase 4, 2026-07-19).** Every **primitive** above is built in `src/components/ui/` (hand-written shadcn-style over Radix + cva; colocated RTL tests; rendered in the `/gallery` dev route) — except `Toast` (= react-toastify, see its row). **Reusable composed built** in `src/components/composed/`: `PageContainer, PageHeader, BackButton, Breadcrumb, EmptyState, Tag, StatCard, FileRow, ListRow, DataTable, FormField, Searchbar, ConfirmDialog, LanguageModelDropdown, CourseCard, StudentRow, ProfileHeader` (plus `AppHeader`, `SplitLayout`, `OfflineBanner` from earlier phases). The **Chat** set (`ChatThread, AIMessage, StudentMessage, TypingIndicator, ChatInput, SessionSidebar, SessionItem, RetryBanner`) is **built (Phase 5)** in `src/features/student/chat/` — it lives with the student feature (colocated with `useChatStream` + the streaming logic), not in `composed/`. The **instructor-feature composed** — `ModuleAccordion` (concept→module tree, `@dnd-kit` sortable), `WizardStepper`, `FileUpload`, `PromptHistory`, `AnalyticsChart` (Recharts) — are **built (Phase 6)** in `src/components/composed/`. **All registry components are now built.** The **Admin slice (Phase 7)** — instructor + course management — composes existing registry components (`SplitLayout`, `ListRow`, `ProfileHeader`, `ConfirmDialog`, `Dialog`, `Toggle`, `Searchbar`) with **no new registry entries**. Legacy composed still live under `src/components/` until their page migrates (removed in P8).
+> **Build status (Phase 4, 2026-07-19).** Every **primitive** above is built in `src/components/ui/` (hand-written shadcn-style over Radix + cva; colocated RTL tests; rendered in the `/gallery` dev route). **Reusable composed built** in `src/components/composed/`: `PageContainer, PageHeader, BackButton, Breadcrumb, EmptyState, Tag, StatCard, FileRow, ListRow, DataTable, FormField, Searchbar, ConfirmDialog, LanguageModelDropdown, CourseCard, StudentRow, ProfileHeader` (plus `AppHeader`, `SplitLayout`, `OfflineBanner` from earlier phases). The **Chat** set (`ChatThread, AIMessage, StudentMessage, TypingIndicator, ChatInput, SessionSidebar, SessionItem, RetryBanner`) is **built (Phase 5)** in `src/features/student/chat/` — it lives with the student feature (colocated with `useChatStream` + the streaming logic), not in `composed/`. The **instructor-feature composed** — `ModuleAccordion` (concept→module tree, `@dnd-kit` sortable), `WizardStepper`, `FileUpload`, `PromptHistory`, `AnalyticsChart` (Recharts) — are **built (Phase 6)** in `src/components/composed/`. **All registry components are now built.** The **Admin slice (Phase 7)** — instructor + course management — composes existing registry components (`SplitLayout`, `ListRow`, `ProfileHeader`, `ConfirmDialog`, `Dialog`, `Toggle`, `Searchbar`) with **no new registry entries**. Legacy composed still live under `src/components/` until their page migrates (removed in P8).
 
 ## Registry Rules
 - Map every Figma node to a registry component before writing code
@@ -33,7 +33,6 @@ inclusion: manual
 | `Tabs` | Tab navigation within a page |
 | `Select` | Dropdown selection |
 | `Table` | Data table shell (combine with TanStack Table for sorting/filtering) |
-| `Toast` | Transient notifications — provided by **react-toastify** (wired in `AppV2` + `queryClient`), **not** a Radix primitive. No shadcn Toast component |
 | `Tooltip` | Hover labels on icon buttons |
 | `Separator` | Visual dividers |
 | `Avatar` | User/AI avatar circles |
@@ -45,7 +44,7 @@ inclusion: manual
 | `Toggle` | On/off switch — course active/inactive, per-instructor OCELIA access, boolean settings |
 | `Checkbox` | Boolean selection in forms / roster multi-select |
 | `RadioGroup` | Single-choice selection |
-| `Alert` | Inline, persistent status/callout — `info` / `success` / `warning` / `destructive`. Distinct from the transient `Toast` |
+| `Alert` | Inline, persistent status/callout — `info` / `success` / `warning` / `destructive`. The app's primary error/status surface (no transient toasts) |
 | `Progress` | Determinate + indeterminate progress bar (uploads, async jobs). Already in `src/components/ui/progress.jsx` |
 | `Accordion` | Expand/collapse sections — Configuration Concept→Module tree, collapsible panels |
 | `DropdownMenu` | Action / kebab menus |
@@ -106,7 +105,7 @@ inclusion: manual
 ### Forms
 | Component | Props | Notes |
 |---|---|---|
-| `FormField` | `label`, `error?`, `children` | Label + input + inline error wrapper (RHF + Zod; errors never toasted) |
+| `FormField` | `label`, `error?`, `children` | Label + input + inline error wrapper (RHF + Zod; errors render inline, never global) |
 | `Searchbar` | `value`, `onChange`, `placeholder?` | Debounced search input |
 | `LanguageModelDropdown` | `value`, `onChange`, `models` | LLM selection dropdown (Settings) |
 | `FileUpload` | `onFiles`, `accept?`, `status?` | Drag/drop upload with idle / uploading / success / error states |
