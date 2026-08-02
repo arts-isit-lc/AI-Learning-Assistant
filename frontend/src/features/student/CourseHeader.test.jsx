@@ -83,18 +83,19 @@ describe("CourseHeader", () => {
     expect(screen.queryByText(/syllabus/i)).not.toBeInTheDocument()
   })
 
-  it("collapsed (chat) shows the back link + course code + Expand, hiding the rest (Figma 209:4781)", () => {
+  it("reduced (chat) shows the back link + compact code + Expand, hiding the details from AT (Figma 209:4781)", () => {
     renderHeader({ course: COURSE, collapsible: true, collapsed: true, onToggleCollapse: () => {} })
 
     expect(screen.getByRole("link", { name: /courses/i })).toBeInTheDocument()
-    // Course code stays visible next to the back link, but as plain text (no h1).
-    expect(screen.getByText("GEOG 412")).toBeInTheDocument()
-    expect(screen.queryByRole("heading")).not.toBeInTheDocument()
+    // Compact code in the reduced one-liner is a span, not the h1 title — the h1
+    // stays mounted for the slide but is hidden from assistive tech.
+    expect(screen.getByText("GEOG 412", { selector: "span" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /expand/i })).toBeInTheDocument()
 
-    // The full details collapse away.
-    expect(screen.queryByText("Ada Lovelace")).not.toBeInTheDocument()
-    expect(screen.queryByText("Section 101")).not.toBeInTheDocument()
+    // Details are collapsed and hidden from assistive tech: the h1 title and the
+    // instructor email links are out of the accessibility tree.
+    expect(screen.queryByRole("heading")).not.toBeInTheDocument()
+    expect(screen.queryByRole("link", { name: "ada@ubc.ca" })).not.toBeInTheDocument()
   })
 
   it("shows the instructor list on the expanded chat header too (shared component)", () => {

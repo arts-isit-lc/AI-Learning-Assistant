@@ -66,23 +66,21 @@ describe("StudentChat page", () => {
     expect(screen.getByRole("button", { name: /new chat/i })).toBeInTheDocument()
   })
 
-  it("swaps the Learning Journey bar for a full-bleed divider when the header is reduced", async () => {
+  it("reduces/expands the header — the Learning Journey bar slides away (hidden from AT) and back", async () => {
     const user = userEvent.setup()
     renderChat()
 
-    // Expanded: the Learning Journey bar carries the divider — no stand-in rule.
-    expect(screen.getByText("Learning Journey")).toBeInTheDocument()
-    expect(screen.queryByRole("separator")).not.toBeInTheDocument()
+    // Expanded: the Learning Journey bar and its drawer control are available.
+    expect(screen.getByRole("button", { name: /learning journey/i })).toBeInTheDocument()
 
-    // Reduce → the bar is hidden and the stand-in divider takes its place.
+    // Reduce → the bar collapses and drops out of the accessibility tree (its
+    // edge-to-edge rule persists via the full-bleed wrapper).
     await user.click(screen.getByRole("button", { name: /reduce/i }))
-    expect(screen.queryByText("Learning Journey")).not.toBeInTheDocument()
-    expect(screen.getByRole("separator")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /learning journey/i })).not.toBeInTheDocument()
 
-    // Expand → back to the bar, divider removed.
+    // Expand → the bar returns.
     await user.click(screen.getByRole("button", { name: /expand/i }))
-    expect(screen.getByText("Learning Journey")).toBeInTheDocument()
-    expect(screen.queryByRole("separator")).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /learning journey/i })).toBeInTheDocument()
   })
 
   it("shows an accessible ErrorState with retry when the session list fails to load", async () => {

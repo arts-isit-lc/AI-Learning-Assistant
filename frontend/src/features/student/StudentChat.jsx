@@ -155,22 +155,36 @@ export function StudentChat() {
         collapsed={headerCollapsed}
         onToggleCollapse={() => setHeaderCollapsed((v) => !v)}
       />
-      {!headerCollapsed ? (
-        <LearningJourneyBar
-          concepts={concepts}
-          completedConcepts={completedConcepts}
-          totalConcepts={totalConcepts}
-          percent={percent}
-        />
-      ) : (
-        // Reduced: the Learning Journey bar — which supplies the full-bleed rule
-        // between the top area and the chat — is hidden, so stand in a matching
-        // edge-to-edge divider (same w-screen break-out) to keep that separation.
+      {/* Learning Journey — slides open/closed with the header (grid-rows height
+          + fade, matching the app's accordions and CourseView). The full-bleed
+          wrapper keeps the edge-to-edge rule between the top area and the chat as
+          the divider once reduced; fullBleed={false} lets overflow-hidden clip the
+          height animation without cropping that rule. */}
+      <div className="relative left-1/2 w-screen -translate-x-1/2 border-b border-border">
         <div
-          role="separator"
-          className="relative left-1/2 w-screen -translate-x-1/2 border-b border-border"
-        />
-      )}
+          className={cn(
+            "grid transition-[grid-template-rows] duration-normal ease-standard motion-reduce:transition-none",
+            headerCollapsed ? "grid-rows-[0fr]" : "grid-rows-[1fr]"
+          )}
+        >
+          <div
+            className={cn(
+              "overflow-hidden transition-opacity duration-normal ease-standard motion-reduce:transition-none",
+              headerCollapsed ? "opacity-0" : "opacity-100"
+            )}
+            aria-hidden={headerCollapsed || undefined}
+            {...(headerCollapsed && { inert: "" })}
+          >
+            <LearningJourneyBar
+              concepts={concepts}
+              completedConcepts={completedConcepts}
+              totalConcepts={totalConcepts}
+              percent={percent}
+              fullBleed={false}
+            />
+          </div>
+        </div>
+      </div>
 
       {sessionsQuery.isError ? (
         <ErrorState

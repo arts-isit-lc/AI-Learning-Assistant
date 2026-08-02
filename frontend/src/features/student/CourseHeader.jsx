@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom"
 import { MdChevronLeft, MdExpandMore, MdExpandLess } from "react-icons/md"
 import { titleCase } from "@/utils/formatters"
+import { cn } from "@/lib/utils"
 import { Icon } from "@/components/ui/icon"
 
 /** "‹ COURSES" back link (purple, uppercase). */
@@ -67,70 +68,84 @@ export function CourseHeader({ course, collapsible = false, collapsed = false, o
   const instructors = Array.isArray(course?.instructors) ? course.instructors : []
   const hasTermMeta = Boolean(course?.term || course?.section)
 
-  if (collapsed) {
-    return (
-      <div className="flex justify-between items-start">
-        <div className="flex items-center gap-3 mb-6">
-          <CoursesBackLink />
-          {/* Collapsed one-liner (Figma 209:4781): the course code stays beside
-              the back link so the reduced header remains identifiable. */}
-          <span className="text-h4 font-semibold text-neutral-900">{title}</span>
-        </div>
-        {collapsible && <CollapseToggle collapsed onToggle={onToggleCollapse} />}
-      </div>
-    )
-  }
-
   return (
     <div className="flex flex-col">
-      <div className="flex items-start justify-between gap-4 mb-6">
-        <CoursesBackLink />
-        {collapsible && <CollapseToggle collapsed={false} onToggle={onToggleCollapse} />}
+      {/* Top row: back link (+ compact code when reduced) + Reduce/Expand toggle. */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <CoursesBackLink />
+          {collapsed && (
+            // Reduced one-liner (Figma 209:4781): the code stays beside the back
+            // link. It mirrors the h1 below — hidden from assistive tech while
+            // reduced — so the course is still announced exactly once.
+            <span className="text-h4 font-semibold text-neutral-900">{title}</span>
+          )}
+        </div>
+        {collapsible && <CollapseToggle collapsed={collapsed} onToggle={onToggleCollapse} />}
       </div>
 
       {/* Course details (Figma 143:1427): code + name + instructor list on the
-          left; term/section in the top-right. */}
-      <div className="mb-8 flex items-start justify-between gap-6">
-        <div className="flex flex-col gap-6">
-          <div className="flex flex-col gap-4">
-            <h1 className="text-3xl leading-7 font-semibold text-neutral-900">{title}</h1>
-            {course?.course_name && (
-              <p className="text-body text-foreground">{titleCase(course.course_name)}</p>
+          left, term/section top-right. Reduce/Expand slides this open/closed like
+          the app's accordions — a grid-rows height animation + fade on the shared
+          duration/easing tokens. Reduced: height 0, hidden from assistive tech and
+          removed from the tab order (inert). */}
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows] duration-normal ease-standard motion-reduce:transition-none",
+          collapsed ? "grid-rows-[0fr]" : "grid-rows-[1fr]"
+        )}
+      >
+        <div
+          className={cn(
+            "overflow-hidden transition-opacity duration-normal ease-standard motion-reduce:transition-none",
+            collapsed ? "opacity-0" : "opacity-100"
+          )}
+          aria-hidden={collapsed || undefined}
+          {...(collapsed && { inert: "" })}
+        >
+          <div className="flex items-start justify-between gap-6 pb-8 pt-6">
+            <div className="flex flex-col gap-6">
+              <div className="flex flex-col gap-4">
+                <h1 className="text-3xl leading-7 font-semibold text-neutral-900">{title}</h1>
+                {course?.course_name && (
+                  <p className="text-body text-foreground">{titleCase(course.course_name)}</p>
+                )}
+              </div>
+
+              {instructors.length > 0 && (
+                <div className="flex flex-wrap items-center gap-y-1 text-base leading-7">
+                  {instructors.map((instructor, i) => {
+                    const name = instructorName(instructor)
+                    return (
+                      <span key={instructor.user_email ?? i} className="flex items-center">
+                        {i > 0 && <MetaPipe />}
+                        <span className="flex items-center gap-2.5">
+                          {name && <span className="text-foreground">{name}</span>}
+                          {instructor.user_email && (
+                            <a
+                              href={`mailto:${instructor.user_email}`}
+                              className="text-primary underline hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                            >
+                              {instructor.user_email}
+                            </a>
+                          )}
+                        </span>
+                      </span>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {hasTermMeta && (
+              <div className="flex shrink-0 items-center whitespace-nowrap text-base leading-7 text-foreground">
+                {course?.term && <span>{course.term}</span>}
+                {course?.term && course?.section && <MetaPipe />}
+                {course?.section && <span>Section {course.section}</span>}
+              </div>
             )}
           </div>
-
-          {instructors.length > 0 && (
-            <div className="flex flex-wrap items-center gap-y-1 text-base leading-7">
-              {instructors.map((instructor, i) => {
-                const name = instructorName(instructor)
-                return (
-                  <span key={instructor.user_email ?? i} className="flex items-center">
-                    {i > 0 && <MetaPipe />}
-                    <span className="flex items-center gap-2.5">
-                      {name && <span className="text-foreground">{name}</span>}
-                      {instructor.user_email && (
-                        <a
-                          href={`mailto:${instructor.user_email}`}
-                          className="text-primary underline hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                        >
-                          {instructor.user_email}
-                        </a>
-                      )}
-                    </span>
-                  </span>
-                )
-              })}
-            </div>
-          )}
         </div>
-
-        {hasTermMeta && (
-          <div className="flex shrink-0 items-center whitespace-nowrap text-base leading-7 text-foreground">
-            {course?.term && <span>{course.term}</span>}
-            {course?.term && course?.section && <MetaPipe />}
-            {course?.section && <span>Section {course.section}</span>}
-          </div>
-        )}
       </div>
     </div>
   )

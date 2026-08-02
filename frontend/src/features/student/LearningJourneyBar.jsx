@@ -21,7 +21,14 @@ import { Icon } from "@/components/ui/icon"
  * bottom of the progress list. StudentLayout's `<main>` carries `overflow-x-clip`
  * so the vw/scrollbar overshoot from the break-out never adds a horizontal bar.
  *
- * @param {{ concepts?: Array, completedConcepts?: number, totalConcepts?: number, percent?: number, contentClassName?: string }} props
+ * `fullBleed` (default true) owns that edge-to-edge top+bottom rule. Pass
+ * `fullBleed={false}` when the host wraps the bar in its own full-bleed,
+ * `overflow-hidden` slide container (CourseView's Reduce/Expand): the bar then
+ * renders only a top rule (the wrapper supplies the full-bleed span + bottom
+ * rule), so `overflow-hidden` can clip the height animation without cropping the
+ * edge-to-edge divider.
+ *
+ * @param {{ concepts?: Array, completedConcepts?: number, totalConcepts?: number, percent?: number, contentClassName?: string, fullBleed?: boolean }} props
  */
 export function LearningJourneyBar({
   concepts = [],
@@ -29,6 +36,7 @@ export function LearningJourneyBar({
   totalConcepts = 0,
   percent = 0,
   contentClassName,
+  fullBleed = true,
 }) {
   const { courseId } = useParams()
   const [open, setOpen] = useState(false)
@@ -42,7 +50,15 @@ export function LearningJourneyBar({
         : { label: "IN PROGRESS", cls: "text-info" }
 
   return (
-    <div className="relative left-1/2 w-screen -translate-x-1/2 border-y border-border">
+    <div
+      className={cn(
+        fullBleed
+          ? "relative left-1/2 w-screen -translate-x-1/2 border-y border-border"
+          : // Embedded in a host slide wrapper that owns the full-bleed span +
+            // bottom rule; render only the top rule here.
+            "border-t border-border"
+      )}
+    >
       <div className={cn("mx-auto w-full max-w-7xl py-4", contentClassName)}>
         <div className="flex items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">

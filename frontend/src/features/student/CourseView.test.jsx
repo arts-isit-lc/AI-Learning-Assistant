@@ -70,7 +70,8 @@ describe("CourseView", () => {
     await userEvent.click(reduce)
     expect(screen.queryByRole("button", { name: /learning journey/i })).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: /expand$/i })).toBeInTheDocument()
-    expect(screen.getByText("GEOG 250")).toBeInTheDocument()
+    // Compact code (span) stays in the reduced one-liner; the h1 title is hidden.
+    expect(screen.getByText("GEOG 250", { selector: "span" })).toBeInTheDocument()
     expect(screen.getByRole("heading", { name: "Concepts" })).toBeInTheDocument()
 
     // Expand → the Learning Journey bar returns.
