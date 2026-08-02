@@ -44,11 +44,13 @@ describe("CourseView", () => {
   it("renders the course title, concept, and module statuses (expanded)", () => {
     renderCourse()
     expect(screen.getByRole("heading", { name: "GEOG 250" })).toBeInTheDocument()
-    expect(screen.getByText(/week 1/i)).toBeInTheDocument()
-    expect(screen.getByText(/week 2/i)).toBeInTheDocument()
-    // Module completion is now a status circle (icon with an accessible label).
-    expect(screen.getByLabelText("Complete")).toBeInTheDocument()
-    expect(screen.getByLabelText("Not complete")).toBeInTheDocument()
+    // Query module links/status by role: the Learning Journey drawer stays
+    // mounted for its slide animation but is aria-hidden while collapsed, so
+    // role queries (which skip aria-hidden) target only the Concepts accordion.
+    expect(screen.getByRole("link", { name: /week 1/i })).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: /week 2/i })).toBeInTheDocument()
+    expect(screen.getByRole("img", { name: "Complete" })).toBeInTheDocument()
+    expect(screen.getByRole("img", { name: "Not complete" })).toBeInTheDocument()
   })
 
   it("offers the Learning journey drawer", () => {
@@ -134,7 +136,7 @@ describe("CourseView", () => {
         </Routes>
       </MemoryRouter>
     )
-    expect(screen.getByText(/week 1/i)).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: /week 1/i })).toBeInTheDocument()
     expect(screen.queryByRole("heading", { name: "Couldn't load this course" })).not.toBeInTheDocument()
   })
 })
