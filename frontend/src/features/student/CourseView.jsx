@@ -19,6 +19,7 @@ import {
   AccordionTrigger,
   AccordionContent,
 } from "@/components/ui/accordion"
+import { Collapse } from "@/components/ui/collapse"
 import { CourseHeader } from "./CourseHeader"
 import { LearningJourneyBar } from "./LearningJourneyBar"
 
@@ -72,35 +73,20 @@ export function CourseView() {
         collapsed={headerCollapsed}
         onToggleCollapse={() => setHeaderCollapsed((v) => !v)}
       />
-      {/* Learning Journey — slides open/closed with the header (grid-rows height
-          + fade, matching the app's accordions). The full-bleed wrapper owns the
-          edge-to-edge bottom rule, which remains as the separator once reduced;
-          the bar renders `fullBleed={false}` so overflow-hidden can clip the
-          height animation without cropping that rule. */}
+      {/* Learning Journey — slides open/closed with the header via the shared
+          Collapse primitive. The full-bleed wrapper owns the edge-to-edge bottom
+          rule, which remains as the separator once reduced; the bar renders
+          `fullBleed={false}` so the clip doesn't crop that rule. */}
       <div className="relative left-1/2 w-screen -translate-x-1/2 border-b border-border">
-        <div
-          className={cn(
-            "grid transition-[grid-template-rows] duration-normal ease-standard motion-reduce:transition-none",
-            headerCollapsed ? "grid-rows-[0fr]" : "grid-rows-[1fr]"
-          )}
-        >
-          <div
-            className={cn(
-              "overflow-hidden transition-opacity duration-normal ease-standard motion-reduce:transition-none",
-              headerCollapsed ? "opacity-0" : "opacity-100"
-            )}
-            aria-hidden={headerCollapsed || undefined}
-            {...(headerCollapsed && { inert: "" })}
-          >
-            <LearningJourneyBar
-              concepts={concepts}
-              completedConcepts={completedConcepts}
-              totalConcepts={totalConcepts}
-              percent={percent}
-              fullBleed={false}
-            />
-          </div>
-        </div>
+        <Collapse open={!headerCollapsed}>
+          <LearningJourneyBar
+            concepts={concepts}
+            completedConcepts={completedConcepts}
+            totalConcepts={totalConcepts}
+            percent={percent}
+            fullBleed={false}
+          />
+        </Collapse>
       </div>
 
       <div className="mt-6 mb-6 flex items-center justify-between">

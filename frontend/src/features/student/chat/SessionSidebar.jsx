@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils"
 import { Icon } from "@/components/ui/icon"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Collapse } from "@/components/ui/collapse"
 import { SessionItem } from "./SessionItem"
 
 /**
@@ -92,7 +93,9 @@ export function SessionSidebar({
           Module materials
           <Icon icon={materialsOpen ? MdExpandMore : MdExpandLess} size={24} />
         </button>
-        {materialsOpen && (
+        {/* Slides open/closed via the shared Collapse primitive (same motion as
+            every accordion); the file list scrolls inside once past max height. */}
+        <Collapse open={materialsOpen}>
           <div className="flex max-h-48 flex-col gap-1 overflow-y-auto pb-1">
             {filesLoading ? (
               [0, 1].map((i) => <Skeleton key={i} className="h-8 w-full" />)
@@ -117,7 +120,7 @@ export function SessionSidebar({
               <p className="px-2 py-1 text-caption text-muted-foreground">No materials.</p>
             )}
           </div>
-        )}
+        </Collapse>
       </div>
     </div>
   )

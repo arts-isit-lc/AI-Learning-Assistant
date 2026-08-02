@@ -37,4 +37,14 @@ describe("SessionSidebar", () => {
     expect(screen.getByText("syllabus.pdf")).toBeInTheDocument()
     expect(screen.queryByText("0e4b-uuid")).not.toBeInTheDocument()
   })
+
+  it("hides materials from assistive tech when collapsed (Collapse stays mounted for the slide)", () => {
+    const files = [{ file_id: "0e4b-uuid", filename: "syllabus.pdf", filetype: "pdf" }]
+    render(
+      <SessionSidebar moduleName="Week 1" sessions={sessions} files={files} materialsOpen={false} />
+    )
+    // The panel stays mounted so it can animate, but is aria-hidden while
+    // collapsed, so the file button isn't reachable by role.
+    expect(screen.queryByRole("button", { name: /syllabus\.pdf/i })).not.toBeInTheDocument()
+  })
 })

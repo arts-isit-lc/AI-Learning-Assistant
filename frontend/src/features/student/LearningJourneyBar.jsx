@@ -4,6 +4,7 @@ import { MdCheckCircle, MdMap, MdExpandMore, MdExpandLess } from "react-icons/md
 import { titleCase } from "@/utils/formatters"
 import { cn } from "@/lib/utils"
 import { Icon } from "@/components/ui/icon"
+import { Collapse } from "@/components/ui/collapse"
 
 /**
  * Learning Journey bar (Figma course + module-chat frames): label + overall
@@ -81,63 +82,48 @@ export function LearningJourneyBar({
           </button>
         </div>
 
-        {/* Concept tracker — slides open/closed like the app's accordions
-            (grid-rows height + fade on the shared motion tokens). Collapsed:
-            height 0, hidden from assistive tech and out of the tab order. */}
-        <div
-          className={cn(
-            "grid transition-[grid-template-rows] duration-normal ease-standard motion-reduce:transition-none",
-            open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-          )}
-        >
-          <div
-            className={cn(
-              "overflow-hidden transition-opacity duration-normal ease-standard motion-reduce:transition-none",
-              open ? "opacity-100" : "opacity-0"
-            )}
-            aria-hidden={!open || undefined}
-            {...(!open && { inert: "" })}
-          >
-            <ul id={panelId} className="mt-4 flex flex-col gap-6">
-              {concepts.map((concept, i) => (
-                <li key={concept.concept_id} className="flex flex-col gap-3">
-                  <div className="flex items-center gap-3">
-                    <span
-                      className={cn(
-                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-caption font-semibold",
-                        concept.isComplete
-                          ? "bg-success text-success-foreground"
-                          : "bg-muted text-muted-foreground"
-                      )}
-                    >
-                      {concept.isComplete ? <Icon icon={MdCheckCircle} size={16} label="Complete" /> : i + 1}
+        {/* Concept tracker — slides open/closed via the shared Collapse
+            primitive (same motion as every accordion). */}
+        <Collapse open={open}>
+          <ul id={panelId} className="mt-4 flex flex-col gap-6">
+            {concepts.map((concept, i) => (
+              <li key={concept.concept_id} className="flex flex-col gap-3">
+                <div className="flex items-center gap-3">
+                  <span
+                    className={cn(
+                      "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-caption font-semibold",
+                      concept.isComplete
+                        ? "bg-success text-success-foreground"
+                        : "bg-muted text-muted-foreground"
+                    )}
+                  >
+                    {concept.isComplete ? <Icon icon={MdCheckCircle} size={16} label="Complete" /> : i + 1}
+                  </span>
+                  <div className="flex min-w-0 flex-col">
+                    <span className="truncate text-base font-semibold text-foreground">
+                      {titleCase(concept.concept_name)}
                     </span>
-                    <div className="flex min-w-0 flex-col">
-                      <span className="truncate text-base font-semibold text-foreground">
-                        {titleCase(concept.concept_name)}
-                      </span>
-                    </div>
                   </div>
+                </div>
 
-                  {concept.modules?.length > 0 && (
-                    <ul className="flex flex-col gap-2">
-                      {concept.modules.map((module) => (
-                        <li key={module.module_id} className="flex items-center gap-3">
-                          <Link
-                            to={`/courses/${courseId}/modules/${module.module_id}`}
-                            className="rounded-[12.75px] border-[0.75px] px-1.5 py-[3px] border-primary bg-background text-[10.5px] text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
-                          >
-                            {titleCase(module.module_name)}
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
+                {concept.modules?.length > 0 && (
+                  <ul className="flex flex-col gap-2">
+                    {concept.modules.map((module) => (
+                      <li key={module.module_id} className="flex items-center gap-3">
+                        <Link
+                          to={`/courses/${courseId}/modules/${module.module_id}`}
+                          className="rounded-[12.75px] border-[0.75px] px-1.5 py-[3px] border-primary bg-background text-[10.5px] text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
+                        >
+                          {titleCase(module.module_name)}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Collapse>
       </div>
     </div>
   )

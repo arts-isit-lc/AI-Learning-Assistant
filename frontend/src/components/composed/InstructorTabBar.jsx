@@ -3,6 +3,7 @@ import { NavLink, useMatch } from "react-router-dom"
 import { MdExpandLess, MdExpandMore } from "react-icons/md"
 import { cn } from "@/lib/utils"
 import { Icon } from "@/components/ui/icon"
+import { Collapse } from "@/components/ui/collapse"
 
 const TABS = [
   { to: "/instructor/courses", label: "Courses" },
@@ -76,35 +77,18 @@ export function InstructorTabBar() {
     <div className="border-b border-border bg-background">
       <div className="mx-auto max-w-7xl px-6">
         {/* Top row: greeting/subtitle with the Collapse toggle pinned top-right
-            while expanded. The greeting animates like the accordions (grid-rows
-            0fr<->1fr + fade, var(--transition-normal) / var(--ease-standard),
-            reduced-motion aware). It stays mounted so it animates BOTH ways and
-            is aria-hidden while collapsed (no focusable content inside, so no
-            inert/tab-order handling is needed). When collapsed the greeting
-            column is height 0, so this row disappears and only the tab row shows. */}
+            while expanded. The greeting slides via the shared Collapse primitive
+            (same motion as every accordion); collapsed, it's height 0 so this row
+            disappears and only the tab row shows. */}
         <div className="flex items-start justify-between gap-4">
-          <div
-            id="instructor-greeting"
-            className={cn(
-              "grid flex-1 transition-[grid-template-rows] duration-normal ease-standard motion-reduce:transition-none",
-              expanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-            )}
-          >
-            <div className="overflow-hidden">
-              <div
-                aria-hidden={!expanded}
-                className={cn(
-                  "pt-5 transition-opacity duration-normal ease-standard motion-reduce:transition-none",
-                  expanded ? "opacity-100" : "opacity-0"
-                )}
-              >
-                <h1 className="text-h2 font-semibold uppercase text-foreground">Hi, Instructor!</h1>
-                <p className="mt-1 text-body text-muted-foreground">
-                  Manage your courses, upload materials, and review chat activity and insights.
-                </p>
-              </div>
+          <Collapse open={expanded} className="flex-1" id="instructor-greeting">
+            <div className="pt-5">
+              <h1 className="text-h2 font-semibold uppercase text-foreground">Hi, Instructor!</h1>
+              <p className="mt-1 text-body text-muted-foreground">
+                Manage your courses, upload materials, and review chat activity and insights.
+              </p>
             </div>
-          </div>
+          </Collapse>
           {expanded && <div className="shrink-0 pt-5">{toggleButton}</div>}
         </div>
 

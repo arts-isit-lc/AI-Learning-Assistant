@@ -16,6 +16,7 @@ import { titleCase } from "@/utils/formatters"
 import { cn } from "@/lib/utils"
 import { toUserMessage } from "@/services/apiError"
 import { ErrorState } from "@/components/composed/ErrorState"
+import { Collapse } from "@/components/ui/collapse"
 import { CourseHeader } from "./CourseHeader"
 import { LearningJourneyBar } from "./LearningJourneyBar"
 import { SessionSidebar } from "./chat/SessionSidebar"
@@ -155,35 +156,20 @@ export function StudentChat() {
         collapsed={headerCollapsed}
         onToggleCollapse={() => setHeaderCollapsed((v) => !v)}
       />
-      {/* Learning Journey — slides open/closed with the header (grid-rows height
-          + fade, matching the app's accordions and CourseView). The full-bleed
-          wrapper keeps the edge-to-edge rule between the top area and the chat as
-          the divider once reduced; fullBleed={false} lets overflow-hidden clip the
-          height animation without cropping that rule. */}
+      {/* Learning Journey — slides open/closed with the header via the shared
+          Collapse primitive (same as CourseView). The full-bleed wrapper keeps
+          the edge-to-edge rule between the top area and the chat as the divider
+          once reduced; fullBleed={false} keeps the clip from cropping it. */}
       <div className="relative left-1/2 w-screen -translate-x-1/2 border-b border-border">
-        <div
-          className={cn(
-            "grid transition-[grid-template-rows] duration-normal ease-standard motion-reduce:transition-none",
-            headerCollapsed ? "grid-rows-[0fr]" : "grid-rows-[1fr]"
-          )}
-        >
-          <div
-            className={cn(
-              "overflow-hidden transition-opacity duration-normal ease-standard motion-reduce:transition-none",
-              headerCollapsed ? "opacity-0" : "opacity-100"
-            )}
-            aria-hidden={headerCollapsed || undefined}
-            {...(headerCollapsed && { inert: "" })}
-          >
-            <LearningJourneyBar
-              concepts={concepts}
-              completedConcepts={completedConcepts}
-              totalConcepts={totalConcepts}
-              percent={percent}
-              fullBleed={false}
-            />
-          </div>
-        </div>
+        <Collapse open={!headerCollapsed}>
+          <LearningJourneyBar
+            concepts={concepts}
+            completedConcepts={completedConcepts}
+            totalConcepts={totalConcepts}
+            percent={percent}
+            fullBleed={false}
+          />
+        </Collapse>
       </div>
 
       {sessionsQuery.isError ? (
