@@ -71,8 +71,8 @@ export function CourseHeader({ course, collapsible = false, collapsed = false, o
   return (
     <div className="flex flex-col mb-6">
       {/* Top row: back link (+ compact code when reduced) + Reduce/Expand toggle. */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-4">
           <CoursesBackLink />
           {collapsed && (
             // Reduced one-liner (Figma 209:4781): the code stays beside the back
@@ -91,7 +91,7 @@ export function CourseHeader({ course, collapsible = false, collapsed = false, o
         <div className="flex items-start justify-between gap-6 pb-2 pt-6">
           <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-4">
-              <h1 className="text-3xl leading-7 font-semibold text-neutral-900">{title}</h1>
+              <h1 className="text-4xl leading-7 font-semibold text-neutral-900">{title}</h1>
               {course?.course_name && (
                 <p className="text-body text-foreground">{titleCase(course.course_name)}</p>
               )}
