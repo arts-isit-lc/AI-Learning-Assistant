@@ -69,7 +69,7 @@ export function CourseHeader({ course, collapsible = false, collapsed = false, o
 
   if (collapsed) {
     return (
-      <div className="flex justify-between items-start mt-6">
+      <div className="flex justify-between items-start">
         <div className="flex items-center gap-3 mb-6">
           <CoursesBackLink />
           {/* Collapsed one-liner (Figma 209:4781): the course code stays beside
