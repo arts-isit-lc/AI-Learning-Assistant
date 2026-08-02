@@ -6,12 +6,31 @@ import { z } from "zod"
 // screens are built (Phase 5).
 
 // --- Courses (GET student/course, GET instructor/student_course) ---
+
+// One instructor teaching a course. first/last name are null until an invited
+// user signs up, so the header falls back to the email alone (mirrors the admin
+// instructor shape: user_email + optional names).
+export const CourseInstructorSchema = z
+  .object({
+    user_email: z.string(),
+    first_name: z.string().nullable().optional(),
+    last_name: z.string().nullable().optional(),
+  })
+  .passthrough()
+
 export const CourseSchema = z
   .object({
     course_id: z.string(),
     course_department: z.string(),
     course_number: z.union([z.string(), z.number()]),
     course_name: z.string(),
+    // Course-details header (Figma 143:1427): term/section render top-right and
+    // the instructor list under the course name. `term` is a full label
+    // ("2025 Winter Term 2"); `section` is a bare token ("101"). `instructors`
+    // is server-aggregated and COALESCE'd to [], so it's always an array.
+    term: z.string().nullable().optional(),
+    section: z.string().nullable().optional(),
+    instructors: z.array(CourseInstructorSchema).optional().default([]),
   })
   .passthrough()
 export const CoursesSchema = z.array(CourseSchema)

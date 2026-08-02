@@ -316,9 +316,27 @@ exports.handler = async (event) => {
 
             const user_id = userResult[0].user_id;
 
-            // Query to get courses for the user
+            // Query to get courses for the user, each with the list of
+            // instructors teaching it (name + email) for the course-details
+            // header. The correlated subquery mirrors GET /admin/courseInstructors
+            // (Enrolments -> Users, instructor enrolments only) and COALESCEs to
+            // an empty array so `instructors` is always present. term/section
+            // come free with "Courses".*.
             const data = await sqlConnection`
-                SELECT "Courses".*
+                SELECT "Courses".*,
+                  COALESCE((
+                    SELECT json_agg(
+                      json_build_object(
+                        'first_name', u.first_name,
+                        'last_name', u.last_name,
+                        'user_email', u.user_email
+                      ) ORDER BY u.last_name ASC, u.first_name ASC
+                    )
+                    FROM "Enrolments" ie
+                    JOIN "Users" u ON ie.user_id = u.user_id
+                    WHERE ie.course_id = "Courses".course_id
+                      AND ie.enrolment_type = 'instructor'
+                  ), '[]'::json) AS instructors
                 FROM "Enrolments"
                 JOIN "Courses" ON "Courses".course_id = "Enrolments".course_id
                 WHERE "Enrolments".user_id = ${user_id}

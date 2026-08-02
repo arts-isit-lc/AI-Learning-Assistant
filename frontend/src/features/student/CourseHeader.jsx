@@ -30,16 +30,32 @@ function CollapseToggle({ collapsed, onToggle }) {
   )
 }
 
+/** Thin vertical separator between meta items (matches the Figma pipe). */
+function MetaPipe() {
+  return (
+    <span className="mx-3 text-border" aria-hidden="true">
+      |
+    </span>
+  )
+}
+
+/** "First Last" for an instructor; empty when the invited user hasn't signed up
+ *  yet (names still null) — the header then shows the email alone. */
+function instructorName(instructor) {
+  return [instructor?.first_name, instructor?.last_name].filter(Boolean).join(" ").trim()
+}
+
 /**
- * Shared course header (Figma course + module-chat frames): "‹ COURSES" back
- * link, course code, name, and a meta line. Used by CourseView and StudentChat.
- * On the chat page it's `collapsible`: `collapsed` shows a single line
- * (‹ COURSES + code + Expand) to free up chat room.
+ * Shared course header (Figma 143:1427): "‹ COURSES" back link, then the course
+ * code + name with the instructor list beneath it on the left, and term/section
+ * in the top-right. Used by CourseView and StudentChat. On the chat page it's
+ * `collapsible`: `collapsed` shows a single line (‹ COURSES + Expand) to free up
+ * chat room.
  *
- * NOTE: the frame's meta line (term · instructor · email · section) and Syllabus
- * button are omitted — the `Courses` record carries none of that data and there's
- * no syllabus endpoint. The meta line renders forward-compatibly if those fields
- * ever appear on the record.
+ * Instructors, term, and section come from GET /student/course (and
+ * /instructor/student_course); each block renders only when present. `section`
+ * is a bare token ("101"), so it's shown as "Section 101". The frame's Syllabus
+ * button is intentionally omitted (no syllabus feature).
  *
  * @param {{ course?: object, collapsible?: boolean, collapsed?: boolean, onToggleCollapse?: () => void }} props
  */
@@ -48,12 +64,8 @@ export function CourseHeader({ course, collapsible = false, collapsed = false, o
     ? `${String(course.course_department ?? "").toUpperCase()} ${course.course_number ?? ""}`.trim()
     : "Course"
 
-  const metaParts = []
-  if (course?.term) metaParts.push({ text: course.term })
-  if (course?.instructor_name) metaParts.push({ text: course.instructor_name })
-  if (course?.instructor_email)
-    metaParts.push({ text: course.instructor_email, href: `mailto:${course.instructor_email}` })
-  if (course?.section) metaParts.push({ text: course.section })
+  const instructors = Array.isArray(course?.instructors) ? course.instructors : []
+  const hasTermMeta = Boolean(course?.term || course?.section)
 
   if (collapsed) {
     return (
@@ -68,32 +80,55 @@ export function CourseHeader({ course, collapsible = false, collapsed = false, o
 
   return (
     <div className="flex flex-col">
-      <div className="flex items-start justify-between gap-4 mt-6 items-start">
+      <div className="flex items-start justify-between gap-4 mt-6">
         <CoursesBackLink />
         {collapsible && <CollapseToggle collapsed={false} onToggle={onToggleCollapse} />}
       </div>
-      <h1 className="text-3xl leadgin-7 font-semibold text-neutral-900 mb-4">{title}</h1>
-      {course?.course_name && <p className="text-body text-foreground mb-6">{titleCase(course.course_name)}</p>}
-      {metaParts.length > 0 && (
-        <div className="flex flex-wrap items-center text-base leading-7 text-foreground mb-8">
-          {metaParts.map((p, i) => (
-            <span key={i} className="flex items-center">
-              {i > 0 && (
-                <span className="mx-3 text-border" aria-hidden="true">
-                  |
-                </span>
-              )}
-              {p.href ? (
-                <a href={p.href} className="text-primary hover:underline">
-                  {p.text}
-                </a>
-              ) : (
-                <span>{p.text}</span>
-              )}
-            </span>
-          ))}
+
+      {/* Course details (Figma 143:1427): code + name + instructor list on the
+          left; term/section in the top-right. */}
+      <div className="mb-8 flex items-start justify-between gap-6">
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-4">
+            <h1 className="text-3xl leading-7 font-semibold text-neutral-900">{title}</h1>
+            {course?.course_name && (
+              <p className="text-body text-foreground">{titleCase(course.course_name)}</p>
+            )}
+          </div>
+
+          {instructors.length > 0 && (
+            <div className="flex flex-wrap items-center gap-y-1 text-base leading-7">
+              {instructors.map((instructor, i) => {
+                const name = instructorName(instructor)
+                return (
+                  <span key={instructor.user_email ?? i} className="flex items-center">
+                    {i > 0 && <MetaPipe />}
+                    <span className="flex items-center gap-2.5">
+                      {name && <span className="text-foreground">{name}</span>}
+                      {instructor.user_email && (
+                        <a
+                          href={`mailto:${instructor.user_email}`}
+                          className="text-primary underline hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        >
+                          {instructor.user_email}
+                        </a>
+                      )}
+                    </span>
+                  </span>
+                )
+              })}
+            </div>
+          )}
         </div>
-      )}
+
+        {hasTermMeta && (
+          <div className="flex shrink-0 items-center whitespace-nowrap text-base leading-7 text-foreground">
+            {course?.term && <span>{course.term}</span>}
+            {course?.term && course?.section && <MetaPipe />}
+            {course?.section && <span>Section {course.section}</span>}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

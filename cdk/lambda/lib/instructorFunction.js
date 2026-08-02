@@ -129,8 +129,24 @@ exports.handler = async (event) => {
 
           const userId = userResult[0].user_id;
 
-          // Now, fetch the courses for that user_id
-          data = await sqlConnection`SELECT "Courses".*
+          // Now, fetch the courses for that user_id, each with its instructor
+          // list (name + email) — parity with GET /student/course so the shared
+          // student CourseHeader renders instructors in instructor
+          // preview-as-student mode too.
+          data = await sqlConnection`SELECT "Courses".*,
+              COALESCE((
+                SELECT json_agg(
+                  json_build_object(
+                    'first_name', u.first_name,
+                    'last_name', u.last_name,
+                    'user_email', u.user_email
+                  ) ORDER BY u.last_name ASC, u.first_name ASC
+                )
+                FROM "Enrolments" ie
+                JOIN "Users" u ON ie.user_id = u.user_id
+                WHERE ie.course_id = "Courses".course_id
+                  AND ie.enrolment_type = 'instructor'
+              ), '[]'::json) AS instructors
             FROM "Enrolments"
             JOIN "Courses" ON "Enrolments".course_id = "Courses".course_id
             WHERE "Enrolments".user_id = ${userId}
