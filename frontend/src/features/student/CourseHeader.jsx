@@ -8,7 +8,7 @@ function CoursesBackLink() {
   return (
     <Link
       to="/courses"
-      className="inline-flex items-center gap-2 text-base leading-7 mb-6 uppercase underline text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className="inline-flex items-center gap-2 text-base leading-7 uppercase underline text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
       <Icon icon={MdChevronLeft} size={24} />
       Courses
@@ -71,7 +71,7 @@ export function CourseHeader({ course, collapsible = false, collapsed = false, o
     return (
       <div className="flex justify-between items-start mt-6">
         <div className="flex items-center gap-3 mb-6">
-          <CoursesBackLink className="mb-0"/>
+          <CoursesBackLink />
           {/* Collapsed one-liner (Figma 209:4781): the course code stays beside
               the back link so the reduced header remains identifiable. */}
           <span className="text-h4 font-semibold text-neutral-900">{title}</span>
