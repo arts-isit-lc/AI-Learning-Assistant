@@ -149,7 +149,7 @@ export function StudentChat() {
   const selectedFile = files.data?.find((f) => f.file_id === docId)
 
   return (
-    <div className="mx-auto w-full max-w-7xl py-6">
+    <div className="mx-auto flex w-full max-w-7xl flex-col py-6">
       <CourseHeader
         course={course}
         collapsible
