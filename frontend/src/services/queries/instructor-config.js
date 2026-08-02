@@ -65,6 +65,7 @@ export function useRenameConcept(courseId) {
 export function useDeleteConcept(courseId) {
   const qc = useQueryClient()
   return useMutation({
+    meta: { suppressGlobalError: true },
     mutationFn: async ({ concept, modules = [] }) => {
       await Promise.all(
         modules.map((m) =>
@@ -88,6 +89,7 @@ export function useDeleteConcept(courseId) {
 export function useDeleteModule(courseId) {
   const qc = useQueryClient()
   return useMutation({
+    meta: { suppressGlobalError: true },
     mutationFn: async (module) => {
       await http.del("instructor/delete_module_s3", {
         course_id: courseId,
@@ -109,6 +111,7 @@ export function useReorderConcepts(courseId) {
   const qc = useQueryClient()
   const key = queryKeys.instructor.concepts(courseId)
   return useMutation({
+    meta: { suppressGlobalError: true },
     mutationFn: async (ordered) => {
       await Promise.all(
         ordered.map((c, i) =>
@@ -146,6 +149,7 @@ export function useReorderModules(courseId) {
   const qc = useQueryClient()
   const key = queryKeys.instructor.modules(courseId)
   return useMutation({
+    meta: { suppressGlobalError: true },
     mutationFn: async (ordered) => {
       const { email } = await http.getAuth()
       await Promise.all(

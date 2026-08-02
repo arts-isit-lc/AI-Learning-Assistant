@@ -8,7 +8,8 @@ import { AnalyticsChart } from "@/components/composed/AnalyticsChart"
 import { EmptyState } from "@/components/composed/EmptyState"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
+import { ErrorState } from "@/components/composed/ErrorState"
+import { toUserMessage } from "@/services/apiError"
 
 /**
  * The three metric views behind the Figma chips (376:2182). Each maps to a field
@@ -74,7 +75,7 @@ export function analyticsToCsv(rows) {
  */
 export function InsightsTab() {
   const { courseId } = useParams()
-  const { data: rows = [], isLoading, isError } = useAnalytics(courseId)
+  const { data: rows = [], isLoading, isError, error, refetch } = useAnalytics(courseId)
   const [metricId, setMetricId] = useState("messages")
   const metric = METRICS.find((m) => m.id === metricId) ?? METRICS[0]
 
@@ -106,10 +107,11 @@ export function InsightsTab() {
 
   if (isError) {
     return (
-      <Alert variant="destructive">
-        <AlertTitle>Couldn&rsquo;t load analytics</AlertTitle>
-        <AlertDescription>Please refresh and try again.</AlertDescription>
-      </Alert>
+      <ErrorState
+        title="Couldn't load analytics"
+        description={toUserMessage(error)}
+        onRetry={() => refetch()}
+      />
     )
   }
 

@@ -52,4 +52,25 @@ describe("StudentDetail", () => {
     render(<StudentDetail courseId="c1" email="ada@x.com" onBack={vi.fn()} />)
     expect(screen.getByRole("heading", { name: "No chat history" })).toBeInTheDocument()
   })
+
+  it("shows an accessible ErrorState with retry when chat history fails to load", async () => {
+    const refetch = vi.fn()
+    messagesResult = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }
+    render(<StudentDetail courseId="c1" email="ada@x.com" onBack={vi.fn()} />)
+    expect(screen.getByRole("heading", { name: "Couldn't load chat history" })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }))
+    expect(refetch).toHaveBeenCalledOnce()
+  })
+
+  it("recovers after a successful retry (error → history)", async () => {
+    const refetch = vi.fn()
+    messagesResult = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }
+    const { rerender } = render(<StudentDetail courseId="c1" email="ada@x.com" onBack={vi.fn()} />)
+    expect(screen.getByRole("heading", { name: "Couldn't load chat history" })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }))
+    messagesResult = { data: HISTORY, isLoading: false, isError: false }
+    rerender(<StudentDetail courseId="c1" email="ada@x.com" onBack={vi.fn()} />)
+    expect(screen.getByRole("tab", { name: "Vectors" })).toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "Couldn't load chat history" })).not.toBeInTheDocument()
+  })
 })

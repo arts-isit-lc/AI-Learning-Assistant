@@ -12,6 +12,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 /**
  * "Add instructor" page action (admin chrome). Header-row trigger + an email
@@ -24,6 +25,7 @@ export function AddInstructorDialog() {
   const elevate = useElevateInstructor()
   const [open, setOpen] = useState(false)
   const [emails, setEmails] = useState([""])
+  const [inviteError, setInviteError] = useState(null)
 
   const setEmailAt = (index, value) =>
     setEmails((prev) => prev.map((e, i) => (i === index ? value : e)))
@@ -33,15 +35,25 @@ export function AddInstructorDialog() {
   const close = () => {
     setOpen(false)
     setEmails([""])
+    setInviteError(null)
   }
 
   const submit = async (e) => {
     e.preventDefault()
+    setInviteError(null)
     const values = [...new Set(emails.map((v) => v.trim()).filter(Boolean))]
     if (values.length === 0) return
     const results = await Promise.allSettled(values.map((email) => elevate.mutateAsync(email)))
-    const added = results.filter((r) => r.status === "fulfilled").length
-    if (added > 0) close()
+    const failed = results.filter((r) => r.status === "rejected").length
+    // Partial success is fine (elevate is idempotent server-side); only keep the
+    // dialog open when there's a failure to report inline.
+    if (failed > 0) {
+      setInviteError(
+        `${failed} of ${results.length} ${results.length === 1 ? "invite" : "invites"} couldn't be sent. Please check the ${failed === 1 ? "address" : "addresses"} and try again.`
+      )
+    } else {
+      close()
+    }
   }
 
   return (
@@ -94,6 +106,12 @@ export function AddInstructorDialog() {
                 multi-add +
               </button>
             </div>
+
+            {inviteError && (
+              <Alert variant="destructive">
+                <AlertDescription>{inviteError}</AlertDescription>
+              </Alert>
+            )}
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={close}>

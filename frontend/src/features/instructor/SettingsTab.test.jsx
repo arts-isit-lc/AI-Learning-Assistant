@@ -128,4 +128,40 @@ describe("SettingsTab", () => {
       expect(save.mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ conflictMetadata: null }))
     )
   })
+
+  it("shows an accessible ErrorState with retry when the prompt fails to load", async () => {
+    const refetch = vi.fn()
+    promptResult = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }
+    render(<SettingsTab />)
+    expect(screen.getByRole("heading", { name: "Couldn't load settings" })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }))
+    expect(refetch).toHaveBeenCalledOnce()
+  })
+
+  it("recovers after a successful retry (error → settings)", async () => {
+    const refetch = vi.fn()
+    promptResult = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }
+    const { rerender } = render(<SettingsTab />)
+    expect(screen.getByRole("heading", { name: "Couldn't load settings" })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }))
+    promptResult = {
+      data: { system_prompt: "Teach kindly", llm_model_id: "meta.llama3-70b-instruct-v1:0", conflict_metadata: null },
+      isLoading: false,
+      isError: false,
+    }
+    rerender(<SettingsTab />)
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "Couldn't load settings" })).not.toBeInTheDocument()
+  })
+
+  it("shows an inline error when saving fails, keeping the prompt text", async () => {
+    save.isError = true
+    save.error = { status: 500 }
+    render(<SettingsTab />)
+    await editPrompt("Teach with care")
+    expect(screen.getByRole("alert")).toHaveTextContent(/on our end/i)
+    expect(screen.getByRole("textbox", { name: "Your prompt" })).toHaveValue("Teach with care")
+    save.isError = false
+    save.error = null
+  })
 })

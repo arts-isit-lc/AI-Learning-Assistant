@@ -11,7 +11,8 @@ import {
   AccordionContent,
 } from "@/components/ui/accordion"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
+import { ErrorState } from "@/components/composed/ErrorState"
+import { toUserMessage } from "@/services/apiError"
 import { MdForum } from "react-icons/md"
 
 const MASTERY_MARK = "STUDENT ACHIEVED COMPETENCY"
@@ -38,7 +39,7 @@ function renderContent(text) {
  * @param {{ courseId: string, email: string, name?: string, onBack: () => void }} props
  */
 export function StudentDetail({ courseId, email, name, onBack }) {
-  const { data: byModule = {}, isLoading, isError } = useStudentMessages(courseId, email)
+  const { data: byModule = {}, isLoading, isError, error, refetch } = useStudentMessages(courseId, email)
   const moduleNames = Object.keys(byModule)
 
   return (
@@ -55,10 +56,11 @@ export function StudentDetail({ courseId, email, name, onBack }) {
           <Skeleton className="h-24 w-full" />
         </div>
       ) : isError ? (
-        <Alert variant="destructive">
-          <AlertTitle>Couldn&rsquo;t load chat history</AlertTitle>
-          <AlertDescription>Please refresh and try again.</AlertDescription>
-        </Alert>
+        <ErrorState
+          title="Couldn't load chat history"
+          description={toUserMessage(error)}
+          onRetry={() => refetch()}
+        />
       ) : moduleNames.length === 0 ? (
         <EmptyState
           icon={MdForum}

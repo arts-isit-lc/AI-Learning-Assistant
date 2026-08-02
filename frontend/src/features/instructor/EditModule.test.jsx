@@ -111,4 +111,13 @@ describe("EditModule", () => {
     await userEvent.click(within(confirm).getByRole("button", { name: "Delete" }))
     await waitFor(() => expect(deleteModule.mutate).toHaveBeenCalled())
   })
+
+  it("shows a 400 duplicate-name error inline when saving fails", async () => {
+    editModule.isError = true
+    editModule.error = { status: 400 }
+    render(<EditModule />)
+    expect(screen.getByRole("alert")).toHaveTextContent("A module with this name already exists.")
+    editModule.isError = false
+    editModule.error = null
+  })
 })

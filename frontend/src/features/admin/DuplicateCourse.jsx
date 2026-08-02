@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Icon } from "@/components/ui/icon"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { toUserMessage } from "@/services/apiError"
 import {
   Dialog,
   DialogContent,
@@ -216,6 +218,12 @@ export function DuplicateCourse() {
             </div>
           </div>
         </div>
+
+        {duplicate.isError && (
+          <Alert variant="destructive">
+            <AlertDescription>{toUserMessage(duplicate.error)}</AlertDescription>
+          </Alert>
+        )}
 
         <DialogFooter>
           <Button variant="outline" onClick={close}>

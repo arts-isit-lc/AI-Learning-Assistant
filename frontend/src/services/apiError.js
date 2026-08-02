@@ -20,12 +20,18 @@ export class ApiError extends Error {
 
 /**
  * Map an error to a short, user-facing message for an inline error surface
- * (an `Alert`, the `ErrorState` component, or a confirm-dialog message).
+ * (an `Alert`, the `ErrorState` component, or a confirm-dialog message). Pass
+ * `overrides` to specialize copy for specific status codes (e.g.
+ * `{ 400: "A module with this name already exists." }`); any status not in the
+ * map falls through to the shared default. Keeping copy in this one function
+ * (rather than a per-form mapper) is the convention.
  * @param {{ status?: number|null, message?: string }} error
+ * @param {Record<number, string>} [overrides]
  * @returns {string}
  */
-export function toUserMessage(error) {
+export function toUserMessage(error, overrides = {}) {
   const status = error?.status
+  if (status != null && overrides[status]) return overrides[status]
   if (status === 404) return "We couldn't find that."
   if (status === 429) return "Too many requests \u2014 please slow down and try again."
   if (typeof status === "number" && status >= 500) {

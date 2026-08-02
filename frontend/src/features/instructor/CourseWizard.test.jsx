@@ -384,4 +384,13 @@ describe("CourseWizard", () => {
       screen.queryByText("A module with this name already exists in this concept.")
     ).not.toBeInTheDocument()
   })
+
+  it("shows a 400 duplicate-name error inline when publishing fails", async () => {
+    finalize.isError = true
+    finalize.error = { status: 400 }
+    render(<CourseWizard />)
+    expect(screen.getByRole("alert")).toHaveTextContent("A module with this name already exists.")
+    finalize.isError = false
+    finalize.error = null
+  })
 })

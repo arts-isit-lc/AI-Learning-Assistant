@@ -28,6 +28,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Icon } from "@/components/ui/icon"
 import { Progress } from "@/components/ui/progress"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import {
   Select,
@@ -387,6 +388,13 @@ export function EditModule() {
         {/* Fixed footer: divider + actions — matches the Create-module modal. */}
         <div className="shrink-0 px-9 pb-9">
           <div className="flex flex-col gap-4">
+            {editModule.isError && (
+              <Alert variant="destructive">
+                <AlertDescription>
+                  {toUserMessage(editModule.error, { 400: "A module with this name already exists." })}
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="h-px w-full bg-border" aria-hidden="true" />
             <div className="flex items-center justify-between gap-2 [&_button]:text-base">
               <Button variant="danger" onClick={() => setDeleteOpen(true)} disabled={deleteModule.isPending}>

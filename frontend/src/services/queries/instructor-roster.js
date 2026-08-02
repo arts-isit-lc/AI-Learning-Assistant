@@ -58,6 +58,7 @@ export function useRegenerateAccessCode(courseId) {
 export function useDeleteStudent(courseId) {
   const qc = useQueryClient()
   return useMutation({
+    meta: { suppressGlobalError: true },
     mutationFn: async (userEmail) => {
       const { email } = await http.getAuth()
       await http.del("instructor/delete_student", {

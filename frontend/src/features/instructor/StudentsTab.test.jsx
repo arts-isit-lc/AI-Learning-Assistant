@@ -74,4 +74,25 @@ describe("StudentsTab", () => {
     render(<StudentsTab />)
     expect(screen.getByRole("heading", { name: "No students enrolled yet" })).toBeInTheDocument()
   })
+
+  it("shows an accessible ErrorState with retry when the roster fails to load", async () => {
+    const refetch = vi.fn()
+    studentsResult = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }
+    render(<StudentsTab />)
+    expect(screen.getByRole("heading", { name: "Couldn't load the roster" })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }))
+    expect(refetch).toHaveBeenCalledOnce()
+  })
+
+  it("recovers after a successful retry (error → roster)", async () => {
+    const refetch = vi.fn()
+    studentsResult = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }
+    const { rerender } = render(<StudentsTab />)
+    expect(screen.getByRole("heading", { name: "Couldn't load the roster" })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }))
+    studentsResult = { data: STUDENTS, isLoading: false, isError: false }
+    rerender(<StudentsTab />)
+    expect(screen.getByRole("button", { name: "Lovelace, Ada" })).toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "Couldn't load the roster" })).not.toBeInTheDocument()
+  })
 })

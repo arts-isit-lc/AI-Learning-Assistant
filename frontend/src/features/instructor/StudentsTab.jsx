@@ -9,7 +9,7 @@ import { ConfirmDialog } from "@/components/composed/ConfirmDialog"
 import { EmptyState } from "@/components/composed/EmptyState"
 import { Icon } from "@/components/ui/icon"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
+import { ErrorState } from "@/components/composed/ErrorState"
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
 import { StudentDetail } from "./StudentDetail"
 
@@ -35,7 +35,7 @@ export function StudentsTab() {
   const [searchParams, setSearchParams] = useSearchParams()
   const selectedEmail = searchParams.get("student")
 
-  const { data: students = [], isLoading, isError } = useStudents(courseId)
+  const { data: students = [], isLoading, isError, error, refetch } = useStudents(courseId)
   const deleteStudent = useDeleteStudent(courseId)
 
   const [query, setQuery] = useState("")
@@ -70,10 +70,11 @@ export function StudentsTab() {
 
   if (isError) {
     return (
-      <Alert variant="destructive">
-        <AlertTitle>Couldn&rsquo;t load the roster</AlertTitle>
-        <AlertDescription>Please refresh and try again.</AlertDescription>
-      </Alert>
+      <ErrorState
+        title="Couldn't load the roster"
+        description={toUserMessage(error)}
+        onRetry={() => refetch()}
+      />
     )
   }
 

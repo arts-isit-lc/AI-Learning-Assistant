@@ -55,4 +55,34 @@ describe("StudentHome", () => {
     await userEvent.click(screen.getByRole("button", { name: "Join course" }))
     expect(screen.getByRole("dialog")).toHaveAccessibleName("Join course")
   })
+
+  it("shows an accessible ErrorState with a working retry when courses fail to load", async () => {
+    const refetch = vi.fn()
+    coursesResult = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }
+    renderHome()
+    expect(screen.getByRole("alert")).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Couldn't load your courses" })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }))
+    expect(refetch).toHaveBeenCalledOnce()
+  })
+
+  it("recovers after a successful retry (error → content)", async () => {
+    const refetch = vi.fn()
+    coursesResult = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }
+    const { rerender } = renderHome()
+    expect(screen.getByRole("heading", { name: "Couldn't load your courses" })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }))
+    coursesResult = {
+      data: [{ course_id: "c1", course_department: "geog", course_number: "250", course_name: "Intro" }],
+      isLoading: false,
+      isError: false,
+    }
+    rerender(
+      <MemoryRouter>
+        <StudentHome />
+      </MemoryRouter>
+    )
+    expect(screen.getByText("GEOG 250")).toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "Couldn't load your courses" })).not.toBeInTheDocument()
+  })
 })

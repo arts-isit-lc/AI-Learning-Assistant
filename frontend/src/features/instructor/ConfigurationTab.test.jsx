@@ -125,4 +125,32 @@ describe("ConfigurationTab", () => {
     render(<ConfigurationTab />)
     expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled()
   })
+
+  it("shows an accessible ErrorState with retry when concepts fail to load", async () => {
+    const refetch = vi.fn()
+    conceptsResult = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }
+    render(<ConfigurationTab />)
+    expect(screen.getByRole("heading", { name: "Couldn't load the course structure" })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }))
+    expect(refetch).toHaveBeenCalledOnce()
+  })
+
+  it("recovers after a successful retry (error → tree)", async () => {
+    const refetch = vi.fn()
+    conceptsResult = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }
+    const { rerender } = render(<ConfigurationTab />)
+    expect(screen.getByRole("heading", { name: "Couldn't load the course structure" })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }))
+    conceptsResult = { data: CONCEPTS, isLoading: false, isError: false }
+    rerender(<ConfigurationTab />)
+    expect(screen.getByRole("heading", { name: "1. Algebra" })).toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "Couldn't load the course structure" })).not.toBeInTheDocument()
+  })
+
+  it("shows a revert signal when a reorder fails", () => {
+    reorderConcepts.isError = true
+    render(<ConfigurationTab />)
+    expect(screen.getByRole("alert")).toHaveTextContent(/reverted/i)
+    reorderConcepts.isError = false
+  })
 })

@@ -50,4 +50,25 @@ describe("InstructorList", () => {
     await userEvent.type(screen.getByRole("searchbox", { name: "Search instructors" }), "pending")
     await waitFor(() => expect(screen.queryByText("Lovelace, Ada")).not.toBeInTheDocument())
   })
+
+  it("shows an accessible ErrorState with retry when instructors fail to load", async () => {
+    const refetch = vi.fn()
+    instructorsResult = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }
+    render(<InstructorList />)
+    expect(screen.getByRole("heading", { name: "Couldn't load instructors" })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }))
+    expect(refetch).toHaveBeenCalledOnce()
+  })
+
+  it("recovers after a successful retry (error → list)", async () => {
+    const refetch = vi.fn()
+    instructorsResult = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }
+    const { rerender } = render(<InstructorList />)
+    expect(screen.getByRole("heading", { name: "Couldn't load instructors" })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }))
+    instructorsResult = { data: INSTRUCTORS, isLoading: false, isError: false }
+    rerender(<InstructorList />)
+    expect(screen.getByText("Lovelace, Ada")).toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "Couldn't load instructors" })).not.toBeInTheDocument()
+  })
 })

@@ -97,4 +97,15 @@ describe("DuplicateCourse", () => {
     })
     expect(payload.accessCode).toMatch(/^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/)
   })
+
+  it("shows an inline error when duplication fails, keeping the form", async () => {
+    duplicate.isError = true
+    duplicate.error = { status: 500 }
+    render(<DuplicateCourse />)
+    await pickSource()
+    expect(screen.getByRole("alert")).toHaveTextContent(/on our end/i)
+    expect(screen.getByLabelText(/Course title/)).toHaveValue("Intro Geography (copy)")
+    duplicate.isError = false
+    duplicate.error = null
+  })
 })

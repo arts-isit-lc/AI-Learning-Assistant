@@ -110,9 +110,24 @@ describe("ChatHistoryTab", () => {
     expect(screen.getByRole("heading", { name: "No chat history yet" })).toBeInTheDocument()
   })
 
-  it("shows an error alert when messages fail to load", () => {
-    useCourseMessages.mockReturnValue({ data: undefined, isLoading: false, isError: true })
+  it("shows an accessible ErrorState with retry when messages fail to load", async () => {
+    const refetch = vi.fn()
+    useCourseMessages.mockReturnValue({ data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch })
     render(<ChatHistoryTab />)
-    expect(screen.getByText("Couldn’t load chat history")).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Couldn't load chat history" })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }))
+    expect(refetch).toHaveBeenCalledOnce()
+  })
+
+  it("recovers after a successful retry (error → table)", async () => {
+    const refetch = vi.fn()
+    useCourseMessages.mockReturnValue({ data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch })
+    const { rerender } = render(<ChatHistoryTab />)
+    expect(screen.getByRole("heading", { name: "Couldn't load chat history" })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }))
+    useCourseMessages.mockReturnValue({ data: { messages: [MSG()], total: 1 }, isLoading: false, isError: false })
+    rerender(<ChatHistoryTab />)
+    expect(screen.getByText("Module name")).toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "Couldn't load chat history" })).not.toBeInTheDocument()
   })
 })

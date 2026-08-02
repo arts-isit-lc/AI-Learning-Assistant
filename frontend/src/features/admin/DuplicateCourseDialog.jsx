@@ -5,6 +5,8 @@ import { generateAccessCode } from "./CreateCourse"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { toUserMessage } from "@/services/apiError"
 import {
   Dialog,
   DialogContent,
@@ -116,6 +118,12 @@ export function DuplicateCourseDialog({ course }) {
                 </div>
               </div>
             </div>
+            {duplicate.isError && (
+              <Alert variant="destructive">
+                <AlertDescription>{toUserMessage(duplicate.error)}</AlertDescription>
+              </Alert>
+            )}
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 Cancel

@@ -8,7 +8,8 @@ import { useJobNotification } from "./hooks/useJobNotification"
 import { EmptyState } from "@/components/composed/EmptyState"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
+import { ErrorState } from "@/components/composed/ErrorState"
+import { toUserMessage } from "@/services/apiError"
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
 
 const PAGE_SIZE = 50
@@ -28,7 +29,7 @@ export function ChatHistoryTab() {
   const [page, setPage] = useState(0)
   const offset = page * PAGE_SIZE
 
-  const { data, isLoading, isError } = useCourseMessages(courseId, { limit: PAGE_SIZE, offset })
+  const { data, isLoading, isError, error, refetch } = useCourseMessages(courseId, { limit: PAGE_SIZE, offset })
   const messages = data?.messages ?? []
   const total = data?.total ?? 0
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
@@ -75,10 +76,11 @@ export function ChatHistoryTab() {
 
   if (isError) {
     return (
-      <Alert variant="destructive">
-        <AlertTitle>Couldn&rsquo;t load chat history</AlertTitle>
-        <AlertDescription>Please refresh and try again.</AlertDescription>
-      </Alert>
+      <ErrorState
+        title="Couldn't load chat history"
+        description={toUserMessage(error)}
+        onRetry={() => refetch()}
+      />
     )
   }
 

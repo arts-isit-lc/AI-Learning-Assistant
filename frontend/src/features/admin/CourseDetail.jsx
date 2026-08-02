@@ -17,7 +17,9 @@ import { instructorLabel } from "./InstructorList"
 import { courseCode } from "./CourseList"
 import { DuplicateCourseDialog } from "./DuplicateCourseDialog"
 import { ConfirmDialog } from "@/components/composed/ConfirmDialog"
+import { ErrorState } from "@/components/composed/ErrorState"
 import { UnsavedChangesPrompt } from "@/components/composed/UnsavedChangesPrompt"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Toggle } from "@/components/ui/toggle"
 import { Icon } from "@/components/ui/icon"
@@ -64,7 +66,7 @@ export function CourseDetail() {
   const navigate = useNavigate()
 
   const { data: courses = [] } = useAdminCourses()
-  const { data: assigned = [], isLoading } = useCourseInstructors(courseId)
+  const { data: assigned = [], isLoading, isError, error, refetch } = useCourseInstructors(courseId)
   const { data: allInstructors = [] } = useAdminInstructors()
   const updateCourseAccess = useUpdateCourseAccess()
   const updateInstructorAccess = useUpdateInstructorAccess()
@@ -80,6 +82,7 @@ export function CourseDetail() {
   const [pendingAdds, setPendingAdds] = useState(() => new Set())
   const [pendingRemoves, setPendingRemoves] = useState(() => new Set())
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState(null)
   const [addOpen, setAddOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleted, setDeleted] = useState(false)
@@ -182,6 +185,7 @@ export function CourseDetail() {
 
   const saveChanges = async () => {
     setSaving(true)
+    setSaveError(null)
     try {
       if (pendingActive !== null && pendingActive !== serverActive) {
         await updateCourseAccess.mutateAsync({ courseId, access: pendingActive })
@@ -201,8 +205,7 @@ export function CourseDetail() {
       setPendingAdds(new Set())
       setPendingRemoves(new Set())
     } catch {
-      // Partial-save failures are logged by the global error seam; surfacing
-      // them inline is a follow-up (see the error-handling spec).
+      setSaveError("Some changes couldn't be saved. Please review and try again.")
     } finally {
       setSaving(false)
     }
@@ -287,6 +290,13 @@ export function CourseDetail() {
         <div className="mt-2 flex flex-col">
           {isLoading ? (
             <Skeleton className="h-16 w-full" />
+          ) : isError ? (
+            <ErrorState
+              className="border-0"
+              title="Couldn't load instructors"
+              description={toUserMessage(error)}
+              onRetry={() => refetch()}
+            />
           ) : displayed.length === 0 ? (
             <p className="py-3 text-caption text-muted-foreground">No instructors assigned yet.</p>
           ) : (
@@ -317,6 +327,12 @@ export function CourseDetail() {
           )}
         </div>
       </div>
+
+      {saveError && (
+        <Alert variant="destructive" className="mt-4">
+          <AlertDescription>{saveError}</AlertDescription>
+        </Alert>
+      )}
 
       {/* Footer: Delete course + Duplicate (immediate) · Save changes (commits staged edits). */}
       <div className="flex items-center justify-between gap-4 pt-4">

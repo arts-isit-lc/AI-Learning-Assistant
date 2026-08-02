@@ -37,6 +37,7 @@ export function useCourseInstructors(courseId) {
 export function useCreateCourse() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { suppressGlobalError: true },
     mutationFn: async ({
       courseName,
       department,
@@ -81,6 +82,7 @@ export function useCreateCourse() {
 export function useDeleteCourse() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { suppressGlobalError: true },
     mutationFn: async (courseId) => http.del("admin/delete_course", { course_id: courseId }),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.admin.courses }),
   })
@@ -93,6 +95,7 @@ export function useDeleteCourse() {
 export function useUpdateCourseAccess() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { suppressGlobalError: true },
     mutationFn: async ({ courseId, access }) =>
       http.post("admin/updateCourseAccess", { course_id: courseId, access }),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.admin.courses }),
@@ -129,6 +132,7 @@ export function useSetCourseInstructors(courseId) {
 export function useEnrollInstructor() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { suppressGlobalError: true },
     mutationFn: async ({ courseId, instructorEmail }) =>
       http.post("admin/enroll_instructor", {
         course_id: courseId,
@@ -150,6 +154,7 @@ export function useEnrollInstructor() {
 export function useUnenrollInstructor() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { suppressGlobalError: true },
     mutationFn: async ({ courseId, instructorEmail }) =>
       http.del("admin/unenroll_instructor", {
         course_id: courseId,
@@ -171,6 +176,7 @@ export function useUnenrollInstructor() {
 export function useUpdateInstructorAccess() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { suppressGlobalError: true },
     mutationFn: async ({ courseId, instructorEmail, access }) =>
       http.post("admin/updateInstructorAccess", {
         course_id: courseId,
@@ -197,6 +203,7 @@ export function useUpdateInstructorAccess() {
 export function useDuplicateCourse() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { suppressGlobalError: true },
     mutationFn: async ({
       sourceCourseId,
       courseName,

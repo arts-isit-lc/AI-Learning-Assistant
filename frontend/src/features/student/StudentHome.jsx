@@ -9,7 +9,8 @@ import { EmptyState } from "@/components/composed/EmptyState"
 import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/ui/icon"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
+import { ErrorState } from "@/components/composed/ErrorState"
+import { toUserMessage } from "@/services/apiError"
 import { JoinCourseDialog } from "./JoinCourseDialog"
 
 const GRID = "grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
@@ -21,7 +22,7 @@ const GRID = "grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
 export function StudentHome() {
   const navigate = useNavigate()
   const { isInstructorAsStudent } = useAuth()
-  const { data: courses = [], isLoading, isError } = useCourses({
+  const { data: courses = [], isLoading, isError, error, refetch } = useCourses({
     asInstructor: isInstructorAsStudent,
   })
   const { data: progressSummary = [], isLoading: progressLoading } = useCourseProgressSummary({
@@ -51,10 +52,11 @@ export function StudentHome() {
             ))}
           </div>
         ) : isError ? (
-          <Alert variant="destructive">
-            <AlertTitle>Couldn&rsquo;t load your courses</AlertTitle>
-            <AlertDescription>Please refresh and try again.</AlertDescription>
-          </Alert>
+          <ErrorState
+            title="Couldn't load your courses"
+            description={toUserMessage(error)}
+            onRetry={() => refetch()}
+          />
         ) : courses.length === 0 ? (
           <EmptyState
             icon={MdSchool}

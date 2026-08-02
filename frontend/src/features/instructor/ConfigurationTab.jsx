@@ -36,7 +36,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Icon } from "@/components/ui/icon"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
+import { ErrorState } from "@/components/composed/ErrorState"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 /**
  * Group flat modules under their concept (by concept_id, falling back to
@@ -85,7 +86,7 @@ export function ConfigurationTab() {
   const { courseId } = useParams()
   const navigate = useNavigate()
   const { setIsInstructorAsStudent } = useAuth()
-  const { data: concepts = [], isLoading, isError } = useConcepts(courseId)
+  const { data: concepts = [], isLoading, isError, error, refetch } = useConcepts(courseId)
   const { data: modules = [] } = useModules(courseId)
 
   const createConcept = useCreateConcept(courseId)
@@ -215,16 +216,23 @@ export function ConfigurationTab() {
         </div>
       )}
 
+      {(reorderConcepts.isError || reorderModules.isError) && (
+        <Alert variant="destructive">
+          <AlertDescription>{"Couldn't save the new order — it was reverted."}</AlertDescription>
+        </Alert>
+      )}
+
       {isLoading ? (
         <div className="flex flex-col gap-3">
           <Skeleton className="h-24 w-full" />
           <Skeleton className="h-24 w-full" />
         </div>
       ) : isError ? (
-        <Alert variant="destructive">
-          <AlertTitle>Couldn&rsquo;t load the course structure</AlertTitle>
-          <AlertDescription>Please refresh and try again.</AlertDescription>
-        </Alert>
+        <ErrorState
+          title="Couldn't load the course structure"
+          description={toUserMessage(error)}
+          onRetry={() => refetch()}
+        />
       ) : concepts.length === 0 ? (
         // Figma 1099:6510: a filled muted panel with just the icon + copy — no
         // in-panel action button (the header "Concept" button is the add path).

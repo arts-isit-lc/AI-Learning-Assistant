@@ -40,6 +40,7 @@ export function useInstructorAssignedCourses(instructorEmail) {
 export function useElevateInstructor() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { suppressGlobalError: true },
     mutationFn: async (email) => http.post("admin/elevate_instructor", { email }),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.admin.instructors }),
   })
@@ -52,6 +53,7 @@ export function useElevateInstructor() {
 export function useLowerInstructor() {
   const qc = useQueryClient()
   return useMutation({
+    meta: { suppressGlobalError: true },
     mutationFn: async (email) => http.post("admin/lower_instructor", { email }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.admin.instructors })

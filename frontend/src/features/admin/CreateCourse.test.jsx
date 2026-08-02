@@ -106,4 +106,15 @@ describe("CreateCourse", () => {
     const [payload] = create.mutate.mock.calls[0]
     expect(payload.section).toBe("001")
   })
+
+  it("shows an inline error when course creation fails, keeping the form", async () => {
+    create.isError = true
+    create.error = { status: 500 }
+    render(<CreateCourse />)
+    await userEvent.type(screen.getByLabelText(/Course title/), "Intro Geography")
+    expect(screen.getByRole("alert")).toHaveTextContent(/on our end/i)
+    expect(screen.getByLabelText(/Course title/)).toHaveValue("Intro Geography")
+    create.isError = false
+    create.error = null
+  })
 })

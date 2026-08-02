@@ -14,6 +14,8 @@ import { useAuth } from "@/context/AuthContext"
 import { computeConceptProgress } from "@/utils/courseProgress"
 import { titleCase } from "@/utils/formatters"
 import { cn } from "@/lib/utils"
+import { toUserMessage } from "@/services/apiError"
+import { ErrorState } from "@/components/composed/ErrorState"
 import { CourseHeader } from "./CourseHeader"
 import { LearningJourneyBar } from "./LearningJourneyBar"
 import { SessionSidebar } from "./chat/SessionSidebar"
@@ -170,6 +172,14 @@ export function StudentChat() {
         />
       )}
 
+      {sessionsQuery.isError ? (
+        <ErrorState
+          className="mt-6 flex-1 border-0"
+          title="Couldn't load this chat"
+          description={toUserMessage(sessionsQuery.error)}
+          onRetry={() => sessionsQuery.refetch()}
+        />
+      ) : (
       <div className="mt-6 grid min-h-0 flex-1 grid-cols-3 grid-rows-1 gap-8">
         <div className="flex min-w-0 flex-col">
           <SessionSidebar
@@ -222,6 +232,7 @@ export function StudentChat() {
           </div>
         </div>
       </div>
+      )}
     </div>
   )
 }

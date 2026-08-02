@@ -53,6 +53,7 @@ export function useValidatePrompt(courseId) {
 export function useSavePrompt(courseId) {
   const qc = useQueryClient()
   return useMutation({
+    meta: { suppressGlobalError: true },
     mutationFn: async ({ prompt, llmModelId, conflictMetadata }) => {
       const { email } = await http.getAuth()
       const data = await http.put(

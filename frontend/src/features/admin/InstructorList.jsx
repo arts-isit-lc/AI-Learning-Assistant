@@ -5,6 +5,8 @@ import { titleCase } from "@/utils/formatters"
 import { cn } from "@/lib/utils"
 import { Searchbar } from "@/components/composed/Searchbar"
 import { ListRow } from "@/components/composed/ListRow"
+import { ErrorState } from "@/components/composed/ErrorState"
+import { toUserMessage } from "@/services/apiError"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -36,7 +38,7 @@ export function InstructorList() {
   const { instructorId } = useParams()
   const selectedEmail = instructorId ? decodeURIComponent(instructorId) : null
 
-  const { data: instructors = [], isLoading } = useAdminInstructors()
+  const { data: instructors = [], isLoading, isError, error, refetch } = useAdminInstructors()
   const [query, setQuery] = useState("")
 
   const filtered = useMemo(() => {
@@ -61,6 +63,13 @@ export function InstructorList() {
               <Skeleton key={i} className="h-12 w-full" />
             ))}
           </div>
+        ) : isError ? (
+          <ErrorState
+            className="border-0"
+            title="Couldn't load instructors"
+            description={toUserMessage(error)}
+            onRetry={() => refetch()}
+          />
         ) : filtered.length === 0 ? (
           <p className="px-1 py-3 text-caption text-muted-foreground">No instructors found.</p>
         ) : (

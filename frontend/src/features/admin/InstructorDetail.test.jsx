@@ -115,4 +115,37 @@ describe("InstructorDetail (staged editing)", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Delete instructor" }))
     await waitFor(() => expect(lower.mutate).toHaveBeenCalledWith("ada@x.com", expect.any(Object)))
   })
+
+  it("shows an ErrorState with retry when the assigned courses fail to load", async () => {
+    const refetch = vi.fn()
+    assignedResult = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }
+    render(<InstructorDetail />)
+    expect(screen.getByRole("heading", { name: "Couldn't load assigned courses" })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }))
+    expect(refetch).toHaveBeenCalledOnce()
+  })
+
+  it("recovers the assigned courses after a successful retry", async () => {
+    const refetch = vi.fn()
+    assignedResult = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }
+    const { rerender } = render(<InstructorDetail />)
+    expect(screen.getByRole("heading", { name: "Couldn't load assigned courses" })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }))
+    assignedResult = {
+      data: [{ course_id: "c1", course_department: "geog", course_number: "250", course_name: "Intro", access_enabled: true }],
+      isLoading: false,
+      isError: false,
+    }
+    rerender(<InstructorDetail />)
+    expect(screen.getByText("GEOG 250")).toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "Couldn't load assigned courses" })).not.toBeInTheDocument()
+  })
+
+  it("shows an inline error when a staged save partially fails", async () => {
+    updateInstructorAccess.mutateAsync.mockRejectedValueOnce(new Error("boom"))
+    render(<InstructorDetail />)
+    await userEvent.click(screen.getByRole("switch", { name: "OCELIA access for GEOG 250 — Intro" }))
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }))
+    expect(await screen.findByRole("alert")).toHaveTextContent(/couldn't be saved/i)
+  })
 })

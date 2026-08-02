@@ -16,7 +16,9 @@ import { titleCase } from "@/utils/formatters"
 import { instructorLabel } from "./InstructorList"
 import { ProfileHeader } from "@/components/composed/ProfileHeader"
 import { ConfirmDialog } from "@/components/composed/ConfirmDialog"
+import { ErrorState } from "@/components/composed/ErrorState"
 import { UnsavedChangesPrompt } from "@/components/composed/UnsavedChangesPrompt"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Toggle } from "@/components/ui/toggle"
 import { Icon } from "@/components/ui/icon"
@@ -74,7 +76,7 @@ export function InstructorDetail() {
   const email = decodeURIComponent(instructorId)
 
   const { data: instructors = [] } = useAdminInstructors()
-  const { data: assigned = [], isLoading } = useInstructorAssignedCourses(email)
+  const { data: assigned = [], isLoading, isError, error, refetch } = useInstructorAssignedCourses(email)
   const { data: allCourses = [] } = useAdminCourses()
   const updateInstructorAccess = useUpdateInstructorAccess()
   const enroll = useEnrollInstructor()
@@ -89,6 +91,7 @@ export function InstructorDetail() {
   const [pendingAdds, setPendingAdds] = useState(() => new Set())
   const [pendingRemoves, setPendingRemoves] = useState(() => new Set())
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState(null)
   const [addOpen, setAddOpen] = useState(false)
   const [removeOpen, setRemoveOpen] = useState(false)
   const [deleted, setDeleted] = useState(false)
@@ -186,6 +189,7 @@ export function InstructorDetail() {
 
   const saveChanges = async () => {
     setSaving(true)
+    setSaveError(null)
     try {
       for (const courseId of pendingRemoves) {
         await unenroll.mutateAsync({ courseId, instructorEmail: email })
@@ -202,8 +206,7 @@ export function InstructorDetail() {
       setPendingAdds(new Set())
       setPendingRemoves(new Set())
     } catch {
-      // Partial-save failures are logged by the global error seam; surfacing
-      // them inline is a follow-up (see the error-handling spec).
+      setSaveError("Some changes couldn't be saved. Please review and try again.")
     } finally {
       setSaving(false)
     }
@@ -238,6 +241,13 @@ export function InstructorDetail() {
         <div className="flex flex-col">
           {isLoading ? (
             <Skeleton className="h-16 w-full" />
+          ) : isError ? (
+            <ErrorState
+              className="border-0"
+              title="Couldn't load assigned courses"
+              description={toUserMessage(error)}
+              onRetry={() => refetch()}
+            />
           ) : displayed.length === 0 ? (
             <p className="py-3 text-caption text-muted-foreground">No courses assigned yet.</p>
           ) : (
@@ -269,6 +279,12 @@ export function InstructorDetail() {
           )}
         </div>
       </div>
+
+      {saveError && (
+        <Alert variant="destructive" className="mt-4">
+          <AlertDescription>{saveError}</AlertDescription>
+        </Alert>
+      )}
 
       {/* Footer: Delete instructor (immediate, terminal) + Save changes (commits
           the staged edits; disabled until there are unsaved changes). */}

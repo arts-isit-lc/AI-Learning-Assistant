@@ -48,4 +48,25 @@ describe("CourseList", () => {
     await userEvent.type(screen.getByRole("searchbox", { name: "Search courses" }), "mechanics")
     await waitFor(() => expect(screen.queryByText("GEOG 250")).not.toBeInTheDocument())
   })
+
+  it("shows an accessible ErrorState with retry when courses fail to load", async () => {
+    const refetch = vi.fn()
+    coursesResult = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }
+    render(<CourseList />)
+    expect(screen.getByRole("heading", { name: "Couldn't load courses" })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }))
+    expect(refetch).toHaveBeenCalledOnce()
+  })
+
+  it("recovers after a successful retry (error → list)", async () => {
+    const refetch = vi.fn()
+    coursesResult = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }
+    const { rerender } = render(<CourseList />)
+    expect(screen.getByRole("heading", { name: "Couldn't load courses" })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }))
+    coursesResult = { data: COURSES, isLoading: false, isError: false }
+    rerender(<CourseList />)
+    expect(screen.getByText("GEOG 250")).toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "Couldn't load courses" })).not.toBeInTheDocument()
+  })
 })

@@ -76,9 +76,25 @@ describe("InsightsTab", () => {
     expect(screen.getByRole("heading", { name: "No analytics yet" })).toBeInTheDocument()
   })
 
-  it("shows an error alert when analytics fail to load", () => {
-    analyticsResult = { data: undefined, isLoading: false, isError: true }
+  it("shows an accessible ErrorState with retry when analytics fail to load", async () => {
+    const refetch = vi.fn()
+    analyticsResult = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }
     render(<InsightsTab />)
-    expect(screen.getByText("Couldn’t load analytics")).toBeInTheDocument()
+    expect(screen.getByRole("alert")).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Couldn't load analytics" })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }))
+    expect(refetch).toHaveBeenCalledOnce()
+  })
+
+  it("recovers after a successful retry (error → chart)", async () => {
+    const refetch = vi.fn()
+    analyticsResult = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }
+    const { rerender } = render(<InsightsTab />)
+    expect(screen.getByRole("heading", { name: "Couldn't load analytics" })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }))
+    analyticsResult = { data: ROWS, isLoading: false, isError: false }
+    rerender(<InsightsTab />)
+    expect(screen.getByTestId("analytics-chart")).toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "Couldn't load analytics" })).not.toBeInTheDocument()
   })
 })

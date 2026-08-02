@@ -1,8 +1,9 @@
-import { MdClose, MdRefresh } from "react-icons/md"
+import { MdClose } from "react-icons/md"
 import { useFileUrl } from "@/services/queries"
 import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/ui/icon"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ErrorState } from "@/components/composed/ErrorState"
 
 /**
  * Reference-document column shown beside the chat when a material is opened
@@ -31,13 +32,13 @@ export function ReferenceDocPanel({ fileId, fileName, onClose }) {
             <Skeleton className="h-full min-h-64 w-full" />
           </div>
         ) : isError || !data?.presignedurl ? (
-          <div className="flex flex-col items-center justify-center gap-3 p-8 text-center">
-            <p className="text-caption text-muted-foreground">Couldn&rsquo;t load this document.</p>
-            <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1">
-              <Icon icon={MdRefresh} size={16} />
-              Retry
-            </Button>
-          </div>
+          <ErrorState
+            className="h-full border-0"
+            title="Couldn't load this document"
+            description="The document couldn't be opened. Please try again."
+            retryLabel="Retry"
+            onRetry={() => refetch()}
+          />
         ) : (
           <iframe title={fileName || "Reference document"} src={data.presignedurl} className="h-full w-full" />
         )}

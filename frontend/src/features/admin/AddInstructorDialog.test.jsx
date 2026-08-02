@@ -32,4 +32,15 @@ describe("AddInstructorDialog", () => {
     expect(elevate.mutateAsync).toHaveBeenCalledWith("b@x.com")
     expect(elevate.mutateAsync).toHaveBeenCalledTimes(2)
   })
+
+  it("keeps the dialog open and reports failures when some invites fail", async () => {
+    elevate.mutateAsync.mockRejectedValue(new Error("boom"))
+    render(<AddInstructorDialog />)
+    await userEvent.click(screen.getByRole("button", { name: "Add instructor" }))
+    await userEvent.type(screen.getByLabelText("Email address"), "bad@x.com")
+    await userEvent.click(screen.getByRole("button", { name: "Send invite" }))
+    expect(await screen.findByRole("alert")).toHaveTextContent(/couldn't be sent/i)
+    expect(screen.getByRole("dialog")).toBeInTheDocument()
+    expect(screen.getByLabelText("Email address")).toHaveValue("bad@x.com")
+  })
 })

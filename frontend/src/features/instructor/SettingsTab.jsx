@@ -10,8 +10,11 @@ import { ConfirmDialog } from "@/components/composed/ConfirmDialog"
 import { ConflictList } from "@/components/composed/ConflictList"
 import { ConflictWarning } from "@/components/composed/ConflictWarning"
 import { UnsavedChangesPrompt } from "@/components/composed/UnsavedChangesPrompt"
+import { ErrorState } from "@/components/composed/ErrorState"
+import { toUserMessage } from "@/services/apiError"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   Accordion,
   AccordionItem,
@@ -37,7 +40,7 @@ const MODELS = Object.values(LLM_MODELS)
  */
 export function SettingsTab() {
   const { courseId } = useParams()
-  const { data: promptData, isLoading } = useCoursePrompt(courseId)
+  const { data: promptData, isLoading, isError, error, refetch } = useCoursePrompt(courseId)
   const { data: previousPrompts = [] } = usePreviousPrompts(courseId)
   const validate = useValidatePrompt(courseId)
   const save = useSavePrompt(courseId)
@@ -98,6 +101,16 @@ export function SettingsTab() {
 
   if (isLoading) {
     return <p className="text-caption text-muted-foreground">Loading settings…</p>
+  }
+
+  if (isError) {
+    return (
+      <ErrorState
+        title="Couldn't load settings"
+        description={toUserMessage(error)}
+        onRetry={() => refetch()}
+      />
+    )
   }
 
   return (
@@ -177,6 +190,12 @@ export function SettingsTab() {
           </AccordionContent>
         </AccordionItem>
       </Accordion>
+
+      {save.isError && (
+        <Alert variant="destructive">
+          <AlertDescription>{toUserMessage(save.error)}</AlertDescription>
+        </Alert>
+      )}
 
       {/* Footer */}
       <div className="flex justify-end border-t border-border pt-4">

@@ -31,6 +31,7 @@ export function useUpdateInstructorCourseAccess(courseId) {
   const qc = useQueryClient()
   const key = queryKeys.instructor.courses
   return useMutation({
+    meta: { suppressGlobalError: true },
     mutationFn: async (access) =>
       http.post("instructor/updateCourseAccess", { course_id: courseId, access: String(access) }),
     onMutate: async (access) => {
@@ -59,6 +60,7 @@ export function useUpdateInstructorCourseAccess(courseId) {
 export function useDeleteInstructorCourse(courseId) {
   const qc = useQueryClient()
   return useMutation({
+    meta: { suppressGlobalError: true },
     mutationFn: async () => http.del("instructor/delete_course", { course_id: courseId }),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.instructor.courses }),
   })

@@ -30,6 +30,7 @@ import { Label } from "@/components/ui/label"
 import { Icon } from "@/components/ui/icon"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
+import { toUserMessage } from "@/services/apiError"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion"
 import {
@@ -714,6 +715,16 @@ export function CourseWizard() {
               step) sit on the right. */}
           <div className="shrink-0 px-9 pb-9">
             <div className="flex flex-col gap-4">
+              {finalize.isError && (
+                <Alert variant="destructive">
+                  <AlertDescription>
+                    {toUserMessage(finalize.error, {
+                      400: "A module with this name already exists.",
+                      409: "Files are still being processed — try again shortly.",
+                    })}
+                  </AlertDescription>
+                </Alert>
+              )}
               <div className="h-px w-full bg-border" aria-hidden="true" />
               <div className="flex items-center justify-between gap-2">
                 {/* Left slot: Back (empty on step 1 keeps the right group pinned). */}

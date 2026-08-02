@@ -138,4 +138,37 @@ describe("CourseDetail (staged editing)", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Delete course" }))
     await waitFor(() => expect(del.mutate).toHaveBeenCalledWith("c1", expect.any(Object)))
   })
+
+  it("shows an ErrorState with retry when the instructor list fails to load", async () => {
+    const refetch = vi.fn()
+    instructorsAssigned = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }
+    render(<CourseDetail />)
+    expect(screen.getByRole("heading", { name: "Couldn't load instructors" })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }))
+    expect(refetch).toHaveBeenCalledOnce()
+  })
+
+  it("recovers the instructor list after a successful retry", async () => {
+    const refetch = vi.fn()
+    instructorsAssigned = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }
+    const { rerender } = render(<CourseDetail />)
+    expect(screen.getByRole("heading", { name: "Couldn't load instructors" })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }))
+    instructorsAssigned = {
+      data: [{ user_email: "ada@x.com", first_name: "ada", last_name: "lovelace", access_enabled: true }],
+      isLoading: false,
+      isError: false,
+    }
+    rerender(<CourseDetail />)
+    expect(screen.getByText("Lovelace, Ada")).toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "Couldn't load instructors" })).not.toBeInTheDocument()
+  })
+
+  it("shows an inline error when a staged save partially fails", async () => {
+    updateCourseAccess.mutateAsync.mockRejectedValueOnce(new Error("boom"))
+    render(<CourseDetail />)
+    await userEvent.click(screen.getByRole("switch", { name: "Course student access" }))
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }))
+    expect(await screen.findByRole("alert")).toHaveTextContent(/couldn't be saved/i)
+  })
 })

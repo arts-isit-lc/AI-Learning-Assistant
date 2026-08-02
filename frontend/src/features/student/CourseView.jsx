@@ -11,7 +11,8 @@ import { PageContainer } from "@/components/composed/PageContainer"
 import { EmptyState } from "@/components/composed/EmptyState"
 import { Icon } from "@/components/ui/icon"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
+import { ErrorState } from "@/components/composed/ErrorState"
+import { toUserMessage } from "@/services/apiError"
 import {
   Accordion,
   AccordionItem,
@@ -34,7 +35,7 @@ export function CourseView() {
   const { courseId } = useParams()
   const { isInstructorAsStudent } = useAuth()
 
-  const { data: rows = [], isLoading, isError } = useCoursePage(courseId)
+  const { data: rows = [], isLoading, isError, error, refetch } = useCoursePage(courseId)
   const coursesQuery = useCourses({ asInstructor: isInstructorAsStudent })
   const course = coursesQuery.data?.find((c) => c.course_id === courseId)
 
@@ -109,10 +110,11 @@ export function CourseView() {
             ))}
           </div>
         ) : isError ? (
-          <Alert variant="destructive">
-            <AlertTitle>Couldn&rsquo;t load this course</AlertTitle>
-            <AlertDescription>Please refresh and try again.</AlertDescription>
-          </Alert>
+          <ErrorState
+            title="Couldn't load this course"
+            description={toUserMessage(error)}
+            onRetry={() => refetch()}
+          />
         ) : concepts.length === 0 ? (
           <EmptyState title="No modules yet" description="This course doesn't have any modules." />
         ) : (

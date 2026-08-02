@@ -11,6 +11,7 @@ import {
   useDeleteInstructorCourse,
 } from "@/services/queries"
 import { Toggle } from "@/components/ui/toggle"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { ConfirmDialog } from "@/components/composed/ConfirmDialog"
 import { Icon } from "@/components/ui/icon"
 
@@ -99,6 +100,12 @@ export default function InstructorCourseLayout() {
             </div>
           )}
         </div>
+
+        {updateAccess.isError && (
+          <Alert variant="destructive" className="mt-2">
+            <AlertDescription>{"Couldn't update the course — the change was reverted."}</AlertDescription>
+          </Alert>
+        )}
 
         {/* Row 2 (Figma 365:2504): course name (left) + access code aligned on the
             same line (right) — not dropped to the term row, which left a gap above it. */}

@@ -61,4 +61,14 @@ describe("DuplicateCourseDialog", () => {
     // On success it opens the new course.
     expect(navigate).toHaveBeenCalledWith("/admin/courses/new-course")
   })
+
+  it("shows an inline error in the dialog when duplication fails", async () => {
+    duplicate.isError = true
+    duplicate.error = { status: 500 }
+    render(<DuplicateCourseDialog course={COURSE} />)
+    await userEvent.click(screen.getByRole("button", { name: "Duplicate" }))
+    expect(await screen.findByRole("alert")).toHaveTextContent(/on our end/i)
+    duplicate.isError = false
+    duplicate.error = null
+  })
 })

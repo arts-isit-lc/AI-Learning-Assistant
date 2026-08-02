@@ -75,4 +75,43 @@ describe("CourseView", () => {
     expect(expandBtn).toHaveAttribute("aria-pressed", "false")
     expect(expandBtn).toHaveClass("font-normal", "text-neutral-500")
   })
+
+  it("shows an accessible ErrorState with a working retry when the course fails to load", async () => {
+    const refetch = vi.fn()
+    coursePage = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }
+    render(
+      <MemoryRouter initialEntries={["/courses/c1"]}>
+        <Routes>
+          <Route path="/courses/:courseId" element={<CourseView />} />
+        </Routes>
+      </MemoryRouter>
+    )
+    expect(screen.getByRole("heading", { name: "Couldn't load this course" })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }))
+    expect(refetch).toHaveBeenCalledOnce()
+  })
+
+  it("recovers after a successful retry (error → content)", async () => {
+    const refetch = vi.fn()
+    coursePage = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }
+    const { rerender } = render(
+      <MemoryRouter initialEntries={["/courses/c1"]}>
+        <Routes>
+          <Route path="/courses/:courseId" element={<CourseView />} />
+        </Routes>
+      </MemoryRouter>
+    )
+    expect(screen.getByRole("heading", { name: "Couldn't load this course" })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }))
+    coursePage = { data: rows, isLoading: false, isError: false }
+    rerender(
+      <MemoryRouter initialEntries={["/courses/c1"]}>
+        <Routes>
+          <Route path="/courses/:courseId" element={<CourseView />} />
+        </Routes>
+      </MemoryRouter>
+    )
+    expect(screen.getByText(/week 1/i)).toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "Couldn't load this course" })).not.toBeInTheDocument()
+  })
 })

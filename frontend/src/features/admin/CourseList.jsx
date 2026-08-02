@@ -3,6 +3,8 @@ import { useNavigate, useParams } from "react-router-dom"
 import { useAdminCourses } from "@/services/queries"
 import { Searchbar } from "@/components/composed/Searchbar"
 import { ListRow } from "@/components/composed/ListRow"
+import { ErrorState } from "@/components/composed/ErrorState"
+import { toUserMessage } from "@/services/apiError"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -21,7 +23,7 @@ export function courseCode(course) {
 export function CourseList() {
   const navigate = useNavigate()
   const { courseId } = useParams()
-  const { data: courses = [], isLoading } = useAdminCourses()
+  const { data: courses = [], isLoading, isError, error, refetch } = useAdminCourses()
   const [query, setQuery] = useState("")
 
   const filtered = useMemo(() => {
@@ -46,6 +48,13 @@ export function CourseList() {
               <Skeleton key={i} className="h-16 w-full" />
             ))}
           </div>
+        ) : isError ? (
+          <ErrorState
+            className="border-0"
+            title="Couldn't load courses"
+            description={toUserMessage(error)}
+            onRetry={() => refetch()}
+          />
         ) : filtered.length === 0 ? (
           <p className="px-1 py-3 text-caption text-muted-foreground">No courses found.</p>
         ) : (

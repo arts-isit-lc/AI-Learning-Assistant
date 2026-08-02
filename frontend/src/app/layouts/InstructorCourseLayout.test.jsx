@@ -91,4 +91,11 @@ describe("InstructorCourseLayout", () => {
     await userEvent.click(within(confirm).getByRole("button", { name: "Delete course" }))
     expect(deleteCourse.mutate).toHaveBeenCalled()
   })
+
+  it("shows a revert signal when the active-toggle update fails", () => {
+    updateAccess.isError = true
+    renderLayout()
+    expect(screen.getByRole("alert")).toHaveTextContent(/reverted/i)
+    updateAccess.isError = false
+  })
 })
