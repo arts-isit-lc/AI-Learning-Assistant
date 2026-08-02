@@ -69,7 +69,7 @@ export function CourseHeader({ course, collapsible = false, collapsed = false, o
   const hasTermMeta = Boolean(course?.term || course?.section)
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col mb-6">
       {/* Top row: back link (+ compact code when reduced) + Reduce/Expand toggle. */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -88,7 +88,7 @@ export function CourseHeader({ course, collapsible = false, collapsed = false, o
           left, term/section top-right. Reduce/Expand slides this open/closed via
           the shared Collapse primitive (same motion as every accordion). */}
       <Collapse open={!collapsed}>
-        <div className="flex items-start justify-between gap-6 pb-8 pt-6">
+        <div className="flex items-start justify-between gap-6 pb-2 pt-6">
           <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-4">
               <h1 className="text-3xl leading-7 font-semibold text-neutral-900">{title}</h1>
