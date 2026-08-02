@@ -147,7 +147,7 @@ export function CourseView() {
                 value={concept.concept_id}
                 className="border border-border p-4"
               >
-                <AccordionTrigger className="gap-3 font-normal hover:no-underline">
+                <AccordionTrigger className="gap-4 font-normal hover:no-underline">
                   <span className="flex flex-1 items-center justify-between gap-3 pr-2 text-left">
                     <span className="text-neutral-900 text-lg leading-7">
                       {i + 1}. {titleCase(concept.concept_name)}

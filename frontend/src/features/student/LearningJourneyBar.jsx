@@ -62,7 +62,7 @@ export function LearningJourneyBar({
     >
       <div className={cn("mx-auto w-full max-w-7xl py-4", contentClassName)}>
         <div className="flex items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <span className="text-lg leading-7 font-semibold text-neutral-900">Learning Journey</span>
             <span className={cn("text-base leading-7 font-semibold uppercase", status.cls)}>{status.label}</span>
             <span className="text-caption text-foreground leading-7">
