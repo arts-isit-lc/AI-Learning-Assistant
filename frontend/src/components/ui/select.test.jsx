@@ -3,8 +3,9 @@ import { render, screen } from "@testing-library/react"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "./select"
 
 // Radix Select's open interaction relies on pointer-capture / scrollIntoView
-// that jsdom lacks; the open menu is exercised in Playwright (Phase 5+). Here we
-// verify the closed trigger renders as an accessible combobox.
+// that jsdom lacks; the open menu (option alignment + the chevron that rotates
+// up on open) is exercised in Playwright (Phase 5+). Here we verify the closed
+// trigger renders as an accessible combobox and reflects the selected value.
 describe("Select", () => {
   it("renders an accessible combobox trigger", () => {
     render(
@@ -19,5 +20,20 @@ describe("Select", () => {
       </Select>
     )
     expect(screen.getByRole("combobox", { name: "Language model" })).toBeInTheDocument()
+  })
+
+  it("shows the selected option's label in the trigger", () => {
+    render(
+      <Select defaultValue="b">
+        <SelectTrigger aria-label="Language model">
+          <SelectValue placeholder="Choose a model" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="a">Claude</SelectItem>
+          <SelectItem value="b">Llama</SelectItem>
+        </SelectContent>
+      </Select>
+    )
+    expect(screen.getByRole("combobox", { name: "Language model" })).toHaveTextContent("Llama")
   })
 })

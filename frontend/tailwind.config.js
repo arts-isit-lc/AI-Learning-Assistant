@@ -48,6 +48,7 @@ export default {
           0: "hsl(var(--neutral-0))",
           200: "hsl(var(--neutral-200))",
           300: "hsl(var(--neutral-300))",
+          400: "hsl(var(--neutral-400))",
           500: "hsl(var(--neutral-500))",
           700: "hsl(var(--neutral-700))",
           900: "hsl(var(--neutral-900))",

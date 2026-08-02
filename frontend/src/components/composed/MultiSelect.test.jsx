@@ -17,29 +17,74 @@ describe("MultiSelect", () => {
     expect(screen.getByRole("button", { name: "Picker" })).toHaveTextContent("Pick some")
   })
 
-  it("selects an option (adds its value) via the dropdown", async () => {
+  it("stages ticks locally and commits them only on Apply", async () => {
     const onChange = vi.fn()
     render(<MultiSelect options={OPTIONS} value={[]} onChange={onChange} aria-label="Picker" />)
     await userEvent.click(screen.getByRole("button", { name: "Picker" }))
-    await userEvent.click(await screen.findByRole("button", { name: "Alpha" }))
+    await userEvent.click(await screen.findByRole("checkbox", { name: "Alpha" }))
+    // Staged only — the committed value is untouched until Apply.
+    expect(onChange).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole("button", { name: "Apply" }))
     expect(onChange).toHaveBeenCalledWith(["a@x.com"])
   })
 
-  it("deselects an already-selected option", async () => {
+  it("discards the staged draft when dismissed without applying", async () => {
     const onChange = vi.fn()
-    render(<MultiSelect options={OPTIONS} value={["a@x.com"]} onChange={onChange} aria-label="Picker" />)
-    // Trigger summarizes the count; the option toggles off when re-clicked.
-    expect(screen.getByRole("button", { name: "Picker" })).toHaveTextContent("1 selected")
+    render(
+      <div>
+        <p>outside</p>
+        <MultiSelect options={OPTIONS} value={[]} onChange={onChange} aria-label="Picker" />
+      </div>
+    )
     await userEvent.click(screen.getByRole("button", { name: "Picker" }))
-    await userEvent.click(await screen.findByRole("button", { name: "Alpha" }))
+    await userEvent.click(await screen.findByRole("checkbox", { name: "Alpha" }))
+    await userEvent.click(screen.getByText("outside"))
+    await waitFor(() =>
+      expect(screen.queryByRole("checkbox", { name: "Alpha" })).not.toBeInTheDocument()
+    )
+    expect(onChange).not.toHaveBeenCalled()
+    // Reopening reseeds the draft from the committed value → Alpha is unticked.
+    await userEvent.click(screen.getByRole("button", { name: "Picker" }))
+    expect(await screen.findByRole("checkbox", { name: "Alpha" })).toHaveAttribute("aria-checked", "false")
+  })
+
+  it("Clear resets the staged draft without committing", async () => {
+    const onChange = vi.fn()
+    render(<MultiSelect options={OPTIONS} value={[]} onChange={onChange} aria-label="Picker" />)
+    await userEvent.click(screen.getByRole("button", { name: "Picker" }))
+    await userEvent.click(await screen.findByRole("checkbox", { name: "Alpha" }))
+    await userEvent.click(screen.getByRole("button", { name: "Clear" }))
+    expect(screen.getByRole("checkbox", { name: "Alpha" })).toHaveAttribute("aria-checked", "false")
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  it("enables Apply only once the draft differs from the committed value", async () => {
+    render(<MultiSelect options={OPTIONS} value={[]} onChange={() => {}} aria-label="Picker" />)
+    await userEvent.click(screen.getByRole("button", { name: "Picker" }))
+    expect(screen.getByRole("button", { name: "Apply" })).toBeDisabled()
+    await userEvent.click(await screen.findByRole("checkbox", { name: "Alpha" }))
+    expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled()
+  })
+
+  it("shows the committed count on the trigger and clears it via the × button", async () => {
+    const onChange = vi.fn()
+    render(
+      <MultiSelect
+        options={OPTIONS}
+        value={["a@x.com"]}
+        onChange={onChange}
+        placeholder="Instructors"
+        aria-label="Picker"
+      />
+    )
+    expect(screen.getByRole("button", { name: "Picker" })).toHaveTextContent("Instructors (1)")
+    await userEvent.click(screen.getByRole("button", { name: "Clear Picker" }))
     expect(onChange).toHaveBeenCalledWith([])
   })
 
-  it("renders the selection as removable tags", async () => {
-    const onChange = vi.fn()
-    render(<MultiSelect options={OPTIONS} value={["a@x.com"]} onChange={onChange} aria-label="Picker" />)
-    await userEvent.click(screen.getByRole("button", { name: "Remove Alpha" }))
-    expect(onChange).toHaveBeenCalledWith([])
+  it("does not render removable tag pills below the trigger", () => {
+    render(<MultiSelect options={OPTIONS} value={["a@x.com"]} onChange={() => {}} aria-label="Picker" />)
+    expect(screen.queryByRole("button", { name: "Remove Alpha" })).not.toBeInTheDocument()
   })
 
   it("shows the empty text when there are no options", async () => {
@@ -59,11 +104,11 @@ describe("MultiSelect", () => {
       </Dialog>
     )
     await userEvent.click(screen.getByRole("button", { name: "Picker" }))
-    expect(await screen.findByRole("button", { name: "Alpha" })).toBeInTheDocument()
+    expect(await screen.findByRole("checkbox", { name: "Alpha" })).toBeInTheDocument()
     // Click elsewhere inside the dialog (outside the open dropdown).
     await userEvent.click(screen.getByText("elsewhere in the dialog"))
     await waitFor(() =>
-      expect(screen.queryByRole("button", { name: "Alpha" })).not.toBeInTheDocument()
+      expect(screen.queryByRole("checkbox", { name: "Alpha" })).not.toBeInTheDocument()
     )
   })
 })

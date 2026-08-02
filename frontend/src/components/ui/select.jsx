@@ -13,7 +13,7 @@ const SelectTrigger = React.forwardRef(function SelectTrigger({ className, child
     <SelectPrimitive.Trigger
       ref={ref}
       className={cn(
-        "flex h-10 w-full items-center justify-between gap-2 rounded-none border border-input bg-background px-3 py-2 text-caption text-foreground",
+        "group flex h-10 w-full items-center justify-between gap-2 rounded-none border border-input bg-background px-3 py-2 text-caption text-foreground",
         // Radix marks the trigger with data-placeholder while the placeholder is
         // shown (SelectValue is a span, so the native placeholder: pseudo never
         // applied) — grey it to match the other fields.
@@ -25,7 +25,11 @@ const SelectTrigger = React.forwardRef(function SelectTrigger({ className, child
     >
       {children}
       <SelectPrimitive.Icon asChild>
-        <Icon icon={MdExpandMore} size={24} />
+        <Icon
+          icon={MdExpandMore}
+          size={24}
+          className="shrink-0 transition-transform duration-fast group-data-[state=open]:rotate-180"
+        />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   )
@@ -62,18 +66,18 @@ const SelectItem = React.forwardRef(function SelectItem({ className, children, .
     <SelectPrimitive.Item
       ref={ref}
       className={cn(
-        "relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-caption outline-none",
+        "relative flex w-full cursor-pointer select-none items-center rounded-sm py-2 pl-4 pr-8 text-caption outline-none",
         "focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         className
       )}
       {...props}
     >
-      <span className="absolute left-2 flex h-4 w-4 items-center justify-center">
+      <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+      <span className="absolute right-2 flex h-4 w-4 items-center justify-center">
         <SelectPrimitive.ItemIndicator>
           <Icon icon={MdCheck} size={16} />
         </SelectPrimitive.ItemIndicator>
       </span>
-      <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
     </SelectPrimitive.Item>
   )
 })
