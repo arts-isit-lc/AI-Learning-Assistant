@@ -117,4 +117,13 @@ describe("CreateCourse", () => {
     create.isError = false
     create.error = null
   })
+
+  it("shows the identity-conflict message on a 409", async () => {
+    create.isError = true
+    create.error = { status: 409 }
+    render(<CreateCourse />)
+    expect(screen.getByRole("alert")).toHaveTextContent(/already exists/i)
+    create.isError = false
+    create.error = null
+  })
 })

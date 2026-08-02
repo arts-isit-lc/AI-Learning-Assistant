@@ -119,6 +119,26 @@ describe("OpenAPI contract: admin course-management routes", () => {
     expect(route.post["x-amazon-apigateway-integration"].uri["Fn::Sub"]).toBe(adminUri);
   });
 
+  it("POST /admin/create_course: declares a 409 conflict response (identity uniqueness)", () => {
+    const route = spec.paths["/admin/create_course"];
+    expect(route.post.responses["409"]).toBeDefined();
+  });
+
+  it("POST /admin/duplicate_course: optional `section` query param (source section kept when omitted)", () => {
+    const route = spec.paths["/admin/duplicate_course"];
+    const byName = Object.fromEntries(route.post.parameters.map((p: any) => [p.name, p]));
+    expect(byName["section"]).toBeDefined();
+    expect(byName["section"].in).toBe("query");
+    // Optional, like duplicate's term — omitting it preserves the source's section.
+    expect(byName["section"].required).toBe(false);
+    expect(byName["section"].schema.type).toBe("string");
+  });
+
+  it("POST /admin/duplicate_course: declares a 409 conflict response (identity uniqueness)", () => {
+    const route = spec.paths["/admin/duplicate_course"];
+    expect(route.post.responses["409"]).toBeDefined();
+  });
+
   it("DELETE /admin/unenroll_instructor: course_id + instructor_email (query) + adminAuthorizer", () => {
     const route = spec.paths["/admin/unenroll_instructor"];
     expect(route).toBeDefined();
@@ -186,6 +206,46 @@ describe("initializer.py migration: Courses.section (nullable)", () => {
   });
 });
 
+describe("initializer.py migration: Courses identity unique index", () => {
+  const initializer = fs.readFileSync(
+    path.join(__dirname, "..", "lambda", "initializer", "initializer.py"),
+    "utf8"
+  );
+
+  it("declares a unique index ux_courses_identity on Courses (idempotent)", () => {
+    expect(initializer).toContain("CREATE UNIQUE INDEX IF NOT EXISTS ux_courses_identity");
+    expect(initializer).toContain('ON "Courses" (');
+  });
+
+  it("normalizes text fields (lower + btrim) and matches course_number exactly", () => {
+    expect(initializer).toContain("lower(btrim(course_name))");
+    expect(initializer).toContain("lower(btrim(course_department))");
+    // course_number is integer — compared exactly (no lower/btrim wrapping it).
+    expect(initializer).toMatch(/lower\(btrim\(course_department\)\),\s*course_number,/);
+  });
+
+  it("coalesces nullable term & section to '' so 'no term/section' is one identity", () => {
+    // A plain unique index treats NULLs as distinct; coalescing to '' makes two
+    // courses that both lack a term/section collide (the intended behavior).
+    expect(initializer).toContain("lower(btrim(coalesce(term, '')))");
+    expect(initializer).toContain("lower(btrim(coalesce(section, '')))");
+  });
+
+  it("builds the index after the term & section ADD COLUMN backfills (columns must exist first)", () => {
+    const termMigration = initializer.indexOf(
+      'ALTER TABLE "Courses" ADD COLUMN IF NOT EXISTS "term" varchar'
+    );
+    const sectionMigration = initializer.indexOf(
+      'ALTER TABLE "Courses" ADD COLUMN IF NOT EXISTS "section" varchar'
+    );
+    const indexPos = initializer.indexOf("CREATE UNIQUE INDEX IF NOT EXISTS ux_courses_identity");
+    expect(termMigration).toBeGreaterThan(-1);
+    expect(sectionMigration).toBeGreaterThan(-1);
+    expect(indexPos).toBeGreaterThan(termMigration);
+    expect(indexPos).toBeGreaterThan(sectionMigration);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // (b) Handler unit tests
 // ---------------------------------------------------------------------------
@@ -196,19 +256,28 @@ describe("initializer.py migration: Courses.section (nullable)", () => {
 type FakeSql = {
   (strings: TemplateStringsArray, ...values: any[]): Promise<any[]>;
   queueResult: (rows: any[]) => FakeSql;
+  queueError: (err: any) => FakeSql;
   calls: string[];
   reset: () => void;
 };
 
 function makeFakeSql(): FakeSql {
-  const queue: any[][] = [];
+  // Each queued item is either a rows result or an error to reject with (used to
+  // simulate a Postgres unique_violation, code 23505, on the identity index).
+  const queue: Array<{ rows: any[] } | { error: any }> = [];
   const calls: string[] = [];
   const fn = ((strings: TemplateStringsArray) => {
     calls.push(strings.join("?"));
-    return Promise.resolve(queue.length ? (queue.shift() as any[]) : []);
+    const next = queue.shift();
+    if (next && "error" in next) return Promise.reject(next.error);
+    return Promise.resolve(next ? next.rows : []);
   }) as FakeSql;
   fn.queueResult = (rows: any[]) => {
-    queue.push(rows);
+    queue.push({ rows });
+    return fn;
+  };
+  fn.queueError = (err: any) => {
+    queue.push({ error: err });
     return fn;
   };
   fn.calls = calls;
@@ -484,6 +553,31 @@ describe("adminFunction — POST /admin/duplicate_course (B2)", () => {
     expect(res.statusCode).toBe(200);
     expect(mockSql.calls[0]).toContain("COALESCE(?, term)");
   });
+
+  it("200: threads the optional section through the INSERT...SELECT via COALESCE(section, source)", async () => {
+    mockSql
+      .queueResult([{ course_id: "new-course" }]) // INSERT...SELECT Courses RETURNING *
+      .queueResult([]); // no concepts (stops after the course row)
+    const res = await handler(
+      makeEvent("POST", "/admin/duplicate_course", { ...VALID_QS, section: "002" }, BODY)
+    );
+    expect(res.statusCode).toBe(200);
+    const courseInsert = mockSql.calls[0];
+    expect(courseInsert).toContain('INSERT INTO "Courses"');
+    expect(courseInsert).toContain("section");
+    // An edited section overrides the source's; omitting it (the course-detail
+    // dialog) binds NULL so COALESCE keeps the source section.
+    expect(courseInsert).toContain("COALESCE(?, section)");
+  });
+
+  it("409: maps a unique_violation (23505) on the duplicate INSERT to a conflict", async () => {
+    mockSql.queueError({ code: "23505" }); // INSERT...SELECT trips ux_courses_identity
+    const res = await handler(makeEvent("POST", "/admin/duplicate_course", VALID_QS, BODY));
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toMatch(/already exists/i);
+    // The failed INSERT...SELECT is the only call — no concept/module cloning.
+    expect(mockSql.calls).toHaveLength(1);
+  });
 });
 
 describe("adminFunction — POST /admin/create_course (term)", () => {
@@ -503,11 +597,14 @@ describe("adminFunction — POST /admin/create_course (term)", () => {
   const BODY = JSON.stringify({ system_prompt: "You are a tutor." });
 
   it("200: inserts the course with the term column in the INSERT", async () => {
-    mockSql.queueResult([{ course_id: "new-course", term: "2026 Winter Term 2" }]);
+    mockSql
+      .queueResult([]) // uniqueness pre-check: no existing course
+      .queueResult([{ course_id: "new-course", term: "2026 Winter Term 2" }]); // INSERT
     const res = await handler(makeEvent("POST", "/admin/create_course", VALID_QS, BODY));
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).course_id).toBe("new-course");
-    const insertSql = mockSql.calls[0];
+    // calls[0] is the identity pre-check SELECT; the INSERT is calls[1].
+    const insertSql = mockSql.calls[1];
     expect(insertSql).toContain('INSERT INTO "Courses"');
     expect(insertSql).toContain("term");
   });
@@ -520,20 +617,44 @@ describe("adminFunction — POST /admin/create_course (term)", () => {
   });
 
   it("200: includes the optional section column in the INSERT when provided", async () => {
-    mockSql.queueResult([{ course_id: "new-course", section: "001" }]);
+    mockSql
+      .queueResult([]) // uniqueness pre-check: no existing course
+      .queueResult([{ course_id: "new-course", section: "001" }]); // INSERT
     const res = await handler(
       makeEvent("POST", "/admin/create_course", { ...VALID_QS, section: "001" }, BODY)
     );
     expect(res.statusCode).toBe(200);
-    expect(mockSql.calls[0]).toContain("section");
+    expect(mockSql.calls[1]).toContain("section");
   });
 
   it("200: section is OPTIONAL — creates the course even when section is omitted", async () => {
-    mockSql.queueResult([{ course_id: "new-course" }]);
+    mockSql
+      .queueResult([]) // uniqueness pre-check: no existing course
+      .queueResult([{ course_id: "new-course" }]); // INSERT
     const res = await handler(makeEvent("POST", "/admin/create_course", VALID_QS, BODY));
     expect(res.statusCode).toBe(200);
     expect(JSON.parse(res.body).course_id).toBe("new-course");
     // The column is still in the INSERT (bound to NULL when omitted).
-    expect(mockSql.calls[0]).toContain("section");
+    expect(mockSql.calls[1]).toContain("section");
+  });
+
+  it("409: rejects a duplicate identity via the pre-check (no INSERT attempted)", async () => {
+    mockSql.queueResult([{ course_id: "existing" }]); // pre-check finds a clash
+    const res = await handler(makeEvent("POST", "/admin/create_course", VALID_QS, BODY));
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toMatch(/already exists/i);
+    // Only the identity pre-check ran; the INSERT was never reached.
+    expect(mockSql.calls).toHaveLength(1);
+    expect(mockSql.calls[0]).toContain('SELECT course_id FROM "Courses"');
+  });
+
+  it("409: maps a unique_violation (23505) on INSERT to a conflict (race backstop)", async () => {
+    mockSql
+      .queueResult([]) // pre-check: no clash (lost the race to a concurrent insert)
+      .queueError({ code: "23505" }); // INSERT trips ux_courses_identity
+    const res = await handler(makeEvent("POST", "/admin/create_course", VALID_QS, BODY));
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).error).toMatch(/already exists/i);
+    expect(mockSql.calls).toHaveLength(2);
   });
 });

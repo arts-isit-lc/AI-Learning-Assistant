@@ -490,6 +490,25 @@ def handler(event, context):
             CREATE INDEX IF NOT EXISTS idx_course_modules_status_created
             ON "Course_Modules" (status, created_at)
             WHERE status IN ('draft', 'deleting');
+
+            -- Course identity uniqueness: no two courses may share the same
+            -- name + department + number + term + section. Case-insensitive and
+            -- trimmed (lower(btrim(...))) so "GEOG 210" == " geog  210 "; term and
+            -- section are coalesced to '' so "no term/section" collapses to a
+            -- single identity (a plain unique index treats NULLs as DISTINCT and
+            -- would let such duplicates through). course_number is integer, matched
+            -- exactly. Runs after the term/section ADD COLUMN backfills above (both
+            -- columns must exist first). The create_course/duplicate_course handlers
+            -- also enforce this at the app layer (pre-check + 23505->409); this index
+            -- is the race-safe backstop.
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_courses_identity
+            ON "Courses" (
+                lower(btrim(course_name)),
+                lower(btrim(course_department)),
+                course_number,
+                lower(btrim(coalesce(term, ''))),
+                lower(btrim(coalesce(section, '')))
+            );
         """
 
         #

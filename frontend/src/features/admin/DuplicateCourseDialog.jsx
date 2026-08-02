@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { useDuplicateCourse } from "@/services/queries"
-import { generateAccessCode } from "./CreateCourse"
+import { generateAccessCode, COURSE_EXISTS_MESSAGE } from "./CreateCourse"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -30,6 +30,7 @@ export function DuplicateCourseDialog({ course }) {
   const [name, setName] = useState("")
   const [department, setDepartment] = useState("")
   const [number, setNumber] = useState("")
+  const [section, setSection] = useState("")
 
   // Re-seed the form from the current source course each time the dialog opens.
   const handleOpenChange = (next) => {
@@ -37,6 +38,7 @@ export function DuplicateCourseDialog({ course }) {
       setName(course.course_name ? `${course.course_name} (copy)` : "")
       setDepartment(course.course_department ?? "")
       setNumber(course.course_number != null ? String(course.course_number) : "")
+      setSection(course.section ?? "")
     }
     setOpen(next)
   }
@@ -57,6 +59,8 @@ export function DuplicateCourseDialog({ course }) {
         courseName: name.trim(),
         department: department.trim(),
         number: number.trim(),
+        // Optional; omitted by the hook when empty so the source section is kept.
+        section: section.trim(),
         accessCode: generateAccessCode(),
         active: course.course_student_access !== false,
         systemPrompt: course.system_prompt ?? "",
@@ -117,10 +121,22 @@ export function DuplicateCourseDialog({ course }) {
                   />
                 </div>
               </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="dup-section">Section</Label>
+                <Input
+                  id="dup-section"
+                  value={section}
+                  onChange={(e) => setSection(e.target.value)}
+                  placeholder="e.g. 001"
+                  maxLength={20}
+                />
+              </div>
             </div>
             {duplicate.isError && (
               <Alert variant="destructive">
-                <AlertDescription>{toUserMessage(duplicate.error)}</AlertDescription>
+                <AlertDescription>
+                  {toUserMessage(duplicate.error, { 409: COURSE_EXISTS_MESSAGE })}
+                </AlertDescription>
               </Alert>
             )}
 

@@ -27,6 +27,13 @@ let { SM_DB_CREDENTIALS, RDS_PROXY_ENDPOINT } = process.env;
 // SQL conneciton from global variable at libadmin.js
 let sqlConnectionTableCreator = global.sqlConnectionTableCreator;
 
+// Shared 409 copy for the course-identity uniqueness rule (course_name +
+// course_department + course_number + term + section). Enforced by a pre-check
+// SELECT plus the ux_courses_identity unique index (Postgres 23505 backstop) in
+// both create_course and duplicate_course.
+const COURSE_IDENTITY_CONFLICT_MSG =
+  "A course with the same name, code, term, and section already exists.";
+
 exports.handler = async (event) => {
   const response = {
     statusCode: 200,
@@ -211,6 +218,27 @@ exports.handler = async (event) => {
 
             const { system_prompt } = JSON.parse(event.body);
 
+            // Uniqueness pre-check: reject a course whose identity
+            // (name + department + number + term + section) collides with an
+            // existing one. Case-insensitive/trimmed with NULL/absent term &
+            // section normalized to '' — mirrors the ux_courses_identity index so
+            // the friendly 409 fires before the INSERT (the index is the race
+            // backstop, mapped to 409 in the catch below).
+            const identityClash = await sqlConnectionTableCreator`
+                  SELECT course_id FROM "Courses"
+                  WHERE lower(btrim(course_name)) = lower(btrim(${course_name}))
+                    AND lower(btrim(course_department)) = lower(btrim(${course_department}))
+                    AND course_number = ${course_number}
+                    AND lower(btrim(coalesce(term, ''))) = lower(btrim(coalesce(${term}, '')))
+                    AND lower(btrim(coalesce(section, ''))) = lower(btrim(coalesce(${section}, '')))
+                  LIMIT 1;
+              `;
+            if (identityClash.length > 0) {
+              response.statusCode = 409;
+              response.body = JSON.stringify({ error: COURSE_IDENTITY_CONFLICT_MSG });
+              break;
+            }
+
             // Insert new course into Courses table
             const newCourse = await sqlConnectionTableCreator`         
                   INSERT INTO "Courses" (
@@ -241,9 +269,16 @@ exports.handler = async (event) => {
             console.log(newCourse);
             response.body = JSON.stringify(newCourse[0]);
           } catch (err) {
-            response.statusCode = 500;
-            console.log(err);
-            response.body = JSON.stringify({ error: "Internal server error" });
+            // 23505 = unique_violation on ux_courses_identity (race backstop for
+            // the pre-check above).
+            if (err.code === "23505") {
+              response.statusCode = 409;
+              response.body = JSON.stringify({ error: COURSE_IDENTITY_CONFLICT_MSG });
+            } else {
+              response.statusCode = 500;
+              console.log(err);
+              response.body = JSON.stringify({ error: "Internal server error" });
+            }
           }
         } else {
           response.statusCode = 400;
@@ -285,6 +320,14 @@ exports.handler = async (event) => {
             // driver binds SQL NULL rather than throwing.
             const term = event.queryStringParameters.term ?? null;
 
+            // Optional section — same COALESCE-with-source semantics as term:
+            // an edited section overrides the source's; omitting it keeps the
+            // source course's section. null (not undefined) so the pg driver binds
+            // SQL NULL. Uniqueness (name+dept+number+term+section) is enforced by
+            // the ux_courses_identity index; a collision surfaces as 23505 -> 409
+            // in the catch below.
+            const section = event.queryStringParameters.section ?? null;
+
             const { system_prompt } = JSON.parse(event.body);
 
             // 1. Create the new course. INSERT ... SELECT copies llm_model_id
@@ -299,6 +342,7 @@ exports.handler = async (event) => {
                     course_access_code,
                     course_student_access,
                     term,
+                    section,
                     system_prompt,
                     llm_model_id
                 )
@@ -310,6 +354,7 @@ exports.handler = async (event) => {
                     ${course_access_code},
                     ${course_student_access.toLowerCase() === "true"},
                     COALESCE(${term}, term),
+                    COALESCE(${section}, section),
                     ${system_prompt},
                     llm_model_id
                 FROM "Courses"
@@ -360,9 +405,17 @@ exports.handler = async (event) => {
 
             response.body = JSON.stringify(newCourse[0]);
           } catch (err) {
-            response.statusCode = 500;
-            console.log(err);
-            response.body = JSON.stringify({ error: "Internal server error" });
+            // 23505 = unique_violation on ux_courses_identity: the duplicate's
+            // resolved identity (name+dept+number + COALESCEd term/section) already
+            // exists. The failed INSERT...SELECT writes no row, so no partial clone.
+            if (err.code === "23505") {
+              response.statusCode = 409;
+              response.body = JSON.stringify({ error: COURSE_IDENTITY_CONFLICT_MSG });
+            } else {
+              response.statusCode = 500;
+              console.log(err);
+              response.body = JSON.stringify({ error: "Internal server error" });
+            }
           }
         } else {
           response.statusCode = 400;

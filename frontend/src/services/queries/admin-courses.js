@@ -196,9 +196,10 @@ export function useUpdateInstructorAccess() {
  * enrolments, or student data. `active` is sent as-is (apiClient stringifies it
  * to "true"/"false"). `term` is optional and only sent when non-empty — omitting
  * it makes the backend keep the source course's term (COALESCE), so the
- * course-detail Duplicate dialog (which sends no term) is unaffected. Returns the
- * new `{ course_id }`. Variables:
- * `{ sourceCourseId, courseName, department, number, term?, accessCode, active, systemPrompt }`.
+ * course-detail Duplicate dialog (which sends no term) is unaffected. `section`
+ * is optional too and only sent when non-empty — omitting it keeps the source
+ * course's section (COALESCE). Returns the new `{ course_id }`. Variables:
+ * `{ sourceCourseId, courseName, department, number, term?, section?, accessCode, active, systemPrompt }`.
  */
 export function useDuplicateCourse() {
   const qc = useQueryClient()
@@ -210,6 +211,7 @@ export function useDuplicateCourse() {
       department,
       number,
       term,
+      section,
       accessCode,
       active,
       systemPrompt,
@@ -222,6 +224,9 @@ export function useDuplicateCourse() {
           course_department: department,
           course_number: number,
           ...(term ? { term } : {}),
+          // Optional; only sent when non-empty (mirrors term) so omitting it keeps
+          // the source course's section server-side (COALESCE).
+          ...(section ? { section } : {}),
           course_access_code: accessCode,
           course_student_access: active,
         },

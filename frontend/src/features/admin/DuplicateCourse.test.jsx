@@ -15,6 +15,7 @@ const courses = [
     course_student_access: true,
     system_prompt: "Base prompt",
     term: "2026 Winter Term 1",
+    section: "001",
   },
 ]
 
@@ -66,6 +67,8 @@ describe("DuplicateCourse", () => {
     expect(screen.getByLabelText(/Course title/)).toHaveValue("Intro Geography (copy)")
     // The Term trigger reflects the source course's term.
     expect(screen.getByRole("combobox", { name: "Term" })).toHaveTextContent("2026 Winter Term 1")
+    // The Section field reflects the source course's section.
+    expect(screen.getByLabelText("Section")).toHaveValue("001")
   })
 
   it("regenerates the access code on demand", async () => {
@@ -92,6 +95,7 @@ describe("DuplicateCourse", () => {
       department: "GEOG",
       number: "250",
       term: "2026 Winter Term 1",
+      section: "001",
       active: true,
       systemPrompt: "Base prompt",
     })
@@ -105,6 +109,16 @@ describe("DuplicateCourse", () => {
     await pickSource()
     expect(screen.getByRole("alert")).toHaveTextContent(/on our end/i)
     expect(screen.getByLabelText(/Course title/)).toHaveValue("Intro Geography (copy)")
+    duplicate.isError = false
+    duplicate.error = null
+  })
+
+  it("shows the identity-conflict message on a 409", async () => {
+    duplicate.isError = true
+    duplicate.error = { status: 409 }
+    render(<DuplicateCourse />)
+    await pickSource()
+    expect(screen.getByRole("alert")).toHaveTextContent(/already exists/i)
     duplicate.isError = false
     duplicate.error = null
   })

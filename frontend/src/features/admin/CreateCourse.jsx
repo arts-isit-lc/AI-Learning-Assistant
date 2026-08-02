@@ -34,6 +34,14 @@ import {
 const DEFAULT_PROMPT =
   "Engage with the student through questions and conversation to identify gaps in their understanding. Address those gaps with targeted explanations, answers to their questions, and references to the relevant course materials. Focus only on concepts needed to resolve the identified misunderstandings rather than providing broad summaries."
 
+/**
+ * Inline copy for the 409 that create_course / duplicate_course return when a
+ * course's identity (name + code + term + section) already exists. Shared with
+ * the Duplicate modals via import so the wording never drifts.
+ */
+export const COURSE_EXISTS_MESSAGE =
+  "A course with the same name, code, term, and section already exists."
+
 /** Generate a 16-char access code formatted XXXX-XXXX-XXXX-XXXX (ported). */
 export function generateAccessCode() {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -236,7 +244,9 @@ export function CreateCourse() {
 
         {create.isError && (
           <Alert variant="destructive">
-            <AlertDescription>{toUserMessage(create.error)}</AlertDescription>
+            <AlertDescription>
+              {toUserMessage(create.error, { 409: COURSE_EXISTS_MESSAGE })}
+            </AlertDescription>
           </Alert>
         )}
 

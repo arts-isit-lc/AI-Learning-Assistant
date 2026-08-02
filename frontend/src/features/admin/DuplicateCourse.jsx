@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { MdContentCopy } from "react-icons/md"
 import { useAdminCourses, useDuplicateCourse } from "@/services/queries"
 import { COURSE_TERMS } from "@/constants/courseTerms"
-import { generateAccessCode, parseCourseCode } from "./CreateCourse"
+import { generateAccessCode, parseCourseCode, COURSE_EXISTS_MESSAGE } from "./CreateCourse"
 import { UnsavedChangesPrompt } from "@/components/composed/UnsavedChangesPrompt"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -56,6 +56,7 @@ export function DuplicateCourse() {
   const [code, setCode] = useState("")
   const [title, setTitle] = useState("")
   const [term, setTerm] = useState("")
+  const [section, setSection] = useState("")
   const [accessCode, setAccessCode] = useState(() => generateAccessCode())
   // Set to the destination once the course is duplicated, so the unsaved-changes
   // guard is disarmed before we navigate to the new course (see effect below).
@@ -88,6 +89,7 @@ export function DuplicateCourse() {
     setCode([src.course_department, src.course_number].filter(Boolean).join(" "))
     setTitle(src.course_name ? `${src.course_name} (copy)` : "")
     setTerm(src.term ?? "")
+    setSection(src.section ?? "")
     setAccessCode(generateAccessCode())
   }
 
@@ -108,6 +110,8 @@ export function DuplicateCourse() {
         number,
         // Empty term is omitted by the hook so the source term is preserved.
         term,
+        // Empty section is likewise omitted by the hook (source section kept).
+        section: section.trim(),
         accessCode,
         active: source ? source.course_student_access !== false : true,
         systemPrompt: source?.system_prompt ?? "",
@@ -193,6 +197,18 @@ export function DuplicateCourse() {
             </Select>
           </div>
 
+          <div className="flex flex-col">
+            <Label htmlFor="dup-course-section">Section</Label>
+            <Input
+              id="dup-course-section"
+              className="h-7"
+              value={section}
+              onChange={(e) => setSection(e.target.value)}
+              placeholder="e.g. 001"
+              maxLength={20}
+            />
+          </div>
+
           <div className="flex flex-col mb-6">
             <Label>Access code</Label>
             <div className="flex items-center justify-between gap-2">
@@ -221,7 +237,9 @@ export function DuplicateCourse() {
 
         {duplicate.isError && (
           <Alert variant="destructive">
-            <AlertDescription>{toUserMessage(duplicate.error)}</AlertDescription>
+            <AlertDescription>
+              {toUserMessage(duplicate.error, { 409: COURSE_EXISTS_MESSAGE })}
+            </AlertDescription>
           </Alert>
         )}
 

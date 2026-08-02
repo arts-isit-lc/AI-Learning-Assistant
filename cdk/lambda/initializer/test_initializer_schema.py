@@ -275,3 +275,45 @@ class TestForeignKeysAreNamed:
             '"chatlogs_notifications_instructor_email_fkey"',
         ):
             assert f"DROP CONSTRAINT IF EXISTS {auto}" in src, f"missing legacy drop for {auto}"
+
+
+class TestCourseIdentityUniqueIndex:
+    """Courses must enforce identity uniqueness on the combination
+    (course_name, course_department, course_number, term, section). A functional
+    UNIQUE INDEX normalizes the text fields (lower + btrim) and coalesces the
+    nullable term/section to '' so "no term/section" collapses to a single
+    identity — a plain unique index treats NULLs as DISTINCT and would let such
+    duplicates through. course_number is integer, compared exactly. The
+    create_course/duplicate_course handlers enforce the same rule at the app layer
+    (pre-check + 23505->409); this index is the race-safe backstop.
+    """
+
+    def test_unique_index_present_and_idempotent(self):
+        src = _source()
+        assert "CREATE UNIQUE INDEX IF NOT EXISTS ux_courses_identity" in src
+        assert 'ON "Courses" (' in src
+
+    def test_text_fields_normalized_and_number_exact(self):
+        src = _source()
+        assert "lower(btrim(course_name))" in src
+        assert "lower(btrim(course_department))" in src
+        # course_number is integer — included in the index and matched exactly,
+        # NOT wrapped in lower/btrim (which would fail on a non-text type anyway).
+        assert "course_number," in src
+        assert "lower(btrim(course_number))" not in src
+
+    def test_nullable_term_and_section_coalesced(self):
+        src = _source()
+        assert "lower(btrim(coalesce(term, '')))" in src
+        assert "lower(btrim(coalesce(section, '')))" in src
+
+    def test_index_built_after_term_and_section_backfills(self):
+        # The functional index references term & section, so their
+        # ADD COLUMN IF NOT EXISTS migrations must run first (schema-drift rule),
+        # or the index build fails on a pre-existing table missing the columns.
+        src = _source()
+        term_pos = src.index('ALTER TABLE "Courses" ADD COLUMN IF NOT EXISTS "term" varchar')
+        section_pos = src.index('ALTER TABLE "Courses" ADD COLUMN IF NOT EXISTS "section" varchar')
+        index_pos = src.index("CREATE UNIQUE INDEX IF NOT EXISTS ux_courses_identity")
+        assert index_pos > term_pos
+        assert index_pos > section_pos
