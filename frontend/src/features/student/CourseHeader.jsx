@@ -70,7 +70,7 @@ export function CourseHeader({ course, collapsible = false, collapsed = false, o
   if (collapsed) {
     return (
       <div className="flex justify-between items-start mt-6">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 mb-6">
           <CoursesBackLink />
           {/* Collapsed one-liner (Figma 209:4781): the course code stays beside
               the back link so the reduced header remains identifiable. */}
@@ -83,7 +83,7 @@ export function CourseHeader({ course, collapsible = false, collapsed = false, o
 
   return (
     <div className="flex flex-col">
-      <div className="flex items-start justify-between gap-4 mt-6">
+      <div className="flex items-start justify-between gap-4">
         <CoursesBackLink />
         {collapsible && <CollapseToggle collapsed={false} onToggle={onToggleCollapse} />}
       </div>
