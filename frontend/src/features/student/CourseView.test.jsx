@@ -56,6 +56,28 @@ describe("CourseView", () => {
     expect(screen.getByRole("button", { name: /learning journey/i })).toBeInTheDocument()
   })
 
+  it("Reduce/Expand collapses the header — hides the Learning Journey bar, keeps code + Concepts", async () => {
+    renderCourse()
+
+    // Expanded by default: the Reduce toggle and the Learning Journey bar show.
+    const reduce = screen.getByRole("button", { name: /reduce/i })
+    expect(screen.getByRole("button", { name: /learning journey/i })).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "GEOG 250" })).toBeInTheDocument()
+
+    // Reduce → the Learning Journey bar collapses away; the toggle flips to
+    // Expand, and the course code + Concepts stay in view. (/expand$/ avoids the
+    // separate "Expand all" concepts control.)
+    await userEvent.click(reduce)
+    expect(screen.queryByRole("button", { name: /learning journey/i })).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /expand$/i })).toBeInTheDocument()
+    expect(screen.getByText("GEOG 250")).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Concepts" })).toBeInTheDocument()
+
+    // Expand → the Learning Journey bar returns.
+    await userEvent.click(screen.getByRole("button", { name: /expand$/i }))
+    expect(screen.getByRole("button", { name: /learning journey/i })).toBeInTheDocument()
+  })
+
   it("toggles Expand all / Collapse all — Expand all active (bold + primary) by default", async () => {
     renderCourse()
     const expandBtn = screen.getByRole("button", { name: "Expand all" })

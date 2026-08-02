@@ -26,10 +26,15 @@ import { LearningJourneyBar } from "./LearningJourneyBar"
 export { groupConcepts }
 
 /**
- * Student course view — Figma 143:1427 (collapsed) / 151:3297 (expanded).
- * Shared `CourseHeader` + `LearningJourneyBar`, then a Concepts accordion where
- * each concept is a bordered card showing `X/Y completed` (modules) and, when
- * expanded, its module links with a completion circle.
+ * Student course view — Figma 143:1427. Shared `CourseHeader` + `LearningJourneyBar`,
+ * then a Concepts accordion where each concept is a bordered card showing
+ * `X/Y completed` (modules) and, when expanded, its module links with a completion
+ * circle.
+ *
+ * The header is collapsible (Reduce/Expand, top-right) like the module chat
+ * (Figma 162:3817 / 209:4781): reduced, it shrinks to `‹ COURSES  <code>` and the
+ * Learning Journey bar gives way to a full-bleed rule, keeping the Concepts list
+ * in focus.
  */
 export function CourseView() {
   const { courseId } = useParams()
@@ -46,6 +51,8 @@ export function CourseView() {
 
   const conceptIds = concepts.map((c) => c.concept_id)
   const [open, setOpen] = useState([])
+  // Collapsible course header (Reduce/Expand, top-right), mirroring the module chat.
+  const [headerCollapsed, setHeaderCollapsed] = useState(false)
   // Expand/Collapse-all toggle — "Expand all" is active by default, so every
   // concept is open on first load; only the two toggle buttons change this.
   const [expandedMode, setExpandedMode] = useState(true)
@@ -59,13 +66,28 @@ export function CourseView() {
 
   return (
     <PageContainer>
-      <CourseHeader course={course} />
-      <LearningJourneyBar
-        concepts={concepts}
-        completedConcepts={completedConcepts}
-        totalConcepts={totalConcepts}
-        percent={percent}
+      <CourseHeader
+        course={course}
+        collapsible
+        collapsed={headerCollapsed}
+        onToggleCollapse={() => setHeaderCollapsed((v) => !v)}
       />
+      {!headerCollapsed ? (
+        <LearningJourneyBar
+          concepts={concepts}
+          completedConcepts={completedConcepts}
+          totalConcepts={totalConcepts}
+          percent={percent}
+        />
+      ) : (
+        // Reduced: mirror StudentChat — the course details + Learning Journey bar
+        // collapse away, standing in a matching full-bleed rule so the reduced
+        // header stays separated from the Concepts list below.
+        <div
+          role="separator"
+          className="relative left-1/2 w-screen -translate-x-1/2 border-b border-border"
+        />
+      )}
 
       <div className="mt-6 mb-6 flex items-center justify-between">
         <h2 className="text-lg leading-7 font-semibold text-neutral-900">Concepts</h2>
