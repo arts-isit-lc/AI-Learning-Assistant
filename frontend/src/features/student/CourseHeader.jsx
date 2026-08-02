@@ -83,7 +83,7 @@ export function CourseHeader({ course, collapsible = false, collapsed = false, o
 
   return (
     <div className="flex flex-col">
-      <div className="flex items-start justify-between gap-4 mt-6">
+      <div className="flex items-start justify-between gap-4 mb-6">
         <CoursesBackLink />
         {collapsible && <CollapseToggle collapsed={false} onToggle={onToggleCollapse} />}
       </div>
