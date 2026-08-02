@@ -3,13 +3,25 @@
 The initializer's DDL lives as an inline SQL string inside the handler, so this
 verifies it at the source level: the ANN (HNSW) index must be present, use the
 opclass that matches the retrieval query's distance operator, and degrade
-gracefully on older pgvector. Deterministic — no DB or import required.
+gracefully on older pgvector. The credential-resolution tests additionally import
+the module and exercise its pure helper; that is import-safe (lazy DB connection +
+os.environ.get, so no env vars, AWS creds, or DB socket are needed). Deterministic
+— no network, no DB.
 """
 from __future__ import annotations
 
 import os
+import sys
+
+import pytest
 
 _INIT_PATH = os.path.join(os.path.dirname(__file__), "initializer.py")
+
+# Behavioral tests below import the initializer module to call _resolve_credentials
+# directly. The module is import-safe (see the module docstring), so this stays
+# deterministic and offline.
+sys.path.insert(0, os.path.dirname(_INIT_PATH))
+import initializer  # noqa: E402
 
 
 def _source() -> str:
@@ -317,3 +329,124 @@ class TestCourseIdentityUniqueIndex:
         index_pos = src.index("CREATE UNIQUE INDEX IF NOT EXISTS ux_courses_identity")
         assert index_pos > term_pos
         assert index_pos > section_pos
+
+
+class TestCredentialResolution:
+    """The initializer must treat Secrets Manager as the source of truth for the
+    app DB credentials: REUSE stored credentials on re-run and generate new ones
+    ONLY on first init (secret at the bootstrap placeholder) or teardown (secret
+    empty). Regenerating on every run rotated the username/password and desynced
+    the secret, the RDS Proxy's cached copy, and each Lambda's cached connection —
+    the direct cause of "This RDS proxy has no credentials for the role <username>"
+    (adminFunction.js:243). Pure logic, exercised directly.
+    """
+
+    def test_reuses_existing_real_credentials(self):
+        # Real stored creds -> reuse verbatim, is_new False, generator never called.
+        def _must_not_generate(_nbytes):
+            pytest.fail("must not generate credentials when reusing existing ones")
+
+        result = initializer._resolve_credentials(
+            {"username": "2ba85710a3a7e6c7", "password": "deadbeefcafe", "host": "h"},
+            generate=_must_not_generate,
+        )
+        assert result == ("2ba85710a3a7e6c7", "deadbeefcafe", False)
+
+    def test_generates_when_placeholder_present(self):
+        # First init: secret still holds the database-stack.ts placeholder username.
+        result = initializer._resolve_credentials(
+            {
+                "username": initializer.PLACEHOLDER_USERNAME,
+                "password": "applicationPassword",
+            },
+            generate=lambda nbytes: f"gen{nbytes}",
+        )
+        assert result == ("gen8", "gen16", True)
+
+    @pytest.mark.parametrize(
+        "secret",
+        [
+            {},
+            None,
+            {"username": "only_user"},          # missing password
+            {"password": "only_pass"},          # missing username
+            {"username": "", "password": ""},   # empty strings
+        ],
+    )
+    def test_generates_when_credentials_absent(self, secret):
+        _, _, is_new = initializer._resolve_credentials(secret, generate=lambda n: "x")
+        assert is_new is True
+
+    def test_generated_values_are_hex_with_token_hex_lengths(self):
+        # Real generator (secrets.token_hex): username = token_hex(8) = 16 hex chars,
+        # password = token_hex(16) = 32 hex chars. Locks generated-vs-reused shape.
+        username, password, is_new = initializer._resolve_credentials({})
+        assert is_new is True
+        assert len(username) == 16
+        assert len(password) == 32
+        int(username, 16)  # raises ValueError if non-hex
+        int(password, 16)
+
+    def test_reuse_ignores_extra_secret_keys(self):
+        # host/port/dbname etc. must not affect the reuse decision.
+        username, password, is_new = initializer._resolve_credentials(
+            {
+                "username": "u1",
+                "password": "p1",
+                "host": "db.internal",
+                "port": 5432,
+                "dbname": "aila",
+            },
+            generate=lambda n: "SHOULD_NOT_BE_USED",
+        )
+        assert (username, password, is_new) == ("u1", "p1", False)
+
+
+class TestCredentialsStableAcrossRuns:
+    """Source-level guards so the credential-rotation regression cannot silently
+    return: no unconditional regeneration, both app secrets are read for reuse,
+    CREATE USER is idempotent, and secrets are (re)written only when newly minted.
+    """
+
+    def test_no_unconditional_random_generation(self):
+        # The removed 4-line block assigned secrets.token_hex to username/password
+        # on EVERY run — the root cause. It must not come back.
+        src = _source()
+        assert "username = secrets.token_hex(8)" not in src
+        assert "password = secrets.token_hex(16)" not in src
+        assert "usernameTableCreator = secrets.token_hex(8)" not in src
+
+    def test_resolve_credentials_used_for_both_app_users(self):
+        # Once for the readwrite user secret, once for the tablecreator secret.
+        assert _source().count("_resolve_credentials(") >= 2
+
+    def test_reads_current_app_secrets_for_reuse(self):
+        src = _source()
+        assert "_get_secret_dict(sm_client, DB_USER_SECRET_NAME)" in src
+        assert "_get_secret_dict(sm_client, DB_PROXY)" in src
+
+    def test_create_user_is_idempotent(self):
+        # A pre-existing user (re-run) must re-assert its password via ALTER USER,
+        # not fail or mint a brand-new random user. Two role blocks + two user
+        # blocks => four duplicate_object guards.
+        src = _source()
+        assert src.count("ALTER USER") >= 2
+        assert src.count("WHEN duplicate_object THEN") >= 4
+
+    def test_secret_writes_conditional_on_new_credentials(self):
+        src = _source()
+        assert "if user_is_new:" in src
+        assert "if tablecreator_is_new:" in src
+
+    def test_placeholder_matches_database_stack_seed(self):
+        # The reuse gate keys off this exact placeholder; it must equal the value
+        # database-stack.ts seeds into the secrets (SecretValue "applicationUsername").
+        assert initializer.PLACEHOLDER_USERNAME == "applicationUsername"
+
+    def test_connection_is_lazy_not_module_level(self):
+        # Module-level connect at import would (a) break these imports and (b) mean
+        # a warm re-run never re-reads the secret. Init must be inside the handler.
+        src = _source()
+        assert "dbSecret = None" in src
+        assert "connection = None" in src
+        assert "dbSecret = getDbSecret()\nconnection = createConnection()" not in src

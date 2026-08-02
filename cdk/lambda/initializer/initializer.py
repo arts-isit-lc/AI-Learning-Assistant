@@ -5,10 +5,17 @@ import psycopg2
 from psycopg2.extensions import AsIs
 import secrets
 
-DB_SECRET_NAME = os.environ["DB_SECRET_NAME"]
-DB_USER_SECRET_NAME = os.environ["DB_USER_SECRET_NAME"]
-DB_PROXY = os.environ["DB_PROXY"]
-print(psycopg2.__version__)
+# Read with .get so importing this module (e.g. in unit tests) does not require
+# the Lambda env vars to be set; they are always present at runtime.
+DB_SECRET_NAME = os.environ.get("DB_SECRET_NAME")
+DB_USER_SECRET_NAME = os.environ.get("DB_USER_SECRET_NAME")
+DB_PROXY = os.environ.get("DB_PROXY")
+
+# Bootstrap placeholder that database-stack.ts seeds into the user/tablecreator
+# secrets at stack-create time. Its presence means "no real credentials yet" so
+# this run mints them; ANY other stored username means real credentials already
+# exist and MUST be reused (see _resolve_credentials).
+PLACEHOLDER_USERNAME = "applicationUsername"
 
 
 def getDbSecret():
@@ -17,6 +24,40 @@ def getDbSecret():
     response = sm_client.get_secret_value(SecretId=DB_SECRET_NAME)["SecretString"]
     secret = json.loads(response)
     return secret
+
+
+def _get_secret_dict(sm_client, secret_id):
+    """Fetch a Secrets Manager secret as a dict; {} when unset/unreadable.
+
+    Used to read the CURRENT app-user secrets so their credentials can be reused
+    instead of regenerated on every run.
+    """
+    try:
+        raw = sm_client.get_secret_value(SecretId=secret_id)["SecretString"]
+        return json.loads(raw)
+    except Exception:
+        return {}
+
+
+def _resolve_credentials(existing_secret, generate=secrets.token_hex):
+    """Return (username, password, is_new) for an app DB user.
+
+    Secrets Manager is the source of truth: reuse the stored username/password
+    when they are real, and generate fresh credentials ONLY on first init (the
+    secret still holds PLACEHOLDER_USERNAME) or after a teardown (secret empty).
+    Keeping credentials STABLE across deploys is what stops the secret, the RDS
+    Proxy's cached copy of it, and each Lambda's cached connection from disagreeing
+    about the current role — the disagreement that raises
+    "This RDS proxy has no credentials for the role <username>". Pure: no AWS/DB.
+    """
+    existing = existing_secret or {}
+    username = existing.get("username")
+    password = existing.get("password")
+    if username and password and username != PLACEHOLDER_USERNAME:
+        return username, password, False
+    # token_hex(8) -> 16 hex chars (username); token_hex(16) -> 32 (password).
+    return generate(8), generate(16), True
+
 
 def createConnection():
 
@@ -30,14 +71,17 @@ def createConnection():
     return connection
 
 
-dbSecret = getDbSecret()
-connection = createConnection()
+# Connection state is initialized lazily in the handler (not at import) so this
+# module can be imported by unit tests without AWS credentials or a live DB.
+dbSecret = None
+connection = None
 
 
 def handler(event, context):
-    global connection
-    print(connection)
-    if connection.closed:
+    global dbSecret, connection
+    if dbSecret is None:
+        dbSecret = getDbSecret()
+    if connection is None or connection.closed:
         connection = createConnection()
     
     cursor = connection.cursor()
@@ -519,11 +563,20 @@ def handler(event, context):
         cursor.execute(sqlTableCreation)
         connection.commit()
 
-        # Generate 16 bytes username and password randomly
-        username = secrets.token_hex(8)
-        password = secrets.token_hex(16)
-        usernameTableCreator = secrets.token_hex(8)
-        passwordTableCreator = secrets.token_hex(16)
+        # Resolve app-user credentials from Secrets Manager (the source of truth):
+        # reuse the stored credentials when present, and generate new ones ONLY on
+        # first init / after a teardown (secret still at the bootstrap placeholder).
+        # Regenerating every run rotated the credentials and desynced the secret,
+        # the RDS Proxy's cached copy, and each Lambda's cached connection — the
+        # cause of "This RDS proxy has no credentials for the role <username>".
+        # See _resolve_credentials and engineering-log.md (ADR-017 / Deploy Gotchas).
+        sm_client = boto3.client("secretsmanager")
+        username, password, user_is_new = _resolve_credentials(
+            _get_secret_dict(sm_client, DB_USER_SECRET_NAME)
+        )
+        usernameTableCreator, passwordTableCreator, tablecreator_is_new = _resolve_credentials(
+            _get_secret_dict(sm_client, DB_PROXY)
+        )
 
         # Create new user with the following permission:
         #   - SELECT, INSERT, UPDATE, DELETE
@@ -546,7 +599,14 @@ def handler(event, context):
             GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO readwrite;
             ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE ON SEQUENCES TO readwrite;
 
-            CREATE USER "%s" WITH PASSWORD '%s';
+            DO $$
+            BEGIN
+                CREATE USER "%s" WITH PASSWORD '%s';
+            EXCEPTION
+                WHEN duplicate_object THEN
+                    ALTER USER "%s" WITH PASSWORD '%s';
+            END
+            $$;
             GRANT readwrite TO "%s";
         """
         
@@ -568,15 +628,26 @@ def handler(event, context):
             GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO tablecreator;
             ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE ON SEQUENCES TO tablecreator;
 
-            CREATE USER "%s" WITH PASSWORD '%s';
+            DO $$
+            BEGIN
+                CREATE USER "%s" WITH PASSWORD '%s';
+            EXCEPTION
+                WHEN duplicate_object THEN
+                    ALTER USER "%s" WITH PASSWORD '%s';
+            END
+            $$;
             GRANT tablecreator TO "%s";
         """
 
 
-        # Execute user creation
+        # Execute user creation. The %s placeholders feed the idempotent DO block:
+        #   CREATE USER "<u>" WITH PASSWORD '<p>'  /  (on conflict) ALTER USER "<u>" WITH PASSWORD '<p>'
+        # then GRANT <role> TO "<u>"  ->  (username, password, username, password, username).
         cursor.execute(
             sqlCreateUser,
             (
+                AsIs(username),
+                AsIs(password),
                 AsIs(username),
                 AsIs(password),
                 AsIs(username),
@@ -589,25 +660,32 @@ def handler(event, context):
                 AsIs(usernameTableCreator),
                 AsIs(passwordTableCreator),
                 AsIs(usernameTableCreator),
+                AsIs(passwordTableCreator),
+                AsIs(usernameTableCreator),
             ),
         )
         connection.commit()
 
-        # Store table creator credentials in Secrets Manager
-        authInfoTableCreator = {"username": usernameTableCreator, "password": passwordTableCreator}
-        dbSecret.update(authInfoTableCreator)
-        sm_client = boto3.client("secretsmanager")
-        sm_client.put_secret_value(
-            SecretId=DB_PROXY, SecretString=json.dumps(dbSecret)
-        )
+        # Persist ONLY newly-minted credentials. On reuse the secret already holds
+        # the correct values (it is the source of truth), so rewriting it would
+        # spawn a new secret version and briefly desync the RDS Proxy for nothing.
+        # Each write copies dbSecret (which carries host/port/dbname + other keys
+        # from the admin secret) so the two app secrets never share a mutated dict.
+        if tablecreator_is_new:
+            tablecreator_secret = dict(dbSecret)
+            tablecreator_secret.update(
+                {"username": usernameTableCreator, "password": passwordTableCreator}
+            )
+            sm_client.put_secret_value(
+                SecretId=DB_PROXY, SecretString=json.dumps(tablecreator_secret)
+            )
 
-        # Store read/write user credentials in Secrets Manager
-        authInfo = {"username": username, "password": password}
-        dbSecret.update(authInfo)
-        sm_client = boto3.client("secretsmanager")
-        sm_client.put_secret_value(
-            SecretId=DB_USER_SECRET_NAME, SecretString=json.dumps(dbSecret)
-        )
+        if user_is_new:
+            user_secret = dict(dbSecret)
+            user_secret.update({"username": username, "password": password})
+            sm_client.put_secret_value(
+                SecretId=DB_USER_SECRET_NAME, SecretString=json.dumps(user_secret)
+            )
 
         # Close cursor and connection
         cursor.close()
