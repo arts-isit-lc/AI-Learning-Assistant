@@ -83,13 +83,16 @@ describe("CourseHeader", () => {
     expect(screen.queryByText(/syllabus/i)).not.toBeInTheDocument()
   })
 
-  it("collapsed (chat) shows only the back link + Expand, hiding course details", () => {
+  it("collapsed (chat) shows the back link + course code + Expand, hiding the rest (Figma 209:4781)", () => {
     renderHeader({ course: COURSE, collapsible: true, collapsed: true, onToggleCollapse: () => {} })
 
     expect(screen.getByRole("link", { name: /courses/i })).toBeInTheDocument()
+    // Course code stays visible next to the back link, but as plain text (no h1).
+    expect(screen.getByText("GEOG 412")).toBeInTheDocument()
+    expect(screen.queryByRole("heading")).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: /expand/i })).toBeInTheDocument()
 
-    expect(screen.queryByRole("heading", { name: "GEOG 412" })).not.toBeInTheDocument()
+    // The full details collapse away.
     expect(screen.queryByText("Ada Lovelace")).not.toBeInTheDocument()
     expect(screen.queryByText("Section 101")).not.toBeInTheDocument()
   })
