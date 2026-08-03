@@ -58,6 +58,25 @@ describe("InstructorCourseLayout", () => {
     expect(screen.getByRole("button", { name: /copy access code/i })).toHaveClass("text-primary")
   })
 
+  it("gives inactive section tabs the rounded brand hover state (bg #F2E8FF / text #2E0666)", () => {
+    renderLayout() // Settings is active here → hover applies to the other four.
+    for (const name of ["Configuration", "Insights", "Chat history", "Students"]) {
+      const tab = screen.getByRole("link", { name })
+      expect(tab).toHaveClass("hover:bg-primary-subtle")
+      expect(tab).toHaveClass("hover:text-primary-dark")
+      expect(tab).toHaveClass("rounded")
+    }
+  })
+
+  it("gives the active section tab no hover state and no rounded corners", () => {
+    renderLayout()
+    const active = screen.getByRole("link", { name: "Settings" })
+    expect(active).toHaveClass("border-primary", "text-primary")
+    expect(active).not.toHaveClass("rounded")
+    expect(active).not.toHaveClass("hover:bg-primary-subtle")
+    expect(active).not.toHaveClass("hover:text-primary-dark")
+  })
+
   it("flags the Settings tab with a dot when there is an unresolved prompt conflict", () => {
     promptResult = { data: { conflict_metadata: { has_conflicts: true } } }
     renderLayout()
