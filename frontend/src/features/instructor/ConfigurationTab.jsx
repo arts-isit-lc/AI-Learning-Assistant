@@ -157,7 +157,7 @@ export function ConfigurationTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-2 mb-6">
+      <div className="flex items-center justify-between gap-2 mb-8">
         <h2 className="text-sm leading-7 font-semibold text-neutral-900">Course configuration</h2>
         <div className="flex gap-2">
           {/* Figma `Button/UI/Desktop/Secondary with Icon` (node 1099:6534): outline
@@ -165,7 +165,7 @@ export function ConfigurationTab() {
           <Button
             variant="outline"
             size="sm"
-            className="h-7 gap-2 rounded-sm px-2"
+            className="h-7 gap-2 rounded-sm px-2 py-1"
             aria-label="Add concept"
             onClick={() => setAddingConcept(true)}
           >
@@ -174,7 +174,7 @@ export function ConfigurationTab() {
           <Button
             variant="outline"
             size="sm"
-            className="h-7 gap-2 rounded-sm px-2"
+            className="h-7 gap-2 rounded-sm px-2 py-1"
             aria-label="Add module"
             onClick={() => navigate(`${moduleBasePath}/new`)}
             disabled={concepts.length === 0}

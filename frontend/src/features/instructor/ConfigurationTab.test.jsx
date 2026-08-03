@@ -75,6 +75,15 @@ describe("ConfigurationTab", () => {
     expect(screen.getByRole("button", { name: "ii. Vectors" })).toBeInTheDocument()
   })
 
+  it("gives the Add concept / Add module buttons the brand #F2E8FF hover (outline variant)", () => {
+    render(<ConfigurationTab />)
+    // Both use the shared `outline` Button variant, which carries
+    // hover:bg-primary-subtle (#F2E8FF). concepts.length > 0 here, so Add module
+    // is enabled and still receives the hover.
+    expect(screen.getByRole("button", { name: /add concept/i })).toHaveClass("hover:bg-primary-subtle")
+    expect(screen.getByRole("button", { name: /add module/i })).toHaveClass("hover:bg-primary-subtle")
+  })
+
   it("creates a concept from the inline add form", async () => {
     render(<ConfigurationTab />)
     await userEvent.click(screen.getByRole("button", { name: /add concept/i }))
