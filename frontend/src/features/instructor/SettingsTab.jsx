@@ -138,7 +138,7 @@ export function SettingsTab() {
         <p className="text-caption leading-7 text-muted-foreground">
           This is the base system prompt applied to all courses. It cannot be edited.
         </p>
-        <p className="whitespace-pre-wrap rounded-sm border border-border bg-background p-4 text-caption leading-7 text-muted-foreground">
+        <p className="whitespace-pre-wrap border border-border bg-background p-4 text-caption text-muted-foreground">
           {SYSTEM_LEVEL_PROMPT}
         </p>
       </section>
@@ -154,7 +154,7 @@ export function SettingsTab() {
         {hasConflicts && <ConflictWarning />}
 
         <Textarea
-          className="mt-3"
+          className="mt-3 p-4"
           value={userPrompt}
           onChange={handlePromptChange}
           rows={6}
