@@ -27,7 +27,7 @@ const TABS = [
 
 const tabClass = ({ isActive }) =>
   cn(
-    "-mb-px border-b-[3px] px-6 py-2 text-caption font-semibold transition-colors duration-fast",
+    "-mb-px border-b-[3px] px-6 py-1 text-caption font-semibold transition-colors duration-fast",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
     // Only inactive tabs get the rounded hover fill — brand "lightest" surface
     // (#F2E8FF / --primary-subtle) + "Faculty of Arts/Dark" text (#2E0666 /
