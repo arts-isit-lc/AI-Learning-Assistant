@@ -114,12 +114,12 @@ export function SettingsTab() {
   }
 
   return (
-    <div className="flex max-w-3xl flex-col gap-8">
+    <div className="flex max-w-3xl flex-col gap-6">
       <UnsavedChangesPrompt when={dirty} />
       {/* Language model */}
       <section>
-        <h3 className="text-caption font-semibold text-neutral-900">Language model</h3>
-        <p className="mt-1 text-caption text-muted-foreground">
+        <h3 className="text-caption font-semibold leading-7 text-neutral-900">Language model</h3>
+        <p className="text-caption leading-7 text-muted-foreground">
           Choose which language model you&rsquo;d like to use for chatting with students and analyzing
           reference materials.
         </p>
@@ -128,30 +128,30 @@ export function SettingsTab() {
           onChange={setModelId}
           models={MODELS}
           aria-label="Language model"
-          className="mt-3 w-full"
+          className="w-full"
         />
       </section>
 
       {/* System prompt (read-only) */}
       <section>
-        <h3 className="text-caption font-semibold text-neutral-900">System prompt</h3>
-        <p className="mt-1 text-caption text-muted-foreground">
+        <h3 className="text-caption font-semibold leading-7 text-neutral-900">System prompt</h3>
+        <p className="text-caption leading-7 text-muted-foreground">
           This is the base system prompt applied to all courses. It cannot be edited.
         </p>
-        <p className="mt-3 whitespace-pre-wrap rounded-sm border border-border bg-background p-4 text-caption text-muted-foreground">
+        <p className="whitespace-pre-wrap rounded-sm border border-border bg-background p-4 text-caption leading-7 text-muted-foreground">
           {SYSTEM_LEVEL_PROMPT}
         </p>
       </section>
 
       {/* Your prompt (editable, with conflict check) */}
       <section>
-        <h3 className="text-caption font-semibold text-neutral-900">Your prompt</h3>
-        <p className="mt-1 text-caption text-muted-foreground">
+        <h3 className="text-caption font-semibold leading-7 text-neutral-900">Your prompt</h3>
+        <p className="text-caption leading-7 text-muted-foreground">
           <span className="font-semibold text-foreground">Warning:</span> Modifying the prompt in the text
           area below can significantly impact the quality and accuracy of the responses.
         </p>
 
-        {hasConflicts && <ConflictWarning className="mt-3" />}
+        {hasConflicts && <ConflictWarning />}
 
         <Textarea
           className="mt-3"
@@ -168,9 +168,6 @@ export function SettingsTab() {
           <span className={cn("text-caption text-muted-foreground", overLimit && "text-destructive")}>
             {userPrompt.length}/{PROMPT_CHAR_LIMIT}
           </span>
-          <Button variant="outline" onClick={handleCheck} loading={validate.isPending}>
-            Check for conflicts
-          </Button>
         </div>
 
         <ConflictList report={activeReport} />
