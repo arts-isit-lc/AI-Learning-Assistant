@@ -151,7 +151,7 @@ function SortableModuleRow({ module, number, courseId, conceptName, onEdit, onDe
               {/* Footer (Figma 859:7479): Delete module = plain destructive text
                   link (left); Edit = a Secondary CTA = outline button (right, 59x40 =
                   the default outline size). py-2 gives the 40px button breathing room. */}
-              <div className="flex items-center justify-between border-t border-border px-6 py-2">
+              <div className="flex items-center justify-between border-t border-border pt-4">
                 <Button variant="link" className="p-0 text-destructive leading-7" onClick={() => onDelete(module)}>
                   Delete module
                 </Button>
