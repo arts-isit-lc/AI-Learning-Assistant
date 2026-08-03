@@ -16,7 +16,7 @@ const AccordionTrigger = React.forwardRef(function AccordionTrigger({ className,
       <AccordionPrimitive.Trigger
         ref={ref}
         className={cn(
-          "flex flex-1 items-center justify-between text-caption font-semibold transition-all",
+          "group flex flex-1 items-center justify-between text-caption font-semibold transition-all",
           "hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
           "[&[data-state=open]>svg]:rotate-180",
           className
@@ -24,7 +24,12 @@ const AccordionTrigger = React.forwardRef(function AccordionTrigger({ className,
         {...props}
       >
         {children}
-        <Icon icon={MdExpandMore} size={24} className="shrink-0 transition-transform duration-fast" />
+        {/* Chevron greys to #BFBFBF (neutral-400) while the trigger is hovered. */}
+        <Icon
+          icon={MdExpandMore}
+          size={24}
+          className="shrink-0 transition duration-fast group-hover:text-neutral-400"
+        />
       </AccordionPrimitive.Trigger>
     </AccordionPrimitive.Header>
   )

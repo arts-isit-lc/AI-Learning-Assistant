@@ -105,14 +105,18 @@ function SortableModuleRow({ module, number, courseId, conceptName, onEdit, onDe
               <Icon icon={MdDragIndicator} size={24} />
             </button>
             <AccordionPrimitive.Header className="flex flex-1">
-              <AccordionPrimitive.Trigger className="flex flex-1 items-center justify-between gap-2 rounded text-left text-caption text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <AccordionPrimitive.Trigger className="group flex flex-1 items-center justify-between gap-2 rounded text-left text-caption text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 <span>
                   {toRoman(number)}. {titleCase(module.module_name)}
                 </span>
+                {/* Chevron greys to #BFBFBF (neutral-400) while the trigger is hovered. */}
                 <Icon
                   icon={MdExpandMore}
                   size={24}
-                  className={cn("shrink-0 transition-transform duration-fast", open && "rotate-180")}
+                  className={cn(
+                    "shrink-0 transition duration-fast group-hover:text-neutral-400",
+                    open && "rotate-180"
+                  )}
                 />
               </AccordionPrimitive.Trigger>
             </AccordionPrimitive.Header>

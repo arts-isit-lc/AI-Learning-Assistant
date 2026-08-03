@@ -46,6 +46,13 @@ describe("ModuleAccordion", () => {
     expect(screen.getByRole("button", { name: "i. Vectors" })).toBeInTheDocument()
   })
 
+  it("greys the module disclosure chevron while its trigger is hovered (group-hover:text-neutral-400)", () => {
+    renderAccordion()
+    const trigger = screen.getByRole("button", { name: "i. Vectors" })
+    expect(trigger).toHaveClass("group")
+    expect(trigger.querySelector("svg")).toHaveClass("group-hover:text-neutral-400")
+  })
+
   it("expands a module to the full read-only summary (all six fields) with Edit/Delete", async () => {
     const { onEditModule, onDeleteModule } = renderAccordion()
     await userEvent.click(screen.getByRole("button", { name: "i. Vectors" }))
