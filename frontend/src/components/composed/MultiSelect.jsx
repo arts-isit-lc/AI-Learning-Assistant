@@ -133,7 +133,10 @@ export function MultiSelect({
                         role="checkbox"
                         aria-checked={checked}
                         onClick={() => toggle(o.value)}
-                        className="flex w-full items-center gap-2 px-4 py-2 text-left text-caption text-foreground transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+                        // 44px rows with the #F2E8FF (primary-subtle) hover surface —
+                        // matches the `Selection/Multi/Option` mockup and keeps the
+                        // option-hover affordance consistent with the single Select.
+                        className="flex w-full items-center gap-2 px-4 py-3 text-left text-caption text-foreground transition-colors hover:bg-primary-subtle focus-visible:bg-primary-subtle focus-visible:outline-none"
                       >
                         <span
                           className={cn(

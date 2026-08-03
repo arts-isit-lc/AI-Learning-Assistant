@@ -2,10 +2,10 @@ import { describe, it, expect } from "vitest"
 import { render, screen } from "@testing-library/react"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "./select"
 
-// Radix Select's open interaction relies on pointer-capture / scrollIntoView
-// that jsdom lacks; the open menu (option alignment + the chevron that rotates
-// up on open) is exercised in Playwright (Phase 5+). Here we verify the closed
-// trigger renders as an accessible combobox and reflects the selected value.
+// The pointer-capture / scrollIntoView APIs Radix Select needs are polyfilled in
+// src/test/setup.js, so we can render the OPEN menu here to assert the option
+// surface (square rows + the #F2E8FF hover tint). Full pointer/keyboard highlight
+// navigation + the chevron rotate-on-open are still exercised in Playwright.
 describe("Select", () => {
   it("renders an accessible combobox trigger", () => {
     render(
@@ -51,5 +51,26 @@ describe("Select", () => {
     const trigger = screen.getByRole("combobox", { name: "Language model" })
     expect(trigger).toHaveClass("group")
     expect(trigger.querySelector("svg")).toHaveClass("group-hover:text-neutral-400")
+  })
+
+  it("gives open options a square, #F2E8FF (primary-subtle) hover surface", async () => {
+    render(
+      <Select defaultOpen defaultValue="a">
+        <SelectTrigger aria-label="Language model">
+          <SelectValue placeholder="Choose a model" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="a">Claude</SelectItem>
+          <SelectItem value="b">Llama</SelectItem>
+        </SelectContent>
+      </Select>
+    )
+    const option = await screen.findByRole("option", { name: "Llama" })
+    // #F2E8FF == the primary-subtle token; applied on both pointer-hover (focus)
+    // and keyboard highlight (data-highlighted). Square, not rounded.
+    expect(option).toHaveClass("focus:bg-primary-subtle")
+    expect(option).toHaveClass("data-[highlighted]:bg-primary-subtle")
+    expect(option).toHaveClass("rounded-none")
+    expect(option).not.toHaveClass("focus:bg-accent")
   })
 })

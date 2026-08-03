@@ -24,6 +24,15 @@ describe("MultiSelect", () => {
     expect(trigger.querySelector("svg")).toHaveClass("group-hover:text-neutral-400")
   })
 
+  it("gives open options the #F2E8FF (primary-subtle) hover surface", async () => {
+    render(<MultiSelect options={OPTIONS} value={[]} onChange={() => {}} aria-label="Picker" />)
+    await userEvent.click(screen.getByRole("button", { name: "Picker" }))
+    const option = await screen.findByRole("checkbox", { name: "Alpha" })
+    // #F2E8FF == the primary-subtle token — same option-hover tint as the single Select.
+    expect(option).toHaveClass("hover:bg-primary-subtle")
+    expect(option).not.toHaveClass("hover:bg-accent")
+  })
+
   it("stages ticks locally and commits them only on Apply", async () => {
     const onChange = vi.fn()
     render(<MultiSelect options={OPTIONS} value={[]} onChange={onChange} aria-label="Picker" />)

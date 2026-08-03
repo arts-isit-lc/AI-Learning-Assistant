@@ -53,7 +53,9 @@ const SelectContent = React.forwardRef(function SelectContent(
         {...props}
       >
         <SelectPrimitive.Viewport
-          className={cn("p-1", position === "popper" && "w-full min-w-[var(--radix-select-trigger-width)]")}
+          // Only vertical padding: options run edge-to-edge so the highlight
+          // surface reaches the panel border (option px-4 keeps the 16px text inset).
+          className={cn("py-1", position === "popper" && "w-full min-w-[var(--radix-select-trigger-width)]")}
         >
           {children}
         </SelectPrimitive.Viewport>
@@ -67,8 +69,13 @@ const SelectItem = React.forwardRef(function SelectItem({ className, children, .
     <SelectPrimitive.Item
       ref={ref}
       className={cn(
-        "relative flex w-full cursor-pointer select-none items-center rounded-sm py-2 pl-4 pr-8 text-caption outline-none",
-        "focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        // 44px rows (py-3 + 20px caption line) with a square, edge-to-edge hover
+        // surface — matches the OCELIA `Selection/Single/Option` mockup.
+        "relative flex w-full cursor-pointer select-none items-center rounded-none py-3 pl-4 pr-8 text-caption outline-none",
+        // Hover / keyboard-highlight surface = #F2E8FF (primary-subtle). Radix flags
+        // the active option with `data-highlighted` AND moves DOM focus to it, so
+        // pointer-hover and arrow-key navigation both tint the same row.
+        "focus:bg-primary-subtle data-[highlighted]:bg-primary-subtle data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         className
       )}
       {...props}
