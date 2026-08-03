@@ -26,4 +26,20 @@ describe("ListRow", () => {
     expect(screen.queryByRole("button")).toBeNull()
     expect(screen.getByText("Static")).toBeInTheDocument()
   })
+
+  it("applies the brand hover surface (#F2E8FF / --primary-subtle) to an interactive, unselected row", () => {
+    render(<ListRow onClick={() => {}}>GEOG 250</ListRow>)
+    expect(screen.getByRole("button", { name: "GEOG 250" })).toHaveClass("hover:bg-primary-subtle")
+  })
+
+  it("does not tint the selected row on hover — it uses the solid brand fill instead", () => {
+    render(
+      <ListRow onClick={() => {}} selected>
+        GEOG 250
+      </ListRow>
+    )
+    const row = screen.getByRole("button", { name: "GEOG 250" })
+    expect(row).not.toHaveClass("hover:bg-primary-subtle")
+    expect(row).toHaveClass("bg-primary")
+  })
 })

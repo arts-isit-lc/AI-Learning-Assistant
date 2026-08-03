@@ -20,7 +20,11 @@ export function ListRow({ children, onClick, selected = false, className }) {
         "group flex w-full items-center gap-3 border-b border-border pt-2 pb-4 px-4 text-left transition-colors duration-fast",
         interactive &&
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-        interactive && !selected && "hover:bg-accent",
+        // Hover = the brand "lightest" surface (--primary-subtle, #F2E8FF /
+        // Faculty of Arts/Lightest), the design system's designated hover/selected
+        // tint — not the neutral `accent` grey. Text is untouched on hover; it
+        // only inverts on the selected row below.
+        interactive && !selected && "hover:bg-primary-subtle",
         // Selected = solid brand fill, flush with the list (no border radius).
         // Children with explicit text colours invert via `group-aria-[current=true]:`
         // (in the feature rows); plain-text children inherit `text-primary-foreground`.

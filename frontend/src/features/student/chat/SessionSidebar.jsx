@@ -34,7 +34,7 @@ export function SessionSidebar({
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-start justify-between gap-2 mb-2">
-        <div className="flex items-start gap-2">
+        <div className="flex items-start gap-2.5">
           {onBack && (
             <button
               type="button"
@@ -45,7 +45,7 @@ export function SessionSidebar({
               <Icon icon={MdChevronLeft} size={16} />
             </button>
           )}
-          <h2 className="text-h4 text-neutral-900">{moduleName}</h2>
+          <h2 className="text-h4 text-neutral-900 font-normal">{moduleName}</h2>
         </div>
         <button
           type="button"
