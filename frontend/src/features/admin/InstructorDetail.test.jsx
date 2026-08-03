@@ -69,6 +69,27 @@ describe("InstructorDetail (staged editing)", () => {
     expect(save).toBeEnabled()
   })
 
+  it("enables Undo with Save on a staged edit and resets everything on click", async () => {
+    render(<InstructorDetail />)
+    const undo = screen.getByRole("button", { name: "Undo" })
+    const save = screen.getByRole("button", { name: "Save changes" })
+    expect(undo).toBeDisabled()
+    expect(save).toBeDisabled()
+
+    // A staged course removal enables both (and drops the row).
+    await userEvent.click(screen.getByRole("button", { name: "Remove" }))
+    expect(screen.queryByText("GEOG 250")).not.toBeInTheDocument()
+    expect(undo).toBeEnabled()
+    expect(save).toBeEnabled()
+
+    // Undo reverts everything: the row returns, both disable again, nothing saved.
+    await userEvent.click(undo)
+    expect(screen.getByText("GEOG 250")).toBeInTheDocument()
+    expect(undo).toBeDisabled()
+    expect(save).toBeDisabled()
+    expect(unenroll.mutateAsync).not.toHaveBeenCalled()
+  })
+
   it("stages a per-course access toggle and commits it only on Save (B4)", async () => {
     render(<InstructorDetail />)
     await userEvent.click(screen.getByRole("switch", { name: "OCELIA access for GEOG 250 — Intro" }))

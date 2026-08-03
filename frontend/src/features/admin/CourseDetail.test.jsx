@@ -84,6 +84,27 @@ describe("CourseDetail (staged editing)", () => {
     expect(save).toBeEnabled()
   })
 
+  it("enables Undo with Save on a staged edit and resets everything on click", async () => {
+    render(<CourseDetail />)
+    const undo = screen.getByRole("button", { name: "Undo" })
+    const save = screen.getByRole("button", { name: "Save changes" })
+    expect(undo).toBeDisabled()
+    expect(save).toBeDisabled()
+
+    // A staged instructor removal enables both (and drops the row).
+    await userEvent.click(screen.getByRole("button", { name: "Remove" }))
+    expect(screen.queryByText("Lovelace, Ada")).not.toBeInTheDocument()
+    expect(undo).toBeEnabled()
+    expect(save).toBeEnabled()
+
+    // Undo reverts everything: the row returns, both disable again, nothing saved.
+    await userEvent.click(undo)
+    expect(screen.getByText("Lovelace, Ada")).toBeInTheDocument()
+    expect(undo).toBeDisabled()
+    expect(save).toBeDisabled()
+    expect(unenroll.mutateAsync).not.toHaveBeenCalled()
+  })
+
   it("stages the course active toggle and commits it on Save", async () => {
     render(<CourseDetail />)
     await userEvent.click(screen.getByRole("switch", { name: "Course student access" }))

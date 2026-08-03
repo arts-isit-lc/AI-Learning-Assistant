@@ -183,6 +183,15 @@ export function CourseDetail() {
     })
   }
 
+  // Discard every staged edit — back to the last-saved (server) state. Powers
+  // the Undo button and the post-save reset.
+  const discardChanges = () => {
+    setPendingActive(null)
+    setPendingAccess({})
+    setPendingAdds(new Set())
+    setPendingRemoves(new Set())
+  }
+
   const saveChanges = async () => {
     setSaving(true)
     setSaveError(null)
@@ -200,10 +209,7 @@ export function CourseDetail() {
         if (pendingRemoves.has(em)) continue
         await updateInstructorAccess.mutateAsync({ courseId, instructorEmail: em, access })
       }
-      setPendingActive(null)
-      setPendingAccess({})
-      setPendingAdds(new Set())
-      setPendingRemoves(new Set())
+      discardChanges()
     } catch {
       setSaveError("Some changes couldn't be saved. Please review and try again.")
     } finally {
@@ -347,11 +353,18 @@ export function CourseDetail() {
           </Button>
           <DuplicateCourseDialog className="ml-6" course={course} />
         </div>
-        {/* Same as the instructor Settings tab: the default solid-primary Button,
-            disabled (faded) until there are unsaved edits, spinner while saving. */}
-        <Button onClick={saveChanges} loading={saving} disabled={!isDirty}>
-          Save changes
-        </Button>
+        {/* Undo discards the staged edits (back to the last-saved state); Save
+            commits them. Both enable together the moment there's an edit. Save
+            matches the instructor Settings tab (solid-primary, disabled/faded
+            until dirty, spinner while saving). */}
+        <div className="flex items-center gap-4">
+          <Button variant="outline" onClick={discardChanges} disabled={!isDirty || saving}>
+            Undo
+          </Button>
+          <Button onClick={saveChanges} loading={saving} disabled={!isDirty}>
+            Save changes
+          </Button>
+        </div>
       </div>
 
       {/* Add-instructor picker (staged — commits on Save changes). */}

@@ -187,6 +187,14 @@ export function InstructorDetail() {
     })
   }
 
+  // Discard every staged edit — back to the last-saved (server) state. Powers
+  // the Undo button and the post-save reset.
+  const discardChanges = () => {
+    setPendingAccess({})
+    setPendingAdds(new Set())
+    setPendingRemoves(new Set())
+  }
+
   const saveChanges = async () => {
     setSaving(true)
     setSaveError(null)
@@ -202,9 +210,7 @@ export function InstructorDetail() {
         if (pendingRemoves.has(courseId)) continue
         await updateInstructorAccess.mutateAsync({ courseId, instructorEmail: email, access })
       }
-      setPendingAccess({})
-      setPendingAdds(new Set())
-      setPendingRemoves(new Set())
+      discardChanges()
     } catch {
       setSaveError("Some changes couldn't be saved. Please review and try again.")
     } finally {
@@ -297,15 +303,22 @@ export function InstructorDetail() {
         >
           Delete instructor
         </Button>
-        <Button
-          variant="ghost"
-          className={isDirty ? "text-primary" : "text-neutral-300"}
-          onClick={saveChanges}
-          disabled={!isDirty || saving}
-          loading={saving}
-        >
-          Save changes
-        </Button>
+        {/* Undo discards the staged edits (back to the last-saved state); Save
+            commits them. Both enable together the moment there's an edit. */}
+        <div className="flex items-center gap-4">
+          <Button variant="outline" onClick={discardChanges} disabled={!isDirty || saving}>
+            Undo
+          </Button>
+          <Button
+            variant="ghost"
+            className={isDirty ? "text-primary" : "text-neutral-300"}
+            onClick={saveChanges}
+            disabled={!isDirty || saving}
+            loading={saving}
+          >
+            Save changes
+          </Button>
+        </div>
       </div>
 
       {/* Assign-course picker (staged — commits on Save changes). */}
