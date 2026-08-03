@@ -347,13 +347,9 @@ export function CourseDetail() {
           </Button>
           <DuplicateCourseDialog className="ml-6" course={course} />
         </div>
-        <Button
-          variant="ghost"
-          className={isDirty ? "text-primary" : "text-neutral-300"}
-          onClick={saveChanges}
-          disabled={!isDirty || saving}
-          loading={saving}
-        >
+        {/* Same as the instructor Settings tab: the default solid-primary Button,
+            disabled (faded) until there are unsaved edits, spinner while saving. */}
+        <Button onClick={saveChanges} loading={saving} disabled={!isDirty}>
           Save changes
         </Button>
       </div>
