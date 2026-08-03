@@ -175,7 +175,7 @@ export function SettingsTab() {
 
       {/* View previous prompts (disclosure) */}
       <Accordion type="single" collapsible>
-        <AccordionItem value="history" className="border-t border-border">
+        <AccordionItem value="history">
           <AccordionTrigger className="text-caption font-semibold text-neutral-900 hover:no-underline">
             View previous prompts
           </AccordionTrigger>
