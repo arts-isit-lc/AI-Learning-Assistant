@@ -109,6 +109,14 @@ describe("MultiSelect", () => {
     expect(await screen.findByText("Nothing here")).toBeInTheDocument()
   })
 
+  it("does not open when disabled", async () => {
+    render(<MultiSelect options={OPTIONS} value={[]} onChange={() => {}} aria-label="Picker" disabled />)
+    const trigger = screen.getByRole("button", { name: "Picker" })
+    expect(trigger).toBeDisabled()
+    await userEvent.click(trigger)
+    expect(screen.queryByRole("checkbox", { name: "Alpha" })).not.toBeInTheDocument()
+  })
+
   it("closes on outside click when rendered inside a modal Dialog", async () => {
     render(
       <Dialog open>

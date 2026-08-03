@@ -36,7 +36,9 @@ const DialogContent = React.forwardRef(function DialogContent({ className, child
         {...props}
       >
         {children}
-        <DialogPrimitive.Close className="absolute right-4 top-4 rounded-md opacity-70 transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+        {/* Close X: #404040 (foreground) at rest, greying to neutral-400 (#BFBFBF)
+            on hover — the same colour the dropdown chevron greys to. */}
+        <DialogPrimitive.Close className="absolute right-4 top-4 rounded-md text-foreground transition-colors duration-fast hover:text-neutral-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
           <Icon icon={MdClose} size={24} label="Close" />
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>

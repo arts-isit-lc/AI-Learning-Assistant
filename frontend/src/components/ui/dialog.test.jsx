@@ -23,6 +23,21 @@ describe("Dialog", () => {
     expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument()
   })
 
+  it("shows the close X in #404040 (foreground), greying to the chevron hover colour on hover", () => {
+    render(
+      <Dialog open>
+        <DialogContent>
+          <DialogTitle>Confirm</DialogTitle>
+        </DialogContent>
+      </Dialog>
+    )
+    const close = screen.getByRole("button", { name: "Close" })
+    // #404040 at rest; hover greys to neutral-400 (#BFBFBF) — the same token the
+    // dropdown chevron uses. The old opacity fade is gone.
+    expect(close).toHaveClass("text-foreground", "hover:text-neutral-400")
+    expect(close).not.toHaveClass("opacity-70")
+  })
+
   it("applies the standard modal padding (36px sides/bottom, 56px top) and 32px section rhythm", () => {
     render(
       <Dialog open>

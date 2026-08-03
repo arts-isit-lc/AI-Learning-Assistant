@@ -12,6 +12,9 @@ let trackedFilesResult = {}
 let generateResult = { topics: [] }
 // Per-test sibling modules (step-0 duplicate-name check). Empty = no collisions.
 let modulesResult = []
+// Per-test course files (step-1 "Attach existing references" options). Files from
+// OTHER modules (module_id !== the draft's) are attachable. Empty = nothing to attach.
+let courseFilesResult = []
 // Per-test upload state. Default: one already-uploaded file so step 1 can advance.
 let fileStatesResult = { f1: { fileId: "f1", fileName: "notes.pdf", status: "upload_complete", progress: 100 } }
 
@@ -32,7 +35,7 @@ vi.mock("./hooks/useModuleTopics", () => ({
 vi.mock("@/services/queries", () => ({
   useConcepts: () => ({ data: [{ concept_id: "con1", concept_name: "algebra" }] }),
   useModules: () => ({ data: modulesResult }),
-  useCourseFiles: () => ({ data: [] }),
+  useCourseFiles: () => ({ data: courseFilesResult }),
   useFinalizeModule: () => finalize,
   useValidatePrompt: () => validate,
 }))
@@ -61,6 +64,7 @@ beforeEach(() => {
   trackedFilesResult = {}
   generateResult = { topics: [] }
   modulesResult = []
+  courseFilesResult = []
   fileStatesResult = { f1: { fileId: "f1", fileName: "notes.pdf", status: "upload_complete", progress: 100 } }
 })
 
@@ -104,6 +108,34 @@ describe("CourseWizard", () => {
       moduleName: "Vectors",
       moduleNumber: 1,
     })
+  })
+
+  it("attaches existing references via the multi-select and sends them to finalize", async () => {
+    // Two files from OTHER modules (module_id !== the draft's "m1") → attachable.
+    courseFilesResult = [
+      { file_id: "cf1", filename: "syllabus.pdf", module_id: "m2", module_name: "intro" },
+      { file_id: "cf2", filename: "reading.pdf", module_id: "m3", module_name: "week 2" },
+    ]
+    const user = userEvent.setup()
+    render(<CourseWizard />)
+    await user.type(screen.getByLabelText("Module name"), "Vectors")
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> references
+
+    // It's a multi-select now: open, stage a tick, and commit with Apply (the old
+    // single-select toggled immediately and had no staged Apply step).
+    await user.click(screen.getByRole("button", { name: "Attach existing references" }))
+    await user.click(await screen.findByRole("checkbox", { name: /syllabus\.pdf/ }))
+    await user.click(screen.getByRole("button", { name: "Apply" }))
+    // The committed count shows on the trigger.
+    expect(screen.getByRole("button", { name: "Attach existing references" })).toHaveTextContent("(1)")
+
+    // Finish the wizard; the staged reference rides along to finalize.
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> prompt & topics
+    await user.type(screen.getByLabelText("Add key topic"), "vectors{Enter}")
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> review
+    await user.click(screen.getByRole("button", { name: "Publish" }))
+    const [payload] = finalize.mutate.mock.calls[0]
+    expect(payload.referencedFileIds).toEqual(["cf1"])
   })
 
   it("blocks Next on step 0 until a name is entered", async () => {

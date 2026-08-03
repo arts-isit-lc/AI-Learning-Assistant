@@ -14,7 +14,8 @@ const sameSet = (a, b) => a.length === b.length && a.every((v) => b.includes(v))
  * reset with `Clear`); dismissing without applying discards the draft. Once a
  * selection is committed and the popover is closed, the trigger shows
  * `placeholder (n)` in the brand colour with a clear (×) button. Controlled via
- * `value` (array of selected values) + `onChange(next)`.
+ * `value` (array of selected values) + `onChange(next)`. Pass `disabled` to
+ * lock the control (e.g. when there are no options to choose from).
  *
  * @param {{
  *   options: Array<{ value: string, label: string }>,
@@ -22,6 +23,7 @@ const sameSet = (a, b) => a.length === b.length && a.every((v) => b.includes(v))
  *   onChange: (next: string[]) => void,
  *   placeholder?: string,
  *   emptyText?: string,
+ *   disabled?: boolean,
  *   id?: string,
  *   "aria-label"?: string,
  *   className?: string,
@@ -34,6 +36,7 @@ export function MultiSelect({
   onChange,
   placeholder = "Select…",
   emptyText = "No options available.",
+  disabled = false,
   id,
   "aria-label": ariaLabel,
   className,
@@ -78,6 +81,7 @@ export function MultiSelect({
             id={id}
             type="button"
             aria-label={ariaLabel}
+            disabled={disabled}
             className={cn(
               "group flex h-10 w-full items-center justify-between gap-2 rounded-none border border-input bg-background px-3 py-2 text-caption text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
               triggerClassName
@@ -108,7 +112,8 @@ export function MultiSelect({
               type="button"
               aria-label={`Clear ${ariaLabel ?? "selection"}`}
               onClick={() => onChange([])}
-              className="absolute right-9 top-1/2 -translate-y-1/2 text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              disabled={disabled}
+              className="absolute right-9 top-1/2 -translate-y-1/2 text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Icon icon={MdCancel} size={24} />
             </button>

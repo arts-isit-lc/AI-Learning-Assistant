@@ -19,7 +19,7 @@ import { BLOCKING_STATUSES } from "@/constants/uploadConfig"
 import { FileUpload } from "@/components/composed/FileUpload"
 import { ConfirmDialog } from "@/components/composed/ConfirmDialog"
 import { UnsavedChangesPrompt } from "@/components/composed/UnsavedChangesPrompt"
-import { Tag } from "@/components/composed/Tag"
+import { MultiSelect } from "@/components/composed/MultiSelect"
 import { EditableTagList } from "@/components/composed/EditableTagList"
 import { ConflictList } from "@/components/composed/ConflictList"
 import { ConflictWarning } from "@/components/composed/ConflictWarning"
@@ -168,7 +168,6 @@ export function CourseWizard() {
     for (const f of otherFiles) map.set(f.file_id, f.filename || f.file_id)
     return map
   }, [otherFiles])
-  const attachableFiles = otherFiles.filter((f) => !referencedFileIds.includes(f.file_id))
 
   // Step-0 validation: does another module in the SAME concept already use this
   // name? Run on Next (not as a gate) so the user gets an inline reason. Checked
@@ -249,11 +248,6 @@ export function CourseWizard() {
   }, [suggestedTopics, keyTopics])
 
   const handleRestoreSuggested = () => setKeyTopics((prev) => mergeTopics(prev, suggestedTopics))
-
-  const toggleReference = (fileId) =>
-    setReferencedFileIds((prev) =>
-      prev.includes(fileId) ? prev.filter((id) => id !== fileId) : [...prev, fileId]
-    )
 
   const setFileDescription = (fileId, text) =>
     setFileDescriptions((prev) => ({ ...prev, [fileId]: text }))
@@ -486,37 +480,21 @@ export function CourseWizard() {
                     <p className="text-caption text-muted-foreground">
                       Reference files from this course&rsquo;s other modules.
                     </p>
-                    <Select
-                      value=""
-                      onValueChange={toggleReference}
-                      disabled={validating || attachableFiles.length === 0}
-                    >
-                      <SelectTrigger aria-label="Attach existing reference">
-                        <SelectValue
-                          placeholder={
-                            attachableFiles.length === 0 ? "No other files available" : "Select a file to attach"
-                          }
-                        />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {attachableFiles.map((f) => (
-                          <SelectItem key={f.file_id} value={f.file_id}>
-                            {(f.filename || f.file_id) + (f.module_name ? ` — ${titleCase(f.module_name)}` : "")}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {referencedFileIds.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {referencedFileIds.map((id) => (
-                          <Tag
-                            key={id}
-                            label={fileNameById.get(id) || id}
-                            onRemove={() => toggleReference(id)}
-                          />
-                        ))}
-                      </div>
-                    )}
+                    {/* Multi-select: attach several reference files at once. Options are
+                        all files from the course's OTHER modules; the committed picks
+                        (`referencedFileIds`) surface again on the Step 4 review. */}
+                    <MultiSelect
+                      aria-label="Attach existing references"
+                      placeholder={otherFiles.length === 0 ? "No other files available" : "Select files to attach"}
+                      emptyText="No other files available."
+                      disabled={validating || otherFiles.length === 0}
+                      options={otherFiles.map((f) => ({
+                        value: f.file_id,
+                        label: (f.filename || f.file_id) + (f.module_name ? ` — ${titleCase(f.module_name)}` : ""),
+                      }))}
+                      value={referencedFileIds}
+                      onChange={setReferencedFileIds}
+                    />
                   </div>
 
                   <div className="flex flex-col">
