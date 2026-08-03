@@ -64,6 +64,13 @@ describe("EditModule", () => {
     expect(screen.getByRole("button", { name: "Save changes" })).toHaveClass("hover:bg-primary-dark")
   })
 
+  it("gives the Delete module button no hover state (background unchanged on hover)", () => {
+    render(<EditModule />)
+    const del = screen.getByRole("button", { name: "Delete module" })
+    expect(del).toHaveClass("hover:bg-destructive")
+    expect(del).not.toHaveClass("hover:bg-destructive/90")
+  })
+
   it("seeds the form from the module record", () => {
     render(<EditModule />)
     expect(screen.getByLabelText("Module name")).toHaveValue("Vectors")

@@ -152,7 +152,11 @@ function SortableModuleRow({ module, number, courseId, conceptName, onEdit, onDe
                   link (left); Edit = a Secondary CTA = outline button (right, 59x40 =
                   the default outline size). py-2 gives the 40px button breathing room. */}
               <div className="flex items-center justify-between border-t border-border pt-4">
-                <Button variant="link" className="p-0 text-destructive leading-7" onClick={() => onDelete(module)}>
+                <Button
+                  variant="link"
+                  className="p-0 text-destructive leading-7 hover:no-underline"
+                  onClick={() => onDelete(module)}
+                >
                   Delete module
                 </Button>
                 <Button variant="outline" onClick={() => onEdit(module)}>

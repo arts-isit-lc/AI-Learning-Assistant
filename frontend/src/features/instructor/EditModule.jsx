@@ -397,7 +397,12 @@ export function EditModule() {
             )}
             <div className="h-px w-full bg-border" aria-hidden="true" />
             <div className="flex items-center justify-between gap-2 [&_button]:text-base">
-              <Button variant="danger" onClick={() => setDeleteOpen(true)} disabled={deleteModule.isPending}>
+              <Button
+                variant="danger"
+                className="hover:bg-destructive"
+                onClick={() => setDeleteOpen(true)}
+                disabled={deleteModule.isPending}
+              >
                 Delete module
               </Button>
               <div className="flex gap-2">

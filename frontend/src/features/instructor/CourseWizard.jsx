@@ -732,7 +732,7 @@ export function CourseWizard() {
                   {step > 0 && (
                     <Button
                       variant="ghost"
-                      className="text-primary text-base"
+                      className="text-primary text-base hover:bg-primary-subtle hover:text-primary"
                       disabled={validating}
                       onClick={() => setStep((s) => s - 1)}
                     >

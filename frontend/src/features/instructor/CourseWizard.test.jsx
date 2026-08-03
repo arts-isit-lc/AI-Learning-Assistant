@@ -83,6 +83,16 @@ describe("CourseWizard", () => {
     expect(screen.getByRole("button", { name: "Next" })).toHaveClass("hover:bg-primary-dark")
   })
 
+  it("hovers the Back button to #F2E8FF (primary-subtle), not the ghost grey", async () => {
+    const user = userEvent.setup()
+    render(<CourseWizard />)
+    await user.type(screen.getByLabelText("Module name"), "Vectors")
+    await user.click(screen.getByRole("button", { name: "Next" })) // step 0 -> references (Back appears)
+    const back = screen.getByRole("button", { name: "Back" })
+    expect(back).toHaveClass("hover:bg-primary-subtle")
+    expect(back).not.toHaveClass("hover:bg-accent")
+  })
+
   it("walks the 4 steps and finalizes with the collected values", async () => {
     const user = await advance()
     await user.click(screen.getByRole("button", { name: "Publish" }))

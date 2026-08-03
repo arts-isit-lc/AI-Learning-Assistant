@@ -46,6 +46,14 @@ describe("ModuleAccordion", () => {
     expect(screen.getByRole("button", { name: "i. Vectors" })).toBeInTheDocument()
   })
 
+  it("gives the Delete module summary action no hover state (no underline on hover)", async () => {
+    renderAccordion()
+    await userEvent.click(screen.getByRole("button", { name: "i. Vectors" }))
+    const del = screen.getByRole("button", { name: "Delete module" })
+    expect(del).toHaveClass("hover:no-underline")
+    expect(del).not.toHaveClass("hover:underline")
+  })
+
   it("greys the module disclosure chevron while its trigger is hovered (group-hover:text-neutral-400)", () => {
     renderAccordion()
     const trigger = screen.getByRole("button", { name: "i. Vectors" })
