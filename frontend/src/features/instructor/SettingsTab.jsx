@@ -31,10 +31,11 @@ const MODELS = Object.values(LLM_MODELS)
  * a **View previous prompts** disclosure, and a footer **Save changes**.
  *
  * Conflict flow: **Save changes** runs the prompt conflict check first. No
- * conflicts → it saves. Conflicts → it renders them inline (red alert + red
- * textarea + severity rows) and asks to confirm before saving anyway (which
- * stores conflict_metadata, keeping the Settings tab dot lit until the prompt is
- * edited and re-saved conflict-free). A failed check doesn't block the save —
+ * conflicts → it saves. Conflicts → it surfaces them inline (red alert + red
+ * textarea + severity rows) for review WITHOUT saving; clicking Save again
+ * (still unresolved) opens the "save anyway?" confirm, which stores
+ * conflict_metadata (keeping the Settings tab dot lit until the prompt is edited
+ * and re-saved conflict-free). A failed check doesn't block the save —
  * validation is best-effort (degradation path).
  */
 export function SettingsTab() {
@@ -84,26 +85,33 @@ export function SettingsTab() {
     setOverrideOpen(false)
   }
 
-  // Save runs the conflict check first (there's no separate "check" button):
-  // no conflicts → save; conflicts → surface them inline and open the override
-  // confirm before saving anyway. Reuses a report already computed for the
-  // current prompt (cleared whenever the prompt is edited) so re-clicking Save
-  // doesn't re-run the check. A failed check is best-effort — it never blocks
-  // the save (matches the degradation path).
+  // Save runs the conflict check first (there's no separate "check" button).
+  //   • No report yet for the current prompt (it was just edited) → run the
+  //     check and only SURFACE the result. Conflicts stay inline for review —
+  //     NO dialog — so the user can read them before deciding. No conflicts →
+  //     save straight away.
+  //   • A report already exists for the current prompt (surfaced on a prior
+  //     Save, or loaded stored conflicts that are already shown inline) → a
+  //     repeat Save with unresolved conflicts opens the "save anyway?" confirm;
+  //     otherwise it saves.
+  // A failed check is best-effort — it never blocks the save (degradation path).
   const handleSave = async () => {
-    let report = activeReport
-    if (!report) {
-      try {
-        report = await validate.mutateAsync({ prompt: userPrompt, scope: "course" })
-        setConflictReport(report)
-      } catch {
-        report = null
+    if (activeReport) {
+      if (activeReport.has_conflicts) {
+        setOverrideOpen(true)
+        return
       }
-    }
-    if (report?.has_conflicts) {
-      setOverrideOpen(true)
+      performSave(null)
       return
     }
+    let report = null
+    try {
+      report = await validate.mutateAsync({ prompt: userPrompt, scope: "course" })
+    } catch {
+      report = null
+    }
+    setConflictReport(report)
+    if (report?.has_conflicts) return // surfaced inline; a second Save confirms
     performSave(null)
   }
 

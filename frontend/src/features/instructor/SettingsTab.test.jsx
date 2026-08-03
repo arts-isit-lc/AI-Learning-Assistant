@@ -102,21 +102,20 @@ describe("SettingsTab", () => {
     expect(screen.getByRole("combobox", { name: "Language model" })).toBeDisabled()
   })
 
-  it("runs the conflict check on Save, surfacing conflicts and asking before it saves", async () => {
+  it("surfaces conflicts inline on Save for review, without opening the override dialog yet", async () => {
     validate.mutateAsync.mockResolvedValue(CONFLICT)
     render(<SettingsTab />)
     await editPrompt("always answer in French")
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }))
 
-    // Save ran the course-scoped conflict check…
+    // Save ran the course-scoped check and rendered the conflicts inline…
     expect(validate.mutateAsync).toHaveBeenCalledWith(
       expect.objectContaining({ prompt: "always answer in French", scope: "course" })
     )
-    // …surfaced the conflicts inline…
     expect(await screen.findByText("There are conflicts. Please resolve below.")).toBeInTheDocument()
     expect(screen.getByText("HARD CONTRADICTION")).toBeInTheDocument()
-    // …and opened the override confirm without persisting anything yet.
-    expect(await screen.findByRole("dialog")).toBeInTheDocument()
+    // …but did NOT open the override dialog or save — the user reviews first.
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
     expect(save.mutateAsync).not.toHaveBeenCalled()
   })
 
@@ -132,11 +131,16 @@ describe("SettingsTab", () => {
     )
   })
 
-  it("saves with conflict metadata after confirming the override", async () => {
+  it("opens the override confirm only on a second Save, then saves with conflict metadata", async () => {
     validate.mutateAsync.mockResolvedValue(CONFLICT)
     render(<SettingsTab />)
     await editPrompt("always answer in French")
-    // Save runs the check, finds conflicts, and opens the override confirm.
+    // First Save surfaces the conflicts inline — still no dialog, nothing saved.
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }))
+    await waitFor(() => expect(screen.getByText(/There are conflicts/i)).toBeInTheDocument())
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    expect(save.mutateAsync).not.toHaveBeenCalled()
+    // Second Save (still unresolved) opens the "save anyway?" confirm.
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }))
     const dialog = await screen.findByRole("dialog")
     await userEvent.click(within(dialog).getByRole("button", { name: "Save anyway" }))
@@ -145,6 +149,8 @@ describe("SettingsTab", () => {
     expect(save.mutateAsync).toHaveBeenCalledWith(
       expect.objectContaining({ conflictMetadata: expect.objectContaining({ has_conflicts: true }) })
     )
+    // The check ran once — the second Save reused the surfaced report.
+    expect(validate.mutateAsync).toHaveBeenCalledTimes(1)
   })
 
   it("still saves (no metadata) when the conflict check on Save fails (degradation)", async () => {
