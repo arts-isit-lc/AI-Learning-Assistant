@@ -197,8 +197,20 @@ describe("CourseWizard", () => {
     const label = screen.getByText("Complete")
     expect(label).toBeInTheDocument()
     expect(label).toHaveClass("text-success")
-    // Terminal states are static — no glow.
-    expect(label).not.toHaveClass("animate-pulse-glow")
+    // Complete stays green — not the #0055B7 in-progress blue.
+    expect(label).not.toHaveClass("text-info-strong")
+    // Terminal states are static — no blink.
+    expect(label).not.toHaveClass("animate-blink")
+  })
+
+  it("shows the file-remove trashcan icon in #6829C2 (primary)", async () => {
+    const user = userEvent.setup()
+    render(<CourseWizard />)
+    await user.type(screen.getByLabelText("Module name"), "Vectors")
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> references (file list)
+    // The trashcan is coloured on the Icon (not the ghost Button) so it stays purple on hover.
+    const remove = screen.getByRole("button", { name: "Remove notes.pdf" })
+    expect(remove.querySelector("svg")).toHaveClass("text-primary")
   })
 
   it("captures a per-file description and sends it to finalize", async () => {
@@ -227,27 +239,27 @@ describe("CourseWizard", () => {
     expect(screen.queryByRole("button", { name: /Description \(optional\)/i })).not.toBeInTheDocument()
   })
 
-  it("makes the in-progress status label glow while a file is ingesting", async () => {
+  it("blinks the in-progress status label (in #0055B7) while a file is ingesting", async () => {
     trackedFilesResult = { f1: { fileId: "f1", status: "ingesting" } }
     const user = userEvent.setup()
     render(<CourseWizard />)
     await user.type(screen.getByLabelText("Module name"), "Vectors")
     await user.click(screen.getByRole("button", { name: "Next" })) // -> references
-    // The whole label glows (replacing the old animated ellipsis) with a trailing "…".
+    // The whole label blinks (fades out/in) with a trailing "…", in the #0055B7 (info-strong) blue.
     const label = screen.getByText(/Reading document/)
     expect(label).toBeInTheDocument()
-    expect(label).toHaveClass("animate-pulse-glow")
+    expect(label).toHaveClass("animate-blink", "text-info-strong")
     expect(screen.queryByTestId("animated-ellipsis")).not.toBeInTheDocument()
   })
 
-  it("glows the status and shows no progress bar while a file is uploading", async () => {
+  it("blinks the status and shows no progress bar while a file is uploading", async () => {
     fileStatesResult = { f1: { fileId: "f1", fileName: "notes.pdf", status: "uploading", progress: 40 } }
     const user = userEvent.setup()
     render(<CourseWizard />)
     await user.type(screen.getByLabelText("Module name"), "Vectors")
     await user.click(screen.getByRole("button", { name: "Next" })) // -> references
     const label = screen.getByText(/Uploading/)
-    expect(label).toHaveClass("animate-pulse-glow")
+    expect(label).toHaveClass("animate-blink")
     // The per-file upload bar is gone; only the wizard's step progress bar remains.
     expect(screen.getAllByRole("progressbar")).toHaveLength(1)
   })
@@ -260,7 +272,7 @@ describe("CourseWizard", () => {
     await user.click(screen.getByRole("button", { name: "Next" })) // -> references
     const label = screen.getByText(/Analyzing content/)
     expect(label).toBeInTheDocument()
-    expect(label).toHaveClass("animate-pulse-glow")
+    expect(label).toHaveClass("animate-blink")
     // 'enriching' is a blocking status, so the user can't advance until 'complete'.
     expect(screen.getByRole("button", { name: "Next" })).toBeDisabled()
   })

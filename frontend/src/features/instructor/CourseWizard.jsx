@@ -63,8 +63,8 @@ const IN_PROGRESS_STATUSES = new Set([
 ])
 
 /** Human-readable label for a per-file status. In-progress labels omit the
- *  trailing ellipsis — a static "…" is appended and the whole label glows
- *  (`animate-pulse-glow`) while work is ongoing. */
+ *  trailing ellipsis — a static "…" is appended and the whole label blinks
+ *  (fades out/in via `animate-blink`) while work is ongoing. */
 function statusLabel(status) {
   switch (status) {
     case "uploading":
@@ -537,9 +537,9 @@ export function CourseWizard() {
                                             ? "text-destructive"
                                             : status === "complete"
                                               ? "text-success"
-                                              : "text-muted-foreground",
+                                              : "text-info-strong",
                                           IN_PROGRESS_STATUSES.has(status) &&
-                                            "animate-pulse-glow motion-reduce:animate-none"
+                                            "animate-blink motion-reduce:animate-none"
                                         )}
                                       >
                                         {IN_PROGRESS_STATUSES.has(status)
@@ -555,7 +555,7 @@ export function CourseWizard() {
                                     aria-label={`Remove ${f.fileName}`}
                                     onClick={() => handleRemoveFile(f.fileId)}
                                   >
-                                    <Icon  icon={MdDelete} size={24} />
+                                    <Icon icon={MdDelete} size={24} className="text-primary" />
                                   </Button>
                                 </div>
                                 {showDescription && (

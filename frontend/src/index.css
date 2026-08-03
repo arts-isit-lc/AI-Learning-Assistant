@@ -80,6 +80,7 @@
     --warning-foreground: 0 0% 12%; /* dark text keeps AA on the mustard */
     --info: 198 73% 67%; /* #6EC4E8 info / in-progress */
     --info-foreground: 211 100% 14%; /* navy text on cyan (8:1) */
+    --info-strong: 212 100% 35.9%; /* #0055B7 — in-progress / processing status text (upload wizard) */
     --border: 0 0% 50%; /* #808080 Arts ISIT Neutral/600 — structural borders + dividers (matches the Figma frames: header, cards, lists) */
     --border-subtle: 0 0% 50%; /* #808080 — same as --border */
     --input: 0 0% 50%;
