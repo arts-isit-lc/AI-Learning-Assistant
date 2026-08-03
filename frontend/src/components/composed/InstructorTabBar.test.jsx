@@ -20,14 +20,24 @@ describe("InstructorTabBar", () => {
     expect(screen.getByRole("link", { name: "Global Chats" })).toBeInTheDocument()
   })
 
-  it("gives every nav tab the brand hover state (bg #F2E8FF / text #2E0666)", () => {
+  it("gives inactive nav tabs the rounded brand hover state (bg #F2E8FF / text #2E0666)", () => {
     renderAt("/instructor/courses")
-    // Applies to the active tab (Courses) and the inactive ones alike.
-    for (const name of ["Courses", "Global Analytics", "Global Chats"]) {
+    // Courses is active here, so the hover applies only to the other two.
+    for (const name of ["Global Analytics", "Global Chats"]) {
       const tab = screen.getByRole("link", { name })
       expect(tab).toHaveClass("hover:bg-primary-subtle")
       expect(tab).toHaveClass("hover:text-primary-dark")
+      expect(tab).toHaveClass("rounded")
     }
+  })
+
+  it("gives the active tab no hover state and no rounded corners", () => {
+    renderAt("/instructor/courses")
+    const active = screen.getByRole("link", { name: "Courses" })
+    expect(active).toHaveClass("border-primary", "text-primary")
+    expect(active).not.toHaveClass("rounded")
+    expect(active).not.toHaveClass("hover:bg-primary-subtle")
+    expect(active).not.toHaveClass("hover:text-primary-dark")
   })
 
   it("is expanded (greeting shown) on the courses landing", () => {
