@@ -15,9 +15,12 @@ const tabClass = ({ isActive }) =>
   cn(
     "-mb-px border-b-2 px-6 pb-2 text-caption font-semibold transition-colors duration-fast",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-    isActive
-      ? "border-primary text-primary"
-      : "border-transparent text-muted-foreground hover:text-foreground"
+    // Hover = brand "lightest" surface (#F2E8FF / --primary-subtle) with
+    // "Faculty of Arts/Dark" text (#2E0666 / --primary-dark), applied to every
+    // tab — replaces the old text-only darkening. The active tab keeps its
+    // border-primary underline so the current page stays identifiable.
+    "hover:bg-primary-subtle hover:text-primary-dark",
+    isActive ? "border-primary text-primary" : "border-transparent text-muted-foreground"
   )
 
 const toggleClass =

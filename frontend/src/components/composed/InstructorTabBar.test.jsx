@@ -20,6 +20,16 @@ describe("InstructorTabBar", () => {
     expect(screen.getByRole("link", { name: "Global Chats" })).toBeInTheDocument()
   })
 
+  it("gives every nav tab the brand hover state (bg #F2E8FF / text #2E0666)", () => {
+    renderAt("/instructor/courses")
+    // Applies to the active tab (Courses) and the inactive ones alike.
+    for (const name of ["Courses", "Global Analytics", "Global Chats"]) {
+      const tab = screen.getByRole("link", { name })
+      expect(tab).toHaveClass("hover:bg-primary-subtle")
+      expect(tab).toHaveClass("hover:text-primary-dark")
+    }
+  })
+
   it("is expanded (greeting shown) on the courses landing", () => {
     renderAt("/instructor/courses")
     expect(screen.getByRole("heading", { name: /hi, instructor/i })).toBeInTheDocument()
