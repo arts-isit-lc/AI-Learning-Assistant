@@ -124,7 +124,7 @@ function SortableModuleRow({ module, number, courseId, conceptName, onEdit, onDe
           <AccordionPrimitive.Content className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down motion-reduce:animate-none">
             <div className="rounded-b bg-muted text-caption leading-7 text-foreground">
               {/* Read-only module summary (Figma 859:7479). */}
-              <div className="flex flex-col gap-2.5 px-6 py-4">
+              <div className="flex flex-col gap-2.5 px-6 pt-4 pb-8">
                 <SummaryRow label="Module name">{titleCase(module.module_name)}</SummaryRow>
                 <SummaryRow label="Concept">{conceptName ? titleCase(conceptName) : "—"}</SummaryRow>
                 <SummaryRow label="Reference">{referenceValue}</SummaryRow>
