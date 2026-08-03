@@ -161,11 +161,14 @@ export function ConfigurationTab() {
         <h2 className="text-sm leading-7 font-semibold text-neutral-900">Course configuration</h2>
         <div className="flex gap-2">
           {/* Figma `Button/UI/Desktop/Secondary with Icon` (node 1099:6534): outline
-              purple, h-28 / px-8 / gap-8 / rounded-4, 20px add icon. */}
+              purple, px-8 / gap-8 / rounded-4, 20px add icon. Height is a fixed 30px
+              via h-[30px]; box-sizing is border-box, so this INCLUDES the 1px border
+              (28px content area). An explicit height is required — padding can't grow
+              a fixed-height border-box, which is why adding py-* did nothing. */}
           <Button
             variant="outline"
             size="sm"
-            className="h-7 gap-2 rounded-sm px-2 py-1"
+            className="h-[30px] gap-2 rounded-sm px-2"
             aria-label="Add concept"
             onClick={() => setAddingConcept(true)}
           >
@@ -174,7 +177,7 @@ export function ConfigurationTab() {
           <Button
             variant="outline"
             size="sm"
-            className="h-7 gap-2 rounded-sm px-2 py-1"
+            className="h-[30px] gap-2 rounded-sm px-2"
             aria-label="Add module"
             onClick={() => navigate(`${moduleBasePath}/new`)}
             disabled={concepts.length === 0}

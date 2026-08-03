@@ -84,6 +84,14 @@ describe("ConfigurationTab", () => {
     expect(screen.getByRole("button", { name: /add module/i })).toHaveClass("hover:bg-primary-subtle")
   })
 
+  it("fixes the Add concept / Add module buttons at 30px tall (h-[30px], border-box incl. border)", () => {
+    render(<ConfigurationTab />)
+    // Explicit height (not padding) drives the size — border-box means 30px is
+    // the total box height including the 1px outline border.
+    expect(screen.getByRole("button", { name: /add concept/i })).toHaveClass("h-[30px]")
+    expect(screen.getByRole("button", { name: /add module/i })).toHaveClass("h-[30px]")
+  })
+
   it("creates a concept from the inline add form", async () => {
     render(<ConfigurationTab />)
     await userEvent.click(screen.getByRole("button", { name: /add concept/i }))
