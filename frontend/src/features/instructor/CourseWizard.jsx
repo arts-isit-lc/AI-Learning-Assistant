@@ -155,6 +155,18 @@ export function CourseWizard() {
   const validate = useValidatePrompt(courseId)
 
   const fileList = Object.values(fileStates)
+  // When a newly selected file appears in the upload list, scroll the body to
+  // the bottom so the user can watch it upload/process. Only on growth (a file
+  // was added) — removing a file shouldn't yank the view. Runs before paint so
+  // the new row is already in view when it renders.
+  const prevFileCountRef = useRef(fileList.length)
+  useLayoutEffect(() => {
+    if (fileList.length > prevFileCountRef.current) {
+      const body = bodyRef.current
+      if (body) body.scrollTo({ top: body.scrollHeight })
+    }
+    prevFileCountRef.current = fileList.length
+  }, [fileList.length])
   const isProcessingBlocking = [...fileList, ...Object.values(trackedFiles)].some((f) =>
     BLOCKING_STATUSES.includes(f.status)
   )
@@ -532,7 +544,7 @@ export function CourseWizard() {
                                     <Icon
                                       icon={MdInsertDriveFile}
                                       size={20}
-                                      className="shrink-0 text-muted-foreground pl-2"
+                                      className="shrink-0 text-muted-foreground ml-2"
                                     />
                                     <div className="flex min-w-0 flex-col">
                                       <span className="truncate text-xs leading-5 font-semibold text-neutral-900">

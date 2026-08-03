@@ -158,6 +158,34 @@ describe("CourseWizard", () => {
     scrollTo.mockRestore()
   })
 
+  it("scrolls the body to the bottom when a newly uploaded file appears", async () => {
+    // jsdom reports scrollHeight as 0 (no layout); fake a tall body so a
+    // scroll-to-bottom is distinguishable from the step-change scroll-to-top(0).
+    const heightDesc = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollHeight")
+    Object.defineProperty(HTMLElement.prototype, "scrollHeight", { configurable: true, get: () => 4000 })
+    const scrollTo = vi.spyOn(Element.prototype, "scrollTo").mockImplementation(() => {})
+    try {
+      const user = userEvent.setup()
+      fileStatesResult = { f1: { fileId: "f1", fileName: "a.pdf", status: "upload_complete", progress: 100 } }
+      const { rerender } = render(<CourseWizard />)
+      await user.type(screen.getByLabelText("Module name"), "Vectors")
+      await user.click(screen.getByRole("button", { name: "Next" })) // -> references/upload step
+      scrollTo.mockClear() // ignore the step-change scroll-to-top
+      // A second file is selected and appears in the list.
+      fileStatesResult = {
+        f1: { fileId: "f1", fileName: "a.pdf", status: "upload_complete", progress: 100 },
+        f2: { fileId: "f2", fileName: "b.pdf", status: "uploading", progress: 20 },
+      }
+      rerender(<CourseWizard />)
+      // Scrolls to the bottom (scrollHeight), not the top.
+      expect(scrollTo).toHaveBeenCalledWith({ top: 4000 })
+    } finally {
+      scrollTo.mockRestore()
+      if (heightDesc) Object.defineProperty(HTMLElement.prototype, "scrollHeight", heightDesc)
+      else delete HTMLElement.prototype.scrollHeight
+    }
+  })
+
   it("keeps Next disabled on the references step while a file is still ingesting", async () => {
     // f1 finished uploading (mock) but is still processing -> must wait here.
     trackedFilesResult = { f1: { fileId: "f1", status: "processing" } }
