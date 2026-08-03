@@ -154,7 +154,7 @@ export function SettingsTab() {
         {hasConflicts && <ConflictWarning />}
 
         <Textarea
-          className="mt-3 p-4"
+          className="p-4"
           value={userPrompt}
           onChange={handlePromptChange}
           rows={6}
