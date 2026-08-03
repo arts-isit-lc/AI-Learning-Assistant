@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { MdDelete, MdInsertDriveFile } from "react-icons/md"
 import {
@@ -139,6 +139,14 @@ export function CourseWizard() {
   const [lastPromptCheck, setLastPromptCheck] = useState(null) // { prompt, hasConflicts } for the last checked prompt
   const [conflictWarnOpen, setConflictWarnOpen] = useState(false) // "proceed despite conflicts?" dialog
   const autoGenRef = useRef(false)
+  // Scroll container for the wizard body. Reset it to the top on every step
+  // change so each step opens at the top of its form — not wherever the
+  // previous step was left scrolled (e.g. the bottom of a long upload list).
+  // useLayoutEffect runs before paint, so the reset isn't visible as a jump.
+  const bodyRef = useRef(null)
+  useLayoutEffect(() => {
+    bodyRef.current?.scrollTo({ top: 0 })
+  }, [step])
 
   const { fileStates, uploadFiles, removeFile } = useFileUpload({ courseId, moduleId, moduleName })
   const { trackedFiles, addTrackedFiles } = useProcessingPoller({ moduleId, enabled: Boolean(moduleId) })
@@ -411,7 +419,7 @@ export function CourseWizard() {
               fills the space left by the fixed header/footer; `min-h-0` +
               `overflow-y-auto` scroll the overflow within the modal's fixed
               height. */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-9 pb-16 pt-14">
+          <div ref={bodyRef} className="flex-1 min-h-0 overflow-y-auto px-9 pb-16 pt-14">
             <div className="mx-auto flex w-full max-w-[608px] flex-col gap-8">
               <h2 className="text-h3 text-neutral-900">{STEP_TITLES[step]}</h2>
 

@@ -20,6 +20,7 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
 }
 if (typeof Element !== 'undefined') {
   Element.prototype.scrollIntoView = Element.prototype.scrollIntoView || function () {}
+  Element.prototype.scrollTo = Element.prototype.scrollTo || function () {}
   Element.prototype.hasPointerCapture = Element.prototype.hasPointerCapture || function () {
     return false
   }

@@ -146,6 +146,18 @@ describe("CourseWizard", () => {
     expect(screen.getByRole("button", { name: "Next" })).toBeEnabled()
   })
 
+  it("scrolls the wizard body back to the top on a step change", async () => {
+    // jsdom has no layout, so assert the scroll call rather than a scrollTop value.
+    const scrollTo = vi.spyOn(Element.prototype, "scrollTo").mockImplementation(() => {})
+    const user = userEvent.setup()
+    render(<CourseWizard />)
+    await user.type(screen.getByLabelText("Module name"), "Vectors")
+    scrollTo.mockClear() // ignore the initial mount call; assert on the transition
+    await user.click(screen.getByRole("button", { name: "Next" })) // step 0 -> references
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0 })
+    scrollTo.mockRestore()
+  })
+
   it("keeps Next disabled on the references step while a file is still ingesting", async () => {
     // f1 finished uploading (mock) but is still processing -> must wait here.
     trackedFilesResult = { f1: { fileId: "f1", status: "processing" } }
