@@ -122,9 +122,9 @@ function SortableModuleRow({ module, number, courseId, conceptName, onEdit, onDe
             </AccordionPrimitive.Header>
           </div>
           <AccordionPrimitive.Content className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down motion-reduce:animate-none">
-            <div className="rounded-b bg-muted text-caption leading-7 text-foreground mt-2.5">
+            <div className="rounded-b bg-muted text-caption leading-7 text-foreground mt-2.5 px-6 py-4">
               {/* Read-only module summary (Figma 859:7479). */}
-              <div className="flex flex-col gap-2.5 px-6 pt-4 pb-8">
+              <div className="flex flex-col gap-2.5 pb-8">
                 <SummaryRow label="Module name">{titleCase(module.module_name)}</SummaryRow>
                 <SummaryRow label="Concept">{conceptName ? titleCase(conceptName) : "—"}</SummaryRow>
                 <SummaryRow label="Reference">{referenceValue}</SummaryRow>
@@ -148,12 +148,14 @@ function SortableModuleRow({ module, number, courseId, conceptName, onEdit, onDe
                 </div>
                 <SummaryRow label="Key topics">{topics.length ? topics.join("; ") : "None"}</SummaryRow>
               </div>
-              {/* Footer: Delete module (left) / Edit (right), per the mockup. */}
-              <div className="flex items-center justify-between border-t border-border px-6 py-0.5">
+              {/* Footer (Figma 859:7479): Delete module = plain destructive text
+                  link (left); Edit = a Secondary CTA = outline button (right, 59x40 =
+                  the default outline size). py-2 gives the 40px button breathing room. */}
+              <div className="flex items-center justify-between border-t border-border px-6 py-2">
                 <Button variant="link" className="p-0 text-destructive leading-7" onClick={() => onDelete(module)}>
                   Delete module
                 </Button>
-                <Button variant="link" className="p-0 leading-7" onClick={() => onEdit(module)}>
+                <Button variant="outline" onClick={() => onEdit(module)}>
                   Edit
                 </Button>
               </div>

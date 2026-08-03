@@ -65,6 +65,15 @@ describe("ModuleAccordion", () => {
     expect(body).not.toHaveClass("bg-background")
   })
 
+  it("renders the summary Edit action as an outline button (purple border), per the mockup", async () => {
+    renderAccordion()
+    await userEvent.click(screen.getByRole("button", { name: "i. Vectors" }))
+    const edit = screen.getByRole("button", { name: "Edit" })
+    // Outline variant (border-primary) — not the old borderless text link.
+    expect(edit).toHaveClass("border-primary")
+    expect(edit).toHaveClass("text-primary")
+  })
+
   it("expands a module to the full read-only summary (all six fields) with Edit/Delete", async () => {
     const { onEditModule, onDeleteModule } = renderAccordion()
     await userEvent.click(screen.getByRole("button", { name: "i. Vectors" }))
