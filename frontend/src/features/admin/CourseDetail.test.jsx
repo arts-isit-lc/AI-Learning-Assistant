@@ -139,6 +139,13 @@ describe("CourseDetail (staged editing)", () => {
     await waitFor(() => expect(del.mutate).toHaveBeenCalledWith("c1", expect.any(Object)))
   })
 
+  it("gives the Delete course button no hover state change (no underline)", () => {
+    render(<CourseDetail />)
+    const del = screen.getByRole("button", { name: "Delete course" })
+    expect(del).toHaveClass("hover:no-underline")
+    expect(del).not.toHaveClass("hover:underline")
+  })
+
   it("shows an ErrorState with retry when the instructor list fails to load", async () => {
     const refetch = vi.fn()
     instructorsAssigned = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }

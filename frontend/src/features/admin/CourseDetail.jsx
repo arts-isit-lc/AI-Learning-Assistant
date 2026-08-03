@@ -339,7 +339,7 @@ export function CourseDetail() {
         <div className="flex items-center gap-4">
           <Button
             variant="link"
-            className="p-0 text-destructive"
+            className="p-0 text-destructive hover:no-underline"
             onClick={() => setDeleteOpen(true)}
             disabled={del.isPending}
           >
