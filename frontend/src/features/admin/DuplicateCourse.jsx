@@ -247,7 +247,12 @@ export function DuplicateCourse() {
           <Button variant="outline" onClick={close}>
             Cancel
           </Button>
-          <Button onClick={handleDuplicate} loading={duplicate.isPending} disabled={!canDuplicate}>
+          <Button
+            className="hover:bg-primary-dark"
+            onClick={handleDuplicate}
+            loading={duplicate.isPending}
+            disabled={!canDuplicate}
+          >
             Duplicate course
           </Button>
         </DialogFooter>

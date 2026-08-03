@@ -144,7 +144,12 @@ export function DuplicateCourseDialog({ course }) {
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" loading={duplicate.isPending} disabled={!canSubmit}>
+              <Button
+                type="submit"
+                className="hover:bg-primary-dark"
+                loading={duplicate.isPending}
+                disabled={!canSubmit}
+              >
                 Duplicate
               </Button>
             </DialogFooter>

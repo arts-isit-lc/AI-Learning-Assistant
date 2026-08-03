@@ -43,6 +43,11 @@ describe("parseCourseCode", () => {
 })
 
 describe("CreateCourse", () => {
+  it("hovers the Add course button to #2E0666 (primary-dark)", () => {
+    render(<CreateCourse />)
+    expect(screen.getByRole("button", { name: "Add course" })).toHaveClass("hover:bg-primary-dark")
+  })
+
   it("disables Add course until code, title, and term are all provided", async () => {
     render(<CreateCourse />)
     expect(screen.getByRole("button", { name: "Add course" })).toBeDisabled()

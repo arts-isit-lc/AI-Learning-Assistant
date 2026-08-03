@@ -37,6 +37,13 @@ beforeEach(() => {
 })
 
 describe("DuplicateCourseDialog", () => {
+  it("hovers the dialog Duplicate button to #2E0666 (primary-dark)", async () => {
+    render(<DuplicateCourseDialog course={COURSE} />)
+    await userEvent.click(screen.getByRole("button", { name: "Duplicate" }))
+    const dialog = await screen.findByRole("dialog")
+    expect(within(dialog).getByRole("button", { name: "Duplicate" })).toHaveClass("hover:bg-primary-dark")
+  })
+
   it("pre-fills from the source course and duplicates on submit", async () => {
     render(<DuplicateCourseDialog course={COURSE} />)
     await userEvent.click(screen.getByRole("button", { name: "Duplicate" }))

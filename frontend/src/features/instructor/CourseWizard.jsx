@@ -745,11 +745,21 @@ export function CourseWizard() {
                     Cancel
                   </Button>
                   {step < STEP_COUNT - 1 ? (
-                    <Button className="text-base" onClick={handleNext} loading={validating} disabled={!canNext}>
+                    <Button
+                      className="text-base hover:bg-primary-dark"
+                      onClick={handleNext}
+                      loading={validating}
+                      disabled={!canNext}
+                    >
                       Next
                     </Button>
                   ) : (
-                    <Button className="text-base" onClick={handleSave} loading={finalize.isPending} disabled={!canSave}>
+                    <Button
+                      className="text-base hover:bg-primary-dark"
+                      onClick={handleSave}
+                      loading={finalize.isPending}
+                      disabled={!canSave}
+                    >
                       Publish
                     </Button>
                   )}

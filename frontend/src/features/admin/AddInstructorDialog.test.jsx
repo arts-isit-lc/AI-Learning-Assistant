@@ -13,6 +13,12 @@ beforeEach(() => {
 })
 
 describe("AddInstructorDialog", () => {
+  it("hovers the Send invite button to #2E0666 (primary-dark)", async () => {
+    render(<AddInstructorDialog />)
+    await userEvent.click(screen.getByRole("button", { name: "Add instructor" }))
+    expect(screen.getByRole("button", { name: "Send invite" })).toHaveClass("hover:bg-primary-dark")
+  })
+
   it("opens from the header trigger and elevates the entered email", async () => {
     render(<AddInstructorDialog />)
     await userEvent.click(screen.getByRole("button", { name: "Add instructor" }))

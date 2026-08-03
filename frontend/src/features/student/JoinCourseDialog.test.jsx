@@ -12,6 +12,11 @@ import { JoinCourseDialog } from "./JoinCourseDialog"
 beforeEach(() => mutate.mockReset())
 
 describe("JoinCourseDialog", () => {
+  it("hovers the Join course button to #2E0666 (primary-dark)", () => {
+    render(<JoinCourseDialog open onOpenChange={() => {}} />)
+    expect(screen.getByRole("button", { name: "Join course" })).toHaveClass("hover:bg-primary-dark")
+  })
+
   it("shows a validation error when the code is empty", async () => {
     render(<JoinCourseDialog open onOpenChange={() => {}} />)
     await userEvent.click(screen.getByRole("button", { name: "Join course" }))

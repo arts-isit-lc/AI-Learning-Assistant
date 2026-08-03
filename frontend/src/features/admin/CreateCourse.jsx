@@ -254,7 +254,12 @@ export function CreateCourse() {
           <Button variant="outline" onClick={close}>
             Cancel
           </Button>
-          <Button onClick={handleCreate} loading={create.isPending} disabled={!canCreate}>
+          <Button
+            className="hover:bg-primary-dark"
+            onClick={handleCreate}
+            loading={create.isPending}
+            disabled={!canCreate}
+          >
             Add course
           </Button>
         </DialogFooter>

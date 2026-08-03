@@ -37,6 +37,11 @@ describe("Button", () => {
     expect(screen.getByRole("button", { name: "Delete" })).toHaveClass("bg-destructive")
   })
 
+  it("gives the outline variant (every modal Cancel button) the #F2E8FF hover (hover:bg-primary-subtle)", () => {
+    render(<Button variant="outline">Cancel</Button>)
+    expect(screen.getByRole("button", { name: "Cancel" })).toHaveClass("hover:bg-primary-subtle")
+  })
+
   it("greys a disabled outline button with the #BFBFBF (neutral-400) token, not the opacity fade", () => {
     render(
       <Button variant="outline" disabled>

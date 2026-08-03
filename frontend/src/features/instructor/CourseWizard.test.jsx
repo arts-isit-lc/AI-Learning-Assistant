@@ -78,6 +78,11 @@ async function advance() {
 }
 
 describe("CourseWizard", () => {
+  it("hovers the Next primary button to #2E0666 (primary-dark)", () => {
+    render(<CourseWizard />)
+    expect(screen.getByRole("button", { name: "Next" })).toHaveClass("hover:bg-primary-dark")
+  })
+
   it("walks the 4 steps and finalizes with the collected values", async () => {
     const user = await advance()
     await user.click(screen.getByRole("button", { name: "Publish" }))

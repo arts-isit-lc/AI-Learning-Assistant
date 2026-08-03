@@ -117,7 +117,7 @@ export function AddInstructorDialog() {
               <Button type="button" variant="outline" onClick={close}>
                 Cancel
               </Button>
-              <Button type="submit" loading={elevate.isPending}>
+              <Button type="submit" className="hover:bg-primary-dark" loading={elevate.isPending}>
                 Send invite
               </Button>
             </DialogFooter>

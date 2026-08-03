@@ -59,6 +59,11 @@ beforeEach(() => {
 })
 
 describe("EditModule", () => {
+  it("hovers the Save changes button to #2E0666 (primary-dark)", () => {
+    render(<EditModule />)
+    expect(screen.getByRole("button", { name: "Save changes" })).toHaveClass("hover:bg-primary-dark")
+  })
+
   it("seeds the form from the module record", () => {
     render(<EditModule />)
     expect(screen.getByLabelText("Module name")).toHaveValue("Vectors")

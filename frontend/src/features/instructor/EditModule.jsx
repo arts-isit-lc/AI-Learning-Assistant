@@ -405,6 +405,7 @@ export function EditModule() {
                   Cancel
                 </Button>
                 <Button
+                  className="hover:bg-primary-dark"
                   onClick={handleSave}
                   loading={editModule.isPending}
                   disabled={!canSave || !isDirty}

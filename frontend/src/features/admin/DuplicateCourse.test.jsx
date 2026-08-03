@@ -53,6 +53,11 @@ async function pickSource() {
 }
 
 describe("DuplicateCourse", () => {
+  it("hovers the Duplicate course button to #2E0666 (primary-dark)", () => {
+    render(<DuplicateCourse />)
+    expect(screen.getByRole("button", { name: "Duplicate course" })).toHaveClass("hover:bg-primary-dark")
+  })
+
   it("disables Duplicate until a source course is selected", async () => {
     render(<DuplicateCourse />)
     expect(screen.getByRole("button", { name: "Duplicate course" })).toBeDisabled()

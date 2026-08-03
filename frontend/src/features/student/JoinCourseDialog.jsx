@@ -86,7 +86,7 @@ export function JoinCourseDialog({ open, onOpenChange }) {
             <Button type="button" variant="outline" onClick={() => close(false)}>
               Cancel
             </Button>
-            <Button type="submit" loading={enroll.isPending}>
+            <Button type="submit" className="hover:bg-primary-dark" loading={enroll.isPending}>
               Join course
             </Button>
           </DialogFooter>

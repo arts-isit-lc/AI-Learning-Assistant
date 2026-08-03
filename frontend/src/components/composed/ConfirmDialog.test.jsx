@@ -37,4 +37,18 @@ describe("ConfirmDialog", () => {
     ).toBeInTheDocument()
     expect(screen.getByRole("dialog")).toBeInTheDocument()
   })
+
+  it("hovers a primary (default) confirm to #2E0666 (primary-dark)", () => {
+    render(
+      <ConfirmDialog open title="Proceed?" confirmLabel="Okay" variant="default" onConfirm={vi.fn()} />
+    )
+    expect(screen.getByRole("button", { name: "Okay" })).toHaveClass("hover:bg-primary-dark")
+  })
+
+  it("does not add the primary-dark hover to a danger confirm (keeps its own hover)", () => {
+    render(
+      <ConfirmDialog open title="Delete?" confirmLabel="Delete" variant="danger" onConfirm={vi.fn()} />
+    )
+    expect(screen.getByRole("button", { name: "Delete" })).not.toHaveClass("hover:bg-primary-dark")
+  })
 })
