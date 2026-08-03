@@ -66,6 +66,9 @@ export function SettingsTab() {
   const dirty =
     userPrompt !== (promptData?.system_prompt ?? "") ||
     modelId !== (promptData?.llm_model_id ?? DEFAULT_LLM_MODEL_ID)
+  // Freeze the form fields once Save is clicked, while the conflict check and
+  // the save are in flight, so the prompt/model can't change mid-validation.
+  const busy = validate.isPending || save.isPending
 
   const handlePromptChange = (e) => {
     setUserPrompt(e.target.value)
@@ -134,6 +137,7 @@ export function SettingsTab() {
           models={MODELS}
           aria-label="Language model"
           className="w-full"
+          disabled={busy}
         />
       </section>
 
@@ -166,6 +170,7 @@ export function SettingsTab() {
           maxLength={PROMPT_CHAR_LIMIT}
           aria-label="Your prompt"
           aria-invalid={hasConflicts || overLimit || undefined}
+          disabled={busy}
           placeholder="Add course-specific instructions for the assistant…"
         />
 
@@ -189,6 +194,7 @@ export function SettingsTab() {
             <PromptHistory
               versions={previousPrompts}
               onRestore={(text) => handlePromptChange({ target: { value: text } })}
+              disabled={busy}
             />
           </AccordionContent>
         </AccordionItem>

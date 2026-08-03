@@ -49,7 +49,9 @@ beforeEach(() => {
     isLoading: false,
   }
   validate.mutateAsync.mockReset()
+  validate.isPending = false
   save.mutateAsync.mockReset().mockResolvedValue({})
+  save.isPending = false
 })
 
 /** Type into the course prompt textarea (also marks the form dirty). */
@@ -84,6 +86,20 @@ describe("SettingsTab", () => {
     expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled()
     await editPrompt("Teach with care")
     expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled()
+  })
+
+  it("disables the prompt and model fields while the conflict check is running", () => {
+    validate.isPending = true
+    render(<SettingsTab />)
+    expect(screen.getByRole("textbox", { name: "Your prompt" })).toBeDisabled()
+    expect(screen.getByRole("combobox", { name: "Language model" })).toBeDisabled()
+  })
+
+  it("keeps the prompt and model fields disabled while the save is in flight", () => {
+    save.isPending = true
+    render(<SettingsTab />)
+    expect(screen.getByRole("textbox", { name: "Your prompt" })).toBeDisabled()
+    expect(screen.getByRole("combobox", { name: "Language model" })).toBeDisabled()
   })
 
   it("runs the conflict check on Save, surfacing conflicts and asking before it saves", async () => {

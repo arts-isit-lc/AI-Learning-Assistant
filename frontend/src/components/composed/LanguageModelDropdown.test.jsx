@@ -16,4 +16,16 @@ describe("LanguageModelDropdown", () => {
     )
     expect(screen.getByRole("combobox", { name: "Model" })).toBeInTheDocument()
   })
+
+  it("disables the trigger when disabled", () => {
+    render(
+      <LanguageModelDropdown
+        aria-label="Model"
+        value="a"
+        disabled
+        models={[{ id: "a", name: "Claude Sonnet 4.5" }]}
+      />
+    )
+    expect(screen.getByRole("combobox", { name: "Model" })).toBeDisabled()
+  })
 })

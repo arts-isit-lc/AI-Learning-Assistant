@@ -8,7 +8,7 @@ import {
 
 /**
  * LLM selection dropdown (instructor Settings). Thin wrapper over `Select`.
- * @param {{ value?: string, onChange?: (id: string) => void, models?: Array<{ id: string, name: string }>, placeholder?: string, className?: string, "aria-label"?: string }} props
+ * @param {{ value?: string, onChange?: (id: string) => void, models?: Array<{ id: string, name: string }>, placeholder?: string, className?: string, disabled?: boolean, "aria-label"?: string }} props
  */
 export function LanguageModelDropdown({
   value,
@@ -16,10 +16,11 @@ export function LanguageModelDropdown({
   models = [],
   placeholder = "Select a model",
   className,
+  disabled = false,
   "aria-label": ariaLabel = "Language model",
 }) {
   return (
-    <Select value={value} onValueChange={onChange}>
+    <Select value={value} onValueChange={onChange} disabled={disabled}>
       <SelectTrigger aria-label={ariaLabel} className={className}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>

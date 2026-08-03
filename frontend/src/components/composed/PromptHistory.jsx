@@ -14,9 +14,9 @@ function formatTimestamp(ts) {
  * Prompt version history (`previous_prompts`). A compact stepper over prior
  * versions with an optional restore action.
  *
- * @param {{ versions?: Array<{ previous_prompt: string, timestamp?: string }>, onRestore?: (text: string) => void }} props
+ * @param {{ versions?: Array<{ previous_prompt: string, timestamp?: string }>, onRestore?: (text: string) => void, disabled?: boolean }} props
  */
-export function PromptHistory({ versions = [], onRestore }) {
+export function PromptHistory({ versions = [], onRestore, disabled = false }) {
   const [index, setIndex] = useState(0)
   if (versions.length === 0) {
     return <p className="text-caption text-muted-foreground">No previous versions yet.</p>
@@ -52,7 +52,12 @@ export function PromptHistory({ versions = [], onRestore }) {
           </Button>
         </div>
         {onRestore && (
-          <Button size="sm" variant="outline" onClick={() => onRestore(version.previous_prompt)}>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={disabled}
+            onClick={() => onRestore(version.previous_prompt)}
+          >
             Restore
           </Button>
         )}

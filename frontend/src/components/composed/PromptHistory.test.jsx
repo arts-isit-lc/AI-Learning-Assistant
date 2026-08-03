@@ -29,4 +29,9 @@ describe("PromptHistory", () => {
     await userEvent.click(screen.getByRole("button", { name: "Restore" }))
     expect(onRestore).toHaveBeenCalledWith("newest version")
   })
+
+  it("disables the Restore button when disabled", () => {
+    render(<PromptHistory versions={VERSIONS} onRestore={vi.fn()} disabled />)
+    expect(screen.getByRole("button", { name: "Restore" })).toBeDisabled()
+  })
 })
