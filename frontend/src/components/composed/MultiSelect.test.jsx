@@ -17,6 +17,13 @@ describe("MultiSelect", () => {
     expect(screen.getByRole("button", { name: "Picker" })).toHaveTextContent("Pick some")
   })
 
+  it("greys the trigger chevron on hover (group-hover:text-neutral-400)", () => {
+    render(<MultiSelect options={OPTIONS} value={[]} onChange={() => {}} aria-label="Picker" />)
+    const trigger = screen.getByRole("button", { name: "Picker" })
+    expect(trigger).toHaveClass("group")
+    expect(trigger.querySelector("svg")).toHaveClass("group-hover:text-neutral-400")
+  })
+
   it("stages ticks locally and commits them only on Apply", async () => {
     const onChange = vi.fn()
     render(<MultiSelect options={OPTIONS} value={[]} onChange={onChange} aria-label="Picker" />)

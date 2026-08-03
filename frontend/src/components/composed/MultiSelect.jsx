@@ -79,7 +79,7 @@ export function MultiSelect({
             type="button"
             aria-label={ariaLabel}
             className={cn(
-              "flex h-10 w-full items-center justify-between gap-2 rounded-none border border-input bg-background px-3 py-2 text-caption text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+              "group flex h-10 w-full items-center justify-between gap-2 rounded-none border border-input bg-background px-3 py-2 text-caption text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
               triggerClassName
             )}
           >
@@ -90,10 +90,14 @@ export function MultiSelect({
               {/* Reserves room for the overlaid clear (×) so the chevron doesn't
                   shift when a value is committed. */}
               {showValue && <span aria-hidden className="h-6 w-6" />}
+              {/* Chevron greys to #BFBFBF (neutral-400) while the trigger is hovered. */}
               <Icon
                 icon={MdExpandMore}
                 size={24}
-                className={cn("transition-transform duration-fast", open && "rotate-180")}
+                className={cn(
+                  "transition duration-fast group-hover:text-neutral-400",
+                  open && "rotate-180"
+                )}
               />
             </span>
           </PopoverTrigger>

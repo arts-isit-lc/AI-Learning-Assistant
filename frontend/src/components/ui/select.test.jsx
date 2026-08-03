@@ -36,4 +36,20 @@ describe("Select", () => {
     )
     expect(screen.getByRole("combobox", { name: "Language model" })).toHaveTextContent("Llama")
   })
+
+  it("greys the trigger chevron on hover (group-hover:text-neutral-400)", () => {
+    render(
+      <Select defaultValue="a">
+        <SelectTrigger aria-label="Language model">
+          <SelectValue placeholder="Choose a model" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="a">Claude</SelectItem>
+        </SelectContent>
+      </Select>
+    )
+    const trigger = screen.getByRole("combobox", { name: "Language model" })
+    expect(trigger).toHaveClass("group")
+    expect(trigger.querySelector("svg")).toHaveClass("group-hover:text-neutral-400")
+  })
 })

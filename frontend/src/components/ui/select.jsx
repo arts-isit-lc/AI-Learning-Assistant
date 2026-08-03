@@ -25,10 +25,11 @@ const SelectTrigger = React.forwardRef(function SelectTrigger({ className, child
     >
       {children}
       <SelectPrimitive.Icon asChild>
+        {/* Chevron greys to #BFBFBF (neutral-400) while the trigger is hovered. */}
         <Icon
           icon={MdExpandMore}
           size={24}
-          className="shrink-0 transition-transform duration-fast group-data-[state=open]:rotate-180"
+          className="shrink-0 transition duration-fast group-hover:text-neutral-400 group-data-[state=open]:rotate-180"
         />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
