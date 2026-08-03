@@ -27,16 +27,15 @@ const MODELS = Object.values(LLM_MODELS)
 
 /**
  * Settings tab — Figma 376:2480 / 771:5650. Flat sections (not cards): Language
- * model, the read-only System prompt, then the editable course ("Your") prompt
- * with an explicit **Check for conflicts** action, a **View previous prompts**
- * disclosure, and a footer **Save changes**.
+ * model, the read-only System prompt, then the editable course ("Your") prompt,
+ * a **View previous prompts** disclosure, and a footer **Save changes**.
  *
- * Conflict flow: "Check for conflicts" runs validation and renders the results
- * inline (red alert + red textarea + severity rows). "Save changes" persists;
- * if the checked prompt still has conflicts it asks to confirm before saving
- * anyway (which stores conflict_metadata, keeping the Settings tab dot lit until
- * the prompt is edited and re-saved conflict-free). Saving is allowed without
- * checking (validation is best-effort, matching the degradation path).
+ * Conflict flow: **Save changes** runs the prompt conflict check first. No
+ * conflicts → it saves. Conflicts → it renders them inline (red alert + red
+ * textarea + severity rows) and asks to confirm before saving anyway (which
+ * stores conflict_metadata, keeping the Settings tab dot lit until the prompt is
+ * edited and re-saved conflict-free). A failed check doesn't block the save —
+ * validation is best-effort (degradation path).
  */
 export function SettingsTab() {
   const { courseId } = useParams()
@@ -75,15 +74,6 @@ export function SettingsTab() {
     setStoredConflicts(null)
   }
 
-  const handleCheck = async () => {
-    try {
-      const report = await validate.mutateAsync({ prompt: userPrompt, scope: "course" })
-      setConflictReport(report)
-    } catch {
-      // Best-effort — a failed conflict check must not block saving.
-    }
-  }
-
   const performSave = async (metadata) => {
     await save.mutateAsync({ prompt: userPrompt, llmModelId: modelId, conflictMetadata: metadata })
     setStoredConflicts(metadata?.has_conflicts ? metadata : null)
@@ -91,8 +81,23 @@ export function SettingsTab() {
     setOverrideOpen(false)
   }
 
-  const handleSave = () => {
-    if (hasConflicts) {
+  // Save runs the conflict check first (there's no separate "check" button):
+  // no conflicts → save; conflicts → surface them inline and open the override
+  // confirm before saving anyway. Reuses a report already computed for the
+  // current prompt (cleared whenever the prompt is edited) so re-clicking Save
+  // doesn't re-run the check. A failed check is best-effort — it never blocks
+  // the save (matches the degradation path).
+  const handleSave = async () => {
+    let report = activeReport
+    if (!report) {
+      try {
+        report = await validate.mutateAsync({ prompt: userPrompt, scope: "course" })
+        setConflictReport(report)
+      } catch {
+        report = null
+      }
+    }
+    if (report?.has_conflicts) {
       setOverrideOpen(true)
       return
     }
@@ -164,13 +169,10 @@ export function SettingsTab() {
           placeholder="Add course-specific instructions for the assistant…"
         />
 
-        <div className="mt-2 flex items-center justify-between gap-3">
+        <div className="mt-2">
           <span className={cn("text-caption text-muted-foreground", overLimit && "text-destructive")}>
             {userPrompt.length}/{PROMPT_CHAR_LIMIT}
           </span>
-          <Button variant="outline" onClick={handleCheck} loading={validate.isPending}>
-            Check for conflicts
-          </Button>
         </div>
 
         <ConflictList report={activeReport} />
@@ -200,7 +202,7 @@ export function SettingsTab() {
 
       {/* Footer */}
       <div className="flex justify-end border-t border-border pt-4">
-        <Button onClick={handleSave} loading={save.isPending} disabled={!dirty}>
+        <Button onClick={handleSave} loading={validate.isPending || save.isPending} disabled={!dirty}>
           Save changes
         </Button>
       </div>

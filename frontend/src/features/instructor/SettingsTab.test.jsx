@@ -74,6 +74,11 @@ describe("SettingsTab", () => {
     expect(item).not.toHaveClass("border-b")
   })
 
+  it("no longer renders a separate 'Check for conflicts' button", () => {
+    render(<SettingsTab />)
+    expect(screen.queryByRole("button", { name: "Check for conflicts" })).not.toBeInTheDocument()
+  })
+
   it("keeps Save disabled until there are unsaved changes", async () => {
     render(<SettingsTab />)
     expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled()
@@ -81,24 +86,26 @@ describe("SettingsTab", () => {
     expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled()
   })
 
-  it("checks for conflicts and lists them inline (no save yet)", async () => {
+  it("runs the conflict check on Save, surfacing conflicts and asking before it saves", async () => {
     validate.mutateAsync.mockResolvedValue(CONFLICT)
     render(<SettingsTab />)
     await editPrompt("always answer in French")
-    await userEvent.click(screen.getByRole("button", { name: "Check for conflicts" }))
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }))
 
-    await waitFor(() =>
-      expect(screen.getByText("There are conflicts. Please resolve below.")).toBeInTheDocument()
+    // Save ran the course-scoped conflict check…
+    expect(validate.mutateAsync).toHaveBeenCalledWith(
+      expect.objectContaining({ prompt: "always answer in French", scope: "course" })
     )
-    // Severity pill + "Conflicts with:" summary, expandable to the explanation.
+    // …surfaced the conflicts inline…
+    expect(await screen.findByText("There are conflicts. Please resolve below.")).toBeInTheDocument()
     expect(screen.getByText("HARD CONTRADICTION")).toBeInTheDocument()
-    const row = screen.getByRole("button", { name: /Conflicts with: system level prompt/i })
-    await userEvent.click(row)
-    expect(screen.getByText("Language instructions clash")).toBeInTheDocument()
+    // …and opened the override confirm without persisting anything yet.
+    expect(await screen.findByRole("dialog")).toBeInTheDocument()
     expect(save.mutateAsync).not.toHaveBeenCalled()
   })
 
-  it("saves directly (no conflict metadata) when the prompt was not flagged", async () => {
+  it("saves directly (no conflict metadata) when the check finds no conflicts", async () => {
+    validate.mutateAsync.mockResolvedValue({ has_conflicts: false })
     render(<SettingsTab />)
     await editPrompt("Teach kindly and clearly")
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }))
@@ -109,13 +116,11 @@ describe("SettingsTab", () => {
     )
   })
 
-  it("requires an override confirm to save once conflicts are flagged", async () => {
+  it("saves with conflict metadata after confirming the override", async () => {
     validate.mutateAsync.mockResolvedValue(CONFLICT)
     render(<SettingsTab />)
     await editPrompt("always answer in French")
-    await userEvent.click(screen.getByRole("button", { name: "Check for conflicts" }))
-    await waitFor(() => expect(screen.getByText(/There are conflicts/i)).toBeInTheDocument())
-
+    // Save runs the check, finds conflicts, and opens the override confirm.
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }))
     const dialog = await screen.findByRole("dialog")
     await userEvent.click(within(dialog).getByRole("button", { name: "Save anyway" }))
@@ -126,11 +131,10 @@ describe("SettingsTab", () => {
     )
   })
 
-  it("still lets you save after a failed conflict check (degradation)", async () => {
+  it("still saves (no metadata) when the conflict check on Save fails (degradation)", async () => {
     validate.mutateAsync.mockRejectedValue(new Error("503"))
     render(<SettingsTab />)
     await editPrompt("Teach kindly and clearly")
-    await userEvent.click(screen.getByRole("button", { name: "Check for conflicts" }))
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }))
 
     await waitFor(() =>
