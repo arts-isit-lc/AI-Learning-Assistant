@@ -177,7 +177,7 @@ export default function InstructorCourseLayout() {
         ))}
       </nav>
 
-      <div className="mt-4">
+      <div className="mt-6">
         <Outlet />
       </div>
 
