@@ -14,24 +14,22 @@ describe("PromptHistory", () => {
     expect(screen.getByText("No previous versions yet.")).toBeInTheDocument()
   })
 
-  it("steps between versions", async () => {
+  it("lists every previous version's prompt text", () => {
     render(<PromptHistory versions={VERSIONS} />)
     expect(screen.getByText("newest version")).toBeInTheDocument()
-    expect(screen.getByText("Version 1 of 2")).toBeInTheDocument()
-    await userEvent.click(screen.getByRole("button", { name: "Next version" }))
     expect(screen.getByText("older version")).toBeInTheDocument()
-    expect(screen.getByText("Version 2 of 2")).toBeInTheDocument()
   })
 
-  it("restores the current version", async () => {
+  it("restores a version when its row is clicked", async () => {
     const onRestore = vi.fn()
     render(<PromptHistory versions={VERSIONS} onRestore={onRestore} />)
-    await userEvent.click(screen.getByRole("button", { name: "Restore" }))
-    expect(onRestore).toHaveBeenCalledWith("newest version")
+    // The whole entry is the restore control (no separate Restore button).
+    await userEvent.click(screen.getByText("older version").closest("button"))
+    expect(onRestore).toHaveBeenCalledWith("older version")
   })
 
-  it("disables the Restore button when disabled", () => {
+  it("disables the entries when disabled", () => {
     render(<PromptHistory versions={VERSIONS} onRestore={vi.fn()} disabled />)
-    expect(screen.getByRole("button", { name: "Restore" })).toBeDisabled()
+    expect(screen.getByText("newest version").closest("button")).toBeDisabled()
   })
 })

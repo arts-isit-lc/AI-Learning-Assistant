@@ -1,8 +1,4 @@
-import { useState } from "react"
-import { MdChevronLeft, MdChevronRight } from "react-icons/md"
-import { Button } from "@/components/ui/button"
-import { Icon } from "@/components/ui/icon"
-import { ScrollArea } from "@/components/ui/scroll-area"
+import { cn } from "@/lib/utils"
 
 function formatTimestamp(ts) {
   if (!ts) return ""
@@ -11,63 +7,43 @@ function formatTimestamp(ts) {
 }
 
 /**
- * Prompt version history (`previous_prompts`). A compact stepper over prior
- * versions with an optional restore action.
+ * Prompt version history (`previous_prompts`) — OCELIA `Prompt/View Previous`
+ * (expanded). A scannable list of prior prompt versions: each entry shows its
+ * timestamp/identifier (12px, semibold) over the full prompt text (18px body),
+ * with a divider between entries. The whole row is the restore control —
+ * clicking an entry restores that version.
  *
  * @param {{ versions?: Array<{ previous_prompt: string, timestamp?: string }>, onRestore?: (text: string) => void, disabled?: boolean }} props
  */
 export function PromptHistory({ versions = [], onRestore, disabled = false }) {
-  const [index, setIndex] = useState(0)
   if (versions.length === 0) {
     return <p className="text-caption text-muted-foreground">No previous versions yet.</p>
   }
 
-  const safeIndex = Math.min(index, versions.length - 1)
-  const version = versions[safeIndex]
-
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1">
-          <Button
-            size="icon"
-            variant="ghost"
-            aria-label="Previous version"
-            disabled={safeIndex === 0}
-            onClick={() => setIndex((i) => Math.max(0, i - 1))}
-          >
-            <Icon icon={MdChevronLeft} />
-          </Button>
-          <span className="text-caption text-muted-foreground">
-            Version {safeIndex + 1} of {versions.length}
-          </span>
-          <Button
-            size="icon"
-            variant="ghost"
-            aria-label="Next version"
-            disabled={safeIndex === versions.length - 1}
-            onClick={() => setIndex((i) => Math.min(versions.length - 1, i + 1))}
-          >
-            <Icon icon={MdChevronRight} />
-          </Button>
-        </div>
-        {onRestore && (
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={disabled}
-            onClick={() => onRestore(version.previous_prompt)}
-          >
-            Restore
-          </Button>
-        )}
-      </div>
-      {version.timestamp && (
-        <p className="text-caption text-muted-foreground">{formatTimestamp(version.timestamp)}</p>
-      )}
-      <ScrollArea className="max-h-40 rounded-md border border-border p-3">
-        <p className="whitespace-pre-wrap text-caption text-foreground">{version.previous_prompt}</p>
-      </ScrollArea>
-    </div>
+    <ul className="flex flex-col">
+      {versions.map((version, i) => {
+        // Newest first (index 0), so the version-number fallback counts down.
+        const label = formatTimestamp(version.timestamp) || `Version ${versions.length - i}`
+        return (
+          <li key={i} className="border-b border-border">
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => onRestore?.(version.previous_prompt)}
+              aria-label={`Restore prompt from ${label}`}
+              className={cn(
+                "flex w-full flex-col gap-2.5 rounded-sm p-2.5 text-left transition-colors",
+                "hover:bg-primary-subtle focus-visible:bg-primary-subtle focus-visible:outline-none",
+                "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
+              )}
+            >
+              <span className="text-xs font-semibold leading-7 text-foreground">{label}</span>
+              <span className="whitespace-pre-wrap text-body text-foreground">{version.previous_prompt}</span>
+            </button>
+          </li>
+        )
+      })}
+    </ul>
   )
 }
