@@ -12,7 +12,7 @@ export function SplitLayout({ list }) {
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col px-6 lg:min-h-[calc(100vh-15rem)] lg:flex-row lg:gap-0">
       <aside className="w-full shrink-0 lg:w-1/3 pt-8 pr-8">{list}</aside>
-      <section className="min-w-0 flex-1 lg:border-l lg:border-border lg:pl-16 pt-8">
+      <section className="min-w-0 flex-1 lg:border-l lg:border-border lg:pl-16 py-8">
         <Outlet />
       </section>
     </div>
