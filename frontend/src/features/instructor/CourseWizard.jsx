@@ -528,19 +528,19 @@ export function CourseWizard() {
                             return (
                               <li key={f.fileId} className="flex flex-col gap-2 rounded-sm border border-border p-2.5">
                                 <div className="flex items-center justify-between gap-3">
-                                  <div className="flex min-w-0 items-center gap-3">
+                                  <div className="flex min-w-0 items-center gap-4">
                                     <Icon
                                       icon={MdInsertDriveFile}
                                       size={20}
-                                      className="shrink-0 text-muted-foreground"
+                                      className="shrink-0 text-muted-foreground pl-2"
                                     />
                                     <div className="flex min-w-0 flex-col">
-                                      <span className="truncate text-xs leading-7 font-semibold text-neutral-900">
+                                      <span className="truncate text-xs leading-5 font-semibold text-neutral-900">
                                         {f.fileName}
                                       </span>
                                       <span
                                         className={cn(
-                                          "text-xs leading-7",
+                                          "text-xs leading-5",
                                           failed
                                             ? "text-destructive"
                                             : status === "complete"
