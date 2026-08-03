@@ -58,7 +58,9 @@ export function AddInstructorDialog() {
 
   return (
     <>
-      <Button size="sm" className="h-7 gap-4 rounded-sm px-6" onClick={() => setOpen(true)}>
+      {/* Outline (like Add concept / Add module / Add course): white bg by
+          default, #F2E8FF (primary-subtle) on hover — not the solid-purple default. */}
+      <Button variant="outline" size="sm" className="h-7 gap-4 rounded-sm px-6" onClick={() => setOpen(true)}>
         Add instructor <Icon icon={MdAdd} size={20} />
       </Button>
       <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : close())}>

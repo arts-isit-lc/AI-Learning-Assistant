@@ -13,6 +13,16 @@ beforeEach(() => {
 })
 
 describe("AddInstructorDialog", () => {
+  it("shows the trigger with a white default background that hovers to #F2E8FF (primary-subtle)", () => {
+    render(<AddInstructorDialog />)
+    const trigger = screen.getByRole("button", { name: "Add instructor" })
+    // Outline variant: white (bg-background) at rest, primary-subtle on hover —
+    // matching Add concept / Add module. Not the solid-purple default.
+    expect(trigger).toHaveClass("bg-background")
+    expect(trigger).toHaveClass("hover:bg-primary-subtle")
+    expect(trigger).not.toHaveClass("bg-primary")
+  })
+
   it("hovers the Send invite button to #2E0666 (primary-dark)", async () => {
     render(<AddInstructorDialog />)
     await userEvent.click(screen.getByRole("button", { name: "Add instructor" }))
