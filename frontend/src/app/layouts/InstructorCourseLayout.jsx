@@ -158,7 +158,7 @@ export default function InstructorCourseLayout() {
       </div>
 
       <nav
-        className="mt-2 flex gap-2 overflow-x-auto"
+        className="mt-2.5 flex gap-2.5 overflow-x-auto"
         aria-label="Course sections"
       >
         {TABS.map((tab) => (
