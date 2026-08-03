@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { groupConceptTree, ConfigurationTab } from "./ConfigurationTab"
+import { groupConceptTree, reconcileOrder, ConfigurationTab } from "./ConfigurationTab"
 
 let conceptsResult
 let modulesResult
@@ -9,8 +9,8 @@ const createConcept = { mutate: vi.fn(), isPending: false }
 const renameConcept = { mutate: vi.fn(), isPending: false }
 const deleteConcept = { mutate: vi.fn(), isPending: false }
 const deleteModule = { mutate: vi.fn(), isPending: false }
-const reorderConcepts = { mutate: vi.fn(), isPending: false }
-const reorderModules = { mutate: vi.fn(), isPending: false }
+const reorderConcepts = { mutate: vi.fn(), mutateAsync: vi.fn().mockResolvedValue(undefined), isError: false, isPending: false }
+const reorderModules = { mutate: vi.fn(), mutateAsync: vi.fn().mockResolvedValue(undefined), isError: false, isPending: false }
 const navigate = vi.fn()
 const setIsInstructorAsStudent = vi.fn()
 
@@ -30,7 +30,14 @@ vi.mock("@/services/queries", () => ({
 }))
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal()
-  return { ...actual, useParams: () => ({ courseId: "c1" }), useNavigate: () => navigate }
+  return {
+    ...actual,
+    useParams: () => ({ courseId: "c1" }),
+    useNavigate: () => navigate,
+    // ConfigurationTab now renders <UnsavedChangesPrompt> (useBlocker needs a data
+    // router). Stub it as never-blocking; the guard is covered in its own test.
+    useBlocker: () => ({ state: "unblocked", proceed: vi.fn(), reset: vi.fn() }),
+  }
 })
 vi.mock("@/context/AuthContext", () => ({
   useAuth: () => ({ setIsInstructorAsStudent }),
@@ -63,6 +70,21 @@ describe("groupConceptTree", () => {
   it("falls back to concept_name when concept_id is absent", () => {
     const tree = groupConceptTree(CONCEPTS, [{ module_id: "m3", module_name: "x", concept_name: "algebra" }])
     expect(tree[0].modules.map((m) => m.module_id)).toEqual(["m3"])
+  })
+})
+
+describe("reconcileOrder (staged reorder resilience)", () => {
+  it("returns the server order when nothing is staged", () => {
+    expect(reconcileOrder(["a", "b", "c"], null)).toEqual(["a", "b", "c"])
+  })
+
+  it("keeps the staged order for ids that still exist", () => {
+    expect(reconcileOrder(["a", "b", "c"], ["c", "a", "b"])).toEqual(["c", "a", "b"])
+  })
+
+  it("drops staged ids that were deleted and appends newly-added server ids last", () => {
+    // 'x' was staged then deleted server-side; 'd' is new on the server → appended.
+    expect(reconcileOrder(["a", "b", "d"], ["b", "x", "a"])).toEqual(["b", "a", "d"])
   })
 })
 
@@ -151,8 +173,9 @@ describe("ConfigurationTab", () => {
     expect(navigate).toHaveBeenCalledWith("/courses/c1")
   })
 
-  it("keeps Save changes disabled — configuration edits persist immediately", () => {
+  it("keeps Save changes disabled until a concept/module reorder is staged", () => {
     render(<ConfigurationTab />)
+    // No staged reorder yet → nothing to save (add/rename/delete persist immediately).
     expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled()
   })
 
@@ -177,10 +200,10 @@ describe("ConfigurationTab", () => {
     expect(screen.queryByRole("heading", { name: "Couldn't load the course structure" })).not.toBeInTheDocument()
   })
 
-  it("shows a revert signal when a reorder fails", () => {
+  it("shows an inline error when saving the reorder fails", () => {
     reorderConcepts.isError = true
     render(<ConfigurationTab />)
-    expect(screen.getByRole("alert")).toHaveTextContent(/reverted/i)
+    expect(screen.getByRole("alert")).toHaveTextContent(/couldn't save/i)
     reorderConcepts.isError = false
   })
 })
