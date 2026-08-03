@@ -149,7 +149,7 @@ export default function InstructorCourseLayout() {
             <button
               type="button"
               onClick={() => setDeleteOpen(true)}
-              className="ml-auto text-caption text-destructive leading-7 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="ml-auto text-caption text-destructive leading-7 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Delete course
             </button>
