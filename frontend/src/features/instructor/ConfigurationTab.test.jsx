@@ -92,6 +92,19 @@ describe("ConfigurationTab", () => {
     expect(screen.getByRole("button", { name: /add module/i })).toHaveClass("h-[30px]")
   })
 
+  it("greys the disabled Add module button — #BFBFBF (neutral-400) border + text, no opacity fade", () => {
+    conceptsResult = { data: [], isLoading: false, isError: false }
+    modulesResult = { data: [], isLoading: false, isError: false }
+    render(<ConfigurationTab />)
+    const addModule = screen.getByRole("button", { name: /add module/i })
+    expect(addModule).toBeDisabled()
+    expect(addModule).toHaveClass("disabled:border-neutral-400")
+    expect(addModule).toHaveClass("disabled:text-neutral-400")
+    // Overrides the base disabled:opacity-50 so #BFBFBF renders true, not faded.
+    expect(addModule).toHaveClass("disabled:opacity-100")
+    expect(addModule).not.toHaveClass("disabled:opacity-50")
+  })
+
   it("creates a concept from the inline add form", async () => {
     render(<ConfigurationTab />)
     await userEvent.click(screen.getByRole("button", { name: /add concept/i }))

@@ -17,7 +17,11 @@ const buttonVariants = cva(
       variant: {
         default: "bg-primary text-primary-foreground hover:bg-primary/90",
         secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        outline: "border border-primary bg-background text-primary hover:bg-primary-subtle",
+        // Disabled outline = the neutral-400 (#BFBFBF) "inactive/disabled control"
+        // token on border + text (icons inherit via currentColor), at full opacity
+        // so it renders true grey — overriding the base disabled:opacity-50 fade.
+        outline:
+          "border border-primary bg-background text-primary hover:bg-primary-subtle disabled:border-neutral-400 disabled:text-neutral-400 disabled:opacity-100",
         ghost: "text-foreground hover:bg-accent hover:text-accent-foreground",
         danger: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
         cta: "bg-navy text-navy-foreground hover:bg-navy/90",

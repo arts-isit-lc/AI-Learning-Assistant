@@ -36,4 +36,24 @@ describe("Button", () => {
     render(<Button variant="danger">Delete</Button>)
     expect(screen.getByRole("button", { name: "Delete" })).toHaveClass("bg-destructive")
   })
+
+  it("greys a disabled outline button with the #BFBFBF (neutral-400) token, not the opacity fade", () => {
+    render(
+      <Button variant="outline" disabled>
+        Add module
+      </Button>
+    )
+    const btn = screen.getByRole("button", { name: "Add module" })
+    expect(btn).toHaveClass("disabled:border-neutral-400")
+    expect(btn).toHaveClass("disabled:text-neutral-400")
+    expect(btn).toHaveClass("disabled:opacity-100")
+    expect(btn).not.toHaveClass("disabled:opacity-50")
+  })
+
+  it("keeps the default opacity fade for non-outline disabled buttons (change is scoped to outline)", () => {
+    render(<Button disabled>Save</Button>)
+    const btn = screen.getByRole("button", { name: "Save" })
+    expect(btn).toHaveClass("disabled:opacity-50")
+    expect(btn).not.toHaveClass("disabled:border-neutral-400")
+  })
 })
