@@ -32,6 +32,33 @@ describe("AdminLayout", () => {
     expect(screen.getByText("OCELIA")).toBeInTheDocument()
   })
 
+  it("gives inactive nav tabs the instructor rounded brand hover (bg #F2E8FF / text #2E0666)", () => {
+    render(
+      <MemoryRouter initialEntries={["/admin/instructors"]}>
+        <AdminLayout />
+      </MemoryRouter>
+    )
+    // Instructors is active here, so the hover applies to Courses.
+    const courses = screen.getByRole("link", { name: "Courses" })
+    expect(courses).toHaveClass("rounded")
+    expect(courses).toHaveClass("hover:bg-primary-subtle")
+    expect(courses).toHaveClass("hover:text-primary-dark")
+    // The old faded-purple text hover is gone.
+    expect(courses).not.toHaveClass("hover:text-primary/80")
+  })
+
+  it("gives the active nav tab no hover fill and no rounded corners", () => {
+    render(
+      <MemoryRouter initialEntries={["/admin/instructors"]}>
+        <AdminLayout />
+      </MemoryRouter>
+    )
+    const active = screen.getByRole("link", { name: "Instructors" })
+    expect(active).toHaveClass("border-primary", "text-neutral-900")
+    expect(active).not.toHaveClass("rounded")
+    expect(active).not.toHaveClass("hover:bg-primary-subtle")
+  })
+
   it("shows the Add instructor action on the instructors section", () => {
     render(
       <MemoryRouter initialEntries={["/admin/instructors"]}>

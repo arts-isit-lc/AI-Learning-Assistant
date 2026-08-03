@@ -8,17 +8,19 @@ import { cn } from "@/lib/utils"
 
 /**
  * Admin tab (Figma `Button/UI/Desktop/Tertiary`): the active tab is black with a
- * black underline; inactive tabs are the brand purple with no underline. The
- * full-width divider that separates the section header from the master-detail
- * body lives on the row wrapper (below), not on the tab itself.
+ * black underline. Inactive tabs are the brand purple; on hover they take the
+ * same state as the instructor nav tabs — a rounded brand-"lightest" fill
+ * (#F2E8FF / --primary-subtle) with "Faculty of Arts/Dark" text (#2E0666 /
+ * --primary-dark). The full-width divider that separates the section header from
+ * the master-detail body lives on the row wrapper (below), not on the tab itself.
  */
 const navLinkClass = ({ isActive }) =>
   cn(
-    "border-b-2 pb-1 px-6 text-caption font-semibold text-sm transition-colors duration-fast",
+    "border-b-2 py-1 px-6 text-caption font-semibold text-sm transition-colors duration-fast",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
     isActive
       ? "border-primary text-neutral-900"
-      : "border-transparent text-primary hover:text-primary/80"
+      : "rounded border-transparent text-primary hover:bg-primary-subtle hover:text-primary-dark"
   )
 
 /**
