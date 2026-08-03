@@ -37,6 +37,16 @@ beforeEach(() => {
 })
 
 describe("DuplicateCourseDialog", () => {
+  it("gives the trigger the admin nav hover (rounded #F2E8FF fill / #2E0666 text, no underline)", () => {
+    render(<DuplicateCourseDialog course={COURSE} />)
+    // Trigger only (dialog closed) — matches the Instructors/Courses nav-link hover.
+    const trigger = screen.getByRole("button", { name: "Duplicate" })
+    expect(trigger).toHaveClass("rounded")
+    expect(trigger).toHaveClass("hover:bg-primary-subtle")
+    expect(trigger).toHaveClass("hover:text-primary-dark")
+    expect(trigger).not.toHaveClass("hover:underline")
+  })
+
   it("hovers the dialog Duplicate button to #2E0666 (primary-dark)", async () => {
     render(<DuplicateCourseDialog course={COURSE} />)
     await userEvent.click(screen.getByRole("button", { name: "Duplicate" }))

@@ -76,7 +76,14 @@ export function DuplicateCourseDialog({ course }) {
 
   return (
     <>
-      <Button variant="link" onClick={() => handleOpenChange(true)}>
+      {/* Hover matches the admin nav links (Instructors/Courses): a rounded
+          brand-"lightest" fill (#F2E8FF / --primary-subtle) with "Faculty of
+          Arts/Dark" text (#2E0666 / --primary-dark), not the link underline. */}
+      <Button
+        variant="link"
+        className="rounded hover:bg-primary-subtle hover:text-primary-dark hover:no-underline"
+        onClick={() => handleOpenChange(true)}
+      >
         Duplicate
       </Button>
       <Dialog open={open} onOpenChange={handleOpenChange}>
