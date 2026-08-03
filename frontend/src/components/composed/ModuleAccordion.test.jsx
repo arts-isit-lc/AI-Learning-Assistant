@@ -53,6 +53,18 @@ describe("ModuleAccordion", () => {
     expect(trigger.querySelector("svg")).toHaveClass("group-hover:text-neutral-400")
   })
 
+  it("gives the expanded module body the same bg-muted surface as the heading/box", async () => {
+    renderAccordion()
+    const trigger = screen.getByRole("button", { name: "i. Vectors" })
+    // Heading/box surface.
+    expect(trigger.closest("[class*='group/module']")).toHaveClass("bg-muted")
+    // Expanded body uses the same surface (not the old white bg-background).
+    await userEvent.click(trigger)
+    const body = screen.getByText("Module name").closest(".rounded-b")
+    expect(body).toHaveClass("bg-muted")
+    expect(body).not.toHaveClass("bg-background")
+  })
+
   it("expands a module to the full read-only summary (all six fields) with Edit/Delete", async () => {
     const { onEditModule, onDeleteModule } = renderAccordion()
     await userEvent.click(screen.getByRole("button", { name: "i. Vectors" }))
