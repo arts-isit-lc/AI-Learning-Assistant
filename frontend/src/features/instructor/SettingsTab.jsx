@@ -168,6 +168,9 @@ export function SettingsTab() {
           <span className={cn("text-caption text-muted-foreground", overLimit && "text-destructive")}>
             {userPrompt.length}/{PROMPT_CHAR_LIMIT}
           </span>
+          <Button variant="outline" onClick={handleCheck} loading={validate.isPending}>
+            Check for conflicts
+          </Button>
         </div>
 
         <ConflictList report={activeReport} />
@@ -175,7 +178,8 @@ export function SettingsTab() {
 
       {/* View previous prompts (disclosure) */}
       <Accordion type="single" collapsible>
-        <AccordionItem value="history">
+        {/* border-b-0 drops the AccordionItem's default bottom divider. */}
+        <AccordionItem value="history" className="border-b-0">
           <AccordionTrigger className="text-caption font-semibold text-neutral-900 hover:no-underline">
             View previous prompts
           </AccordionTrigger>

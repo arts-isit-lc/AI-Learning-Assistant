@@ -65,6 +65,15 @@ describe("SettingsTab", () => {
     expect(screen.getByText(/Socratic teaching style/i)).toBeInTheDocument()
   })
 
+  it("renders the 'View previous prompts' accordion without a divider border", () => {
+    render(<SettingsTab />)
+    const trigger = screen.getByRole("button", { name: "View previous prompts" })
+    // The AccordionItem (border owner) is the nearest div wrapping the trigger.
+    const item = trigger.closest("div")
+    expect(item).toHaveClass("border-b-0")
+    expect(item).not.toHaveClass("border-b")
+  })
+
   it("keeps Save disabled until there are unsaved changes", async () => {
     render(<SettingsTab />)
     expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled()
