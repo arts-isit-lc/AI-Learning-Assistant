@@ -306,7 +306,7 @@ export function InstructorDetail() {
         {/* Undo discards the staged edits (back to the last-saved state); Save
             commits them. Both enable together the moment there's an edit. */}
         <div className="flex items-center gap-4">
-          <Button variant="outline" onClick={discardChanges} disabled={!isDirty || saving}>
+          <Button variant="ghost" onClick={discardChanges} disabled={!isDirty || saving}>
             Undo
           </Button>
           <Button
