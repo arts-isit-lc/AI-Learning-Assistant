@@ -65,6 +65,26 @@ describe("DuplicateCourse", () => {
     expect(screen.getByRole("button", { name: "Duplicate course" })).toBeEnabled()
   })
 
+  it("hides the editable fields until a source course is chosen, then reveals them", async () => {
+    render(<DuplicateCourse />)
+    // Initial state: only the source dropdown — no course code/title/term/section/access code yet.
+    expect(screen.getByRole("combobox", { name: "Course to duplicate" })).toBeInTheDocument()
+    expect(screen.queryByLabelText(/Course code/)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/Course title/)).not.toBeInTheDocument()
+    expect(screen.queryByRole("combobox", { name: "Term" })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText("Section")).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Generate new code" })).not.toBeInTheDocument()
+
+    await pickSource()
+
+    // After selecting a source the fields appear (prefilled — see the prefill test).
+    expect(screen.getByLabelText(/Course code/)).toBeInTheDocument()
+    expect(screen.getByLabelText(/Course title/)).toBeInTheDocument()
+    expect(screen.getByRole("combobox", { name: "Term" })).toBeInTheDocument()
+    expect(screen.getByLabelText("Section")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Generate new code" })).toBeInTheDocument()
+  })
+
   it("prefills the code, title (with ' (copy)'), and term from the chosen source", async () => {
     render(<DuplicateCourse />)
     await pickSource()
@@ -78,6 +98,8 @@ describe("DuplicateCourse", () => {
 
   it("regenerates the access code on demand", async () => {
     render(<DuplicateCourse />)
+    // The access code lives in the disclosed section, so select a source first.
+    await pickSource()
     const before = screen.getByText(/^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/).textContent
     await userEvent.click(screen.getByRole("button", { name: "Generate new code" }))
     await waitFor(() =>

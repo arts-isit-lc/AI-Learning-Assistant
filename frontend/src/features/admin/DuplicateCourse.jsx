@@ -34,9 +34,10 @@ function courseOptionLabel(c) {
 }
 
 /**
- * Duplicate-course modal (Figma 859:6928). A centered dialog over the course
- * list: pick a source course, then review/edit the prefilled Course code, title
- * (" (copy)"), Term, and a freshly generated Access code before duplicating.
+ * Duplicate-course modal (Figma 1035:6394). A centered dialog over the course
+ * list. It opens with ONLY the source-course dropdown; picking a source reveals
+ * and prefills the editable fields — Course code, title (" (copy)"), Term,
+ * Section, and a freshly generated Access code — to review before duplicating.
  * Submits duplicate_course (backend track B2 — clones the course row + the
  * concept/module OUTLINE server-side; NOT files, embeddings, enrolments, or
  * student data), then opens the new course.
@@ -132,7 +133,8 @@ export function DuplicateCourse() {
           <DialogTitle>Duplicate course</DialogTitle>
         </DialogHeader>
         <DialogDescription>
-          Review and update the fields below before duplicating your course.
+          If you would like to duplicate an existing course, select it from the dropdown and confirm
+          the details before clicking Duplicate course.
         </DialogDescription>
 
         <div className="flex flex-col gap-4">
@@ -154,85 +156,91 @@ export function DuplicateCourse() {
             </Select>
           </div>
 
-          <div className="flex flex-col">
-            <Label htmlFor="dup-course-code">
-              Course code <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="dup-course-code"
-              className="h-7"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="e.g. GEOG 210"
-              maxLength={30}
-            />
-          </div>
+          {/* Progressive disclosure (Figma 1035:6394): the editable fields stay
+              hidden until a source is chosen, then appear prefilled from it. */}
+          {sourceCourseId && (
+            <>
+              <div className="flex flex-col">
+                <Label htmlFor="dup-course-code">
+                  Course code <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="dup-course-code"
+                  className="h-7"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  placeholder="e.g. GEOG 210"
+                  maxLength={30}
+                />
+              </div>
 
-          <div className="flex flex-col">
-            <Label htmlFor="dup-course-title">
-              Course title <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="dup-course-title"
-              className="h-7"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              maxLength={50}
-            />
-          </div>
+              <div className="flex flex-col">
+                <Label htmlFor="dup-course-title">
+                  Course title <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="dup-course-title"
+                  className="h-7"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  maxLength={50}
+                />
+              </div>
 
-          <div className="flex flex-col">
-            <Label htmlFor="dup-course-term">Term</Label>
-            <Select value={term} onValueChange={setTerm}>
-              <SelectTrigger id="dup-course-term" aria-label="Term" className="h-7">
-                <SelectValue placeholder="Select a term" />
-              </SelectTrigger>
-              <SelectContent>
-                {COURSE_TERMS.map((t) => (
-                  <SelectItem key={t} value={t}>
-                    {t}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+              <div className="flex flex-col">
+                <Label htmlFor="dup-course-term">Term</Label>
+                <Select value={term} onValueChange={setTerm}>
+                  <SelectTrigger id="dup-course-term" aria-label="Term" className="h-7">
+                    <SelectValue placeholder="Select a term" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {COURSE_TERMS.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-          <div className="flex flex-col">
-            <Label htmlFor="dup-course-section">Section</Label>
-            <Input
-              id="dup-course-section"
-              className="h-7"
-              value={section}
-              onChange={(e) => setSection(e.target.value)}
-              placeholder="e.g. 001"
-              maxLength={20}
-            />
-          </div>
+              <div className="flex flex-col">
+                <Label htmlFor="dup-course-section">Section</Label>
+                <Input
+                  id="dup-course-section"
+                  className="h-7"
+                  value={section}
+                  onChange={(e) => setSection(e.target.value)}
+                  placeholder="e.g. 001"
+                  maxLength={20}
+                />
+              </div>
 
-          <div className="flex flex-col mb-6">
-            <Label>Access code</Label>
-            <div className="flex items-center justify-between gap-2">
-              <span className="flex items-center gap-2 text-caption">
-                <span className="text-foreground">{accessCode}</span>
-                <button
-                  type="button"
-                  onClick={copyCode}
-                  aria-label="Copy access code"
-                  className="rounded p-1 text-primary transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <Icon icon={MdContentCopy} size={16} />
-                </button>
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7"
-                onClick={() => setAccessCode(generateAccessCode())}
-              >
-                Generate new code
-              </Button>
-            </div>
-          </div>
+              <div className="flex flex-col mb-6">
+                <Label>Access code</Label>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-2 text-caption">
+                    <span className="text-foreground">{accessCode}</span>
+                    <button
+                      type="button"
+                      onClick={copyCode}
+                      aria-label="Copy access code"
+                      className="rounded p-1 text-primary transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <Icon icon={MdContentCopy} size={16} />
+                    </button>
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7"
+                    onClick={() => setAccessCode(generateAccessCode())}
+                  >
+                    Generate new code
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {duplicate.isError && (
