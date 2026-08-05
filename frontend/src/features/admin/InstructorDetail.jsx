@@ -232,15 +232,6 @@ export function InstructorDetail() {
         <div className="flex items-center justify-between gap-4 mb-6 mt-2">
           <div className="flex items-center gap-1">
             <h2 className="text-caption font-semibold text-foreground">Assigned courses</h2>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => setAddOpen(true)}
-              aria-label="Assign course"
-            >
-              <Icon icon={MdAdd} size={24} />
-            </Button>
           </div>
           <span className="text-caption font-semibold text-foreground">OCELIA access</span>
         </div>
