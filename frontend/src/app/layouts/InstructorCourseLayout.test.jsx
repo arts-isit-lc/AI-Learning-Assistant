@@ -62,20 +62,21 @@ describe("InstructorCourseLayout", () => {
     )
   })
 
-  it("gives inactive section tabs the rounded brand hover state (bg #F2E8FF / text #2E0666)", () => {
-    renderLayout() // Settings is active here → hover applies to the other four.
+  it("gives inactive section tabs the top-nav styling: purple text + rounded brand hover (bg #F2E8FF / text #2E0666)", () => {
+    renderLayout() // Settings is active here → inactive styling applies to the other four.
     for (const name of ["Configuration", "Insights", "Chat history", "Students"]) {
       const tab = screen.getByRole("link", { name })
+      expect(tab).toHaveClass("text-primary")
       expect(tab).toHaveClass("hover:bg-primary-subtle")
       expect(tab).toHaveClass("hover:text-primary-dark")
       expect(tab).toHaveClass("rounded")
     }
   })
 
-  it("gives the active section tab no hover state and no rounded corners", () => {
+  it("marks the active section tab black (#000 / neutral-900) with a border-primary underline and no hover, matching the top nav", () => {
     renderLayout()
     const active = screen.getByRole("link", { name: "Settings" })
-    expect(active).toHaveClass("border-primary", "text-primary")
+    expect(active).toHaveClass("border-primary", "text-neutral-900")
     expect(active).not.toHaveClass("rounded")
     expect(active).not.toHaveClass("hover:bg-primary-subtle")
     expect(active).not.toHaveClass("hover:text-primary-dark")
