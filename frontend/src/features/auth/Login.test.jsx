@@ -55,12 +55,13 @@ describe("Login", () => {
     expect(screen.getByRole("button", { name: "Create an account" })).toBeInTheDocument()
   })
 
-  it("gives the Forgot password / Create an account links the #F2E8FF hover bg + #2E0666 hover text", () => {
+  it("gives the Forgot password / Create an account links px-4 + the #F2E8FF hover bg / #2E0666 hover text, no hover underline", () => {
     render(<Login />)
-    // primary-subtle = #F2E8FF (hover bg), primary-dark = #2E0666 (hover text).
+    // primary-subtle = #F2E8FF (hover bg), primary-dark = #2E0666 (hover text);
+    // hover:no-underline cancels the link variant's default hover underline.
     for (const name of ["Forgot password?", "Create an account"]) {
       const link = screen.getByRole("button", { name })
-      expect(link).toHaveClass("hover:bg-primary-subtle", "hover:text-primary-dark")
+      expect(link).toHaveClass("px-4", "hover:bg-primary-subtle", "hover:text-primary-dark", "hover:no-underline")
     }
   })
 

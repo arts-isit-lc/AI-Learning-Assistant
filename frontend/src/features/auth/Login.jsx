@@ -300,7 +300,7 @@ export function Login() {
                 <Button
                   type="button"
                   variant="link"
-                  className="px-0 text-base hover:bg-primary-subtle hover:text-primary-dark"
+                  className="px-4 text-base hover:bg-primary-subtle hover:text-primary-dark hover:no-underline"
                   onClick={() => switchMode("forgot")}
                 >
                   Forgot password?
@@ -308,7 +308,7 @@ export function Login() {
                 <Button
                   type="button"
                   variant="link"
-                  className="px-0 text-base hover:bg-primary-subtle hover:text-primary-dark"
+                  className="px-4 text-base hover:bg-primary-subtle hover:text-primary-dark hover:no-underline"
                   onClick={() => switchMode("signUp")}
                 >
                   Create an account
