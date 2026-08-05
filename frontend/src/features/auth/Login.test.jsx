@@ -55,6 +55,15 @@ describe("Login", () => {
     expect(screen.getByRole("button", { name: "Create an account" })).toBeInTheDocument()
   })
 
+  it("gives the Forgot password / Create an account links the #F2E8FF hover bg + #2E0666 hover text", () => {
+    render(<Login />)
+    // primary-subtle = #F2E8FF (hover bg), primary-dark = #2E0666 (hover text).
+    for (const name of ["Forgot password?", "Create an account"]) {
+      const link = screen.getByRole("button", { name })
+      expect(link).toHaveClass("hover:bg-primary-subtle", "hover:text-primary-dark")
+    }
+  })
+
   it("signs in and lands on the role home", async () => {
     h.signIn.mockResolvedValue({ isSignedIn: true })
     render(<Login />)

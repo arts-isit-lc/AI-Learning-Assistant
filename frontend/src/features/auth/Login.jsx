@@ -297,10 +297,20 @@ export function Login() {
                 <Button type="submit" loading={busy} className="w-full text-base">Log in</Button>
               </div>
               <div className="flex items-center justify-between border-t border-border pt-2">
-                <Button type="button" variant="link" className="px-0 text-base" onClick={() => switchMode("forgot")}>
+                <Button
+                  type="button"
+                  variant="link"
+                  className="px-0 text-base hover:bg-primary-subtle hover:text-primary-dark"
+                  onClick={() => switchMode("forgot")}
+                >
                   Forgot password?
                 </Button>
-                <Button type="button" variant="link" className="px-0 text-base" onClick={() => switchMode("signUp")}>
+                <Button
+                  type="button"
+                  variant="link"
+                  className="px-0 text-base hover:bg-primary-subtle hover:text-primary-dark"
+                  onClick={() => switchMode("signUp")}
+                >
                   Create an account
                 </Button>
               </div>
