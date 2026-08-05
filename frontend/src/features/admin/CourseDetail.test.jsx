@@ -155,11 +155,12 @@ describe("CourseDetail (staged editing)", () => {
     expect(del).not.toHaveClass("hover:underline")
   })
 
-  it("renders Save changes as the solid primary button (matching the instructor Settings tab)", () => {
+  it("renders Undo + Save changes as ghost (text) buttons, matching the instructor detail pane", () => {
     render(<CourseDetail />)
     const save = screen.getByRole("button", { name: "Save changes" })
-    expect(save).toHaveClass("bg-primary", "text-primary-foreground")
-    expect(save).not.toHaveClass("text-neutral-300")
+    // Ghost text button, faded (neutral) until dirty — not the solid-primary CTA.
+    expect(save).not.toHaveClass("bg-primary")
+    expect(save).toHaveClass("text-neutral-300")
   })
 
   it("shows an ErrorState with retry when the instructor list fails to load", async () => {

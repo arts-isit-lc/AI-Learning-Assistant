@@ -319,14 +319,20 @@ export function CourseDetail() {
           <DuplicateCourseDialog className="ml-6" course={course} />
         </div>
         {/* Undo discards the staged edits (back to the last-saved state); Save
-            commits them. Both enable together the moment there's an edit. Save
-            matches the instructor Settings tab (solid-primary, disabled/faded
-            until dirty, spinner while saving). */}
+            commits them. Both enable together the moment there's an edit. Matches
+            the admin InstructorDetail pane: ghost (text) Undo + Save, the Save
+            fading from neutral to primary once there's an edit. */}
         <div className="flex items-center gap-4">
-          <Button variant="outline" onClick={discardChanges} disabled={!isDirty || saving}>
+          <Button variant="ghost" onClick={discardChanges} disabled={!isDirty || saving}>
             Undo
           </Button>
-          <Button onClick={saveChanges} loading={saving} disabled={!isDirty}>
+          <Button
+            variant="ghost"
+            className={isDirty ? "text-primary" : "text-neutral-300"}
+            onClick={saveChanges}
+            disabled={!isDirty || saving}
+            loading={saving}
+          >
             Save changes
           </Button>
         </div>

@@ -265,14 +265,18 @@ export function InstructorDetail() {
           Delete instructor
         </Button>
         {/* Undo discards the staged edits (back to the last-saved state); Save
-            commits them. Both enable together the moment there's an edit. Matches
-            the admin CourseDetail / instructor Settings tab: an outline Undo + a
-            solid-primary Save (disabled until dirty, spinner while saving). */}
+            commits them. Both enable together the moment there's an edit. */}
         <div className="flex items-center gap-4">
-          <Button variant="outline" onClick={discardChanges} disabled={!isDirty || saving}>
+          <Button variant="ghost" onClick={discardChanges} disabled={!isDirty || saving}>
             Undo
           </Button>
-          <Button onClick={saveChanges} loading={saving} disabled={!isDirty}>
+          <Button
+            variant="ghost"
+            className={isDirty ? "text-primary" : "text-neutral-300"}
+            onClick={saveChanges}
+            disabled={!isDirty || saving}
+            loading={saving}
+          >
             Save changes
           </Button>
         </div>
