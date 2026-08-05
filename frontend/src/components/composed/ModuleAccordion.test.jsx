@@ -151,4 +151,14 @@ describe("ModuleAccordion", () => {
     renderAccordion()
     expect(screen.getByRole("button", { name: "Reorder vectors" })).not.toHaveClass("opacity-0")
   })
+
+  it("darkens both drag handles (concept + module) to #2E0666 (primary-dark) on hover", () => {
+    renderAccordion()
+    const conceptHandle = screen.getByRole("button", { name: "Reorder algebra" })
+    const moduleHandle = screen.getByRole("button", { name: "Reorder vectors" })
+    expect(conceptHandle).toHaveClass("hover:text-primary-dark")
+    expect(moduleHandle).toHaveClass("hover:text-primary-dark")
+    expect(conceptHandle).not.toHaveClass("hover:text-foreground")
+    expect(moduleHandle).not.toHaveClass("hover:text-foreground")
+  })
 })
