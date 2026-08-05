@@ -17,7 +17,9 @@ const SelectTrigger = React.forwardRef(function SelectTrigger({ className, child
         // Radix marks the trigger with data-placeholder while the placeholder is
         // shown (SelectValue is a span, so the native placeholder: pseudo never
         // applied) — grey it to match the other fields.
-        "data-[placeholder]:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        // Border turns brand purple (#6829C2 / primary) when the trigger is clicked:
+        // while the menu is open (data-state) and while it holds focus.
+        "data-[placeholder]:text-muted-foreground focus:border-primary data-[state=open]:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         "disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
         className
       )}
@@ -25,11 +27,10 @@ const SelectTrigger = React.forwardRef(function SelectTrigger({ className, child
     >
       {children}
       <SelectPrimitive.Icon asChild>
-        {/* Chevron greys to #BFBFBF (neutral-400) while the trigger is hovered. */}
         <Icon
           icon={MdExpandMore}
           size={24}
-          className="shrink-0 transition duration-fast group-hover:text-neutral-400 group-data-[state=open]:rotate-180"
+          className="shrink-0 transition duration-fast group-data-[state=open]:rotate-180"
         />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>

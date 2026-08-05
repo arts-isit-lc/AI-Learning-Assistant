@@ -17,11 +17,14 @@ describe("MultiSelect", () => {
     expect(screen.getByRole("button", { name: "Picker" })).toHaveTextContent("Pick some")
   })
 
-  it("greys the trigger chevron on hover (group-hover:text-neutral-400)", () => {
+  it("turns the trigger border #6829C2 (primary) on focus/open, with no chevron hover greying", () => {
     render(<MultiSelect options={OPTIONS} value={[]} onChange={() => {}} aria-label="Picker" />)
     const trigger = screen.getByRole("button", { name: "Picker" })
-    expect(trigger).toHaveClass("group")
-    expect(trigger.querySelector("svg")).toHaveClass("group-hover:text-neutral-400")
+    // Border becomes brand purple on focus (click) and while the menu is open.
+    expect(trigger).toHaveClass("focus:border-primary", "data-[state=open]:border-primary")
+    // The old hover-greying of the chevron is gone (and the now-unused group marker removed).
+    expect(trigger).not.toHaveClass("group")
+    expect(trigger.querySelector("svg")).not.toHaveClass("group-hover:text-neutral-400")
   })
 
   it("gives open options the #F2E8FF (primary-subtle) hover surface", async () => {

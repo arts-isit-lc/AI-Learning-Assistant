@@ -37,7 +37,7 @@ describe("Select", () => {
     expect(screen.getByRole("combobox", { name: "Language model" })).toHaveTextContent("Llama")
   })
 
-  it("greys the trigger chevron on hover (group-hover:text-neutral-400)", () => {
+  it("turns the trigger border #6829C2 (primary) on focus/open, with no chevron hover greying", () => {
     render(
       <Select defaultValue="a">
         <SelectTrigger aria-label="Language model">
@@ -49,8 +49,10 @@ describe("Select", () => {
       </Select>
     )
     const trigger = screen.getByRole("combobox", { name: "Language model" })
-    expect(trigger).toHaveClass("group")
-    expect(trigger.querySelector("svg")).toHaveClass("group-hover:text-neutral-400")
+    // Border becomes brand purple on focus (click) and while the menu is open.
+    expect(trigger).toHaveClass("focus:border-primary", "data-[state=open]:border-primary")
+    // The old hover-greying of the chevron is gone.
+    expect(trigger.querySelector("svg")).not.toHaveClass("group-hover:text-neutral-400")
   })
 
   it("gives open options a square, #F2E8FF (primary-subtle) hover surface", async () => {
