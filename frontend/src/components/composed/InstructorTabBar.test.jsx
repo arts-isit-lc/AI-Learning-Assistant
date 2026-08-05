@@ -74,24 +74,27 @@ describe("InstructorTabBar", () => {
 
   // Regression: the toggle used to be rendered in two different slots (top-right
   // when expanded, inline with the tabs when collapsed), so it teleported on
-  // every click and lost focus. It now lives in one fixed, always-rendered slot
-  // pinned to the top-right of the greeting row.
-  it("keeps the toggle in the greeting row (top-right), not in the tab row, when expanded", () => {
+  // every click and lost focus. It now lives in one fixed, always-rendered
+  // container of its OWN — sharing no wrapper with the greeting text or tabs.
+  it("puts the toggle in its own container, separate from the greeting, when expanded", () => {
     renderAt("/instructor/courses") // expanded
+    const greeting = document.getElementById("instructor-greeting")
     const nav = screen.getByRole("navigation", { name: /instructor navigation/i })
     const toggle = screen.getByRole("button", { name: /collapse/i })
-    const greetingRow = document.getElementById("instructor-greeting").parentElement
-    expect(greetingRow).toContainElement(toggle) // shares the greeting's row
-    expect(nav.parentElement).not.toContainElement(toggle) // not in the tab row
+    const heading = screen.getByRole("heading", { name: /hi, instructor/i })
+    // The toggle is not inside the greeting container, nor the tab row…
+    expect(greeting).not.toContainElement(toggle)
+    expect(nav.parentElement).not.toContainElement(toggle)
+    // …and the greeting text is not inside the toggle's own container.
+    expect(toggle.parentElement).not.toContainElement(heading)
   })
 
-  it("keeps that same toggle slot visible when collapsed (inside a course)", () => {
+  it("keeps the toggle visible in its own container when collapsed (inside a course)", () => {
     renderAt("/instructor/courses/c1/configuration") // collapsed
-    const nav = screen.getByRole("navigation", { name: /instructor navigation/i })
+    const greeting = document.getElementById("instructor-greeting")
     const toggle = screen.getByRole("button", { name: /expand/i })
-    const greetingRow = document.getElementById("instructor-greeting").parentElement
-    expect(greetingRow).toContainElement(toggle)
-    expect(nav.parentElement).not.toContainElement(toggle)
+    expect(toggle).toBeInTheDocument()
+    expect(greeting).not.toContainElement(toggle)
   })
 
   it("toggles in place: the same button element keeps focus across collapse (no remount/jump)", async () => {

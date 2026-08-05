@@ -35,17 +35,18 @@ const toggleClass =
  * `AppHeader`.
  *
  * Layout:
- *  - The Expand/Collapse toggle lives in its OWN always-rendered slot, pinned to
- *    the top-right of the greeting row — permanently visible, never moves.
- *  - Clicking it slides only the greeting/subtitle (to its left) open/closed via
- *    the shared Collapse primitive (same motion as every accordion). `items-start`
- *    holds both the greeting and the toggle at `pt-5`, so the toggle stays fixed
- *    whether the greeting is full-height (expanded) or collapsed to 0.
+ *  - The Expand/Collapse toggle lives in its OWN container, absolutely pinned to
+ *    the top-right of the bar and always rendered — so it's permanently visible,
+ *    fully independent of the greeting (they share no wrapper), and never moves.
+ *  - Clicking it slides only the greeting/subtitle open/closed via the shared
+ *    Collapse primitive (same motion as every accordion). Because the toggle is
+ *    positioned independently, it stays put whether the greeting is full-height
+ *    (expanded) or collapsed to 0.
  *
  * Rendering the toggle in two different slots (the earlier approach — top-right
  * when expanded, inline with the tabs when collapsed) made it teleport on every
  * click (a visible "jump") and unmount/remount (dropping keyboard focus). One
- * stable, always-present slot fixes both.
+ * stable, always-present container fixes both.
  *
  * Auto-collapses when a course is open (the course workspace needs the vertical
  * space); the toggle overrides until the next navigation. The `Quicklink?`
@@ -88,23 +89,23 @@ export function InstructorTabBar() {
 
   return (
     <div className="border-b border-border bg-background">
-      <div className="mx-auto max-w-7xl px-6">
-        {/* Greeting row: the greeting/subtitle (left) slides open/closed via the
-            shared Collapse primitive, while the toggle sits in its own fixed
-            top-right slot that's ALWAYS rendered. `items-start` pins both to
-            `pt-5`, so the toggle holds its position whether the greeting is
-            full-height (expanded) or collapsed to 0. */}
-        <div className="flex items-start justify-between gap-4">
-          <Collapse open={expanded} className="flex-1" id="instructor-greeting">
-            <div className="pt-5">
-              <h1 className="text-h2 font-semibold uppercase text-foreground">Hi, Instructor!</h1>
-              <p className="mt-1 text-body text-muted-foreground">
-                Manage your courses, upload materials, and review chat activity and insights.
-              </p>
-            </div>
-          </Collapse>
-          <div className="shrink-0 pt-5">{toggleButton}</div>
-        </div>
+      <div className="relative mx-auto max-w-7xl px-6">
+        {/* Toggle — its OWN container, absolutely pinned to the top-right of the
+            bar and always rendered. Positioned independently, it shares no
+            wrapper with the greeting, never moves when the greeting collapses,
+            and stays put across toggles (so it doesn't jump or lose focus). */}
+        <div className="absolute right-6 top-5">{toggleButton}</div>
+
+        {/* Greeting — its own container; slides open/closed via the shared
+            Collapse primitive. pr-32 keeps the text clear of the toggle. */}
+        <Collapse open={expanded} id="instructor-greeting">
+          <div className="pt-5 pr-32">
+            <h1 className="text-h2 font-semibold uppercase text-foreground">Hi, Instructor!</h1>
+            <p className="mt-1 text-body text-muted-foreground">
+              Manage your courses, upload materials, and review chat activity and insights.
+            </p>
+          </div>
+        </Collapse>
 
         {/* Tab row (persistent). */}
         <div className="flex items-center justify-between py-6">{tabs}</div>

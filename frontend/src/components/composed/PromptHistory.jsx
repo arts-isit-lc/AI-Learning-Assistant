@@ -48,7 +48,7 @@ export function PromptHistory({ versions = [], onRestore, disabled = false }) {
         return (
           // Every entry past the first carries the divider (border-t) + symmetric
           // spacing, so a line only appears *between* prompts (never with one).
-          <li key={i} className={cn(i > 0 && "mt-2 border-t border-border pt-2")}>
+          <li key={i} className={cn(i > 0 && "mt-4 border-t border-border pt-4")}>
             {/* `relative` anchors the Use prompt button, which overlays the
                 top-right of the card as a sibling (never nested inside the select
                 button). Scoped to the card so the li's divider spacing can't
