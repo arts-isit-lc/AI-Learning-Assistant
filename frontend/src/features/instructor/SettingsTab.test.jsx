@@ -88,6 +88,16 @@ describe("SettingsTab", () => {
     expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled()
   })
 
+  it("renders Save changes as a ghost (text) button, faded until dirty (matching the admin panes)", async () => {
+    render(<SettingsTab />)
+    const saveBtn = screen.getByRole("button", { name: "Save changes" })
+    // Ghost text button, faded neutral until dirty — not the solid-primary CTA.
+    expect(saveBtn).not.toHaveClass("bg-primary")
+    expect(saveBtn).toHaveClass("text-neutral-300")
+    await editPrompt("Teach with care")
+    expect(screen.getByRole("button", { name: "Save changes" })).toHaveClass("text-primary")
+  })
+
   it("disables the prompt and model fields while the conflict check is running", () => {
     validate.isPending = true
     render(<SettingsTab />)

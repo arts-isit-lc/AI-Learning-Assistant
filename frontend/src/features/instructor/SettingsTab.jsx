@@ -214,9 +214,17 @@ export function SettingsTab() {
         </Alert>
       )}
 
-      {/* Footer */}
+      {/* Footer — ghost (text) Save matching the admin CourseDetail /
+          InstructorDetail panes: faded neutral until dirty, primary text once
+          there's an edit (spinner while validating/saving). */}
       <div className="flex justify-end border-t border-border pt-4">
-        <Button onClick={handleSave} loading={validate.isPending || save.isPending} disabled={!dirty}>
+        <Button
+          variant="ghost"
+          className={dirty ? "text-primary" : "text-neutral-300"}
+          onClick={handleSave}
+          loading={validate.isPending || save.isPending}
+          disabled={!dirty}
+        >
           Save changes
         </Button>
       </div>
