@@ -316,7 +316,7 @@ export function CourseDetail() {
           >
             Delete course
           </Button>
-          <DuplicateCourseDialog className="ml-6" course={course} />
+          <DuplicateCourseDialog className="ml-6 h-7" course={course} />
         </div>
         {/* Undo + Save (ghost/text, matched across the admin panes + Settings):
             28px tall (h-7 + size-sm padding), 4px radius (rounded), lavender
