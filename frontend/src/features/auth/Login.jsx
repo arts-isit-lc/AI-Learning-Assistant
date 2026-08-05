@@ -285,11 +285,11 @@ export function Login() {
               <div className="flex flex-col gap-6">
                 <div className="flex flex-col gap-6">
                   <h1 className="text-2xl font-book leading-9 text-foreground">Please log in</h1>
-                  <div className="flex flex-col gap-1.5">
+                  <div className="flex flex-col">
                     <Label htmlFor="email" className="text-h4 text-foreground">Email</Label>
                     <LoginInput id="email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={40} required autoFocus />
                   </div>
-                  <div className="flex flex-col gap-1.5">
+                  <div className="flex flex-col">
                     <Label htmlFor="password" className="text-h4 text-foreground">Password</Label>
                     <LoginInput id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} maxLength={50} required />
                   </div>
@@ -321,11 +321,11 @@ export function Login() {
             <form onSubmit={handleSignUp} className="flex flex-col gap-6">
               <h1 className="text-2xl font-book leading-9 text-foreground">Create your account</h1>
               <div className="flex gap-3">
-                <div className="flex flex-1 flex-col gap-1.5">
+                <div className="flex flex-1 flex-col">
                   <Label htmlFor="firstName" className="text-h4 text-foreground">First name</Label>
                   <LoginInput id="firstName" autoComplete="given-name" value={firstName} onChange={(e) => setFirstName(e.target.value)} maxLength={30} required autoFocus />
                 </div>
-                <div className="flex flex-1 flex-col gap-1.5">
+                <div className="flex flex-1 flex-col">
                   <Label htmlFor="lastName" className="text-h4 text-foreground">Last name</Label>
                   <LoginInput id="lastName" autoComplete="family-name" value={lastName} onChange={(e) => setLastName(e.target.value)} maxLength={30} required />
                 </div>
@@ -358,7 +358,7 @@ export function Login() {
               <p className="text-caption text-muted-foreground">
                 Enter the confirmation code sent to {email || "your email"}.
               </p>
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col">
                 <Label htmlFor="code" className="text-h4 text-foreground">Confirmation code</Label>
                 <LoginInput id="code" value={code} onChange={(e) => setCode(e.target.value)} maxLength={15} required autoFocus />
               </div>
@@ -378,11 +378,11 @@ export function Login() {
             <form onSubmit={handleNewPassword} className="flex flex-col gap-6">
               <h1 className="text-2xl font-book leading-9 text-foreground">Set a new password</h1>
               <p className="text-caption text-muted-foreground">Choose a new password for your account.</p>
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col">
                 <Label htmlFor="new-password" className="text-h4 text-foreground">New password</Label>
                 <LoginInput id="new-password" type="password" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} maxLength={50} required autoFocus />
               </div>
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col">
                 <Label htmlFor="confirm-new-password" className="text-h4 text-foreground">Confirm new password</Label>
                 <LoginInput id="confirm-new-password" type="password" autoComplete="new-password" value={confirmNewPassword} onChange={(e) => setConfirmNewPassword(e.target.value)} maxLength={50} required />
               </div>
@@ -396,7 +396,7 @@ export function Login() {
 
               {resetStep === "request" && (
                 <form onSubmit={handleRequestReset} className="flex flex-col gap-6">
-                  <div className="flex flex-col gap-1.5">
+                  <div className="flex flex-col">
                     <Label htmlFor="reset-email" className="text-h4 text-foreground">Email</Label>
                     <LoginInput id="reset-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={40} required autoFocus />
                   </div>
@@ -406,11 +406,11 @@ export function Login() {
 
               {resetStep === "confirm" && (
                 <form onSubmit={handleConfirmReset} className="flex flex-col gap-6">
-                  <div className="flex flex-col gap-1.5">
+                  <div className="flex flex-col">
                     <Label htmlFor="reset-code" className="text-h4 text-foreground">Confirmation code</Label>
                     <LoginInput id="reset-code" value={code} onChange={(e) => setCode(e.target.value)} maxLength={15} required autoFocus />
                   </div>
-                  <div className="flex flex-col gap-1.5">
+                  <div className="flex flex-col">
                     <Label htmlFor="reset-new-password" className="text-h4 text-foreground">New password</Label>
                     <LoginInput id="reset-new-password" type="password" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} maxLength={50} required />
                   </div>
