@@ -746,7 +746,7 @@ export function CourseWizard() {
                     reaches a terminal state, at which point Next enables. Cancel
                     + the primary action (Next, or Publish on the final step) stay
                     paired at 8px. */}
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-8">
                   {step === 1 && isProcessingBlocking && (
                     <p className="text-base font-semibold text-destructive">
                       You can continue once file upload and ingestion are complete.

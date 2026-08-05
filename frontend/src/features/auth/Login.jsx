@@ -353,11 +353,11 @@ export function Login() {
                 <LoginInput id="code" value={code} onChange={(e) => setCode(e.target.value)} maxLength={15} required autoFocus />
               </div>
               <Button type="submit" loading={busy} className="w-full">Confirm</Button>
-              <div className="flex items-center justify-between border-t border-border pt-2">
-                <Button type="button" variant="link" className="px-0" onClick={handleResendCode}>
+              <div className="flex items-center justify-between border-t border-border pt-4">
+                <Button type="button" variant="link" className="px-4" onClick={handleResendCode}>
                   Resend code
                 </Button>
-                <Button type="button" variant="link" className="px-0" onClick={() => switchMode("signIn")}>
+                <Button type="button" variant="link" className="px-4" onClick={() => switchMode("signIn")}>
                   Back to sign in
                 </Button>
               </div>

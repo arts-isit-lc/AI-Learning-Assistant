@@ -39,6 +39,7 @@ import { Icon } from "@/components/ui/icon"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ErrorState } from "@/components/composed/ErrorState"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { cn } from "@/lib/utils"
 
 /**
  * Group flat modules under their concept (by concept_id, falling back to
@@ -121,14 +122,14 @@ export function ConfigurationTab() {
   const [deleteConceptTarget, setDeleteConceptTarget] = useState(null)
   const [deleteModuleTarget, setDeleteModuleTarget] = useState(null)
 
-  // Staged reorder — concept/module drags update these local ORDER overrides (id
-  // lists; null/absent = follow the server order) and are NOT persisted until the
-  // user clicks "Save changes". Objects always resolve fresh from the server
-  // cache, so renames/edits + immediate add/delete flow through while only the
-  // ORDER is staged locally.
+  // Staged edits — concept/module drag reorders (id lists; null/absent = follow
+  // the server order) AND concept renames ({ [conceptId]: newName }) are held
+  // locally and NOT persisted until "Save changes" (revert them with Undo).
+  // Add/delete still persist immediately and flow through the server cache.
   const [conceptOrder, setConceptOrder] = useState(null)
   const [moduleOrders, setModuleOrders] = useState({})
-  const [savingOrder, setSavingOrder] = useState(false)
+  const [conceptNames, setConceptNames] = useState({})
+  const [saving, setSaving] = useState(false)
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -139,7 +140,7 @@ export function ConfigurationTab() {
 
   // Display tree = the server order overlaid with the staged drag reorders, plus
   // the dirty flags derived from comparing the two.
-  const { tree, isDirty, conceptsReordered, reorderedModuleConceptIds } = useMemo(() => {
+  const { tree, isDirty, conceptsReordered, reorderedModuleConceptIds, renamedConceptIds } = useMemo(() => {
     const conceptsById = new Map(concepts.map((c) => [c.concept_id, c]))
     const modulesById = new Map(modules.map((m) => [m.module_id, m]))
     const serverConceptIds = serverTree.map((t) => t.concept.concept_id)
@@ -149,14 +150,28 @@ export function ConfigurationTab() {
     const modIdsFor = (cid) => reconcileOrder(serverModuleIds.get(cid) ?? [], moduleOrders[cid])
     const displayConceptIds = reconcileOrder(serverConceptIds, conceptOrder)
 
+    // Overlay a staged rename (that still differs from the server name) onto the
+    // concept so both the tree AND the reorder save payload — which carries
+    // concept_name — reflect the new name.
     const nextTree = displayConceptIds
       .map((cid) => {
         const concept = conceptsById.get(cid)
         if (!concept) return null
-        return { concept, modules: modIdsFor(cid).map((id) => modulesById.get(id)).filter(Boolean) }
+        const staged = conceptNames[cid]
+        const displayConcept =
+          staged != null && staged !== concept.concept_name ? { ...concept, concept_name: staged } : concept
+        return {
+          concept: displayConcept,
+          modules: modIdsFor(cid).map((id) => modulesById.get(id)).filter(Boolean),
+        }
       })
       .filter(Boolean)
 
+    const renamedIds = displayConceptIds.filter((cid) => {
+      const staged = conceptNames[cid]
+      const server = conceptsById.get(cid)
+      return staged != null && server && staged !== server.concept_name
+    })
     const reorderedMods = displayConceptIds.filter(
       (cid) => !sameOrder(modIdsFor(cid), serverModuleIds.get(cid) ?? [])
     )
@@ -165,9 +180,10 @@ export function ConfigurationTab() {
       tree: nextTree,
       conceptsReordered: conceptsMoved,
       reorderedModuleConceptIds: reorderedMods,
-      isDirty: conceptsMoved || reorderedMods.length > 0,
+      renamedConceptIds: renamedIds,
+      isDirty: conceptsMoved || reorderedMods.length > 0 || renamedIds.length > 0,
     }
-  }, [concepts, modules, serverTree, conceptOrder, moduleOrders])
+  }, [concepts, modules, serverTree, conceptOrder, moduleOrders, conceptNames])
 
   const conceptIds = tree.map((t) => t.concept.concept_id)
 
@@ -177,23 +193,42 @@ export function ConfigurationTab() {
   const stageModuleOrder = (conceptId, ordered) =>
     setModuleOrders((prev) => ({ ...prev, [conceptId]: ordered.map((m) => m.module_id) }))
 
-  // Persist all staged reorders (concepts + each changed concept's modules). On
-  // failure each mutation rolls back its own cache and surfaces the inline error
-  // below; we keep the staged order so the user can retry Save.
-  const saveOrder = async () => {
-    setSavingOrder(true)
+  // Discard every staged edit — reorder + renames — back to the last-saved
+  // (server) state. Powers the Undo button and the post-save reset.
+  const discardChanges = () => {
+    setConceptOrder(null)
+    setModuleOrders({})
+    setConceptNames({})
+  }
+
+  // Persist all staged edits: concept renames first (each keeps its number),
+  // then the concept reorder, then each changed concept's module order. The
+  // reorder payload also carries concept_name, so a renamed+reordered concept
+  // stays consistent regardless of order. On failure each mutation rolls back
+  // its own cache and surfaces the inline error below; the staged edits are kept
+  // so the user can retry.
+  const saveChanges = async () => {
+    setSaving(true)
     try {
+      for (const cid of renamedConceptIds) {
+        const node = tree.find((t) => t.concept.concept_id === cid)
+        if (node)
+          await renameConcept.mutateAsync({
+            conceptId: cid,
+            conceptName: node.concept.concept_name,
+            conceptNumber: node.concept.concept_number,
+          })
+      }
       if (conceptsReordered) await reorderConcepts.mutateAsync(tree.map((t) => t.concept))
       for (const cid of reorderedModuleConceptIds) {
         const node = tree.find((t) => t.concept.concept_id === cid)
         if (node) await reorderModules.mutateAsync(node.modules)
       }
-      setConceptOrder(null)
-      setModuleOrders({})
+      discardChanges()
     } catch {
-      // Surfaced via the mutations' isError (inline Alert below); staged order kept.
+      // Surfaced via the mutations' isError (inline Alert below); staged edits kept.
     } finally {
-      setSavingOrder(false)
+      setSaving(false)
     }
   }
 
@@ -230,12 +265,10 @@ export function ConfigurationTab() {
   }
 
   const conceptHandlers = (concept, conceptModules) => ({
-    onRename: (name) =>
-      renameConcept.mutate({
-        conceptId: concept.concept_id,
-        conceptName: name,
-        conceptNumber: concept.concept_number,
-      }),
+    // Stage the rename locally (revert with Undo, persist on Save) rather than
+    // writing through immediately. Dirtiness is derived by diffing against the
+    // server name in the display memo, so a rename back to the original clears.
+    onRename: (name) => setConceptNames((prev) => ({ ...prev, [concept.concept_id]: name })),
     onDelete: () => setDeleteConceptTarget({ concept, modules: conceptModules }),
     onAddModule: () => navigate(`${moduleBasePath}/new?concept=${concept.concept_id}`),
     onReorderModules: (ordered) => stageModuleOrder(concept.concept_id, ordered),
@@ -245,7 +278,7 @@ export function ConfigurationTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Guard the staged reorder against navigation (tab switch / back / refresh). */}
+      {/* Guard staged edits (reorder + renames) against navigation (tab switch / back / refresh). */}
       <UnsavedChangesPrompt when={isDirty} />
       <div className="flex items-center justify-between gap-2 mb-8">
         <h2 className="text-sm leading-7 font-semibold text-neutral-900">Course configuration</h2>
@@ -309,7 +342,7 @@ export function ConfigurationTab() {
         </div>
       )}
 
-      {(reorderConcepts.isError || reorderModules.isError) && (
+      {(renameConcept.isError || reorderConcepts.isError || reorderModules.isError) && (
         <Alert variant="destructive">
           <AlertDescription>{"Couldn't save your changes. Please try again."}</AlertDescription>
         </Alert>
@@ -355,22 +388,47 @@ export function ConfigurationTab() {
       )}
 
       {/* Footer (Figma 365:2622) — Student view (left) previews the course as a
-          student; Save changes (right) persists a STAGED concept/module reorder.
-          Add/rename/delete still persist immediately, so Save is only active while
-          there's an unsaved reorder. */}
+          student; Undo + Save changes (right) revert or persist the STAGED
+          concept/module reorder + concept renames together. Add/delete still
+          persist immediately, so the pair is only active while there's an unsaved
+          reorder or rename. */}
       <div className="flex items-center justify-between gap-4 border-t border-border pt-6">
         <Button variant="link" className="p-0" onClick={openStudentView}>
           Student view
         </Button>
-        <Button
-          variant="ghost"
-          className={isDirty ? "text-primary" : "text-neutral-300"}
-          onClick={saveOrder}
-          disabled={!isDirty || savingOrder}
-          loading={savingOrder}
-        >
-          Save changes
-        </Button>
+        {/* Undo + Save — matched to the admin CourseDetail/InstructorDetail panes:
+            28px tall (h-7 + size-sm), 4px radius (rounded), lavender (#F2E8FF /
+            primary-subtle) hover, solid #808080 disabled text (disabled:opacity-100
+            defeats the base fade). Once dirty the text turns #6829C2 (primary);
+            Save also gains a #6829C2 border (transparent while disabled → no layout
+            shift), Undo stays borderless. */}
+        <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "h-7 rounded hover:bg-primary-subtle hover:text-primary disabled:opacity-100",
+              isDirty ? "text-primary" : "text-neutral-300"
+            )}
+            onClick={discardChanges}
+            disabled={!isDirty || saving}
+          >
+            Undo
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "h-7 rounded border hover:bg-primary-subtle hover:text-primary disabled:opacity-100",
+              isDirty ? "border-primary text-primary" : "border-transparent text-neutral-300"
+            )}
+            onClick={saveChanges}
+            disabled={!isDirty || saving}
+            loading={saving}
+          >
+            Save changes
+          </Button>
+        </div>
       </div>
 
       <ConfirmDialog

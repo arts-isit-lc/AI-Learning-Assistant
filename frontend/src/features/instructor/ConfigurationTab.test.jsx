@@ -6,7 +6,7 @@ import { groupConceptTree, reconcileOrder, ConfigurationTab } from "./Configurat
 let conceptsResult
 let modulesResult
 const createConcept = { mutate: vi.fn(), isPending: false }
-const renameConcept = { mutate: vi.fn(), isPending: false }
+const renameConcept = { mutate: vi.fn(), mutateAsync: vi.fn().mockResolvedValue(undefined), isError: false, isPending: false }
 const deleteConcept = { mutate: vi.fn(), isPending: false }
 const deleteModule = { mutate: vi.fn(), isPending: false }
 const reorderConcepts = { mutate: vi.fn(), mutateAsync: vi.fn().mockResolvedValue(undefined), isError: false, isPending: false }
@@ -53,7 +53,10 @@ beforeEach(() => {
   conceptsResult = { data: CONCEPTS, isLoading: false, isError: false }
   modulesResult = { data: MODULES, isLoading: false, isError: false }
   Object.values({ createConcept, renameConcept, deleteConcept, deleteModule, reorderConcepts, reorderModules }).forEach(
-    (m) => m.mutate.mockClear()
+    (m) => {
+      m.mutate.mockClear()
+      m.mutateAsync?.mockClear()
+    }
   )
   navigate.mockClear()
   setIsInstructorAsStudent.mockClear()
@@ -173,10 +176,70 @@ describe("ConfigurationTab", () => {
     expect(navigate).toHaveBeenCalledWith("/courses/c1")
   })
 
-  it("keeps Save changes disabled until a concept/module reorder is staged", () => {
+  it("keeps Save changes and Undo disabled until a reorder or rename is staged", () => {
     render(<ConfigurationTab />)
-    // No staged reorder yet → nothing to save (add/rename/delete persist immediately).
+    // Nothing staged yet → nothing to save or undo (add/delete persist immediately).
     expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Undo" })).toBeDisabled()
+  })
+
+  // --- Staged concept renames + Undo (matches the admin CourseDetail/InstructorDetail
+  // Undo pattern: edits buffer locally, Undo reverts them, Save persists them). ---
+  it("stages a concept rename — enabling Undo + Save and updating the heading — without persisting", async () => {
+    const user = userEvent.setup()
+    render(<ConfigurationTab />)
+    await user.click(screen.getByRole("button", { name: "Rename concept" }))
+    const input = screen.getByRole("textbox", { name: "Concept name" })
+    await user.clear(input)
+    await user.type(input, "Geometry")
+    await user.click(screen.getByRole("button", { name: "Save concept name" }))
+    // Staged only — not written through immediately.
+    expect(renameConcept.mutate).not.toHaveBeenCalled()
+    expect(renameConcept.mutateAsync).not.toHaveBeenCalled()
+    // Heading reflects the staged name; Undo + Save light up.
+    expect(screen.getByRole("heading", { name: "1. Geometry" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Undo" })).toBeEnabled()
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled()
+  })
+
+  it("reverts a staged concept rename on Undo (name + button state)", async () => {
+    const user = userEvent.setup()
+    render(<ConfigurationTab />)
+    await user.click(screen.getByRole("button", { name: "Rename concept" }))
+    const input = screen.getByRole("textbox", { name: "Concept name" })
+    await user.clear(input)
+    await user.type(input, "Geometry")
+    await user.click(screen.getByRole("button", { name: "Save concept name" }))
+    expect(screen.getByRole("heading", { name: "1. Geometry" })).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Undo" }))
+    // Back to the server name; nothing persisted; Undo + Save disabled again.
+    expect(screen.getByRole("heading", { name: "1. Algebra" })).toBeInTheDocument()
+    expect(renameConcept.mutateAsync).not.toHaveBeenCalled()
+    expect(screen.getByRole("button", { name: "Undo" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled()
+  })
+
+  it("persists a staged concept rename on Save changes (keeping its number)", async () => {
+    const user = userEvent.setup()
+    render(<ConfigurationTab />)
+    await user.click(screen.getByRole("button", { name: "Rename concept" }))
+    const input = screen.getByRole("textbox", { name: "Concept name" })
+    await user.clear(input)
+    await user.type(input, "Geometry")
+    await user.click(screen.getByRole("button", { name: "Save concept name" }))
+    await user.click(screen.getByRole("button", { name: "Save changes" }))
+    expect(renameConcept.mutateAsync).toHaveBeenCalledWith({
+      conceptId: "con1",
+      conceptName: "Geometry",
+      conceptNumber: 1,
+    })
+  })
+
+  it("surfaces an inline error when saving a concept rename fails", () => {
+    renameConcept.isError = true
+    render(<ConfigurationTab />)
+    expect(screen.getByRole("alert")).toHaveTextContent(/couldn't save/i)
+    renameConcept.isError = false
   })
 
   it("shows an accessible ErrorState with retry when concepts fail to load", async () => {
