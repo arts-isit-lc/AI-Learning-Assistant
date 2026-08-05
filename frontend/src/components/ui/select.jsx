@@ -18,8 +18,8 @@ const SelectTrigger = React.forwardRef(function SelectTrigger({ className, child
         // shown (SelectValue is a span, so the native placeholder: pseudo never
         // applied) — grey it to match the other fields.
         // Border turns brand purple (#6829C2 / primary) when the trigger is clicked:
-        // while the menu is open (data-state) and while it holds focus.
-        "data-[placeholder]:text-muted-foreground focus:border-primary data-[state=open]:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        // while the menu is open (data-state) and while it holds focus. No wrapping ring.
+        "data-[placeholder]:text-muted-foreground focus:border-primary data-[state=open]:border-primary focus-visible:outline-none",
         "disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
         className
       )}

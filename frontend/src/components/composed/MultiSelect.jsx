@@ -84,8 +84,8 @@ export function MultiSelect({
             disabled={disabled}
             className={cn(
               // Border turns brand purple (#6829C2 / primary) when the trigger is
-              // clicked: while the menu is open (data-state) and while it holds focus.
-              "flex h-10 w-full items-center justify-between gap-2 rounded-none border border-input bg-background px-3 py-2 text-caption text-foreground focus:border-primary data-[state=open]:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+              // clicked: while the menu is open (data-state) and while it holds focus. No wrapping ring.
+              "flex h-10 w-full items-center justify-between gap-2 rounded-none border border-input bg-background px-3 py-2 text-caption text-foreground focus:border-primary data-[state=open]:border-primary focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50",
               triggerClassName
             )}
           >
