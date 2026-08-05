@@ -240,7 +240,7 @@ export function CourseDetail() {
                 type="button"
                 onClick={copyCode}
                 aria-label="Copy access code"
-                className="flex rounded p-1 text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex rounded p-1 text-primary transition-colors hover:text-primary-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <Icon icon={MdContentCopy} size={16} />
               </button>

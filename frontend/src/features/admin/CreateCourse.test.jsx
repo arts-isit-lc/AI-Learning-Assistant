@@ -48,6 +48,11 @@ describe("CreateCourse", () => {
     expect(screen.getByRole("button", { name: "Add course" })).toHaveClass("hover:bg-primary-dark")
   })
 
+  it("darkens the copy access code button to #2E0666 (primary-dark) on hover", () => {
+    render(<CreateCourse />)
+    expect(screen.getByRole("button", { name: "Copy access code" })).toHaveClass("hover:text-primary-dark")
+  })
+
   it("disables Add course until code, title, and term are all provided", async () => {
     render(<CreateCourse />)
     expect(screen.getByRole("button", { name: "Add course" })).toBeDisabled()

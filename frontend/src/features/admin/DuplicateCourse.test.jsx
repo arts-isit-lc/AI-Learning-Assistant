@@ -85,6 +85,12 @@ describe("DuplicateCourse", () => {
     expect(screen.getByRole("button", { name: "Generate new code" })).toBeInTheDocument()
   })
 
+  it("darkens the copy access code button to #2E0666 (primary-dark) on hover", async () => {
+    render(<DuplicateCourse />)
+    await pickSource()
+    expect(screen.getByRole("button", { name: "Copy access code" })).toHaveClass("hover:text-primary-dark")
+  })
+
   it("prefills the code, title (with ' (copy)'), and term from the chosen source", async () => {
     render(<DuplicateCourse />)
     await pickSource()

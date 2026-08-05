@@ -54,8 +54,12 @@ describe("InstructorCourseLayout", () => {
   it("shows the course access code (with a copy control) in the header", () => {
     renderLayout()
     expect(screen.getByText("65XH19000jo12")).toBeInTheDocument()
-    // The copy control uses the brand primary colour (#6829C2 = text-primary).
-    expect(screen.getByRole("button", { name: /copy access code/i })).toHaveClass("text-primary")
+    // The copy control uses the brand primary colour (#6829C2 = text-primary),
+    // darkening to #2E0666 (primary-dark) on hover.
+    expect(screen.getByRole("button", { name: /copy access code/i })).toHaveClass(
+      "text-primary",
+      "hover:text-primary-dark"
+    )
   })
 
   it("gives inactive section tabs the rounded brand hover state (bg #F2E8FF / text #2E0666)", () => {

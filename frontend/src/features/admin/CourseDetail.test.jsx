@@ -76,6 +76,11 @@ describe("CourseDetail (staged editing)", () => {
     expect(screen.getByRole("switch", { name: "OCELIA access for Lovelace, Ada" })).toBeInTheDocument()
   })
 
+  it("darkens the copy access code button to #2E0666 (primary-dark) on hover", () => {
+    render(<CourseDetail />)
+    expect(screen.getByRole("button", { name: "Copy access code" })).toHaveClass("hover:text-primary-dark")
+  })
+
   it("keeps Save changes disabled until there is a staged edit", async () => {
     render(<CourseDetail />)
     const save = screen.getByRole("button", { name: "Save changes" })
