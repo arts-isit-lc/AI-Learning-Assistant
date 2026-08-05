@@ -228,6 +228,50 @@ class TestFeatureColumnBackfillMigrations:
                 assert "NOT NULL" not in line, f"backfilled column must be nullable: {line.strip()}"
 
 
+class TestUserEngagementDeviceColumns:
+    """User_Engagement_Log gained device_type/os_name/browser_name for the
+    'login' engagement event (device/OS/browser analytics parsed server-side from
+    the User-Agent header). They are declared on the CREATE TABLE AND backfilled
+    idempotently, because CREATE TABLE IF NOT EXISTS never alters a pre-existing
+    (prod) table. All three are nullable with no default: only 'login' rows
+    populate them, so adding them to a populated table must not require a value
+    and every other engagement_type legitimately leaves them NULL.
+    """
+
+    _COLUMNS = ("device_type", "os_name", "browser_name")
+
+    def test_columns_declared_in_create_table(self):
+        src = _source()
+        for col in self._COLUMNS:
+            assert f'"{col}" varchar' in src, (
+                f"User_Engagement_Log.{col} column is missing from CREATE TABLE"
+            )
+
+    def test_idempotent_migration_backfills_columns(self):
+        # CREATE TABLE IF NOT EXISTS is a no-op on an existing table, so each new
+        # column also needs an explicit idempotent ALTER to migrate old databases.
+        src = _source()
+        for col in self._COLUMNS:
+            assert (
+                f'ALTER TABLE "User_Engagement_Log" ADD COLUMN IF NOT EXISTS "{col}" varchar'
+                in src
+            ), f"missing idempotent migration for User_Engagement_Log.{col}"
+
+    def test_device_columns_are_nullable(self):
+        # Adding a NOT NULL column without a default to a populated table fails,
+        # and non-'login' rows must be allowed to leave these NULL.
+        src = _source()
+        for line in src.splitlines():
+            if "ADD COLUMN IF NOT EXISTS" in line and (
+                '"device_type"' in line
+                or '"os_name"' in line
+                or '"browser_name"' in line
+            ):
+                assert "NOT NULL" not in line, (
+                    f"device analytics column must be nullable: {line.strip()}"
+                )
+
+
 class TestForeignKeysAreNamed:
     """FKs must be added with EXPLICIT constraint names. An unnamed
     `ADD FOREIGN KEY` gets a fresh server-generated name on every run, so the

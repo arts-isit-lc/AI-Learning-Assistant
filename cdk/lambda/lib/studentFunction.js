@@ -1,6 +1,7 @@
 /**
  * Student Lambda — Route index:
  *   POST   /student/create_user
+ *   POST   /student/session_start
  *   GET    /student/get_user_roles
  *   GET    /student/get_name
  *   GET    /student/course
@@ -22,6 +23,7 @@
  */
 const { initializeConnection } = require("./lib.js");
 const { verifyStudentAccess, verifyStudentOwnsSession } = require("./accessControl.js");
+const { parseUserAgent, getHeaderCaseInsensitive } = require("./userAgent.js");
 const { S3Client, GetObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
@@ -237,6 +239,51 @@ exports.handler = async (event) => {
           response.body = JSON.stringify({ error: "User data is required" });
         }
         break;
+      case "POST /student/session_start": {
+        // Device/OS/browser analytics: record ONE 'login' engagement row per
+        // browser session (the frontend fires this once per session). The client
+        // sends no parameters — the identity comes from the authorizer (never a
+        // query string, so a caller cannot log a session for someone else) and
+        // the device buckets are parsed server-side from the User-Agent header
+        // (coarse family/type only; see userAgent.js). Best-effort: analytics
+        // must never disrupt a sign-in, so unexpected failures are logged and
+        // swallowed rather than surfaced as a 5xx.
+        try {
+          if (!userEmailAttribute) {
+            response.statusCode = 401;
+            response.body = JSON.stringify({ error: "Unauthorized" });
+            break;
+          }
+
+          const { device_type, os_name, browser_name } = parseUserAgent(
+            getHeaderCaseInsensitive(event, "user-agent")
+          );
+
+          // Resolve the caller; an unknown user is a no-op success (a login can
+          // race ahead of the Users row in rare cases — never error on it).
+          const sessionUser = await sqlConnection`
+                SELECT user_id FROM "Users" WHERE user_email = ${userEmailAttribute};
+            `;
+
+          if (sessionUser.length > 0) {
+            await sqlConnection`
+                  INSERT INTO "User_Engagement_Log"
+                    (log_id, user_id, course_id, module_id, enrolment_id, timestamp, engagement_type, device_type, os_name, browser_name)
+                  VALUES
+                    (uuid_generate_v4(), ${sessionUser[0].user_id}, null, null, null, CURRENT_TIMESTAMP, 'login', ${device_type}, ${os_name}, ${browser_name});
+              `;
+          }
+
+          response.statusCode = 200;
+          response.body = JSON.stringify({ device_type, os_name, browser_name });
+        } catch (err) {
+          // Best-effort: log for CloudWatch/X-Ray but do not fail the caller.
+          console.error("session_start engagement logging failed:", err);
+          response.statusCode = 200;
+          response.body = JSON.stringify({ ok: false });
+        }
+        break;
+      }
       case "GET /student/get_user_roles":
         if (
           event.queryStringParameters &&

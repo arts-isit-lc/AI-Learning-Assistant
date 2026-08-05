@@ -220,7 +220,17 @@ def handler(event, context):
                 "enrolment_id" uuid,
                 "timestamp" timestamp,
                 "engagement_type" varchar,
-                "engagement_details" text
+                "engagement_details" text,
+                -- Device analytics (coarse buckets only), parsed server-side from
+                -- the User-Agent header on the 'login' engagement event. Nullable:
+                -- only 'login' rows populate them; every other engagement_type
+                -- legitimately leaves them NULL. Deliberately low-cardinality
+                -- (family/type, not precise versions or device models) so they
+                -- answer "what % of student sessions are mobile?" without
+                -- device fingerprinting.
+                "device_type" varchar,
+                "os_name" varchar,
+                "browser_name" varchar
             );
 
             -- ─── chatlogs_notifications ───────────────────────────────────────────
@@ -333,6 +343,16 @@ def handler(event, context):
             -- enrolments keep access; NOT NULL is safe because the default
             -- backfills every existing row.
             ALTER TABLE "Enrolments" ADD COLUMN IF NOT EXISTS "access_enabled" boolean NOT NULL DEFAULT true;
+
+            -- Idempotent migration (2026-08): device/OS/browser analytics on the
+            -- 'login' engagement event. CREATE TABLE IF NOT EXISTS never alters an
+            -- existing table, so these must be added explicitly to backfill
+            -- databases (prod) provisioned before the columns existed. All three
+            -- are nullable with no default — safe on populated tables, and every
+            -- non-'login' engagement row legitimately leaves them NULL.
+            ALTER TABLE "User_Engagement_Log" ADD COLUMN IF NOT EXISTS "device_type" varchar;
+            ALTER TABLE "User_Engagement_Log" ADD COLUMN IF NOT EXISTS "os_name" varchar;
+            ALTER TABLE "User_Engagement_Log" ADD COLUMN IF NOT EXISTS "browser_name" varchar;
 
             -- Idempotent migration (2026-07): retire Claude 3 Sonnet as the
             -- per-course model. Set the column default (used by new courses) to

@@ -8,6 +8,7 @@ import {
 } from "react";
 import { fetchAuthSession, signOut as amplifySignOut } from "aws-amplify/auth";
 import { setUnauthorizedHandler } from "@/services/authBridge";
+import { recordSessionStart } from "@/services/sessionAnalytics";
 
 /** @typedef {"admin"|"instructor"|"student"|null} Role */
 
@@ -53,6 +54,9 @@ export function AuthProvider({ children }) {
         const idPayload = tokens.idToken?.payload;
         setUser(idPayload ? { ...payload, ...idPayload } : payload);
         setGroups(payload["cognito:groups"] || idPayload?.["cognito:groups"] || []);
+        // Fire-and-forget device/OS/browser analytics, once per browser session.
+        // Best-effort: never blocks or fails session load (see sessionAnalytics).
+        recordSessionStart();
       } else {
         setUser(null);
         setGroups([]);
