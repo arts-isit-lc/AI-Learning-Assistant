@@ -74,21 +74,24 @@ describe("InstructorTabBar", () => {
 
   // Regression: the toggle used to be rendered in two different slots (top-right
   // when expanded, inline with the tabs when collapsed), so it teleported on
-  // every click and lost focus. It now lives in one stable slot — the tab row.
-  it("anchors the toggle beside the tabs (same row) when expanded, so it doesn't jump", () => {
+  // every click and lost focus. It now lives in one fixed, always-rendered slot
+  // pinned to the top-right of the greeting row.
+  it("keeps the toggle in the greeting row (top-right), not in the tab row, when expanded", () => {
     renderAt("/instructor/courses") // expanded
     const nav = screen.getByRole("navigation", { name: /instructor navigation/i })
     const toggle = screen.getByRole("button", { name: /collapse/i })
-    // Same parent element = same row: the toggle sits next to the tabs, not in a
-    // separate top-right slot next to the greeting.
-    expect(toggle.parentElement).toBe(nav.parentElement)
+    const greetingRow = document.getElementById("instructor-greeting").parentElement
+    expect(greetingRow).toContainElement(toggle) // shares the greeting's row
+    expect(nav.parentElement).not.toContainElement(toggle) // not in the tab row
   })
 
-  it("keeps the toggle in that same tab row when collapsed", () => {
+  it("keeps that same toggle slot visible when collapsed (inside a course)", () => {
     renderAt("/instructor/courses/c1/configuration") // collapsed
     const nav = screen.getByRole("navigation", { name: /instructor navigation/i })
     const toggle = screen.getByRole("button", { name: /expand/i })
-    expect(toggle.parentElement).toBe(nav.parentElement)
+    const greetingRow = document.getElementById("instructor-greeting").parentElement
+    expect(greetingRow).toContainElement(toggle)
+    expect(nav.parentElement).not.toContainElement(toggle)
   })
 
   it("toggles in place: the same button element keeps focus across collapse (no remount/jump)", async () => {

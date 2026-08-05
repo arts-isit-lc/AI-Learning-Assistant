@@ -34,15 +34,18 @@ const toggleClass =
  * the `Courses / Global Analytics / Global Chats` tabs belong here, not in
  * `AppHeader`.
  *
- * Two states from the frames:
- *  - Expanded (Default, ~154px): greeting + subtitle above the tab row.
- *  - Collapsed (Variant2, ~28px): just the tab row.
+ * Layout:
+ *  - The Expand/Collapse toggle lives in its OWN always-rendered slot, pinned to
+ *    the top-right of the greeting row — permanently visible, never moves.
+ *  - Clicking it slides only the greeting/subtitle (to its left) open/closed via
+ *    the shared Collapse primitive (same motion as every accordion). `items-start`
+ *    holds both the greeting and the toggle at `pt-5`, so the toggle stays fixed
+ *    whether the greeting is full-height (expanded) or collapsed to 0.
  *
- * The Expand/Collapse toggle is anchored at the right of the (always-present)
- * tab row in BOTH states, so toggling only slides the greeting open/closed —
- * the button never changes DOM slot. Rendering it in two different slots made
- * it teleport on every click (a visible "jump") and unmount/remount (dropping
- * keyboard focus); one stable slot fixes both.
+ * Rendering the toggle in two different slots (the earlier approach — top-right
+ * when expanded, inline with the tabs when collapsed) made it teleport on every
+ * click (a visible "jump") and unmount/remount (dropping keyboard focus). One
+ * stable, always-present slot fixes both.
  *
  * Auto-collapses when a course is open (the course workspace needs the vertical
  * space); the toggle overrides until the next navigation. The `Quicklink?`
@@ -68,8 +71,8 @@ export function InstructorTabBar() {
     </nav>
   )
 
-  // One button, rendered in whichever slot the current state uses (top-right when
-  // expanded, inline with the tabs when collapsed) — matches the frames.
+  // The single, always-rendered toggle. Its label/icon and aria-expanded flip
+  // with `expanded`, but it stays in one fixed top-right slot (see below).
   const toggleButton = (
     <button
       type="button"
@@ -86,25 +89,25 @@ export function InstructorTabBar() {
   return (
     <div className="border-b border-border bg-background">
       <div className="mx-auto max-w-7xl px-6">
-        {/* Greeting/subtitle slides open above the persistent tab row via the
-            shared Collapse primitive (same motion as every accordion); collapsed,
-            it's height 0 so only the tab row shows. */}
-        <Collapse open={expanded} id="instructor-greeting">
-          <div className="pt-5">
-            <h1 className="text-h2 font-semibold uppercase text-foreground">Hi, Instructor!</h1>
-            <p className="mt-1 text-body text-muted-foreground">
-              Manage your courses, upload materials, and review chat activity and insights.
-            </p>
-          </div>
-        </Collapse>
-
-        {/* Tab row (persistent). The toggle is anchored here in BOTH states so it
-            never changes DOM slot: clicking it slides the greeting without the
-            button jumping position or losing focus. */}
-        <div className="flex items-center justify-between py-6">
-          {tabs}
-          {toggleButton}
+        {/* Greeting row: the greeting/subtitle (left) slides open/closed via the
+            shared Collapse primitive, while the toggle sits in its own fixed
+            top-right slot that's ALWAYS rendered. `items-start` pins both to
+            `pt-5`, so the toggle holds its position whether the greeting is
+            full-height (expanded) or collapsed to 0. */}
+        <div className="flex items-start justify-between gap-4">
+          <Collapse open={expanded} className="flex-1" id="instructor-greeting">
+            <div className="pt-5">
+              <h1 className="text-h2 font-semibold uppercase text-foreground">Hi, Instructor!</h1>
+              <p className="mt-1 text-body text-muted-foreground">
+                Manage your courses, upload materials, and review chat activity and insights.
+              </p>
+            </div>
+          </Collapse>
+          <div className="shrink-0 pt-5">{toggleButton}</div>
         </div>
+
+        {/* Tab row (persistent). */}
+        <div className="flex items-center justify-between py-6">{tabs}</div>
       </div>
     </div>
   )
