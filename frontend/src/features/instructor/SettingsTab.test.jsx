@@ -88,14 +88,14 @@ describe("SettingsTab", () => {
     expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled()
   })
 
-  it("styles Save changes: 4px radius + lavender hover; purple border+text once dirty (matching the admin panes)", async () => {
+  it("styles Save changes: 28px tall, 4px radius + lavender hover; solid #808080 disabled, #6829C2 when dirty", async () => {
     render(<SettingsTab />)
     const saveBtn = screen.getByRole("button", { name: "Save changes" })
-    // Shared: rounded (4px) + lavender (#F2E8FF / primary-subtle) hover, bordered; not a solid CTA.
-    expect(saveBtn).toHaveClass("rounded", "hover:bg-primary-subtle", "border")
+    // 28px tall (h-7), rounded (4px), lavender (#F2E8FF) hover, bordered; not a solid CTA.
+    expect(saveBtn).toHaveClass("h-7", "rounded", "hover:bg-primary-subtle", "border")
     expect(saveBtn).not.toHaveClass("bg-primary")
-    // Pristine: faded neutral text + transparent border.
-    expect(saveBtn).toHaveClass("text-neutral-300", "border-transparent")
+    // Disabled: solid #808080 text (neutral-300 at full opacity) + transparent border.
+    expect(saveBtn).toHaveClass("text-neutral-300", "disabled:opacity-100", "border-transparent")
     // Once dirty: #6829C2 text + border.
     await editPrompt("Teach with care")
     expect(screen.getByRole("button", { name: "Save changes" })).toHaveClass("text-primary", "border-primary")

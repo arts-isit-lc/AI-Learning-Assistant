@@ -132,19 +132,20 @@ describe("InstructorDetail (staged editing)", () => {
     expect(del).not.toHaveClass("hover:underline")
   })
 
-  it("styles Undo/Save: 4px radius + lavender hover; purple text when dirty, purple border on Save", async () => {
+  it("styles Undo/Save: 28px tall, 4px radius + lavender hover; solid #808080 disabled, #6829C2 when dirty", async () => {
     render(<InstructorDetail />)
     const undo = screen.getByRole("button", { name: "Undo" })
     const save = screen.getByRole("button", { name: "Save changes" })
-    // Shared: rounded (4px) + lavender (#F2E8FF / primary-subtle) hover; not a solid CTA.
     for (const btn of [undo, save]) {
-      expect(btn).toHaveClass("rounded", "hover:bg-primary-subtle")
+      // 28px tall (h-7), rounded (4px), lavender (#F2E8FF) hover; not a solid CTA.
+      expect(btn).toHaveClass("h-7", "rounded", "hover:bg-primary-subtle")
       expect(btn).not.toHaveClass("bg-primary")
+      // Disabled text is a solid #808080 = neutral-300 at full opacity (base fade defeated).
+      expect(btn).toHaveClass("text-neutral-300", "disabled:opacity-100")
     }
-    // Pristine: faded neutral text; Save carries a transparent border, Undo none.
-    expect(undo).toHaveClass("text-neutral-300")
+    // Save carries a transparent border while disabled; Undo has none.
     expect(undo).not.toHaveClass("border")
-    expect(save).toHaveClass("text-neutral-300", "border", "border-transparent")
+    expect(save).toHaveClass("border", "border-transparent")
     // A staged edit turns text #6829C2 and gives Save a #6829C2 border.
     await userEvent.click(screen.getByRole("switch", { name: "OCELIA access for GEOG 250 — Intro" }))
     expect(screen.getByRole("button", { name: "Undo" })).toHaveClass("text-primary")

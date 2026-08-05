@@ -319,15 +319,18 @@ export function CourseDetail() {
           <DuplicateCourseDialog className="ml-6" course={course} />
         </div>
         {/* Undo + Save (ghost/text, matched across the admin panes + Settings):
-            4px radius (rounded) + lavender (#F2E8FF / primary-subtle) hover; text
-            fades from neutral to #6829C2 (primary) once dirty. Save also gains a
-            #6829C2 border when enabled — transparent while disabled so there's no
-            layout shift; Undo stays borderless. */}
+            28px tall (h-7 + size-sm padding), 4px radius (rounded), lavender
+            (#F2E8FF / primary-subtle) hover. Disabled text is a solid #808080
+            (neutral-300 at full opacity — disabled:opacity-100 defeats the base
+            fade). Once dirty the text turns #6829C2 (primary); Save also gains a
+            #6829C2 border (transparent while disabled so there's no layout
+            shift), Undo stays borderless. */}
         <div className="flex items-center gap-4">
           <Button
             variant="ghost"
+            size="sm"
             className={cn(
-              "rounded hover:bg-primary-subtle hover:text-primary",
+              "h-7 rounded hover:bg-primary-subtle hover:text-primary disabled:opacity-100",
               isDirty ? "text-primary" : "text-neutral-300"
             )}
             onClick={discardChanges}
@@ -337,8 +340,9 @@ export function CourseDetail() {
           </Button>
           <Button
             variant="ghost"
+            size="sm"
             className={cn(
-              "rounded border hover:bg-primary-subtle hover:text-primary",
+              "h-7 rounded border hover:bg-primary-subtle hover:text-primary disabled:opacity-100",
               isDirty ? "border-primary text-primary" : "border-transparent text-neutral-300"
             )}
             onClick={saveChanges}
