@@ -214,13 +214,17 @@ export function SettingsTab() {
         </Alert>
       )}
 
-      {/* Footer — ghost (text) Save matching the admin CourseDetail /
-          InstructorDetail panes: faded neutral until dirty, primary text once
-          there's an edit (spinner while validating/saving). */}
+      {/* Footer — ghost (text) Save matched to the admin CourseDetail /
+          InstructorDetail panes: 4px radius (rounded) + lavender (#F2E8FF /
+          primary-subtle) hover, and a #6829C2 border + text once dirty
+          (transparent border while disabled, so there's no layout shift). */}
       <div className="flex justify-end border-t border-border pt-4">
         <Button
           variant="ghost"
-          className={dirty ? "text-primary" : "text-neutral-300"}
+          className={cn(
+            "rounded border hover:bg-primary-subtle hover:text-primary",
+            dirty ? "border-primary text-primary" : "border-transparent text-neutral-300"
+          )}
           onClick={handleSave}
           loading={validate.isPending || save.isPending}
           disabled={!dirty}

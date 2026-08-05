@@ -155,12 +155,23 @@ describe("CourseDetail (staged editing)", () => {
     expect(del).not.toHaveClass("hover:underline")
   })
 
-  it("renders Undo + Save changes as ghost (text) buttons, matching the instructor detail pane", () => {
+  it("styles Undo/Save: 4px radius + lavender hover; purple text when dirty, purple border on Save", async () => {
     render(<CourseDetail />)
+    const undo = screen.getByRole("button", { name: "Undo" })
     const save = screen.getByRole("button", { name: "Save changes" })
-    // Ghost text button, faded (neutral) until dirty — not the solid-primary CTA.
-    expect(save).not.toHaveClass("bg-primary")
-    expect(save).toHaveClass("text-neutral-300")
+    // Shared: rounded (4px) + lavender (#F2E8FF / primary-subtle) hover; not a solid CTA.
+    for (const btn of [undo, save]) {
+      expect(btn).toHaveClass("rounded", "hover:bg-primary-subtle")
+      expect(btn).not.toHaveClass("bg-primary")
+    }
+    // Pristine: faded neutral text; Save carries a transparent border, Undo none.
+    expect(undo).toHaveClass("text-neutral-300")
+    expect(undo).not.toHaveClass("border")
+    expect(save).toHaveClass("text-neutral-300", "border", "border-transparent")
+    // A staged edit turns text #6829C2 and gives Save a #6829C2 border.
+    await userEvent.click(screen.getByRole("switch", { name: "Course student access" }))
+    expect(screen.getByRole("button", { name: "Undo" })).toHaveClass("text-primary")
+    expect(screen.getByRole("button", { name: "Save changes" })).toHaveClass("text-primary", "border-primary")
   })
 
   it("shows an ErrorState with retry when the instructor list fails to load", async () => {

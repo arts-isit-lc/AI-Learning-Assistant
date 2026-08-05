@@ -198,7 +198,7 @@ export function InstructorDetail() {
 
       {/* Assigned courses: each with Remove + per-course OCELIA access toggle. */}
       <div>
-        <div className="flex items-center justify-between gap-4 mb-6 mt-2">
+        <div className="flex items-center justify-between gap-4 mb-6 mt-2.5">
           <div className="flex items-center gap-1">
             <h2 className="text-caption font-semibold text-foreground">Assigned courses</h2>
           </div>
@@ -264,15 +264,29 @@ export function InstructorDetail() {
         >
           Delete instructor
         </Button>
-        {/* Undo discards the staged edits (back to the last-saved state); Save
-            commits them. Both enable together the moment there's an edit. */}
+        {/* Undo + Save (ghost/text, matched across the admin panes + Settings):
+            4px radius (rounded) + lavender (#F2E8FF / primary-subtle) hover; text
+            fades from neutral to #6829C2 (primary) once dirty. Save also gains a
+            #6829C2 border when enabled — transparent while disabled so there's no
+            layout shift; Undo stays borderless. */}
         <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={discardChanges} disabled={!isDirty || saving}>
+          <Button
+            variant="ghost"
+            className={cn(
+              "rounded hover:bg-primary-subtle hover:text-primary",
+              isDirty ? "text-primary" : "text-neutral-300"
+            )}
+            onClick={discardChanges}
+            disabled={!isDirty || saving}
+          >
             Undo
           </Button>
           <Button
             variant="ghost"
-            className={isDirty ? "text-primary" : "text-neutral-300"}
+            className={cn(
+              "rounded border hover:bg-primary-subtle hover:text-primary",
+              isDirty ? "border-primary text-primary" : "border-transparent text-neutral-300"
+            )}
             onClick={saveChanges}
             disabled={!isDirty || saving}
             loading={saving}

@@ -132,6 +132,25 @@ describe("InstructorDetail (staged editing)", () => {
     expect(del).not.toHaveClass("hover:underline")
   })
 
+  it("styles Undo/Save: 4px radius + lavender hover; purple text when dirty, purple border on Save", async () => {
+    render(<InstructorDetail />)
+    const undo = screen.getByRole("button", { name: "Undo" })
+    const save = screen.getByRole("button", { name: "Save changes" })
+    // Shared: rounded (4px) + lavender (#F2E8FF / primary-subtle) hover; not a solid CTA.
+    for (const btn of [undo, save]) {
+      expect(btn).toHaveClass("rounded", "hover:bg-primary-subtle")
+      expect(btn).not.toHaveClass("bg-primary")
+    }
+    // Pristine: faded neutral text; Save carries a transparent border, Undo none.
+    expect(undo).toHaveClass("text-neutral-300")
+    expect(undo).not.toHaveClass("border")
+    expect(save).toHaveClass("text-neutral-300", "border", "border-transparent")
+    // A staged edit turns text #6829C2 and gives Save a #6829C2 border.
+    await userEvent.click(screen.getByRole("switch", { name: "OCELIA access for GEOG 250 — Intro" }))
+    expect(screen.getByRole("button", { name: "Undo" })).toHaveClass("text-primary")
+    expect(screen.getByRole("button", { name: "Save changes" })).toHaveClass("text-primary", "border-primary")
+  })
+
   it("shows an ErrorState with retry when the assigned courses fail to load", async () => {
     const refetch = vi.fn()
     assignedResult = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }

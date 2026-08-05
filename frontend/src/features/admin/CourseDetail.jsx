@@ -318,17 +318,29 @@ export function CourseDetail() {
           </Button>
           <DuplicateCourseDialog className="ml-6" course={course} />
         </div>
-        {/* Undo discards the staged edits (back to the last-saved state); Save
-            commits them. Both enable together the moment there's an edit. Matches
-            the admin InstructorDetail pane: ghost (text) Undo + Save, the Save
-            fading from neutral to primary once there's an edit. */}
+        {/* Undo + Save (ghost/text, matched across the admin panes + Settings):
+            4px radius (rounded) + lavender (#F2E8FF / primary-subtle) hover; text
+            fades from neutral to #6829C2 (primary) once dirty. Save also gains a
+            #6829C2 border when enabled — transparent while disabled so there's no
+            layout shift; Undo stays borderless. */}
         <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={discardChanges} disabled={!isDirty || saving}>
+          <Button
+            variant="ghost"
+            className={cn(
+              "rounded hover:bg-primary-subtle hover:text-primary",
+              isDirty ? "text-primary" : "text-neutral-300"
+            )}
+            onClick={discardChanges}
+            disabled={!isDirty || saving}
+          >
             Undo
           </Button>
           <Button
             variant="ghost"
-            className={isDirty ? "text-primary" : "text-neutral-300"}
+            className={cn(
+              "rounded border hover:bg-primary-subtle hover:text-primary",
+              isDirty ? "border-primary text-primary" : "border-transparent text-neutral-300"
+            )}
             onClick={saveChanges}
             disabled={!isDirty || saving}
             loading={saving}
