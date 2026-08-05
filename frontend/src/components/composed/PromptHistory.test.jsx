@@ -69,6 +69,19 @@ describe("PromptHistory", () => {
     expect(row).toHaveClass("border-primary", "bg-primary-subtle")
   })
 
+  it("separates entries with a horizontal divider when there is more than one", () => {
+    render(<PromptHistory versions={VERSIONS} onRestore={vi.fn()} />)
+    // The first entry has no divider above it…
+    expect(screen.getByText("newest version").closest("li")).not.toHaveClass("border-t")
+    // …every later entry is split from the previous one by a top border.
+    expect(screen.getByText("older version").closest("li")).toHaveClass("border-t", "border-border")
+  })
+
+  it("shows no divider when there is only one previous prompt", () => {
+    render(<PromptHistory versions={[VERSIONS[0]]} onRestore={vi.fn()} />)
+    expect(screen.getByText("newest version").closest("li")).not.toHaveClass("border-t")
+  })
+
   it("disables the rows when disabled", () => {
     render(<PromptHistory versions={VERSIONS} onRestore={vi.fn()} disabled />)
     expect(rowFor("newest version")).toBeDisabled()

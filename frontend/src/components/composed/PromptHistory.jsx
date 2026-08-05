@@ -20,7 +20,8 @@ function formatTimestamp(ts) {
  * `onRestore`. The transparent default border keeps the hover/selected border
  * from shifting the layout. Selecting a row never restores on its own — only the
  * explicit **Use prompt** action does, so a stray click can't overwrite the
- * editor.
+ * editor. Consecutive entries are split by a horizontal divider, so it only
+ * shows when there's more than one version.
  *
  * @param {{ versions?: Array<{ previous_prompt: string, timestamp?: string }>, onRestore?: (text: string) => void, disabled?: boolean }} props
  */
@@ -39,43 +40,49 @@ export function PromptHistory({ versions = [], onRestore, disabled = false }) {
   }
 
   return (
-    <ul className="flex flex-col gap-2">
+    <ul className="flex flex-col">
       {versions.map((version, i) => {
         // Newest first (index 0), so the version-number fallback counts down.
         const label = formatTimestamp(version.timestamp) || `Version ${versions.length - i}`
         const isSelected = selected === i
         return (
-          // `relative` anchors the Use prompt button, which overlays the top-right
-          // of the card as a sibling (never nested inside the select button).
-          <li key={i} className="relative">
-            <button
-              type="button"
-              disabled={disabled}
-              onClick={() => setSelected((cur) => (cur === i ? null : i))}
-              aria-expanded={isSelected}
-              aria-label={`Prompt from ${label}`}
-              className={cn(
-                "flex w-full flex-col gap-2.5 rounded-sm border border-transparent p-2.5 text-left transition-colors",
-                "hover:border-primary hover:bg-primary-subtle",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-                isSelected && "border-primary bg-primary-subtle",
-                "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-transparent disabled:hover:bg-transparent"
-              )}
-            >
-              <span className="text-xs font-semibold leading-7 text-foreground">{label}</span>
-              <span className="whitespace-pre-wrap text-body text-foreground">{version.previous_prompt}</span>
-            </button>
-            {isSelected && (
-              <Button
-                size="sm"
+          // Every entry past the first carries the divider (border-t) + symmetric
+          // spacing, so a line only appears *between* prompts (never with one).
+          <li key={i} className={cn(i > 0 && "mt-2 border-t border-border pt-2")}>
+            {/* `relative` anchors the Use prompt button, which overlays the
+                top-right of the card as a sibling (never nested inside the select
+                button). Scoped to the card so the li's divider spacing can't
+                shift the button off the identifier row. */}
+            <div className="relative">
+              <button
+                type="button"
                 disabled={disabled}
-                onClick={() => onRestore?.(version.previous_prompt)}
-                aria-label={`Use prompt from ${label}`}
-                className="absolute right-2.5 top-2.5 h-7 shrink-0 rounded px-6"
+                onClick={() => setSelected((cur) => (cur === i ? null : i))}
+                aria-expanded={isSelected}
+                aria-label={`Prompt from ${label}`}
+                className={cn(
+                  "flex w-full flex-col gap-2.5 rounded-sm border border-transparent p-2.5 text-left transition-colors",
+                  "hover:border-primary hover:bg-primary-subtle",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                  isSelected && "border-primary bg-primary-subtle",
+                  "disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-transparent disabled:hover:bg-transparent"
+                )}
               >
-                Use prompt
-              </Button>
-            )}
+                <span className="text-xs font-semibold leading-7 text-foreground">{label}</span>
+                <span className="whitespace-pre-wrap text-body text-foreground">{version.previous_prompt}</span>
+              </button>
+              {isSelected && (
+                <Button
+                  size="sm"
+                  disabled={disabled}
+                  onClick={() => onRestore?.(version.previous_prompt)}
+                  aria-label={`Use prompt from ${label}`}
+                  className="absolute right-2.5 top-2.5 h-7 shrink-0 rounded px-6"
+                >
+                  Use prompt
+                </Button>
+              )}
+            </div>
           </li>
         )
       })}
