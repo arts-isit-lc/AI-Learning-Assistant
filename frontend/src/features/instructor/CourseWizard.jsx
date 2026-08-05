@@ -585,7 +585,10 @@ export function CourseWizard() {
                                       <AccordionTrigger className="py-0 font-normal leading-7 text-neutral-900 hover:no-underline">
                                         Description (optional)
                                       </AccordionTrigger>
-                                      <AccordionContent className="pb-0 pt-2">
+                                      {/* pt-6 keeps the 24px trigger→field gap the
+                                          shared AccordionContent used to add via its
+                                          (now-removed) outer mt-4. */}
+                                      <AccordionContent className="pb-0 pt-6">
                                         <Textarea
                                           value={fileDescriptions[f.fileId] || ""}
                                           onChange={(e) => setFileDescription(f.fileId, e.target.value)}

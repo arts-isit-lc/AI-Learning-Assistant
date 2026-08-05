@@ -39,10 +39,15 @@ const AccordionContent = React.forwardRef(function AccordionContent({ className,
   return (
     <AccordionPrimitive.Content
       ref={ref}
-      className="overflow-hidden mt-4 text-caption data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down motion-reduce:animate-none"
+      className="overflow-hidden text-caption data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down motion-reduce:animate-none"
       {...props}
     >
-      <div className={cn("pb-4 pt-0", className)}>{children}</div>
+      {/* Keep the trigger→content gap INSIDE the clipped, animated box (pt-4 on
+          the inner element) rather than as an outer margin. An outer margin isn't
+          clipped by overflow-hidden and isn't part of the height keyframe, so it
+          snaps in/out and makes the slide look janky. This mirrors ModuleAccordion
+          so every accordion opens/closes with the same smooth slide + fade. */}
+      <div className={cn("pb-4 pt-4", className)}>{children}</div>
     </AccordionPrimitive.Content>
   )
 })

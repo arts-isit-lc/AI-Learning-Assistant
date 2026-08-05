@@ -198,12 +198,13 @@ export function SettingsTab() {
           <AccordionTrigger className="text-caption font-semibold text-neutral-900 hover:no-underline">
             View previous prompts
           </AccordionTrigger>
-          <AccordionContent>
+          {/* pb-0 overrides AccordionContent's default pb-4 wrapper padding
+              (the footer's border-t already spaces the section below). */}
+          <AccordionContent className="pb-0">
             <PromptHistory
               versions={previousPrompts}
               onRestore={(text) => handlePromptChange({ target: { value: text } })}
               disabled={busy}
-              className="pb-0"
             />
           </AccordionContent>
         </AccordionItem>

@@ -76,6 +76,16 @@ describe("SettingsTab", () => {
     expect(item).not.toHaveClass("border-b")
   })
 
+  it("opens the previous-prompts content without the default pb-4 bottom padding", async () => {
+    render(<SettingsTab />)
+    await userEvent.click(screen.getByRole("button", { name: "View previous prompts" }))
+    // AccordionContent's inner wrapper owns the padding; the empty-state text
+    // sits directly inside it. The pb-0 override must beat the default pb-4.
+    const wrapper = (await screen.findByText("No previous versions yet.")).parentElement
+    expect(wrapper).toHaveClass("pb-0")
+    expect(wrapper).not.toHaveClass("pb-4")
+  })
+
   it("no longer renders a separate 'Check for conflicts' button", () => {
     render(<SettingsTab />)
     expect(screen.queryByRole("button", { name: "Check for conflicts" })).not.toBeInTheDocument()

@@ -16,6 +16,26 @@ describe("Accordion", () => {
     expect(screen.getByText("Modules under concept 1")).toBeInTheDocument()
   })
 
+  it("keeps the top gap inside the animated box (inner padding, no outer margin) so the slide stays smooth", () => {
+    render(
+      <Accordion type="single" defaultValue="item-1" collapsible>
+        <AccordionItem value="item-1">
+          <AccordionTrigger>Concept 1</AccordionTrigger>
+          <AccordionContent>Modules under concept 1</AccordionContent>
+        </AccordionItem>
+      </Accordion>
+    )
+    // Spacing is padding on the inner element — clipped by overflow-hidden and
+    // part of the height keyframe, so it animates.
+    const inner = screen.getByText("Modules under concept 1")
+    expect(inner).toHaveClass("pt-4", "pb-4")
+    // The animated wrapper must carry no outer vertical margin (a margin isn't
+    // clipped/animated and would snap in/out).
+    const animated = inner.parentElement
+    expect(animated).toHaveClass("overflow-hidden", "data-[state=open]:animate-accordion-down")
+    expect(animated.className).not.toMatch(/(^|\s)mt-/)
+  })
+
   it("greys the disclosure chevron while the trigger is hovered (group-hover:text-neutral-400)", () => {
     render(
       <Accordion type="single" collapsible>
