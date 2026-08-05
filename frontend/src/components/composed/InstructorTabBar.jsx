@@ -94,7 +94,7 @@ export function InstructorTabBar() {
             bar and always rendered. Positioned independently, it shares no
             wrapper with the greeting, never moves when the greeting collapses,
             and stays put across toggles (so it doesn't jump or lose focus). */}
-        <div className="absolute right-6 top-5">{toggleButton}</div>
+        <div className="absolute right-6 top-6">{toggleButton}</div>
 
         {/* Greeting — its own container; slides open/closed via the shared
             Collapse primitive. pr-32 keeps the text clear of the toggle. */}

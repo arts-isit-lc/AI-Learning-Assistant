@@ -203,6 +203,7 @@ export function SettingsTab() {
               versions={previousPrompts}
               onRestore={(text) => handlePromptChange({ target: { value: text } })}
               disabled={busy}
+              className="pb-0"
             />
           </AccordionContent>
         </AccordionItem>
