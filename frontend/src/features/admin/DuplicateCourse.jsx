@@ -15,6 +15,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogTitle,
   DialogDescription,
   DialogFooter,
@@ -132,12 +133,13 @@ export function DuplicateCourse() {
         <DialogHeader>
           <DialogTitle>Duplicate course</DialogTitle>
         </DialogHeader>
-        <DialogDescription>
-          If you would like to duplicate an existing course, select it from the dropdown and confirm
-          the details before clicking Duplicate course.
-        </DialogDescription>
+        <DialogBody>
+          <DialogDescription>
+            If you would like to duplicate an existing course, select it from the dropdown and
+            confirm the details before clicking Duplicate course.
+          </DialogDescription>
 
-        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4">
           <div className="flex flex-col">
             <Label htmlFor="dup-course-source">
               Course to duplicate <span className="text-destructive">*</span>
@@ -243,13 +245,14 @@ export function DuplicateCourse() {
           )}
         </div>
 
-        {duplicate.isError && (
-          <Alert variant="destructive">
-            <AlertDescription>
-              {toUserMessage(duplicate.error, { 409: COURSE_EXISTS_MESSAGE })}
-            </AlertDescription>
-          </Alert>
-        )}
+          {duplicate.isError && (
+            <Alert variant="destructive">
+              <AlertDescription>
+                {toUserMessage(duplicate.error, { 409: COURSE_EXISTS_MESSAGE })}
+              </AlertDescription>
+            </Alert>
+          )}
+        </DialogBody>
 
         <DialogFooter>
           <Button variant="outline" onClick={close}>

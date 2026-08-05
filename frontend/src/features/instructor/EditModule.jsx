@@ -203,7 +203,9 @@ export function EditModule() {
 
   return (
     <Dialog open onOpenChange={(open) => !open && goToConfiguration()}>
-      <DialogContent className="flex max-h-[90vh] w-[min(92vw,1088px)] max-w-none flex-col gap-0 overflow-hidden p-0">
+      {/* Capped at 85vh per the global modal rule; header/footer stay pinned and
+          only the body between them scrolls. */}
+      <DialogContent className="flex max-h-[85vh] w-[min(92vw,1088px)] max-w-none flex-col gap-0 overflow-hidden p-0">
         <UnsavedChangesPrompt when={isDirty && !leaving} />
         {/* Fixed header: title + divider (pt-14 clears the close control) — matches
             the Create-module modal's chrome (px-9 gutter). */}

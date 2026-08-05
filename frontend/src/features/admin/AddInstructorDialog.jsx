@@ -8,6 +8,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogFooter,
   DialogTitle,
   DialogDescription,
@@ -65,16 +66,19 @@ export function AddInstructorDialog() {
       </Button>
       <Dialog open={open} onOpenChange={(next) => (next ? setOpen(true) : close())}>
         <DialogContent>
-          <form onSubmit={submit} className="flex flex-col gap-8">
+          {/* min-h-0 + flex-1 lets the form fill the capped modal so DialogBody
+              can scroll between the pinned header and footer. */}
+          <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col gap-8">
             <DialogHeader>
               <DialogTitle>Add instructor(s)</DialogTitle>
             </DialogHeader>
-            <DialogDescription>
-              To add an instructor, enter their email address below. They get instructor access the
-              next time they sign in.
-            </DialogDescription>
+            <DialogBody>
+              <DialogDescription>
+                To add an instructor, enter their email address below. They get instructor access the
+                next time they sign in.
+              </DialogDescription>
 
-            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3">
               {emails.map((email, index) => (
                 <div key={index} className="flex items-center gap-2">
                   <Input
@@ -109,11 +113,12 @@ export function AddInstructorDialog() {
               </button>
             </div>
 
-            {inviteError && (
-              <Alert variant="destructive">
-                <AlertDescription>{inviteError}</AlertDescription>
-              </Alert>
-            )}
+              {inviteError && (
+                <Alert variant="destructive">
+                  <AlertDescription>{inviteError}</AlertDescription>
+                </Alert>
+              )}
+            </DialogBody>
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={close}>

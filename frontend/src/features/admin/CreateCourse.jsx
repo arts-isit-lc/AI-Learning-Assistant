@@ -16,6 +16,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogTitle,
   DialogDescription,
   DialogFooter,
@@ -136,12 +137,13 @@ export function CreateCourse() {
         <DialogHeader>
           <DialogTitle>Add course</DialogTitle>
         </DialogHeader>
-        <DialogDescription>
-          To add a new course to the OCELIA system please fill out the following fields. Fields marked
-          with <span className="text-destructive">*</span> are mandatory for course creation.
-        </DialogDescription>
+        <DialogBody>
+          <DialogDescription>
+            To add a new course to the OCELIA system please fill out the following fields. Fields
+            marked with <span className="text-destructive">*</span> are mandatory for course creation.
+          </DialogDescription>
 
-        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4">
           <div className="flex flex-col">
             <Label htmlFor="add-course-code">
               Course code <span className="text-destructive">*</span>
@@ -242,13 +244,14 @@ export function CreateCourse() {
           </div>
         </div>
 
-        {create.isError && (
-          <Alert variant="destructive">
-            <AlertDescription>
-              {toUserMessage(create.error, { 409: COURSE_EXISTS_MESSAGE })}
-            </AlertDescription>
-          </Alert>
-        )}
+          {create.isError && (
+            <Alert variant="destructive">
+              <AlertDescription>
+                {toUserMessage(create.error, { 409: COURSE_EXISTS_MESSAGE })}
+              </AlertDescription>
+            </Alert>
+          )}
+        </DialogBody>
 
         <DialogFooter>
           <Button variant="outline" onClick={close}>

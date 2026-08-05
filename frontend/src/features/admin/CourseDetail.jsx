@@ -28,6 +28,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
@@ -373,26 +374,30 @@ export function CourseDetail() {
           <DialogHeader>
             <DialogTitle>Add an instructor</DialogTitle>
           </DialogHeader>
-          <DialogDescription>Give an instructor access to this course.</DialogDescription>
-          <div className="flex max-h-72 flex-col overflow-y-auto">
-            {unassigned.length === 0 ? (
-              <p className="py-3 text-caption text-muted-foreground">
-                All instructors are already assigned.
-              </p>
-            ) : (
-              unassigned.map((inst) => (
-                <button
-                  key={inst.user_email}
-                  type="button"
-                  onClick={() => addInstructor(inst.user_email)}
-                  className="flex items-center justify-between gap-3 border-b border-border px-1 py-3 text-left text-caption transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                >
-                  <span className="truncate font-medium text-foreground">{instructorLabel(inst)}</span>
-                  <span className="shrink-0 text-muted-foreground">{inst.user_email}</span>
-                </button>
-              ))
-            )}
-          </div>
+          <DialogBody>
+            <DialogDescription>Give an instructor access to this course.</DialogDescription>
+            {/* Inner max-h-72 keeps the picker compact; DialogBody's 85vh cap is
+                just the outer safety net (the two never fight — 72 < 85vh). */}
+            <div className="flex max-h-72 flex-col overflow-y-auto">
+              {unassigned.length === 0 ? (
+                <p className="py-3 text-caption text-muted-foreground">
+                  All instructors are already assigned.
+                </p>
+              ) : (
+                unassigned.map((inst) => (
+                  <button
+                    key={inst.user_email}
+                    type="button"
+                    onClick={() => addInstructor(inst.user_email)}
+                    className="flex items-center justify-between gap-3 border-b border-border px-1 py-3 text-left text-caption transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  >
+                    <span className="truncate font-medium text-foreground">{instructorLabel(inst)}</span>
+                    <span className="shrink-0 text-muted-foreground">{inst.user_email}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          </DialogBody>
         </DialogContent>
       </Dialog>
 

@@ -4,6 +4,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogFooter,
   DialogTitle,
   DialogDescription,
@@ -48,6 +49,42 @@ describe("Dialog", () => {
     )
     const content = screen.getByRole("dialog")
     expect(content).toHaveClass("px-9", "pb-9", "pt-14", "gap-8")
+  })
+
+  it("caps the content at 85vh so a modal can never exceed the screen", () => {
+    render(
+      <Dialog open>
+        <DialogContent>
+          <DialogTitle>Confirm</DialogTitle>
+        </DialogContent>
+      </Dialog>
+    )
+    // Column layout + max-h-[85vh] is what lets a DialogBody scroll while the
+    // header/footer stay pinned (see the body test below).
+    expect(screen.getByRole("dialog")).toHaveClass("flex", "flex-col", "max-h-[85vh]")
+  })
+
+  it("pins the header and footer (shrink-0) and makes the body the scroll region", () => {
+    render(
+      <Dialog open>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm</DialogTitle>
+          </DialogHeader>
+          <DialogBody data-testid="body">
+            <p>Lots of content</p>
+          </DialogBody>
+          <DialogFooter>
+            <button type="button">Save</button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    )
+    // Header/footer don't compress when the body overflows...
+    expect(screen.getByText("Confirm").parentElement).toHaveClass("shrink-0")
+    expect(screen.getByText("Save").parentElement).toHaveClass("shrink-0")
+    // ...and the body takes the leftover height and scrolls its own overflow.
+    expect(screen.getByTestId("body")).toHaveClass("flex-1", "min-h-0", "overflow-y-auto")
   })
 
   it("gives the header a title-over-divider and the footer a divider-over-actions by default", () => {

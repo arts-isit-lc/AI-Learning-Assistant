@@ -2,6 +2,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogFooter,
   DialogTitle,
   DialogDescription,
@@ -41,11 +42,17 @@ export function ConfirmDialog({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
-        {description && <DialogDescription>{description}</DialogDescription>}
-        {error && (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
+        {/* Only mount the body when there's content, so a description-less
+            confirm keeps its single 32px header→footer gap (no empty body). */}
+        {(description || error) && (
+          <DialogBody>
+            {description && <DialogDescription>{description}</DialogDescription>}
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+          </DialogBody>
         )}
         <DialogFooter>
           <Button variant="outline" onClick={handleCancel} disabled={loading}>

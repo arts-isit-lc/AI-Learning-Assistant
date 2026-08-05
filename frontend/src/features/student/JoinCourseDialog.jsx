@@ -6,6 +6,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogFooter,
   DialogTitle,
   DialogDescription,
@@ -62,26 +63,30 @@ export function JoinCourseDialog({ open, onOpenChange }) {
         <DialogHeader>
           <DialogTitle>Join course</DialogTitle>
         </DialogHeader>
-        <DialogDescription>
-          Enter the access code from your instructor or administrator to join the course on OCELIA.
-        </DialogDescription>
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-8">
-          <div className="flex flex-col gap-1.5">
-            <Input
-              aria-label="Access code"
-              placeholder="Enter course code"
-              autoFocus
-              aria-invalid={errors.code ? true : undefined}
-              {...register("code")}
-            />
-            {errors.code && <p className="text-caption text-destructive">{errors.code.message}</p>}
-          </div>
-          <p className="text-base text-muted-foreground">
-            <span className="font-semibold text-foreground">Privacy notice:</span> OCELIA collects usage
-            data to help evaluate course activity and improve your experience. This data is anonymized and
-            does not include personally identifiable information. By joining a course, you agree to this
-            data collection.
-          </p>
+        {/* min-h-0 + flex-1 lets the form fill the capped modal so DialogBody
+            scrolls between the pinned header and footer. */}
+        <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col gap-8">
+          <DialogBody>
+            <DialogDescription>
+              Enter the access code from your instructor or administrator to join the course on OCELIA.
+            </DialogDescription>
+            <div className="flex flex-col gap-1.5">
+              <Input
+                aria-label="Access code"
+                placeholder="Enter course code"
+                autoFocus
+                aria-invalid={errors.code ? true : undefined}
+                {...register("code")}
+              />
+              {errors.code && <p className="text-caption text-destructive">{errors.code.message}</p>}
+            </div>
+            <p className="text-base text-muted-foreground">
+              <span className="font-semibold text-foreground">Privacy notice:</span> OCELIA collects
+              usage data to help evaluate course activity and improve your experience. This data is
+              anonymized and does not include personally identifiable information. By joining a course,
+              you agree to this data collection.
+            </p>
+          </DialogBody>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => close(false)}>
               Cancel

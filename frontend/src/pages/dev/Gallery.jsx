@@ -15,7 +15,7 @@ import { Icon } from "@/components/ui/icon"
 import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
-  Dialog, DialogTrigger, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription, DialogClose,
+  Dialog, DialogTrigger, DialogContent, DialogHeader, DialogBody, DialogFooter, DialogTitle, DialogDescription, DialogClose,
 } from "@/components/ui/dialog"
 import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
@@ -198,7 +198,9 @@ export default function Gallery() {
                 <DialogHeader>
                   <DialogTitle>Confirm action</DialogTitle>
                 </DialogHeader>
-                <DialogDescription>This is a dialog rendered from the primitive.</DialogDescription>
+                <DialogBody>
+                  <DialogDescription>This is a dialog rendered from the primitive.</DialogDescription>
+                </DialogBody>
                 <DialogFooter>
                   <DialogClose asChild>
                     <Button variant="ghost">Cancel</Button>

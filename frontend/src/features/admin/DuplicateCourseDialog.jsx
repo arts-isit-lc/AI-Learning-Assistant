@@ -11,6 +11,7 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogFooter,
   DialogTitle,
   DialogDescription,
@@ -88,15 +89,18 @@ export function DuplicateCourseDialog({ course }) {
       </Button>
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent>
-          <form onSubmit={submit} className="flex flex-col gap-8">
+          {/* min-h-0 + flex-1 lets the form fill the capped modal so DialogBody
+              can scroll between the pinned header and footer. */}
+          <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col gap-8">
             <DialogHeader>
               <DialogTitle>Duplicate course</DialogTitle>
             </DialogHeader>
-            <DialogDescription>
-              Review and update the fields below. This copies the course and its concept/module
-              outline — reference files and student data are not copied.
-            </DialogDescription>
-            <div className="flex flex-col gap-4">
+            <DialogBody>
+              <DialogDescription>
+                Review and update the fields below. This copies the course and its concept/module
+                outline — reference files and student data are not copied.
+              </DialogDescription>
+              <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="dup-name">Course name</Label>
                 <Input
@@ -139,13 +143,14 @@ export function DuplicateCourseDialog({ course }) {
                 />
               </div>
             </div>
-            {duplicate.isError && (
-              <Alert variant="destructive">
-                <AlertDescription>
-                  {toUserMessage(duplicate.error, { 409: COURSE_EXISTS_MESSAGE })}
-                </AlertDescription>
-              </Alert>
-            )}
+              {duplicate.isError && (
+                <Alert variant="destructive">
+                  <AlertDescription>
+                    {toUserMessage(duplicate.error, { 409: COURSE_EXISTS_MESSAGE })}
+                  </AlertDescription>
+                </Alert>
+              )}
+            </DialogBody>
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>

@@ -30,7 +30,13 @@ const DialogContent = React.forwardRef(function DialogContent({ className, child
           // 32px (gap-8) vertical rhythm between sections (header / body /
           // footer). Full-bleed modals (CourseWizard / EditModule) opt out with
           // `gap-0 p-0` and space/pad themselves.
-          "fixed left-1/2 top-1/2 z-modal flex w-full max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col gap-8 rounded-sm border border-border bg-background px-9 pb-9 pt-14 shadow-modal animate-fade-in",
+          //
+          // Height is capped at 85vh (arbitrary viewport value, approved: no
+          // token maps to a viewport fraction) so a modal can never exceed the
+          // screen and hide its actions. As a flex column, a `DialogBody` scrolls
+          // (flex-1 + min-h-0 + overflow) while the shrink-0 header/footer stay
+          // pinned. Short modals size to content — the cap only bites when tall.
+          "fixed left-1/2 top-1/2 z-modal flex max-h-[85vh] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col gap-8 rounded-sm border border-border bg-background px-9 pb-9 pt-14 shadow-modal animate-fade-in",
           className
         )}
         {...props}
@@ -48,22 +54,38 @@ const DialogContent = React.forwardRef(function DialogContent({ className, child
 
 // Standard modal header (Figma): the title sits over a full-width divider, with
 // 8px (pb-2) between them. Opt out with `border-b-0` / `pb-0` when a dialog
-// wants no divider.
+// wants no divider. `shrink-0` keeps it pinned when the body scrolls.
 function DialogHeader({ className, ...props }) {
   return (
-    <div className={cn("flex flex-col gap-1.5 border-b border-border pb-2 text-left", className)} {...props} />
+    <div
+      className={cn("flex shrink-0 flex-col gap-1.5 border-b border-border pb-2 text-left", className)}
+      {...props}
+    />
+  )
+}
+
+// Scrollable modal body: the region between the pinned header and footer. As a
+// flex child it takes the leftover height (`flex-1`) and, once the modal hits
+// its 85vh cap, scrolls its own overflow (`min-h-0` + `overflow-y-auto`) instead
+// of pushing the footer off-screen. Inherits the 32px (gap-8) section rhythm;
+// short content sizes naturally (nothing to scroll). Radix Select/Popover menus
+// portal out, so this overflow never clips them.
+function DialogBody({ className, ...props }) {
+  return (
+    <div className={cn("flex min-h-0 flex-1 flex-col gap-8 overflow-y-auto", className)} {...props} />
   )
 }
 
 // Standard modal footer (Figma): a full-width divider over the action row, with
 // 16px (pt-4) between the divider and the buttons. Action buttons render at the
 // Figma 16px (`text-base`) — set here so dialogs don't size each button by hand
-// (the Button default is `text-caption`/14px).
+// (the Button default is `text-caption`/14px). `shrink-0` keeps it pinned when
+// the body scrolls.
 function DialogFooter({ className, ...props }) {
   return (
     <div
       className={cn(
-        "flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:justify-end [&>button]:text-base",
+        "flex shrink-0 flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:justify-end [&>button]:text-base",
         className
       )}
       {...props}
@@ -93,6 +115,7 @@ export {
   DialogClose,
   DialogContent,
   DialogHeader,
+  DialogBody,
   DialogFooter,
   DialogTitle,
   DialogDescription,
