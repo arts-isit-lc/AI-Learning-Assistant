@@ -132,6 +132,16 @@ describe("InstructorDetail (staged editing)", () => {
     expect(del).not.toHaveClass("hover:underline")
   })
 
+  it("renders Undo (outline) + Save changes (solid primary) — matching CourseDetail / Settings", () => {
+    render(<InstructorDetail />)
+    // Outline Undo (purple border), not a ghost/text button.
+    expect(screen.getByRole("button", { name: "Undo" })).toHaveClass("border-primary")
+    // Solid-primary Save, not the old ghost text-primary/neutral style.
+    const save = screen.getByRole("button", { name: "Save changes" })
+    expect(save).toHaveClass("bg-primary", "text-primary-foreground")
+    expect(save).not.toHaveClass("text-neutral-300")
+  })
+
   it("shows an ErrorState with retry when the assigned courses fail to load", async () => {
     const refetch = vi.fn()
     assignedResult = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }
