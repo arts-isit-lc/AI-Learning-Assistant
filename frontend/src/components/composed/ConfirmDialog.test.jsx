@@ -38,17 +38,19 @@ describe("ConfirmDialog", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument()
   })
 
-  it("hovers a primary (default) confirm to #2E0666 (primary-dark)", () => {
-    render(
-      <ConfirmDialog open title="Proceed?" confirmLabel="Okay" variant="default" onConfirm={vi.fn()} />
+  it("renders the confirm as the primary purple action (#6829C2 / white, hover #2E0666)", () => {
+    render(<ConfirmDialog open title="Proceed?" confirmLabel="Okay" onConfirm={vi.fn()} />)
+    expect(screen.getByRole("button", { name: "Okay" })).toHaveClass(
+      "bg-primary",
+      "text-primary-foreground",
+      "hover:bg-primary-dark"
     )
-    expect(screen.getByRole("button", { name: "Okay" })).toHaveClass("hover:bg-primary-dark")
   })
 
-  it("does not add the primary-dark hover to a danger confirm (keeps its own hover)", () => {
-    render(
-      <ConfirmDialog open title="Delete?" confirmLabel="Delete" variant="danger" onConfirm={vi.fn()} />
-    )
-    expect(screen.getByRole("button", { name: "Delete" })).not.toHaveClass("hover:bg-primary-dark")
+  it("keeps a destructive confirm purple too — the label carries the meaning, not the colour", () => {
+    render(<ConfirmDialog open title="Delete course?" confirmLabel="Delete" onConfirm={vi.fn()} />)
+    const confirm = screen.getByRole("button", { name: "Delete" })
+    expect(confirm).toHaveClass("bg-primary", "text-primary-foreground", "hover:bg-primary-dark")
+    expect(confirm).not.toHaveClass("bg-destructive")
   })
 })

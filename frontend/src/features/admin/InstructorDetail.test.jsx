@@ -117,18 +117,6 @@ describe("InstructorDetail (staged editing)", () => {
     )
   })
 
-  it("stages a course assignment from the picker and commits it on Save", async () => {
-    render(<InstructorDetail />)
-    await userEvent.click(screen.getByRole("button", { name: "Assign course" }))
-    const dialog = await screen.findByRole("dialog")
-    await userEvent.click(within(dialog).getByRole("button", { name: /PHYS 100/ }))
-    expect(enroll.mutateAsync).not.toHaveBeenCalled()
-    await userEvent.click(screen.getByRole("button", { name: "Save changes" }))
-    await waitFor(() =>
-      expect(enroll.mutateAsync).toHaveBeenCalledWith({ courseId: "c2", instructorEmail: "ada@x.com" })
-    )
-  })
-
   it("deletes (demotes) the instructor immediately after confirmation", async () => {
     render(<InstructorDetail />)
     await userEvent.click(screen.getByRole("button", { name: "Delete instructor" }))

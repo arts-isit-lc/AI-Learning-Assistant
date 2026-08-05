@@ -227,7 +227,6 @@ export function SettingsTab() {
         title="Save with unresolved conflicts?"
         description="This prompt conflicts with other instructions. Saving anyway keeps the conflict flagged until you edit the prompt to resolve it."
         confirmLabel="Save anyway"
-        variant="danger"
         loading={save.isPending}
         onConfirm={() => performSave(conflictReport ?? storedConflicts)}
       />

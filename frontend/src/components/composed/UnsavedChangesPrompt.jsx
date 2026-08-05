@@ -47,7 +47,6 @@ export function UnsavedChangesPrompt({ when, onProceed }) {
       title="Unsaved changes"
       description="You have unsaved changes. If you leave now, they'll be discarded."
       confirmLabel="Leave without saving"
-      variant="danger"
       onConfirm={() => {
         onProceed?.()
         blocker.proceed?.()

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { toUserMessage } from "@/services/apiError"
-import { MdAdd, MdContentCopy } from "react-icons/md"
+import { MdContentCopy } from "react-icons/md"
 import {
   useAdminCourses,
   useAdminInstructors,
@@ -24,14 +24,6 @@ import { Button } from "@/components/ui/button"
 import { Toggle } from "@/components/ui/toggle"
 import { Icon } from "@/components/ui/icon"
 import { Skeleton } from "@/components/ui/skeleton"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogBody,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog"
 
 /** Off/On access toggle with labels (mockup: "Off [switch] On"). */
 function AccessToggle({ checked, onCheckedChange, label }) {
@@ -84,7 +76,6 @@ export function CourseDetail() {
   const [pendingRemoves, setPendingRemoves] = useState(() => new Set())
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
-  const [addOpen, setAddOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleted, setDeleted] = useState(false)
 
@@ -118,11 +109,6 @@ export function CourseDetail() {
     return out
   }, [assigned, allInstructors, pendingAccess, pendingAdds, pendingRemoves])
 
-  const unassigned = useMemo(() => {
-    const shown = new Set(displayed.map((i) => i.user_email))
-    return allInstructors.filter((i) => !shown.has(i.user_email))
-  }, [displayed, allInstructors])
-
   const isDirty =
     pendingActive !== null ||
     Object.keys(pendingAccess).length > 0 ||
@@ -151,19 +137,6 @@ export function CourseDetail() {
       }
       return next
     })
-  }
-
-  const addInstructor = (email) => {
-    setPendingRemoves((r) => {
-      if (!r.has(email)) return r
-      const next = new Set(r)
-      next.delete(email)
-      return next
-    })
-    if (!assigned.some((i) => i.user_email === email)) {
-      setPendingAdds((a) => new Set(a).add(email))
-    }
-    setAddOpen(false)
   }
 
   const removeInstructor = (email) => {
@@ -359,39 +332,6 @@ export function CourseDetail() {
         </div>
       </div>
 
-      {/* Add-instructor picker (staged — commits on Save changes). */}
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add an instructor</DialogTitle>
-          </DialogHeader>
-          <DialogBody>
-            <DialogDescription>Give an instructor access to this course.</DialogDescription>
-            {/* Inner max-h-72 keeps the picker compact; DialogBody's 85vh cap is
-                just the outer safety net (the two never fight — 72 < 85vh). */}
-            <div className="flex max-h-72 flex-col overflow-y-auto">
-              {unassigned.length === 0 ? (
-                <p className="py-3 text-caption text-muted-foreground">
-                  All instructors are already assigned.
-                </p>
-              ) : (
-                unassigned.map((inst) => (
-                  <button
-                    key={inst.user_email}
-                    type="button"
-                    onClick={() => addInstructor(inst.user_email)}
-                    className="flex items-center justify-between gap-3 border-b border-border px-1 py-3 text-left text-caption transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                  >
-                    <span className="truncate font-medium text-foreground">{instructorLabel(inst)}</span>
-                    <span className="shrink-0 text-muted-foreground">{inst.user_email}</span>
-                  </button>
-                ))
-              )}
-            </div>
-          </DialogBody>
-        </DialogContent>
-      </Dialog>
-
       <ConfirmDialog
         open={deleteOpen}
         onOpenChange={(open) => {
@@ -401,7 +341,6 @@ export function CourseDetail() {
         title="Delete course?"
         description={`You are about to delete ${courseCode(course)} from the OCELIA system. This change is permanent and removes all of the course's content. This can't be undone.`}
         confirmLabel="Delete course"
-        variant="danger"
         loading={del.isPending}
         error={del.isError ? toUserMessage(del.error) : undefined}
         onConfirm={() =>

@@ -190,7 +190,6 @@ export default function InstructorCourseLayout() {
         title="Delete course?"
         description={`Delete "${code}" and all its concepts, modules, files, and student data? This can't be undone.`}
         confirmLabel="Delete course"
-        variant="danger"
         loading={deleteCourse.isPending}
         error={deleteCourse.isError ? toUserMessage(deleteCourse.error) : undefined}
         onConfirm={handleDelete}

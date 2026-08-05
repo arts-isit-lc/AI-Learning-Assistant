@@ -165,7 +165,6 @@ export function StudentsTab() {
             : ""
         }
         confirmLabel="Delete student"
-        variant="danger"
         loading={deleteStudent.isPending}
         error={deleteStudent.isError ? toUserMessage(deleteStudent.error) : undefined}
         onConfirm={() =>

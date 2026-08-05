@@ -775,7 +775,6 @@ export function CourseWizard() {
         title="Discard this module?"
         description="Your uploaded files and progress for this draft will be discarded."
         confirmLabel="Discard"
-        variant="danger"
         onConfirm={handleCancel}
       />
 
@@ -786,7 +785,6 @@ export function CourseWizard() {
         description="This module prompt may conflict with the course or system prompt. You can go back and revise it, or continue anyway."
         confirmLabel="Okay"
         cancelLabel="Cancel"
-        variant="default"
         onConfirm={proceedPastConflicts}
       />
     </>

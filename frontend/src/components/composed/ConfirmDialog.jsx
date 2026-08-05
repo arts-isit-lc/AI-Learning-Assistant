@@ -27,7 +27,6 @@ export function ConfirmDialog({
   cancelLabel = "Cancel",
   onConfirm,
   onCancel,
-  variant = "danger",
   loading = false,
   error,
 }) {
@@ -58,14 +57,11 @@ export function ConfirmDialog({
           <Button variant="outline" onClick={handleCancel} disabled={loading}>
             {cancelLabel}
           </Button>
-          <Button
-            variant={variant}
-            // Primary (#6829C2) confirms hover to #2E0666 (primary-dark); danger
-            // and other variants keep their own hover.
-            className={variant === "default" ? "hover:bg-primary-dark" : undefined}
-            onClick={onConfirm}
-            loading={loading}
-          >
+          {/* Confirm is always the primary action button — #6829C2 with white
+              text, hovering to #2E0666 (primary-dark) — including destructive
+              confirms: the title + label (e.g. "Delete course?" / "Delete")
+              carry the destructive meaning, not the colour. */}
+          <Button className="hover:bg-primary-dark" onClick={onConfirm} loading={loading}>
             {confirmLabel}
           </Button>
         </DialogFooter>

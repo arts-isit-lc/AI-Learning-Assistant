@@ -434,7 +434,6 @@ export function EditModule() {
         title="Delete module?"
         description={moduleData ? `Delete "${moduleData.module_name}" and its files? This can't be undone.` : ""}
         confirmLabel="Delete"
-        variant="danger"
         loading={deleteModule.isPending}
         error={deleteModule.isError ? toUserMessage(deleteModule.error) : undefined}
         onConfirm={() =>

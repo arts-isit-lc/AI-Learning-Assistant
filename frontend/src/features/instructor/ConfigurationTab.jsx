@@ -384,7 +384,6 @@ export function ConfigurationTab() {
         title="Delete concept?"
         description="This also deletes the concept's modules and their files. This can't be undone."
         confirmLabel="Delete"
-        variant="danger"
         loading={deleteConcept.isPending}
         error={deleteConcept.isError ? toUserMessage(deleteConcept.error) : undefined}
         onConfirm={() =>
@@ -407,7 +406,6 @@ export function ConfigurationTab() {
           deleteModuleTarget ? `Delete "${deleteModuleTarget.module_name}" and its files? This can't be undone.` : ""
         }
         confirmLabel="Delete"
-        variant="danger"
         loading={deleteModule.isPending}
         error={deleteModule.isError ? toUserMessage(deleteModule.error) : undefined}
         onConfirm={() =>

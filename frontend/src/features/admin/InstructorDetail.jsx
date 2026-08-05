@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { toUserMessage } from "@/services/apiError"
-import { MdAdd } from "react-icons/md"
 import {
   useAdminInstructors,
   useAdminCourses,
@@ -21,16 +20,7 @@ import { UnsavedChangesPrompt } from "@/components/composed/UnsavedChangesPrompt
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Toggle } from "@/components/ui/toggle"
-import { Icon } from "@/components/ui/icon"
 import { Skeleton } from "@/components/ui/skeleton"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogBody,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog"
 
 /** "DEPT NUMBER" course code. */
 function courseCode(course) {
@@ -93,7 +83,6 @@ export function InstructorDetail() {
   const [pendingRemoves, setPendingRemoves] = useState(() => new Set())
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
-  const [addOpen, setAddOpen] = useState(false)
   const [removeOpen, setRemoveOpen] = useState(false)
   const [deleted, setDeleted] = useState(false)
 
@@ -125,11 +114,6 @@ export function InstructorDetail() {
     return out
   }, [assigned, allCourses, pendingAccess, pendingAdds, pendingRemoves])
 
-  const unassigned = useMemo(() => {
-    const shownIds = new Set(displayed.map((c) => c.course_id))
-    return allCourses.filter((c) => !shownIds.has(c.course_id))
-  }, [displayed, allCourses])
-
   const isDirty =
     Object.keys(pendingAccess).length > 0 || pendingAdds.size > 0 || pendingRemoves.size > 0
 
@@ -153,21 +137,6 @@ export function InstructorDetail() {
       }
       return next
     })
-  }
-
-  const addCourse = (courseId) => {
-    // Re-adding a course staged for removal just cancels the removal.
-    setPendingRemoves((r) => {
-      if (!r.has(courseId)) return r
-      const next = new Set(r)
-      next.delete(courseId)
-      return next
-    })
-    // A brand-new assignment (not already a server course) → stage an add.
-    if (!assigned.some((c) => c.course_id === courseId)) {
-      setPendingAdds((a) => new Set(a).add(courseId))
-    }
-    setAddOpen(false)
   }
 
   const removeCourse = (courseId) => {
@@ -313,38 +282,6 @@ export function InstructorDetail() {
         </div>
       </div>
 
-      {/* Assign-course picker (staged — commits on Save changes). */}
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Assign a course</DialogTitle>
-          </DialogHeader>
-          <DialogBody>
-            <DialogDescription>Give this instructor access to a course.</DialogDescription>
-            {/* Inner max-h-72 keeps the picker compact; DialogBody's 85vh cap is
-                just the outer safety net (the two never fight — 72 < 85vh). */}
-            <div className="flex max-h-72 flex-col overflow-y-auto">
-              {unassigned.length === 0 ? (
-                <p className="py-3 text-caption text-muted-foreground">
-                  This instructor is already assigned to every course.
-                </p>
-              ) : (
-                unassigned.map((course) => (
-                  <button
-                    key={course.course_id}
-                    type="button"
-                    onClick={() => addCourse(course.course_id)}
-                    className="border-b border-border px-1 py-3 text-left text-caption font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                  >
-                    <span className="block truncate">{courseLabel(course)}</span>
-                  </button>
-                ))
-              )}
-            </div>
-          </DialogBody>
-        </DialogContent>
-      </Dialog>
-
       <ConfirmDialog
         open={removeOpen}
         onOpenChange={(open) => {
@@ -354,7 +291,6 @@ export function InstructorDetail() {
         title="Delete instructor?"
         description={`Remove ${instructor ? instructorLabel(instructor) : email} as an instructor? Their instructor role and course assignments are removed. Their account and any student data are unaffected.`}
         confirmLabel="Delete instructor"
-        variant="danger"
         loading={lower.isPending}
         error={lower.isError ? toUserMessage(lower.error) : undefined}
         onConfirm={() =>
