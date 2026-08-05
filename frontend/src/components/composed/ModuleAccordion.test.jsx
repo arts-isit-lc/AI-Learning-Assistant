@@ -125,6 +125,17 @@ describe("ModuleAccordion", () => {
     expect(onDelete).toHaveBeenCalled()
   })
 
+  it("darkens the concept pencil + trashcan icons to #2E0666 (primary-dark) on hover", () => {
+    renderAccordion()
+    const rename = screen.getByRole("button", { name: "Rename concept" })
+    const del = screen.getByRole("button", { name: "Delete concept" })
+    expect(rename).toHaveClass("hover:text-primary-dark")
+    expect(del).toHaveClass("hover:text-primary-dark")
+    // Not the old grey→foreground (pencil) / grey→destructive (trashcan) hovers.
+    expect(rename).not.toHaveClass("hover:text-foreground")
+    expect(del).not.toHaveClass("hover:text-destructive")
+  })
+
   it("sizes modules to the same 600px as concepts but right-aligns them", () => {
     renderAccordion()
     // Concept box: capped at 600px, left (default alignment).

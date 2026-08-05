@@ -290,7 +290,7 @@ export function ModuleAccordion({
                 setName(concept.concept_name)
                 setEditing(true)
               }}
-              className="leading-4 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="leading-4 text-muted-foreground hover:text-primary-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <Icon icon={MdEdit} size={18} />
             </button>
@@ -299,7 +299,7 @@ export function ModuleAccordion({
                 type="button"
                 aria-label="Delete concept"
                 onClick={onDelete}
-                className="rounded text-muted-foreground hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="rounded text-muted-foreground hover:text-primary-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <Icon icon={MdDelete} />
               </button>
