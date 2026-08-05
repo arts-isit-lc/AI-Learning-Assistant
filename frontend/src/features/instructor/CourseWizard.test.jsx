@@ -492,4 +492,49 @@ describe("CourseWizard", () => {
     finalize.isError = false
     finalize.error = null
   })
+
+  // --- Footer "waiting on processing" hint (Figma `Step2/B`, node 1513:7196) ---
+  // Shown on the upload step (step 2 / index 1) while any file is still
+  // uploading or ingesting, and cleared once everything reaches a terminal
+  // state so the user can move on. Red Primary (#E40000 -> text-destructive).
+  const PROCESSING_HINT = /You can continue once file upload and ingestion are complete/
+
+  it("shows the footer processing hint (Red Primary) on the upload step while a file is ingesting", async () => {
+    trackedFilesResult = { f1: { fileId: "f1", status: "ingesting" } }
+    const user = userEvent.setup()
+    render(<CourseWizard />)
+    await user.type(screen.getByLabelText("Module name"), "Vectors")
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> references (upload step)
+    const hint = screen.getByText(PROCESSING_HINT)
+    expect(hint).toBeInTheDocument()
+    // #E40000 (Red Primary) + Whitney Semibold from the Figma footer spec.
+    expect(hint).toHaveClass("text-destructive", "font-semibold")
+  })
+
+  it("shows the footer processing hint while a file is still uploading", async () => {
+    fileStatesResult = { f1: { fileId: "f1", fileName: "notes.pdf", status: "uploading", progress: 40 } }
+    const user = userEvent.setup()
+    render(<CourseWizard />)
+    await user.type(screen.getByLabelText("Module name"), "Vectors")
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> references (upload step)
+    expect(screen.getByText(PROCESSING_HINT)).toBeInTheDocument()
+  })
+
+  it("hides the footer processing hint once every file is processed, unblocking Next", async () => {
+    trackedFilesResult = { f1: { fileId: "f1", status: "complete" } }
+    const user = userEvent.setup()
+    render(<CourseWizard />)
+    await user.type(screen.getByLabelText("Module name"), "Vectors")
+    await user.click(screen.getByRole("button", { name: "Next" })) // -> references (upload step)
+    expect(screen.queryByText(PROCESSING_HINT)).not.toBeInTheDocument()
+    // Nothing blocking + a completed upload -> the user can continue.
+    expect(screen.getByRole("button", { name: "Next" })).toBeEnabled()
+  })
+
+  it("keeps the footer processing hint off the details step (scoped to the upload step)", async () => {
+    // Even with an in-flight file, the hint belongs to the upload step only.
+    trackedFilesResult = { f1: { fileId: "f1", status: "ingesting" } }
+    render(<CourseWizard />)
+    expect(screen.queryByText(PROCESSING_HINT)).not.toBeInTheDocument()
+  })
 })

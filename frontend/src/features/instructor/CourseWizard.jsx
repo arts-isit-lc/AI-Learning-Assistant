@@ -739,29 +739,43 @@ export function CourseWizard() {
                     </Button>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button className="text-base" variant="outline" onClick={() => setCancelOpen(true)}>
-                    Cancel
-                  </Button>
-                  {step < STEP_COUNT - 1 ? (
-                    <Button
-                      className="text-base hover:bg-primary-dark"
-                      onClick={handleNext}
-                      loading={validating}
-                      disabled={!canNext}
-                    >
-                      Next
-                    </Button>
-                  ) : (
-                    <Button
-                      className="text-base hover:bg-primary-dark"
-                      onClick={handleSave}
-                      loading={finalize.isPending}
-                      disabled={!canSave}
-                    >
-                      Publish
-                    </Button>
+                {/* Right group: while an upload/ingestion is still blocking
+                    Next (step 2 only), a "waiting on processing" hint sits left
+                    of the actions (Figma `Step2/B` node 1513:7196 — Red Primary,
+                    16px from the action pair). It clears itself once every file
+                    reaches a terminal state, at which point Next enables. Cancel
+                    + the primary action (Next, or Publish on the final step) stay
+                    paired at 8px. */}
+                <div className="flex items-center gap-4">
+                  {step === 1 && isProcessingBlocking && (
+                    <p className="text-base font-semibold text-destructive">
+                      You can continue once file upload and ingestion are complete.
+                    </p>
                   )}
+                  <div className="flex items-center gap-2">
+                    <Button className="text-base" variant="outline" onClick={() => setCancelOpen(true)}>
+                      Cancel
+                    </Button>
+                    {step < STEP_COUNT - 1 ? (
+                      <Button
+                        className="text-base hover:bg-primary-dark"
+                        onClick={handleNext}
+                        loading={validating}
+                        disabled={!canNext}
+                      >
+                        Next
+                      </Button>
+                    ) : (
+                      <Button
+                        className="text-base hover:bg-primary-dark"
+                        onClick={handleSave}
+                        loading={finalize.isPending}
+                        disabled={!canSave}
+                      >
+                        Publish
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
