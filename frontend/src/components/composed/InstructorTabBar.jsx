@@ -11,17 +11,18 @@ const TABS = [
   { to: "/instructor/chats", label: "Global Chats" },
 ]
 
+// Mirrors the admin nav tabs exactly (AdminLayout `navLinkClass`): the active
+// tab is black (#000 / neutral-900) with a border-primary underline and no
+// hover; inactive tabs are brand purple (text-primary) and take the rounded
+// brand-"lightest" hover fill (#F2E8FF / --primary-subtle) with "Faculty of
+// Arts/Dark" text (#2E0666 / --primary-dark).
 const tabClass = ({ isActive }) =>
   cn(
-    "-mb-px border-b-2 px-6 py-1 text-caption font-semibold transition-colors duration-fast",
+    "border-b-2 py-1 px-6 text-caption font-semibold text-sm transition-colors duration-fast",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-    // Only inactive tabs get the rounded hover fill — brand "lightest" surface
-    // (#F2E8FF / --primary-subtle) + "Faculty of Arts/Dark" text (#2E0666 /
-    // --primary-dark). The active tab is a square border-primary underline with
-    // no hover, so the current page stays clearly (and statically) marked.
     isActive
-      ? "border-primary text-primary"
-      : "rounded border-transparent text-muted-foreground hover:bg-primary-subtle hover:text-primary-dark"
+      ? "border-primary text-neutral-900"
+      : "rounded border-transparent text-primary hover:bg-primary-subtle hover:text-primary-dark"
   )
 
 const toggleClass =
