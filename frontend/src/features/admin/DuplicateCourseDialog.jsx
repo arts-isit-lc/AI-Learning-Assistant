@@ -79,10 +79,12 @@ export function DuplicateCourseDialog({ course }) {
     <>
       {/* Hover matches the admin nav links (Instructors/Courses): a rounded
           brand-"lightest" fill (#F2E8FF / --primary-subtle) with "Faculty of
-          Arts/Dark" text (#2E0666 / --primary-dark), not the link underline. */}
+          Arts/Dark" text (#2E0666 / --primary-dark), not the link underline.
+          28px tall (h-7 + size-sm padding) to match the footer's Undo/Save. */}
       <Button
         variant="link"
-        className="rounded hover:bg-primary-subtle hover:text-primary-dark hover:no-underline"
+        size="sm"
+        className="h-7 rounded hover:bg-primary-subtle hover:text-primary-dark hover:no-underline"
         onClick={() => handleOpenChange(true)}
       >
         Duplicate

@@ -45,6 +45,8 @@ describe("DuplicateCourseDialog", () => {
     expect(trigger).toHaveClass("hover:bg-primary-subtle")
     expect(trigger).toHaveClass("hover:text-primary-dark")
     expect(trigger).not.toHaveClass("hover:underline")
+    // 28px tall to match the footer's Undo/Save buttons.
+    expect(trigger).toHaveClass("h-7")
   })
 
   it("hovers the dialog Duplicate button to #2E0666 (primary-dark)", async () => {
