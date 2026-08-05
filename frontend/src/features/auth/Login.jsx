@@ -330,15 +330,15 @@ export function Login() {
                   <LoginInput id="lastName" autoComplete="family-name" value={lastName} onChange={(e) => setLastName(e.target.value)} maxLength={30} required />
                 </div>
               </div>
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col">
                 <Label htmlFor="signup-email" className="text-h4 text-foreground">Email</Label>
                 <LoginInput id="signup-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={40} required />
               </div>
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col">
                 <Label htmlFor="signup-password" className="text-h4 text-foreground">Password</Label>
                 <LoginInput id="signup-password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} maxLength={50} required />
               </div>
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col">
                 <Label htmlFor="confirm-password" className="text-h4 text-foreground">Confirm password</Label>
                 <LoginInput id="confirm-password" type="password" autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} maxLength={50} required />
               </div>
