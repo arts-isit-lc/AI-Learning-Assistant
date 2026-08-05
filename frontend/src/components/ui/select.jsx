@@ -1,6 +1,6 @@
 import * as React from "react"
 import * as SelectPrimitive from "@radix-ui/react-select"
-import { MdCheck, MdExpandMore } from "react-icons/md"
+import { MdExpandMore } from "react-icons/md"
 import { Icon } from "./icon"
 import { cn } from "@/lib/utils"
 
@@ -71,8 +71,13 @@ const SelectItem = React.forwardRef(function SelectItem({ className, children, .
       ref={ref}
       className={cn(
         // 44px rows (py-3 + 20px caption line) with a square, edge-to-edge hover
-        // surface — matches the OCELIA `Selection/Single/Option` mockup.
-        "relative flex w-full cursor-pointer select-none items-center rounded-none py-3 pl-4 pr-8 text-caption outline-none",
+        // surface — matches the OCELIA `Selection/Single/Option` mockup. px-4 both
+        // sides now that the right-hand checkmark is gone.
+        "flex w-full cursor-pointer select-none items-center rounded-none px-4 py-3 text-caption outline-none",
+        // The currently-selected option reads bold (no checkmark) when the menu is
+        // reopened — Radix flags it data-state=checked, and the attribute selector
+        // outweighs text-caption's own font-weight.
+        "data-[state=checked]:font-semibold",
         // Hover / keyboard-highlight surface = #F2E8FF (primary-subtle). Radix flags
         // the active option with `data-highlighted` AND moves DOM focus to it, so
         // pointer-hover and arrow-key navigation both tint the same row.
@@ -82,11 +87,6 @@ const SelectItem = React.forwardRef(function SelectItem({ className, children, .
       {...props}
     >
       <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
-      <span className="absolute right-2 flex h-4 w-4 items-center justify-center">
-        <SelectPrimitive.ItemIndicator>
-          <Icon icon={MdCheck} size={16} />
-        </SelectPrimitive.ItemIndicator>
-      </span>
     </SelectPrimitive.Item>
   )
 })

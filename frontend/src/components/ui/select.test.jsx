@@ -75,4 +75,26 @@ describe("Select", () => {
     expect(option).toHaveClass("rounded-none")
     expect(option).not.toHaveClass("focus:bg-accent")
   })
+
+  it("bolds the selected option with no checkmark when the menu is reopened", async () => {
+    render(
+      <Select defaultOpen defaultValue="a">
+        <SelectTrigger aria-label="Language model">
+          <SelectValue placeholder="Choose a model" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="a">Claude</SelectItem>
+          <SelectItem value="b">Llama</SelectItem>
+        </SelectContent>
+      </Select>
+    )
+    const selected = await screen.findByRole("option", { name: "Claude" })
+    // Radix marks the chosen option data-state=checked; it renders bold (semibold)…
+    expect(selected).toHaveAttribute("data-state", "checked")
+    expect(selected).toHaveClass("data-[state=checked]:font-semibold")
+    // …and there's no checkmark icon inside the option anymore.
+    expect(selected.querySelector("svg")).toBeNull()
+    // The unselected option is not marked checked.
+    expect(screen.getByRole("option", { name: "Llama" })).toHaveAttribute("data-state", "unchecked")
+  })
 })
