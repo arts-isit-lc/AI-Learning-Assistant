@@ -126,7 +126,7 @@ export default function InstructorCourseLayout() {
                 type="button"
                 onClick={copyAccessCode}
                 aria-label="Copy access code"
-                className="rounded-sm p-1 text-primary transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex rounded-sm p-1 text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <Icon icon={MdContentCopy} size={16} />
               </button>

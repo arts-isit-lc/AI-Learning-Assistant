@@ -226,7 +226,7 @@ export function DuplicateCourse() {
                       type="button"
                       onClick={copyCode}
                       aria-label="Copy access code"
-                      className="rounded p-1 text-primary transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="flex rounded p-1 text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <Icon icon={MdContentCopy} size={16} />
                     </button>
