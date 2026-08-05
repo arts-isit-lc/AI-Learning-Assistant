@@ -13,6 +13,7 @@ import AdminLayout from "./layouts/AdminLayout"
 import { SplitLayout } from "@/components/composed/SplitLayout"
 import Placeholder from "./pages/Placeholder"
 import NotFound from "./pages/NotFound"
+import RouteError from "./RouteError"
 
 // Heavy/legacy screens are lazy so they stay out of the shell's initial chunk.
 const Login = lazy(() => import("@/features/auth/Login"))
@@ -107,7 +108,7 @@ function RootLayout() {
  * from this; the routing test builds a memory router from the same tree.
  */
 export const routes = createRoutesFromElements(
-  <Route element={<RootLayout />}>
+  <Route element={<RootLayout />} errorElement={<RouteError />}>
     {/* Public */}
     <Route path="/login" element={<Login />} />
     <Route path="/style-guide" element={<StyleGuide />} />

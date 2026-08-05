@@ -73,6 +73,22 @@ export class AmplifyStack extends cdk.Stack {
         VITE_GRAPHQL_WS_URL: apiStack.getEventApiUrl(),
       },
       buildSpec: BuildSpec.fromObjectToYaml(amplifyYaml),
+      // Cache-Control so a redeploy never strands an open tab on stale,
+      // content-hashed chunks: the entry point is revalidated every load while
+      // the immutable (hashed) assets cache for a year. This pairs with the
+      // SPA's RouteError auto-reload — the fresh index.html it fetches must not
+      // itself be served from cache, or the reload wouldn't pick up the new
+      // chunk hashes. (Amplify default hosting caching is left otherwise.)
+      customResponseHeaders: [
+        {
+          pattern: "/index.html",
+          headers: { "Cache-Control": "no-cache, no-store, must-revalidate" },
+        },
+        {
+          pattern: "/assets/*",
+          headers: { "Cache-Control": "public, max-age=31536000, immutable" },
+        },
+      ],
     });
 
     amplifyApp.addCustomRule({
