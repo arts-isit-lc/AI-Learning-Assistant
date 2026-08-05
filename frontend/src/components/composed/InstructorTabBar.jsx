@@ -35,9 +35,14 @@ const toggleClass =
  * `AppHeader`.
  *
  * Two states from the frames:
- *  - Expanded (Default, ~154px): greeting + subtitle, then the tab row, with a
- *    Collapse toggle.
- *  - Collapsed (Variant2, ~28px): just the tab row + an Expand toggle.
+ *  - Expanded (Default, ~154px): greeting + subtitle above the tab row.
+ *  - Collapsed (Variant2, ~28px): just the tab row.
+ *
+ * The Expand/Collapse toggle is anchored at the right of the (always-present)
+ * tab row in BOTH states, so toggling only slides the greeting open/closed —
+ * the button never changes DOM slot. Rendering it in two different slots made
+ * it teleport on every click (a visible "jump") and unmount/remount (dropping
+ * keyboard focus); one stable slot fixes both.
  *
  * Auto-collapses when a course is open (the course workspace needs the vertical
  * space); the toggle overrides until the next navigation. The `Quicklink?`
@@ -81,27 +86,24 @@ export function InstructorTabBar() {
   return (
     <div className="border-b border-border bg-background">
       <div className="mx-auto max-w-7xl px-6">
-        {/* Top row: greeting/subtitle with the Collapse toggle pinned top-right
-            while expanded. The greeting slides via the shared Collapse primitive
-            (same motion as every accordion); collapsed, it's height 0 so this row
-            disappears and only the tab row shows. */}
-        <div className="flex items-start justify-between gap-4">
-          <Collapse open={expanded} className="flex-1" id="instructor-greeting">
-            <div className="pt-5">
-              <h1 className="text-h2 font-semibold uppercase text-foreground">Hi, Instructor!</h1>
-              <p className="mt-1 text-body text-muted-foreground">
-                Manage your courses, upload materials, and review chat activity and insights.
-              </p>
-            </div>
-          </Collapse>
-          {expanded && <div className="shrink-0 pt-5">{toggleButton}</div>}
-        </div>
+        {/* Greeting/subtitle slides open above the persistent tab row via the
+            shared Collapse primitive (same motion as every accordion); collapsed,
+            it's height 0 so only the tab row shows. */}
+        <Collapse open={expanded} id="instructor-greeting">
+          <div className="pt-5">
+            <h1 className="text-h2 font-semibold uppercase text-foreground">Hi, Instructor!</h1>
+            <p className="mt-1 text-body text-muted-foreground">
+              Manage your courses, upload materials, and review chat activity and insights.
+            </p>
+          </div>
+        </Collapse>
 
-        {/* Tab row (persistent). Collapsed: the toggle moves inline with the tabs
-            for the compact single-row layout. */}
+        {/* Tab row (persistent). The toggle is anchored here in BOTH states so it
+            never changes DOM slot: clicking it slides the greeting without the
+            button jumping position or losing focus. */}
         <div className="flex items-center justify-between py-6">
           {tabs}
-          {!expanded && toggleButton}
+          {toggleButton}
         </div>
       </div>
     </div>

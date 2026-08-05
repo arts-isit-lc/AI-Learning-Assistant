@@ -71,4 +71,35 @@ describe("InstructorTabBar", () => {
     await user.click(screen.getByRole("button", { name: /collapse/i }))
     expect(screen.getByRole("button", { name: /expand/i })).toHaveAttribute("aria-expanded", "false")
   })
+
+  // Regression: the toggle used to be rendered in two different slots (top-right
+  // when expanded, inline with the tabs when collapsed), so it teleported on
+  // every click and lost focus. It now lives in one stable slot — the tab row.
+  it("anchors the toggle beside the tabs (same row) when expanded, so it doesn't jump", () => {
+    renderAt("/instructor/courses") // expanded
+    const nav = screen.getByRole("navigation", { name: /instructor navigation/i })
+    const toggle = screen.getByRole("button", { name: /collapse/i })
+    // Same parent element = same row: the toggle sits next to the tabs, not in a
+    // separate top-right slot next to the greeting.
+    expect(toggle.parentElement).toBe(nav.parentElement)
+  })
+
+  it("keeps the toggle in that same tab row when collapsed", () => {
+    renderAt("/instructor/courses/c1/configuration") // collapsed
+    const nav = screen.getByRole("navigation", { name: /instructor navigation/i })
+    const toggle = screen.getByRole("button", { name: /expand/i })
+    expect(toggle.parentElement).toBe(nav.parentElement)
+  })
+
+  it("toggles in place: the same button element keeps focus across collapse (no remount/jump)", async () => {
+    const user = userEvent.setup()
+    renderAt("/instructor/courses") // expanded
+    const collapseBtn = screen.getByRole("button", { name: /collapse/i })
+    await user.click(collapseBtn)
+    const expandBtn = screen.getByRole("button", { name: /expand/i })
+    // One stable slot means it's the SAME DOM node, just relabeled — so focus
+    // stays on it instead of dropping to <body> when it was re-created elsewhere.
+    expect(expandBtn).toBe(collapseBtn)
+    expect(expandBtn).toHaveFocus()
+  })
 })
