@@ -140,4 +140,72 @@ describe("Login", () => {
     expect(h.resetPassword).toHaveBeenCalledWith({ username: "ada@x.com" })
     expect(await screen.findByLabelText("Confirmation code")).toBeInTheDocument()
   })
+
+  describe("inline field validation", () => {
+    it("flags each missing sign-in field inline (module-wizard style) and doesn't call Amplify", async () => {
+      render(<Login />)
+      await userEvent.click(screen.getByRole("button", { name: "Log in" }))
+
+      const emailErr = await screen.findByText("Email is required.")
+      const pwErr = screen.getByText("Password is required.")
+      // Same red-caption style as the module wizard's field error.
+      expect(emailErr).toHaveClass("text-caption", "text-destructive")
+      // Message is wired to its control (rendered directly under the field).
+      expect(screen.getByLabelText("Email")).toHaveAttribute("aria-describedby", emailErr.id)
+      expect(screen.getByLabelText("Email")).toHaveAttribute("aria-invalid", "true")
+      expect(pwErr).toHaveClass("text-caption", "text-destructive")
+      expect(h.signIn).not.toHaveBeenCalled()
+    })
+
+    it("clears a field's inline error once the user edits it", async () => {
+      render(<Login />)
+      await userEvent.click(screen.getByRole("button", { name: "Log in" }))
+      expect(await screen.findByText("Email is required.")).toBeInTheDocument()
+
+      await userEvent.type(screen.getByLabelText("Email"), "ada@x.com")
+      expect(screen.queryByText("Email is required.")).not.toBeInTheDocument()
+    })
+
+    it("flags every missing create-account field inline and doesn't call Amplify", async () => {
+      render(<Login />)
+      await userEvent.click(screen.getByRole("button", { name: "Create an account" }))
+      await userEvent.click(screen.getByRole("button", { name: "Sign up" }))
+
+      expect(await screen.findByText("First name is required.")).toBeInTheDocument()
+      expect(screen.getByText("Last name is required.")).toBeInTheDocument()
+      expect(screen.getByText("Email is required.")).toBeInTheDocument()
+      expect(screen.getByText("Password is required.")).toBeInTheDocument()
+      expect(screen.getByText("Confirm password is required.")).toBeInTheDocument()
+      expect(h.signUp).not.toHaveBeenCalled()
+    })
+
+    it("shows a duplicate-account error under the create-account email field", async () => {
+      const err = new Error("An account with the given email already exists.")
+      err.name = "UsernameExistsException"
+      h.signUp.mockRejectedValue(err)
+      render(<Login />)
+      await userEvent.click(screen.getByRole("button", { name: "Create an account" }))
+      await userEvent.type(screen.getByLabelText("First name"), "Ada")
+      await userEvent.type(screen.getByLabelText("Last name"), "Lovelace")
+      await userEvent.type(screen.getByLabelText("Email"), "ada@x.com")
+      await userEvent.type(screen.getByLabelText("Password"), "Password1!")
+      await userEvent.type(screen.getByLabelText("Confirm password"), "Password1!")
+      await userEvent.click(screen.getByRole("button", { name: "Sign up" }))
+
+      const dupErr = await screen.findByText("A user with this email already exists.")
+      expect(dupErr).toHaveClass("text-caption", "text-destructive")
+      // Rendered under the email field, not as a form-level alert.
+      expect(screen.getByLabelText("Email")).toHaveAttribute("aria-describedby", dupErr.id)
+      expect(h.signUp).toHaveBeenCalled()
+    })
+
+    it("flags a missing email inline on the forgot-password request and doesn't call Amplify", async () => {
+      render(<Login />)
+      await userEvent.click(screen.getByRole("button", { name: "Forgot password?" }))
+      await userEvent.click(screen.getByRole("button", { name: "Send reset code" }))
+
+      expect(await screen.findByText("Email is required.")).toBeInTheDocument()
+      expect(h.resetPassword).not.toHaveBeenCalled()
+    })
+  })
 })

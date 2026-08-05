@@ -5,6 +5,7 @@ import ErrorBoundary from "@/components/ErrorBoundary"
 import { AuthProvider } from "@/context/AuthContext"
 import { NotificationProvider } from "@/context/NotificationContext"
 import { OfflineBanner } from "@/components/composed/OfflineBanner"
+import { SessionTimeout } from "@/features/auth/SessionTimeout"
 import { createQueryClient } from "@/services/queryClient"
 import { routes } from "./AppRoutes"
 
@@ -58,6 +59,7 @@ export default function AppV2() {
     <ErrorBoundary fallbackRender={() => <GlobalErrorFallback />}>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
+          <SessionTimeout />
           <NotificationProvider>
             <OfflineBanner />
             <RouterProvider router={router} />

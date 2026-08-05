@@ -39,6 +39,20 @@ function LoginInput({ className, ...props }) {
 }
 
 /**
+ * Inline field-level validation message. Mirrors the module wizard's field-error
+ * style (a red caption directly under the control) so auth validation reads the
+ * same as the rest of the app. Renders nothing when there's no message.
+ */
+function FieldError({ id, children }) {
+  if (!children) return null
+  return (
+    <p id={id} className="mt-1 text-caption text-destructive">
+      {children}
+    </p>
+  )
+}
+
+/**
  * OCELIA login (migrated off MUI). Preserves the full Cognito flow set — sign in,
  * sign up + email confirmation, force-new-password, and forgot/reset password —
  * on the Tailwind/shadcn system. Auth calls go straight to Amplify; on success it
@@ -69,6 +83,11 @@ export function Login() {
   const [error, setError] = useState("")
   const [message, setMessage] = useState("")
   const [busy, setBusy] = useState(false)
+  // Per-field "missing"/validation messages rendered inline under each control
+  // (module-wizard style, see CourseWizard's name field). Keyed by logical field
+  // name; only one auth mode shows at a time, so email/password keys are safely
+  // shared across modes.
+  const [fieldErrors, setFieldErrors] = useState({})
 
   // If a signed-in user lands on /login, bounce to their role home.
   useEffect(() => {
@@ -79,7 +98,12 @@ export function Login() {
     setMode(next)
     setError("")
     setMessage("")
+    setFieldErrors({})
   }
+
+  // Clear a single field's inline error as soon as the user edits it.
+  const clearFieldError = (field) =>
+    setFieldErrors((prev) => (prev[field] ? { ...prev, [field]: "" } : prev))
 
   const finishAuth = async () => {
     await refresh()
@@ -89,6 +113,14 @@ export function Login() {
   const handleSignIn = async (e) => {
     e.preventDefault()
     setError("")
+    const errors = {}
+    if (!email.trim()) errors.email = "Email is required."
+    if (!password) errors.password = "Password is required."
+    if (Object.keys(errors).length) {
+      setFieldErrors(errors)
+      return
+    }
+    setFieldErrors({})
     setBusy(true)
     try {
       const res = await signIn({ username: email, password })
@@ -107,10 +139,17 @@ export function Login() {
   const handleSignUp = async (e) => {
     e.preventDefault()
     setError("")
-    if (!email || !password || !confirmPassword || !firstName || !lastName) {
-      setError("All fields are required.")
+    const errors = {}
+    if (!firstName.trim()) errors.firstName = "First name is required."
+    if (!lastName.trim()) errors.lastName = "Last name is required."
+    if (!email.trim()) errors.email = "Email is required."
+    if (!password) errors.password = "Password is required."
+    if (!confirmPassword) errors.confirmPassword = "Confirm password is required."
+    if (Object.keys(errors).length) {
+      setFieldErrors(errors)
       return
     }
+    setFieldErrors({})
     if (password !== confirmPassword) {
       setError("Passwords do not match.")
       return
@@ -133,11 +172,15 @@ export function Login() {
         switchMode("signIn")
       }
     } catch (err) {
-      setError(
-        err?.message?.includes("PreSignUp failed")
-          ? "Your email domain is not allowed. Please use a valid email address."
-          : err?.message || "Couldn't create your account."
-      )
+      // A pre-existing account surfaces inline under the email field (module-wizard
+      // style); every other failure stays a form-level alert.
+      if (err?.name === "UsernameExistsException" || /already exists/i.test(err?.message || "")) {
+        setFieldErrors({ email: "A user with this email already exists." })
+      } else if (err?.message?.includes("PreSignUp failed")) {
+        setError("Your email domain is not allowed. Please use a valid email address.")
+      } else {
+        setError(err?.message || "Couldn't create your account.")
+      }
     } finally {
       setBusy(false)
     }
@@ -210,6 +253,11 @@ export function Login() {
     e.preventDefault()
     setError("")
     setMessage("")
+    if (!email.trim()) {
+      setFieldErrors({ email: "Email is required." })
+      return
+    }
+    setFieldErrors({})
     setBusy(true)
     try {
       const output = await resetPassword({ username: email })
@@ -233,6 +281,14 @@ export function Login() {
   const handleConfirmReset = async (e) => {
     e.preventDefault()
     setError("")
+    const errors = {}
+    if (!code.trim()) errors.code = "Confirmation code is required."
+    if (!newPassword) errors.newPassword = "New password is required."
+    if (Object.keys(errors).length) {
+      setFieldErrors(errors)
+      return
+    }
+    setFieldErrors({})
     setBusy(true)
     try {
       await confirmResetPassword({ username: email, confirmationCode: code, newPassword })
@@ -281,17 +337,19 @@ export function Login() {
           )}
 
           {mode === "signIn" && (
-            <form onSubmit={handleSignIn} className="flex flex-col gap-20">
+            <form onSubmit={handleSignIn} noValidate className="flex flex-col gap-20">
               <div className="flex flex-col gap-6">
                 <div className="flex flex-col gap-6">
                   <h1 className="text-2xl font-book leading-9 text-foreground">Please log in</h1>
                   <div className="flex flex-col">
                     <Label htmlFor="email" className="text-h4 text-foreground">Email</Label>
-                    <LoginInput id="email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={40} required autoFocus />
+                    <LoginInput id="email" type="email" autoComplete="email" value={email} onChange={(e) => { setEmail(e.target.value); clearFieldError("email") }} maxLength={40} required autoFocus aria-invalid={fieldErrors.email ? true : undefined} aria-describedby={fieldErrors.email ? "email-error" : undefined} />
+                    <FieldError id="email-error">{fieldErrors.email}</FieldError>
                   </div>
                   <div className="flex flex-col">
                     <Label htmlFor="password" className="text-h4 text-foreground">Password</Label>
-                    <LoginInput id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} maxLength={50} required />
+                    <LoginInput id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => { setPassword(e.target.value); clearFieldError("password") }} maxLength={50} required aria-invalid={fieldErrors.password ? true : undefined} aria-describedby={fieldErrors.password ? "password-error" : undefined} />
+                    <FieldError id="password-error">{fieldErrors.password}</FieldError>
                   </div>
                 </div>
                 <Button type="submit" loading={busy} className="w-full text-base">Log in</Button>
@@ -318,29 +376,34 @@ export function Login() {
           )}
 
           {mode === "signUp" && (
-            <form onSubmit={handleSignUp} className="flex flex-col gap-6">
+            <form onSubmit={handleSignUp} noValidate className="flex flex-col gap-6">
               <h1 className="text-2xl font-book leading-9 text-foreground">Create your account</h1>
               <div className="flex gap-3">
                 <div className="flex flex-1 flex-col">
                   <Label htmlFor="firstName" className="text-h4 text-foreground">First name</Label>
-                  <LoginInput id="firstName" autoComplete="given-name" value={firstName} onChange={(e) => setFirstName(e.target.value)} maxLength={30} required autoFocus />
+                  <LoginInput id="firstName" autoComplete="given-name" value={firstName} onChange={(e) => { setFirstName(e.target.value); clearFieldError("firstName") }} maxLength={30} required autoFocus aria-invalid={fieldErrors.firstName ? true : undefined} aria-describedby={fieldErrors.firstName ? "firstName-error" : undefined} />
+                  <FieldError id="firstName-error">{fieldErrors.firstName}</FieldError>
                 </div>
                 <div className="flex flex-1 flex-col">
                   <Label htmlFor="lastName" className="text-h4 text-foreground">Last name</Label>
-                  <LoginInput id="lastName" autoComplete="family-name" value={lastName} onChange={(e) => setLastName(e.target.value)} maxLength={30} required />
+                  <LoginInput id="lastName" autoComplete="family-name" value={lastName} onChange={(e) => { setLastName(e.target.value); clearFieldError("lastName") }} maxLength={30} required aria-invalid={fieldErrors.lastName ? true : undefined} aria-describedby={fieldErrors.lastName ? "lastName-error" : undefined} />
+                  <FieldError id="lastName-error">{fieldErrors.lastName}</FieldError>
                 </div>
               </div>
               <div className="flex flex-col">
                 <Label htmlFor="signup-email" className="text-h4 text-foreground">Email</Label>
-                <LoginInput id="signup-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={40} required />
+                <LoginInput id="signup-email" type="email" autoComplete="email" value={email} onChange={(e) => { setEmail(e.target.value); clearFieldError("email") }} maxLength={40} required aria-invalid={fieldErrors.email ? true : undefined} aria-describedby={fieldErrors.email ? "signup-email-error" : undefined} />
+                <FieldError id="signup-email-error">{fieldErrors.email}</FieldError>
               </div>
               <div className="flex flex-col">
                 <Label htmlFor="signup-password" className="text-h4 text-foreground">Password</Label>
-                <LoginInput id="signup-password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} maxLength={50} required />
+                <LoginInput id="signup-password" type="password" autoComplete="new-password" value={password} onChange={(e) => { setPassword(e.target.value); clearFieldError("password") }} maxLength={50} required aria-invalid={fieldErrors.password ? true : undefined} aria-describedby={fieldErrors.password ? "signup-password-error" : undefined} />
+                <FieldError id="signup-password-error">{fieldErrors.password}</FieldError>
               </div>
               <div className="flex flex-col">
                 <Label htmlFor="confirm-password" className="text-h4 text-foreground">Confirm password</Label>
-                <LoginInput id="confirm-password" type="password" autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} maxLength={50} required />
+                <LoginInput id="confirm-password" type="password" autoComplete="new-password" value={confirmPassword} onChange={(e) => { setConfirmPassword(e.target.value); clearFieldError("confirmPassword") }} maxLength={50} required aria-invalid={fieldErrors.confirmPassword ? true : undefined} aria-describedby={fieldErrors.confirmPassword ? "confirm-password-error" : undefined} />
+                <FieldError id="confirm-password-error">{fieldErrors.confirmPassword}</FieldError>
               </div>
               <p className="text-caption text-muted-foreground">
                 Personal information is optional beyond what account setup requires.
@@ -395,24 +458,27 @@ export function Login() {
               <h1 className="text-2xl font-book leading-9 text-foreground">Reset password</h1>
 
               {resetStep === "request" && (
-                <form onSubmit={handleRequestReset} className="flex flex-col gap-6">
+                <form onSubmit={handleRequestReset} noValidate className="flex flex-col gap-6">
                   <div className="flex flex-col">
                     <Label htmlFor="reset-email" className="text-h4 text-foreground">Email</Label>
-                    <LoginInput id="reset-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={40} required autoFocus />
+                    <LoginInput id="reset-email" type="email" autoComplete="email" value={email} onChange={(e) => { setEmail(e.target.value); clearFieldError("email") }} maxLength={40} required autoFocus aria-invalid={fieldErrors.email ? true : undefined} aria-describedby={fieldErrors.email ? "reset-email-error" : undefined} />
+                    <FieldError id="reset-email-error">{fieldErrors.email}</FieldError>
                   </div>
                   <Button type="submit" loading={busy} className="w-full">Send reset code</Button>
                 </form>
               )}
 
               {resetStep === "confirm" && (
-                <form onSubmit={handleConfirmReset} className="flex flex-col gap-6">
+                <form onSubmit={handleConfirmReset} noValidate className="flex flex-col gap-6">
                   <div className="flex flex-col">
                     <Label htmlFor="reset-code" className="text-h4 text-foreground">Confirmation code</Label>
-                    <LoginInput id="reset-code" value={code} onChange={(e) => setCode(e.target.value)} maxLength={15} required autoFocus />
+                    <LoginInput id="reset-code" value={code} onChange={(e) => { setCode(e.target.value); clearFieldError("code") }} maxLength={15} required autoFocus aria-invalid={fieldErrors.code ? true : undefined} aria-describedby={fieldErrors.code ? "reset-code-error" : undefined} />
+                    <FieldError id="reset-code-error">{fieldErrors.code}</FieldError>
                   </div>
                   <div className="flex flex-col">
                     <Label htmlFor="reset-new-password" className="text-h4 text-foreground">New password</Label>
-                    <LoginInput id="reset-new-password" type="password" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} maxLength={50} required />
+                    <LoginInput id="reset-new-password" type="password" autoComplete="new-password" value={newPassword} onChange={(e) => { setNewPassword(e.target.value); clearFieldError("newPassword") }} maxLength={50} required aria-invalid={fieldErrors.newPassword ? true : undefined} aria-describedby={fieldErrors.newPassword ? "reset-new-password-error" : undefined} />
+                    <FieldError id="reset-new-password-error">{fieldErrors.newPassword}</FieldError>
                   </div>
                   <Button type="submit" loading={busy} className="w-full">Reset password</Button>
                 </form>

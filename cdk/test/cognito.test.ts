@@ -58,4 +58,25 @@ describe('Cognito Security', () => {
       );
     }
   });
+
+  /**
+   * Session hardening: the user pool client must cap token lifetimes so a
+   * session cannot outlive 24h without re-authentication. Access/ID tokens stay
+   * at 1h; the refresh token is reduced from the Cognito 30-day default to 24h.
+   *
+   * CDK always serializes token validity in MINUTES with a TokenValidityUnits
+   * block, so 1h -> 60 and 24h -> 1440.
+   */
+  test('Cognito user pool client caps token validity (access/ID 1h, refresh 24h)', () => {
+    apiTemplate.hasResourceProperties('AWS::Cognito::UserPoolClient', {
+      AccessTokenValidity: 60,
+      IdTokenValidity: 60,
+      RefreshTokenValidity: 1440,
+      TokenValidityUnits: {
+        AccessToken: 'minutes',
+        IdToken: 'minutes',
+        RefreshToken: 'minutes',
+      },
+    });
+  });
 });

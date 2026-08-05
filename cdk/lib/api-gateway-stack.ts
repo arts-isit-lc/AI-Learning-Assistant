@@ -248,6 +248,14 @@ export class ApiGatewayStack extends cdk.Stack {
         custom: true,
         userSrp: true,
       },
+      // Session hardening: cap how long a session can live. Access/ID tokens
+      // keep the 1h default; the refresh token drops from the Cognito default
+      // of 30 days to 24h, so a session cannot outlive a day without
+      // re-authentication (defense-in-depth alongside the frontend idle
+      // timeout + sessionStorage token persistence).
+      accessTokenValidity: cdk.Duration.hours(1),
+      idTokenValidity: cdk.Duration.hours(1),
+      refreshTokenValidity: cdk.Duration.hours(24),
     });
 
     this.identityPool = new cognito.CfnIdentityPool(

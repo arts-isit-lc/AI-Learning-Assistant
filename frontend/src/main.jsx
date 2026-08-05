@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { Amplify } from "aws-amplify";
 import AppV2 from "./app/AppV2.jsx";
+import { configureAuthStorage } from "./services/authStorage";
 import "./index.css";
 import "katex/dist/katex.min.css";
 
@@ -24,6 +25,11 @@ Amplify.configure({
     },
   },
 });
+
+// Store Cognito tokens in sessionStorage (not the localStorage default) so a
+// session ends when the browser tab/window closes. Must run before any auth
+// call — hence right after configure(), at module load.
+configureAuthStorage();
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
