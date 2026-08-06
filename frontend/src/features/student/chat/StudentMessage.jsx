@@ -19,7 +19,7 @@ export function StudentMessage({ content, isMostRecent = false, hasAiMessageAfte
           type="button"
           onClick={onDelete}
           aria-label="Delete this message and all that follow"
-          className="mt-0.5 shrink-0 rounded-full p-2 text-muted-foreground opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100"
+          className="mt-0.5 shrink-0 rounded-full p-2 text-primary opacity-0 transition-[opacity,color] hover:text-primary-dark active:text-neutral-900 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100"
         >
           <Icon icon={MdDelete} size={16} />
         </button>

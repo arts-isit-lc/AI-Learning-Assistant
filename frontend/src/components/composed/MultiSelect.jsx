@@ -112,7 +112,7 @@ export function MultiSelect({
               aria-label={`Clear ${ariaLabel ?? "selection"}`}
               onClick={() => onChange([])}
               disabled={disabled}
-              className="absolute right-9 top-1/2 -translate-y-1/2 text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              className="absolute right-9 top-1/2 -translate-y-1/2 text-primary transition-colors hover:text-primary-dark active:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:text-neutral-400 disabled:opacity-100"
             >
               <Icon icon={MdCancel} size={24} />
             </button>

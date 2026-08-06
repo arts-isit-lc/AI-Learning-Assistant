@@ -40,9 +40,9 @@ const SheetContent = React.forwardRef(function SheetContent(
       <SheetOverlay />
       <SheetPrimitive.Content ref={ref} className={cn(sheetVariants({ side }), className)} {...props}>
         {children}
-        {/* Close X: #404040 (foreground) at rest, greying to neutral-400 (#BFBFBF)
-            on hover — the same colour the dropdown chevron greys to. */}
-        <SheetPrimitive.Close className="absolute right-4 top-4 rounded-md text-foreground transition-colors duration-fast hover:text-neutral-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+        {/* Close X (non-chevron interactive icon): #6829C2 (primary) default,
+            #2E0666 (primary-dark) hover, #000 (neutral-900) while pressed. */}
+        <SheetPrimitive.Close className="absolute right-4 top-4 rounded-md text-primary transition-colors duration-fast hover:text-primary-dark active:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
           <Icon icon={MdClose} size={24} label="Close" />
         </SheetPrimitive.Close>
       </SheetPrimitive.Content>

@@ -14,7 +14,7 @@ describe("Sheet", () => {
     expect(screen.getByRole("dialog")).toHaveAccessibleName("Module materials")
   })
 
-  it("shows the close X in #404040 (foreground), greying to the chevron hover colour on hover", () => {
+  it("shows the close X in the non-chevron icon state set: #6829C2 → #2E0666 hover → #000 pressed", () => {
     render(
       <Sheet open>
         <SheetContent side="right">
@@ -23,8 +23,8 @@ describe("Sheet", () => {
       </Sheet>
     )
     const close = screen.getByRole("button", { name: "Close" })
-    // #404040 at rest; hover greys to neutral-400 (#BFBFBF) — matches the dropdown chevron.
-    expect(close).toHaveClass("text-foreground", "hover:text-neutral-400")
-    expect(close).not.toHaveClass("opacity-70")
+    // #6829C2 (primary) at rest, #2E0666 (primary-dark) on hover, #000 (neutral-900) pressed.
+    expect(close).toHaveClass("text-primary", "hover:text-primary-dark", "active:text-neutral-900")
+    expect(close).not.toHaveClass("text-foreground", "hover:text-neutral-400")
   })
 })

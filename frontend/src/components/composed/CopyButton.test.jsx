@@ -39,6 +39,12 @@ describe("CopyButton", () => {
     expect(writeText).toHaveBeenCalledWith("ABCD-1234")
   })
 
+  it("uses the non-chevron icon state set: #6829C2 → #2E0666 hover → #000 pressed", () => {
+    render(<CopyButton value="ABCD-1234" label="Copy access code" />)
+    const button = screen.getByRole("button", { name: "Copy access code" })
+    expect(button).toHaveClass("text-primary", "hover:text-primary-dark", "active:text-neutral-900")
+  })
+
   it("waits ~0.5s to show the checkmark, then holds it ~2s before reverting", () => {
     render(<CopyButton value="ABCD-1234" label="Copy access code" />)
     fireEvent.click(screen.getByRole("button", { name: "Copy access code" }))

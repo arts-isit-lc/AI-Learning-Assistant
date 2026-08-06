@@ -25,4 +25,12 @@ describe("StudentMessage", () => {
     await userEvent.click(screen.getByRole("button", { name: /delete this message/i }))
     expect(onDelete).toHaveBeenCalledOnce()
   })
+
+  it("styles the delete icon with the non-chevron state set: #6829C2 → #2E0666 hover → #000 pressed", () => {
+    render(<StudentMessage content="q" isMostRecent hasAiMessageAfter onDelete={() => {}} />)
+    const del = screen.getByRole("button", { name: /delete this message/i })
+    expect(del).toHaveClass("text-primary", "hover:text-primary-dark", "active:text-neutral-900")
+    // Colour-only per the icon rule — no hover background fill.
+    expect(del).not.toHaveClass("hover:bg-muted")
+  })
 })

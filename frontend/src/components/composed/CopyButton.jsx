@@ -64,7 +64,9 @@ export function CopyButton({ value, label = "Copy", size = 16, className, ...pro
       onClick={handleClick}
       aria-label={label}
       className={cn(
-        "flex rounded p-1 text-primary transition-colors hover:text-primary-dark",
+        // Non-chevron interactive icon: #6829C2 (primary) default, #2E0666
+        // (primary-dark) hover, #000 (neutral-900) while pressed.
+        "flex rounded p-1 text-primary transition-colors hover:text-primary-dark active:text-neutral-900",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         className
       )}

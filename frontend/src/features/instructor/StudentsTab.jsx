@@ -135,7 +135,7 @@ export function StudentsTab() {
                         type="button"
                         aria-label={`Remove ${rosterName(s)}`}
                         onClick={() => setRemoveTarget(s)}
-                        className="rounded p-1 text-primary hover:bg-primary-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="rounded p-1 text-primary transition-colors hover:text-primary-dark active:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         <Icon icon={MdClose} size={24} />
                       </button>

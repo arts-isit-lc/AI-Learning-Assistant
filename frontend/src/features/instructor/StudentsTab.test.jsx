@@ -60,6 +60,14 @@ describe("StudentsTab", () => {
     expect(screen.getByText("student detail")).toBeInTheDocument()
   })
 
+  it("styles the remove icon with the non-chevron state set: #6829C2 → #2E0666 hover → #000 pressed", () => {
+    render(<StudentsTab />)
+    const remove = screen.getByRole("button", { name: "Remove Lovelace, Ada" })
+    expect(remove).toHaveClass("text-primary", "hover:text-primary-dark", "active:text-neutral-900")
+    // Colour-only per the icon rule — no hover background fill.
+    expect(remove).not.toHaveClass("hover:bg-primary-subtle")
+  })
+
   it("removes (unenrolls) a student after confirmation", async () => {
     render(<StudentsTab />)
     await userEvent.click(screen.getByRole("button", { name: "Remove Lovelace, Ada" }))
