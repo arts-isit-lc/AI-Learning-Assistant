@@ -552,6 +552,46 @@ def test_completion_input_block_does_not_retry_and_does_not_burn_completion(wire
     assert saved.completion_message_source == ""
 
 
+# ---------------------------------------------------------------------------
+# The completion turn uses a DEDICATED prompt (no Socratic identity, no RAG) so
+# the model actually acknowledges completion instead of being out-competed into
+# another teaching question, and it skips retrieval entirely.
+# ---------------------------------------------------------------------------
+
+
+def test_completion_turn_uses_dedicated_prompt_without_rag(wire, monkeypatch):
+    monkeypatch.setattr(main, "_load_other_module_names", lambda c, m: ["Graph Algorithms"])
+    _make_completion_ready(wire)  # concepts_discussed=["Recursion"], module_concepts=["Recursion","Trees"]
+    wire.retrieval = _retrieval(answer="RAG context about recursion.")
+    wire.stream.return_value = "Congratulations, you've completed the module!"
+
+    main.handler(_event(), _Ctx())
+
+    prompt = wire.stream.call_args.kwargs["system_prompt"]
+    # It's the completion acknowledgement prompt...
+    assert "COMPLETED the module" in prompt
+    assert "Do NOT ask" in prompt
+    # ...it suggests the not-yet-covered module topic ("Trees")...
+    assert "Trees" in prompt
+    # ...and it does NOT carry RAG context or the Socratic base identity (which
+    # is what made the model keep teaching).
+    assert "RAG context about recursion." not in prompt
+    assert "guided questioning" not in prompt
+
+
+def test_completion_turn_skips_retrieval(wire, monkeypatch):
+    monkeypatch.setattr(main, "_load_other_module_names", lambda c, m: [])
+    _make_completion_ready(wire)
+    retrieval_spy = MagicMock(return_value=wire.retrieval)
+    monkeypatch.setattr(main, "invoke_retrieval", retrieval_spy)
+    wire.stream.return_value = "Congratulations, you've completed the module!"
+
+    main.handler(_event(), _Ctx())
+
+    # No retrieval Lambda call on the completion turn (sequential path).
+    retrieval_spy.assert_not_called()
+
+
 def test_state_load_failure_emits_error_terminal_message(wire, monkeypatch):
     # A failed exit must terminate the stream with error=True so the client
     # surfaces the retry banner immediately instead of waiting out the watchdog.

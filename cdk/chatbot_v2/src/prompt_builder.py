@@ -91,6 +91,56 @@ def build_system_prompt(
     return "\n".join(sections)
 
 
+def build_completion_prompt(
+    topic: str,
+    concepts_covered: list[str],
+    remaining_topics: list[str],
+    other_modules: list[str],
+) -> str:
+    """Dedicated system prompt for the "complete" turn (the PRIMARY completion
+    message).
+
+    The general build_system_prompt buries the one-line "congratulate"
+    instruction under the Socratic base identity ("ask guiding questions, stay
+    on course material") AND a full block of retrieved RAG context — so the
+    model keeps TEACHING instead of acknowledging completion (observed in prod:
+    the complete turn produced another course question, never a congratulation).
+    This standalone prompt makes the acknowledgement the ONLY task and omits the
+    Socratic identity and RAG context entirely, so nothing competes with it.
+
+    Suggestion target (per product decision): prefer the module's not-yet-covered
+    topics; fall back to other modules; else invite open exploration.
+
+    Args:
+        topic: The module name/topic just completed.
+        concepts_covered: Topics the student engaged with (concepts_discussed).
+        remaining_topics: Module topics NOT yet covered (suggest these first).
+        other_modules: Other module names in the course (fallback suggestion).
+
+    Returns:
+        A standalone system prompt string for the completion acknowledgement.
+    """
+    covered = ", ".join(concepts_covered) if concepts_covered else "the module's core concepts"
+    if remaining_topics:
+        suggestion = (
+            "Invite them to keep exploring the topics in THIS module they haven't "
+            f"dug into yet: {', '.join(remaining_topics)}."
+        )
+    elif other_modules:
+        suggestion = f"Suggest other modules they might explore next: {', '.join(other_modules)}."
+    else:
+        suggestion = "Invite them to keep asking questions or revisit any topic they'd like."
+    return (
+        f'The student has just met the completion requirements for the module "{topic}". '
+        "Your ONLY task this turn is to acknowledge that they have COMPLETED the module. "
+        f"Warmly congratulate them and briefly summarize the concepts they engaged with: {covered}. "
+        f"{suggestion} "
+        "Make clear they are free to keep chatting to explore further if they wish. "
+        "Do NOT ask a quiz or comprehension question this turn, and do NOT continue "
+        "teaching new material.\n\n" + NO_EMOJI_RULE
+    )
+
+
 def build_completion_retry_prompt() -> str:
     """Constrained system prompt for the ONE completion-message retry after the
     output guardrail blocks the normal "complete" response (Option C).

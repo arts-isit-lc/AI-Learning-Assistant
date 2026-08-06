@@ -28,7 +28,7 @@ from state_machine import (create_default_state, serialize_state, deserialize_st
 from evaluation import evaluate_answer
 from concept_tracker import introduce_concepts, discuss_concepts, demonstrate_concepts, record_misunderstandings
 from mode_selector import select_mode
-from prompt_builder import build_system_prompt, build_tutor_system_prompt, build_completion_retry_prompt
+from prompt_builder import build_system_prompt, build_tutor_system_prompt, build_completion_retry_prompt, build_completion_prompt
 from retrieval_client import invoke_retrieval, get_bounded_history as get_retrieval_history
 from streaming import stream_response, send_final
 from guardrails import load_guardrail_config, wrap_user_message, handle_guardrail_error, GUARDRAIL_SERVICE_ERROR_MESSAGE
@@ -740,16 +740,21 @@ def handler(event, context):
 
         # Step 10: Retrieval. The sequential path runs it now with the
         # post-evaluation learning context (unchanged behavior); the parallel
-        # path already ran it above.
-        if not retrieval_done:
+        # path already ran it above. SKIP entirely on the completion turn — the
+        # completion message is a congratulation, not a grounded answer, and
+        # injecting RAG context is what made the model keep TEACHING instead of
+        # acknowledging completion. (In parallel mode retrieval may have already
+        # run at Step 3; its result is simply ignored below for mode=="complete".)
+        if not retrieval_done and mode != "complete":
             retrieval_result = _run_retrieval(
                 evaluation.concepts_misunderstood if evaluation else []
             )
-        rag_context = retrieval_result.answer if retrieval_result else ""
+        rag_context = "" if mode == "complete" else (retrieval_result.answer if retrieval_result else "")
         logger.info("RAG context received", extra={"rag_context_length": len(rag_context), "rag_context_preview": rag_context[:500]})
 
-        # Introduce concepts from RAG context
-        if retrieval_result and state.module_concepts:
+        # Introduce concepts from RAG context (never on the completion turn — its
+        # rag_context is intentionally empty).
+        if mode != "complete" and retrieval_result and state.module_concepts:
             mentioned = [c for c in state.module_concepts if c.lower() in rag_context.lower()]
             if mentioned:
                 state = introduce_concepts(state, mentioned)
@@ -769,7 +774,10 @@ def handler(event, context):
         # grounding, but keep rag_context so the opening question stays grounded
         # in text. A first turn that DOES carry a student message (so it could
         # reference a figure) is left on the normal path and still shows visuals.
-        if mode == "greet" and not message_content:
+        if (mode == "greet" and not message_content) or mode == "complete":
+            # No visual blocks on the auto-greeting or the completion message —
+            # both are purely conversational (the completion turn skips retrieval
+            # entirely, so there are no figures/tables/formulas to attach anyway).
             selected_figures, table_blocks, formula_blocks, grounding = [], [], [], ""
         else:
             try:
@@ -856,11 +864,22 @@ def handler(event, context):
         # On the ConverseStream path guardrailConfig assesses the full turn, so
         # skip the InvokeModel input-tagging XML wrapper (see tutor path above).
         guardrail_tags = "" if USE_CONVERSE_STREAMING else (wrap_user_message(message_content) if message_content else "")
-        system_prompt = build_system_prompt(mode, topic, context_vars, rag_context, guardrail_tags)
-
-        # Inject math compute results into system prompt (before guardrail tags, after RAG context)
-        if math_compute_context:
-            system_prompt = f"{system_prompt}\n\n{math_compute_context}"
+        if mode == "complete":
+            # Dedicated completion prompt (no Socratic identity, no RAG context)
+            # so the acknowledgement is the model's ONLY task and doesn't get
+            # out-competed into another teaching question. Suggests the module's
+            # not-yet-covered topics first, else other modules.
+            remaining_topics = [c for c in state.module_concepts if c not in state.concepts_discussed]
+            system_prompt = build_completion_prompt(
+                topic, state.concepts_discussed, remaining_topics, other_modules
+            )
+            if guardrail_tags:
+                system_prompt = f"{system_prompt}\n\n{guardrail_tags}"
+        else:
+            system_prompt = build_system_prompt(mode, topic, context_vars, rag_context, guardrail_tags)
+            # Inject math compute results into system prompt (before guardrail tags, after RAG context)
+            if math_compute_context:
+                system_prompt = f"{system_prompt}\n\n{math_compute_context}"
 
         # Step 12: Stream response — with guardrail service error retry
         prompt_history = get_bounded_history(chat_history, MAX_PROMPT_TURNS)
