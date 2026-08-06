@@ -66,7 +66,7 @@ export function LearningJourneyBar({
             "border-t border-border"
       )}
     >
-      <div className={cn("mx-auto w-full max-w-7xl py-4", contentClassName)}>
+      <div className={cn("mx-auto w-full max-w-7xl pt-4", contentClassName)}>
         <div className="flex items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <span className="text-lg leading-7 font-semibold text-neutral-900">Learning Journey</span>
@@ -106,7 +106,7 @@ export function LearningJourneyBar({
           <div id={panelId} className="relative mt-4">
             <ul className="flex gap-6 overflow-x-auto pb-2 pr-10">
               {concepts.map((concept, i) => (
-                <li key={concept.concept_id} className="flex min-w-[180px] shrink-0 flex-col gap-3 border-r border-border pr-6 last:border-r-0">
+                <li key={concept.concept_id} className="flex min-w-[180px] shrink-0 pb-4 flex-col gap-3 border-r border-border pr-6 last:border-r-0">
                   <div className="flex items-center gap-3">
                     <span
                       className={cn(
