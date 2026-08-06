@@ -41,6 +41,12 @@ describe("groupConcepts", () => {
 })
 
 describe("CourseView", () => {
+  it("uses the subtle purple surface when a concept accordion is hovered", () => {
+    renderCourse()
+    const conceptAccordion = screen.getByRole("button", { name: /maps/i }).parentElement.parentElement
+    expect(conceptAccordion).toHaveClass("hover:bg-primary-subtle")
+  })
+
   it("renders the course title, concept, and module statuses (expanded)", async () => {
     renderCourse()
     expect(screen.getByRole("heading", { name: "GEOG 250" })).toBeInTheDocument()

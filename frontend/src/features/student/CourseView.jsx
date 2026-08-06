@@ -145,7 +145,7 @@ export function CourseView() {
               <AccordionItem
                 key={concept.concept_id}
                 value={concept.concept_id}
-                className="border border-border p-4"
+                className="border border-border p-4 hover:bg-primary-subtle"
               >
                 <AccordionTrigger className="gap-4 font-normal hover:no-underline">
                   <span className="flex flex-1 items-center justify-between gap-3 pr-2 text-left">
