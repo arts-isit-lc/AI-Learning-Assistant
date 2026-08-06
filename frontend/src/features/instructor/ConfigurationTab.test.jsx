@@ -248,6 +248,23 @@ describe("ConfigurationTab", () => {
     expect(screen.getByRole("status", { name: /loading course structure/i })).toBeInTheDocument()
   })
 
+  it("keeps the skeleton until BOTH concepts and modules load (no staggered pop-in)", () => {
+    // Concepts resolved, modules still in flight — the tree must NOT render yet,
+    // or concepts would show with their modules popping in a beat later.
+    conceptsResult = { data: CONCEPTS, isLoading: false, isError: false }
+    modulesResult = { data: undefined, isLoading: true, isError: false }
+    render(<ConfigurationTab />)
+    expect(screen.getByRole("status", { name: /loading course structure/i })).toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "1. Algebra" })).not.toBeInTheDocument()
+  })
+
+  it("shows the ErrorState if the modules query fails even when concepts succeeded", () => {
+    conceptsResult = { data: CONCEPTS, isLoading: false, isError: false }
+    modulesResult = { data: undefined, isLoading: false, isError: true, error: { status: 500 } }
+    render(<ConfigurationTab />)
+    expect(screen.getByRole("heading", { name: "Couldn't load the course structure" })).toBeInTheDocument()
+  })
+
   it("shows an accessible ErrorState with retry when concepts fail to load", async () => {
     const refetch = vi.fn()
     conceptsResult = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }

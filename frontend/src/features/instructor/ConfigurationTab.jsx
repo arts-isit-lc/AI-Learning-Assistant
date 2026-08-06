@@ -107,8 +107,32 @@ export function ConfigurationTab() {
   const { courseId } = useParams()
   const navigate = useNavigate()
   const { setIsInstructorAsStudent } = useAuth()
-  const { data: concepts = [], isLoading, isError, error, refetch } = useConcepts(courseId)
-  const { data: modules = [] } = useModules(courseId)
+  const {
+    data: concepts = [],
+    isLoading: conceptsLoading,
+    isError: conceptsError,
+    error: conceptsErrorObj,
+    refetch: refetchConcepts,
+  } = useConcepts(courseId)
+  const {
+    data: modules = [],
+    isLoading: modulesLoading,
+    isError: modulesError,
+    error: modulesErrorObj,
+    refetch: refetchModules,
+  } = useModules(courseId)
+
+  // The tree needs BOTH concepts and their modules (separate queries). Gate the
+  // skeleton on both so the whole structure renders at once — otherwise concepts
+  // render first and their modules pop in a beat later (worse on revisits, where
+  // one query is cached and the other isn't). Same for errors + retry.
+  const isLoading = conceptsLoading || modulesLoading
+  const isError = conceptsError || modulesError
+  const error = conceptsErrorObj || modulesErrorObj
+  const refetch = () => {
+    refetchConcepts?.()
+    refetchModules?.()
+  }
 
   const createConcept = useCreateConcept(courseId)
   const renameConcept = useRenameConcept(courseId)
