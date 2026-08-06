@@ -878,6 +878,18 @@ def handler(event, context):
         _timings["generation_ms"] = round((time.perf_counter() - _gen_t) * 1000, 2)
         # If guardrail retry produced a blocked redirect, return it directly
         if isinstance(llm_output, dict) and llm_output.get("blocked"):
+            # Diagnostic: the stream-signal log only carried block_type, which
+            # made a real intervention a mystery. Surface WHICH side blocked, the
+            # mode/state at block time, and (when the ConverseStream trace is
+            # available) the Bedrock assessment naming the policy that fired, so
+            # an intervention is diagnosable without guessing.
+            logger.warning("Guardrail blocked turn", extra={
+                "guardrail_block_type": llm_output.get("type"),
+                "guardrail_assessment": llm_output.get("assessment"),
+                "mode": mode,
+                "module_complete": state.module_complete,
+                "completion_message_sent": state.completion_message_sent,
+            })
             # M16: a blocked turn is persisted to the RDS projection (so the UI
             # history still shows the exchange) but intentionally NOT to the
             # DynamoDB canonical log — blocked content must never be replayed to
@@ -889,6 +901,21 @@ def handler(event, context):
                 persist_message_to_rds(conn, session_id, llm_output["message"], student_sent=False, time_sent=_utc_now_iso())
             except Exception:
                 logger.exception("RDS projection failed on guardrail block (best-effort)")
+            # Business state MUST latch even when the presentation layer (the
+            # generated message) is blocked by the content filter. The completion
+            # VERDICT is decided by engagement metrics in Step 6, not by the
+            # message clearing the guardrail, so advancing state here is safe and
+            # correct. Without this, a blocked "complete" turn persisted nothing,
+            # leaving the impossible state module_complete=true /
+            # completion_message_sent=false — so the NEXT turn re-selected
+            # "complete", regenerated, and was blocked again: an infinite
+            # completion loop that never latches post_completion. Mirror the
+            # normal turn's end-of-turn bookkeeping (interactions + state persist).
+            state.interactions += 1
+            try:
+                _persist_session_state(state)
+            except Exception:
+                logger.exception("Session state persistence failed on guardrail block (best-effort)")
             blocked_blocks = [{"type": "text", "content": llm_output["message"]}]
             # Authoritative delivery over the stream. A guardrail redirect is a
             # shown message, not a failure — no error flag.

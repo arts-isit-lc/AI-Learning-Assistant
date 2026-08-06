@@ -28,8 +28,13 @@ import main  # noqa: E402
 from state_machine import create_default_state  # noqa: E402
 from evaluation import EvaluationResult  # noqa: E402
 
+# Mirrors _session_state_view in main.py — the shared session_state shape every
+# handler exit returns. Includes the module-completion-probe fields (ADR-007)
+# the view exposes to the frontend, not just the original five.
 _SESSION_STATE_KEYS = {
     "stage", "module_complete", "engagement_score", "concepts_demonstrated", "tutor_active",
+    "interactions", "concepts_discussed_count", "module_concepts_count", "required_concepts",
+    "missing_requirements",
 }
 _TOP_LEVEL_KEYS = {"session_name", "llm_output", "blocks", "llm_verdict", "session_state"}
 
@@ -383,6 +388,76 @@ def test_tutor_guardrail_block_emits_one_terminal_stream_message(wire, monkeypat
     kwargs = sf.call_args.kwargs
     assert kwargs.get("llm_output") == "[blocked]"
     assert not kwargs.get("error")
+
+
+# ---------------------------------------------------------------------------
+# Completion state must latch regardless of guardrail intervention. The bug: a
+# guardrail-blocked "complete" turn returned early WITHOUT persisting session
+# state, leaving the impossible state module_complete=true /
+# completion_message_sent=false — so the next turn re-selected "complete",
+# regenerated, and was blocked again (an infinite completion loop). Business
+# state (decided by engagement metrics) must not depend on the completion
+# message clearing the content filter.
+# ---------------------------------------------------------------------------
+
+
+def _make_completion_ready(ctl):
+    # interactions >= 5, engagement >= 0.5, and >= required concepts discussed
+    # (module has 2 concepts -> ceil(0.5 * 2) = 1 required) so
+    # check_module_completion returns True this turn; completion_message_sent is
+    # still False so select_mode picks "complete".
+    ctl.state.interactions = 5
+    ctl.state.engagement_score = 1.0
+    ctl.state.concepts_discussed = ["Recursion"]
+    ctl.state.module_complete = False
+    ctl.state.completion_message_sent = False
+
+
+def test_blocked_completion_turn_latches_completion_state(wire, monkeypatch):
+    monkeypatch.setattr(main, "_load_other_module_names", lambda c, m: [])
+    _make_completion_ready(wire)
+    wire.stream.return_value = {"message": "[blocked]", "blocked": True, "type": "output"}
+
+    resp = main.handler(_event(), _Ctx())
+    assert resp["statusCode"] == 200
+
+    # State is now persisted on the blocked path (previously it was not persisted
+    # at all), and both completion flags latch — the impossible state is gone.
+    wire.persist_state.assert_called_once()
+    saved = wire.persist_state.call_args.args[0]
+    assert saved.module_complete is True
+    assert saved.completion_message_sent is True
+
+
+def test_blocked_completion_does_not_reloop_next_turn(wire, monkeypatch):
+    # After a blocked completion latches completion_message_sent, the NEXT turn
+    # must select post_completion — NOT complete again (the infinite loop).
+    monkeypatch.setattr(main, "_load_other_module_names", lambda c, m: [])
+    _make_completion_ready(wire)
+    wire.stream.return_value = {"message": "[blocked]", "blocked": True, "type": "output"}
+    main.handler(_event(), _Ctx())  # blocked complete turn — latches the flag
+
+    wire.stream.return_value = "A normal follow-up answer."  # stream succeeds now
+    main.handler(_event(), _Ctx())
+    saved = wire.persist_state.call_args.args[0]  # most recent persist
+    assert saved.last_mode == "post_completion"
+
+
+def test_successful_completion_latches_state_and_next_turn_is_post_completion(wire, monkeypatch):
+    monkeypatch.setattr(main, "_load_other_module_names", lambda c, m: ["Graph Algorithms"])
+    _make_completion_ready(wire)
+    wire.stream.return_value = "Congratulations, you've completed this module!"
+
+    main.handler(_event(), _Ctx())
+    saved = wire.persist_state.call_args.args[0]
+    assert saved.module_complete is True
+    assert saved.completion_message_sent is True
+    assert saved.last_mode == "complete"
+
+    # Next turn -> post_completion (no re-congratulation).
+    main.handler(_event(), _Ctx())
+    saved2 = wire.persist_state.call_args.args[0]
+    assert saved2.last_mode == "post_completion"
 
 
 def test_state_load_failure_emits_error_terminal_message(wire, monkeypatch):

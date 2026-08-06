@@ -50,7 +50,7 @@ def handle_guardrail_error(error: Exception, guardrail_id: str) -> dict | None:
     return None
 
 
-def build_intervention_result(block_type: str) -> dict:
+def build_intervention_result(block_type: str, assessment: dict | None = None) -> dict:
     """Build the blocked-turn result for a guardrail intervention detected via a
     STREAM SIGNAL (ConverseStream sets stopReason='guardrail_intervened' rather
     than raising). Mirrors the dict shape returned by handle_guardrail_error so
@@ -61,7 +61,15 @@ def build_intervention_result(block_type: str) -> dict:
     Args:
         block_type: "input" (user message blocked) or "output" (model response
             blocked). Anything other than "input" is treated as an output block.
+        assessment: the Bedrock guardrail assessment (the policy/filter that
+            fired) when available from the ConverseStream trace, so the caller
+            can log WHY the intervention happened rather than only THAT it did.
+            Included in the result under "assessment" only when provided.
     """
     if block_type == "input":
-        return {"message": GUARDRAIL_REDIRECT_INPUT, "blocked": True, "type": "input"}
-    return {"message": GUARDRAIL_REDIRECT_OUTPUT, "blocked": True, "type": "output"}
+        result = {"message": GUARDRAIL_REDIRECT_INPUT, "blocked": True, "type": "input"}
+    else:
+        result = {"message": GUARDRAIL_REDIRECT_OUTPUT, "blocked": True, "type": "output"}
+    if assessment is not None:
+        result["assessment"] = assessment
+    return result

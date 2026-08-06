@@ -116,6 +116,22 @@ def test_converse_input_block_classified_as_input(monkeypatch):
     assert out["type"] == "input"
 
 
+def test_converse_block_threads_assessment_into_result(monkeypatch):
+    # The Bedrock assessment (which policy fired) must ride along on the blocked
+    # result so the handler can LOG why an intervention happened — otherwise
+    # every future block is a mystery (the driver used to discard the trace).
+    assessment = {"topicPolicy": {"topics": [{"name": "OffTopic", "action": "BLOCKED"}]}}
+    events = [
+        _delta("partial that leaked before the block"),
+        _message_stop("guardrail_intervened"),
+        _metadata(10, 5, trace={"guardrail": {"outputAssessment": assessment}}),
+    ]
+    out, _lat = _run(monkeypatch, events)
+    assert out["blocked"] is True
+    assert out["type"] == "output"
+    assert out["assessment"] == assessment
+
+
 def test_converse_guardrail_disabled_omits_config(monkeypatch):
     monkeypatch.setattr(streaming, "STREAM_GUARDRAIL_DISABLED", True)
     capture: dict = {}

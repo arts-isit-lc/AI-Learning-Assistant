@@ -231,8 +231,10 @@ def _iter_converse_events(bedrock_client, model_id, system_prompt, user_message,
                 guardrail_trace = (meta.get("trace", {}) or {}).get("guardrail", {}) or {}
                 if guardrail_trace.get("inputAssessment"):
                     yield ("block_type", "input")
+                    yield ("guardrail_assessment", guardrail_trace.get("inputAssessment"))
                 elif guardrail_trace.get("outputAssessment"):
                     yield ("block_type", "output")
+                    yield ("guardrail_assessment", guardrail_trace.get("outputAssessment"))
             else:
                 for err in _CONVERSE_ERROR_EVENTS:
                     if err in event:
@@ -281,6 +283,7 @@ def stream_response(
         output_tokens = None
         stop_reason = None
         block_type = "output"  # default block side if the trace doesn't say
+        guardrail_assessment = None  # Bedrock assessment naming the policy that fired
 
         for ev in events:
             kind = ev[0]
@@ -303,6 +306,8 @@ def stream_response(
                 stop_reason = ev[1]
             elif kind == "block_type":
                 block_type = ev[1]
+            elif kind == "guardrail_assessment":
+                guardrail_assessment = ev[1]
 
         # Flush remaining buffered text. The terminal done message (carrying the
         # authoritative blocks + metadata, or an error flag) is emitted ONCE by the
@@ -335,8 +340,9 @@ def stream_response(
         # return the canonical blocked result the handler already understands.
         # (The InvokeModel path signals interventions by raising, handled below.)
         if streaming_mode == "converse" and stop_reason == "guardrail_intervened":
-            logger.warning("Guardrail intervened (stream signal)", extra={"block_type": block_type})
-            return build_intervention_result(block_type)
+            logger.warning("Guardrail intervened (stream signal)",
+                           extra={"block_type": block_type, "assessment": guardrail_assessment})
+            return build_intervention_result(block_type, assessment=guardrail_assessment)
 
         if not full_response:
             return FALLBACK_MESSAGE
