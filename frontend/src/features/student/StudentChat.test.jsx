@@ -23,15 +23,11 @@ vi.mock("@/services/queries", () => ({
   }),
   useCoursePage: () => coursePageResult,
   useModuleFiles: () => ({ data: [], isLoading: false }),
-  useCourses: () => ({
-    data: [{ course_id: "c1", course_department: "geog", course_number: "412", course_name: "water" }],
-  }),
   useCreateSession: () => ({ mutate: vi.fn(), isPending: false }),
   useDeleteSession: () => ({ mutate: vi.fn(), isPending: false }),
   useDeleteLastMessage: () => ({ mutate: vi.fn(), isPending: false }),
 }))
 
-vi.mock("@/context/AuthContext", () => ({ useAuth: () => ({ isInstructorAsStudent: false }) }))
 vi.mock("./chat/useChatStream", () => ({ useChatStream: () => stream }))
 
 import { StudentChat } from "./StudentChat"
@@ -69,28 +65,12 @@ describe("StudentChat page", () => {
     expect(screen.getByRole("button", { name: /new chat/i })).toBeInTheDocument()
   })
 
-  it("reduces/expands the header — the Learning Journey bar slides away (hidden from AT) and back", async () => {
-    const user = userEvent.setup()
+  it("no course header or Learning Journey bar — full vertical space for the chatbot", () => {
     renderChat()
-
-    // Expanded: the Learning Journey bar and its drawer control are available.
-    expect(screen.getByRole("button", { name: /learning journey/i })).toBeInTheDocument()
-
-    // Reduce → the bar collapses and drops out of the accessibility tree (its
-    // edge-to-edge rule persists via the full-bleed wrapper).
-    await user.click(screen.getByRole("button", { name: /reduce/i }))
+    expect(screen.queryByRole("link", { name: /courses/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /reduce/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /expand/i })).not.toBeInTheDocument()
     expect(screen.queryByRole("button", { name: /learning journey/i })).not.toBeInTheDocument()
-
-    // Expand → the bar returns.
-    await user.click(screen.getByRole("button", { name: /expand/i }))
-    expect(screen.getByRole("button", { name: /learning journey/i })).toBeInTheDocument()
-  })
-
-  it("shows a loading placeholder for progress while the course page loads (no stale 0%)", () => {
-    coursePageResult = { data: undefined, isLoading: true }
-    renderChat()
-    expect(screen.getByRole("status", { name: /loading progress/i })).toBeInTheDocument()
-    expect(screen.queryByText(/concepts completed/i)).not.toBeInTheDocument()
   })
 
   it("shows an accessible ErrorState with retry when the session list fails to load", async () => {

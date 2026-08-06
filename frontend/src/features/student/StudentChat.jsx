@@ -4,21 +4,15 @@ import {
   useModuleSessions,
   useSessionMessages,
   useCoursePage,
-  useCourses,
   useModuleFiles,
   useCreateSession,
   useDeleteSession,
   useDeleteLastMessage,
 } from "@/services/queries"
-import { useAuth } from "@/context/AuthContext"
-import { computeConceptProgress } from "@/utils/courseProgress"
 import { titleCase } from "@/utils/formatters"
 import { cn } from "@/lib/utils"
 import { toUserMessage } from "@/services/apiError"
 import { ErrorState } from "@/components/composed/ErrorState"
-import { Collapse } from "@/components/ui/collapse"
-import { CourseHeader } from "./CourseHeader"
-import { LearningJourneyBar } from "./LearningJourneyBar"
 import { SessionSidebar } from "./chat/SessionSidebar"
 import { ChatThread } from "./chat/ChatThread"
 import { ChatInput } from "./chat/ChatInput"
@@ -27,31 +21,28 @@ import { ReferenceDocPanel } from "./ReferenceDocPanel"
 import { ProgressPopover } from "@/components/composed/ProgressPopover"
 
 /**
- * Student module chat — Figma frames 162:3817 / 214:5316 / 209:5164. Embedded
- * under the shared course header + Learning Journey bar (Reduce/Expand collapses
- * them for more room). Left = module + "Previous chats" + "Module materials";
- * right = the "OCELIA ASSISTANT" box (thread + composer); opening a material
- * inserts a reference-doc column between them. Composes the Phase 3 hooks +
- * `useChatStream` (AppSync streaming). Route: /courses/:courseId/modules/:moduleId.
+ * Student module chat — Figma frames 162:3817 / 214:5316 / 209:5164. Full
+ * vertical space for the chatbot. Left = module + "Previous chats" + "Module
+ * materials"; right = the "OCELIA ASSISTANT" box (thread + composer); opening a
+ * material inserts a reference-doc column between them. Composes the Phase 3
+ * hooks + `useChatStream` (AppSync streaming).
+ * Route: /courses/:courseId/modules/:moduleId.
  */
 export function StudentChat() {
   const { courseId, moduleId } = useParams()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const docId = searchParams.get("doc")
-  const { isInstructorAsStudent } = useAuth()
 
   // Sessions created this mount: their greeting streams into the cache, so we
   // must NOT fetch their (empty) server history and clobber it.
   const createdRef = useRef(new Set())
   const [activeSessionId, setActiveSessionId] = useState(null)
   const [materialsOpen, setMaterialsOpen] = useState(false)
-  const [headerCollapsed, setHeaderCollapsed] = useState(false)
 
   const sessionsQuery = useModuleSessions(courseId, moduleId)
   const sessions = useMemo(() => sessionsQuery.data ?? [], [sessionsQuery.data])
   const coursePage = useCoursePage(courseId)
-  const coursesQuery = useCourses({ asInstructor: isInstructorAsStudent })
   const files = useModuleFiles(courseId, moduleId)
   const stream = useChatStream({ courseId, moduleId })
   const createSession = useCreateSession(courseId, moduleId)
@@ -62,12 +53,6 @@ export function StudentChat() {
     enabled: Boolean(activeSessionId) && !createdRef.current.has(activeSessionId),
   })
   const messages = messagesQuery.data ?? []
-
-  const course = coursesQuery.data?.find((c) => c.course_id === courseId)
-  const { concepts, completedConcepts, totalConcepts, percent } = useMemo(
-    () => computeConceptProgress(coursePage.data ?? []),
-    [coursePage.data]
-  )
 
   const moduleName = useMemo(() => {
     const row = coursePage.data?.find((r) => r.module_id === moduleId)
@@ -150,40 +135,17 @@ export function StudentChat() {
   const selectedFile = files.data?.find((f) => f.file_id === docId)
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-5rem)] w-full max-w-7xl flex-col py-6">
-      <CourseHeader
-        course={course}
-        loading={coursesQuery.isLoading}
-        collapsible
-        collapsed={headerCollapsed}
-        onToggleCollapse={() => setHeaderCollapsed((v) => !v)}
-      />
-      {/* Learning Journey — slides open/closed with the header via the shared
-          Collapse primitive (same as CourseView). The full-bleed wrapper keeps
-          the edge-to-edge rule between the top area and the chat as the divider
-          once reduced; fullBleed={false} keeps the clip from cropping it. */}
-      <div className="relative left-1/2 w-screen -translate-x-1/2 border-b border-border">
-        <Collapse open={!headerCollapsed}>
-          <LearningJourneyBar
-            concepts={concepts}
-            completedConcepts={completedConcepts}
-            totalConcepts={totalConcepts}
-            percent={percent}
-            loading={coursePage.isLoading}
-            fullBleed={false}
-          />
-        </Collapse>
-      </div>
+    <div className="mx-auto flex h-[calc(100vh-5rem)] w-full max-w-7xl flex-col pt-4 pb-6">
 
       {sessionsQuery.isError ? (
         <ErrorState
-          className="mt-6 flex-1 border-0"
+          className="flex-1 border-0"
           title="Couldn't load this chat"
           description={toUserMessage(sessionsQuery.error)}
           onRetry={() => sessionsQuery.refetch()}
         />
       ) : (
-      <div className="mt-6 grid min-h-0 flex-1 grid-cols-3 grid-rows-1 gap-8">
+      <div className="grid min-h-0 flex-1 grid-cols-3 grid-rows-1 gap-8">
         <div className="flex min-w-0 flex-col">
           <SessionSidebar
             moduleName={moduleName}
