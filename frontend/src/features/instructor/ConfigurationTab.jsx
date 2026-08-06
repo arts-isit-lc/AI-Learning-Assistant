@@ -486,17 +486,21 @@ export function ConfigurationTab() {
         </Button>
         {/* Undo + Save — matched to the admin CourseDetail/InstructorDetail panes:
             28px tall (h-7 + size-sm), 4px radius (rounded), lavender (#F2E8FF /
-            primary-subtle) hover, solid #808080 disabled text (disabled:opacity-100
-            defeats the base fade). Once dirty the text turns #6829C2 (primary);
-            Save also gains a #6829C2 border (transparent while disabled → no layout
-            shift), Undo stays borderless. */}
+            primary-subtle) hover, #BFBFBF (neutral-400) inactive text on a white
+            (#FFF / bg-background) fill (disabled:opacity-100 defeats the base
+            fade). Once active (dirty) the text turns #6829C2
+            (primary) and the buttons take on the ghost-primary interaction: hover
+            darkens the text to #2E0666 (primary-dark) on the lavender surface, and
+            the press deepens the surface to #AA78F0 (primary-active) with the same
+            #2E0666 text. Save also gains a #6829C2 border (transparent while
+            disabled → no layout shift), Undo stays borderless. */}
         <div className="flex items-center gap-4">
           <Button
             variant="ghost"
             size="sm"
             className={cn(
-              "h-7 rounded hover:bg-primary-subtle hover:text-primary disabled:opacity-100",
-              isDirty ? "text-primary" : "text-neutral-300"
+              "h-7 rounded hover:bg-primary-subtle hover:text-primary-dark active:bg-primary-active active:text-primary-dark disabled:opacity-100",
+              isDirty ? "text-primary" : "bg-background text-neutral-400"
             )}
             onClick={discardChanges}
             disabled={!isDirty || saving}
@@ -507,8 +511,8 @@ export function ConfigurationTab() {
             variant="ghost"
             size="sm"
             className={cn(
-              "h-7 rounded border hover:bg-primary-subtle hover:text-primary disabled:opacity-100",
-              isDirty ? "border-primary text-primary" : "border-transparent text-neutral-300"
+              "h-7 rounded border hover:bg-primary-subtle hover:text-primary-dark active:bg-primary-active active:text-primary-dark disabled:opacity-100",
+              isDirty ? "border-primary text-primary" : "border-transparent bg-background text-neutral-400"
             )}
             onClick={saveChanges}
             disabled={!isDirty || saving}

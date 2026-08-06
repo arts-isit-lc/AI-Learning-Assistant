@@ -185,9 +185,15 @@ describe("CourseDetail (staged editing)", () => {
     for (const btn of [undo, save]) {
       // 28px tall (h-7), rounded (4px), lavender (#F2E8FF) hover; not a solid CTA.
       expect(btn).toHaveClass("h-7", "rounded", "hover:bg-primary-subtle")
+      // Once active the ghost-primary interaction applies: hover darkens the text
+      // to #2E0666 (primary-dark) and the press paints the #AA78F0 (primary-active)
+      // surface with #2E0666 text. (These only fire while enabled — a disabled
+      // button is pointer-events-none.)
+      expect(btn).toHaveClass("hover:text-primary-dark", "active:bg-primary-active", "active:text-primary-dark")
       expect(btn).not.toHaveClass("bg-primary")
-      // Disabled text is a solid #808080 = neutral-300 at full opacity (base fade defeated).
-      expect(btn).toHaveClass("text-neutral-300", "disabled:opacity-100")
+      // Inactive (disabled) is #BFBFBF (neutral-400) text on a white (#FFF /
+      // bg-background) fill, at full opacity (base fade defeated).
+      expect(btn).toHaveClass("bg-background", "text-neutral-400", "disabled:opacity-100")
     }
     // Save carries a transparent border while disabled; Undo has none.
     expect(undo).not.toHaveClass("border")
