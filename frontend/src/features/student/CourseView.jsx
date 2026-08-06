@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useMemo, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import { MdCheckCircle, MdRadioButtonUnchecked } from "react-icons/md"
 import { cn } from "@/lib/utils"
@@ -54,16 +54,8 @@ export function CourseView() {
   const [open, setOpen] = useState([])
   // Collapsible course header (Reduce/Expand, top-right), mirroring the module chat.
   const [headerCollapsed, setHeaderCollapsed] = useState(false)
-  // Expand/Collapse-all toggle — "Expand all" is active by default, so every
-  // concept is open on first load; only the two toggle buttons change this.
-  const [expandedMode, setExpandedMode] = useState(true)
-  const seededRef = useRef(false)
-  useEffect(() => {
-    if (!seededRef.current && conceptIds.length) {
-      seededRef.current = true
-      setOpen(conceptIds)
-    }
-  }, [conceptIds])
+  // Expand/Collapse-all toggle — "Collapse all" is active by default (all closed on load).
+  const [expandedMode, setExpandedMode] = useState(false)
 
   return (
     <PageContainer>
@@ -97,13 +89,16 @@ export function CourseView() {
           <button
             type="button"
             aria-pressed={expandedMode}
+            disabled={expandedMode}
             onClick={() => {
               setExpandedMode(true)
               setOpen(conceptIds)
             }}
             className={cn(
-              "text-lg hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              expandedMode ? "font-semibold text-primary" : "font-normal text-neutral-500"
+              "text-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              expandedMode
+                ? "font-semibold text-primary cursor-default"
+                : "font-normal text-neutral-500 hover:underline"
             )}
           >
             Expand all
@@ -112,13 +107,16 @@ export function CourseView() {
           <button
             type="button"
             aria-pressed={!expandedMode}
+            disabled={!expandedMode}
             onClick={() => {
               setExpandedMode(false)
               setOpen([])
             }}
             className={cn(
-              "text-lg hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              !expandedMode ? "font-semibold text-primary" : "font-normal text-neutral-500"
+              "text-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              !expandedMode
+                ? "font-semibold text-primary cursor-default"
+                : "font-normal text-neutral-500 hover:underline"
             )}
           >
             Collapse all

@@ -41,12 +41,11 @@ describe("groupConcepts", () => {
 })
 
 describe("CourseView", () => {
-  it("renders the course title, concept, and module statuses (expanded)", () => {
+  it("renders the course title, concept, and module statuses (expanded)", async () => {
     renderCourse()
     expect(screen.getByRole("heading", { name: "GEOG 250" })).toBeInTheDocument()
-    // Query module links/status by role: the Learning Journey drawer stays
-    // mounted for its slide animation but is aria-hidden while collapsed, so
-    // role queries (which skip aria-hidden) target only the Concepts accordion.
+    // Concepts are collapsed by default — expand them first.
+    await userEvent.click(screen.getByRole("button", { name: "Expand all" }))
     expect(screen.getByRole("link", { name: /week 1/i })).toBeInTheDocument()
     expect(screen.getByRole("link", { name: /week 2/i })).toBeInTheDocument()
     expect(screen.getByRole("img", { name: "Complete" })).toBeInTheDocument()
@@ -95,24 +94,23 @@ describe("CourseView", () => {
     expect(screen.getByRole("button", { name: /learning journey/i })).toBeInTheDocument()
   })
 
-  it("toggles Expand all / Collapse all — Expand all active (bold + primary) by default", async () => {
+  it("toggles Expand all / Collapse all — Collapse all active by default (all closed on load)", async () => {
     renderCourse()
     const expandBtn = screen.getByRole("button", { name: "Expand all" })
     const collapseBtn = screen.getByRole("button", { name: "Collapse all" })
 
-    // Default: Expand all is the active option (bold + primary); Collapse all is
-    // inactive (normal weight + #808080 = text-neutral-500).
-    expect(expandBtn).toHaveAttribute("aria-pressed", "true")
-    expect(expandBtn).toHaveClass("font-semibold", "text-primary")
-    expect(collapseBtn).toHaveAttribute("aria-pressed", "false")
-    expect(collapseBtn).toHaveClass("font-normal", "text-neutral-500")
-
-    // Clicking Collapse all flips the active option.
-    await userEvent.click(collapseBtn)
+    // Default: Collapse all is the active option (bold + primary); Expand all is inactive.
     expect(collapseBtn).toHaveAttribute("aria-pressed", "true")
     expect(collapseBtn).toHaveClass("font-semibold", "text-primary")
     expect(expandBtn).toHaveAttribute("aria-pressed", "false")
     expect(expandBtn).toHaveClass("font-normal", "text-neutral-500")
+
+    // Clicking Expand all flips the active option.
+    await userEvent.click(expandBtn)
+    expect(expandBtn).toHaveAttribute("aria-pressed", "true")
+    expect(expandBtn).toHaveClass("font-semibold", "text-primary")
+    expect(collapseBtn).toHaveAttribute("aria-pressed", "false")
+    expect(collapseBtn).toHaveClass("font-normal", "text-neutral-500")
   })
 
   it("shows an accessible ErrorState with a working retry when the course fails to load", async () => {
@@ -150,6 +148,8 @@ describe("CourseView", () => {
         </Routes>
       </MemoryRouter>
     )
+    // After recovery, expand to verify module links are present.
+    await userEvent.click(screen.getByRole("button", { name: "Expand all" }))
     expect(screen.getByRole("link", { name: /week 1/i })).toBeInTheDocument()
     expect(screen.queryByRole("heading", { name: "Couldn't load this course" })).not.toBeInTheDocument()
   })
