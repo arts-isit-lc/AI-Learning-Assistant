@@ -1,6 +1,5 @@
 import { useState } from "react"
 import { NavLink, Outlet, useNavigate, useParams } from "react-router-dom"
-import { MdContentCopy } from "react-icons/md"
 import { toUserMessage } from "@/services/apiError"
 import { cn } from "@/lib/utils"
 import {
@@ -13,7 +12,7 @@ import {
 import { Toggle } from "@/components/ui/toggle"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { ConfirmDialog } from "@/components/composed/ConfirmDialog"
-import { Icon } from "@/components/ui/icon"
+import { CopyButton } from "@/components/composed/CopyButton"
 import { Skeleton } from "@/components/ui/skeleton"
 
 // Sub-tabs of the instructor course workspace (audit §7). Paths are relative to
@@ -69,11 +68,6 @@ export default function InstructorCourseLayout() {
   const code = course ? `${dept} ${course.course_number ?? ""}`.trim() : "Course"
   const active = course ? course.course_student_access !== false : true
   const hasConflict = Boolean(prompt?.conflict_metadata?.has_conflicts)
-
-  const copyAccessCode = () => {
-    if (!accessCode) return
-    navigator.clipboard?.writeText(accessCode)
-  }
 
   const handleDelete = () => {
     deleteCourse.mutate(undefined, {
@@ -134,14 +128,7 @@ export default function InstructorCourseLayout() {
               <span>
                 Access Code: <span className="text-foreground">{accessCode}</span>
               </span>
-              <button
-                type="button"
-                onClick={copyAccessCode}
-                aria-label="Copy access code"
-                className="flex rounded-sm p-1 text-primary transition-colors hover:text-primary-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <Icon icon={MdContentCopy} size={16} />
-              </button>
+              <CopyButton value={accessCode} label="Copy access code" className="rounded-sm" />
             </div>
           )}
         </div>

@@ -1,14 +1,13 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { MdContentCopy } from "react-icons/md"
 import { useAdminCourses, useDuplicateCourse } from "@/services/queries"
 import { COURSE_TERMS } from "@/constants/courseTerms"
 import { generateAccessCode, parseCourseCode, COURSE_EXISTS_MESSAGE } from "./CreateCourse"
 import { UnsavedChangesPrompt } from "@/components/composed/UnsavedChangesPrompt"
+import { CopyButton } from "@/components/composed/CopyButton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Icon } from "@/components/ui/icon"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { toUserMessage } from "@/services/apiError"
 import {
@@ -93,14 +92,6 @@ export function DuplicateCourse() {
     setTerm(src.term ?? "")
     setSection(src.section ?? "")
     setAccessCode(generateAccessCode())
-  }
-
-  const copyCode = async () => {
-    try {
-      await navigator.clipboard.writeText(accessCode)
-    } catch {
-      // Clipboard copy is best-effort.
-    }
   }
 
   const handleDuplicate = () => {
@@ -222,14 +213,7 @@ export function DuplicateCourse() {
                 <div className="flex items-center justify-between gap-2">
                   <span className="flex items-center gap-2 text-caption">
                     <span className="text-foreground">{accessCode}</span>
-                    <button
-                      type="button"
-                      onClick={copyCode}
-                      aria-label="Copy access code"
-                      className="flex rounded p-1 text-primary transition-colors hover:text-primary-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <Icon icon={MdContentCopy} size={16} />
-                    </button>
+                    <CopyButton value={accessCode} label="Copy access code" />
                   </span>
                   <Button
                     variant="outline"

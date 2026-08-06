@@ -31,7 +31,6 @@ import {
 import { toUserMessage } from "@/services/apiError"
 import { ModuleAccordion } from "@/components/composed/ModuleAccordion"
 import { EmptyState } from "@/components/composed/EmptyState"
-import { ConfirmDialog } from "@/components/composed/ConfirmDialog"
 import { UnsavedChangesPrompt } from "@/components/composed/UnsavedChangesPrompt"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -143,16 +142,17 @@ export function ConfigurationTab() {
 
   const [addingConcept, setAddingConcept] = useState(false)
   const [newConceptName, setNewConceptName] = useState("")
-  const [deleteConceptTarget, setDeleteConceptTarget] = useState(null)
-  const [deleteModuleTarget, setDeleteModuleTarget] = useState(null)
 
   // Staged edits — concept/module drag reorders (id lists; null/absent = follow
-  // the server order) AND concept renames ({ [conceptId]: newName }) are held
-  // locally and NOT persisted until "Save changes" (revert them with Undo).
-  // Add/delete still persist immediately and flow through the server cache.
+  // the server order), concept renames ({ [conceptId]: newName }), AND concept/
+  // module deletions (id Sets) are held locally and NOT persisted until "Save
+  // changes" (revert them with Undo). Only ADD still persists immediately (the
+  // server generates the id, and the new row is usually acted on right away).
   const [conceptOrder, setConceptOrder] = useState(null)
   const [moduleOrders, setModuleOrders] = useState({})
   const [conceptNames, setConceptNames] = useState({})
+  const [deletedConceptIds, setDeletedConceptIds] = useState(() => new Set())
+  const [deletedModuleIds, setDeletedModuleIds] = useState(() => new Set())
   const [saving, setSaving] = useState(false)
 
   const sensors = useSensors(
@@ -162,17 +162,52 @@ export function ConfigurationTab() {
 
   const serverTree = useMemo(() => groupConceptTree(concepts, modules), [concepts, modules])
 
-  // Display tree = the server order overlaid with the staged drag reorders, plus
-  // the dirty flags derived from comparing the two.
-  const { tree, isDirty, conceptsReordered, reorderedModuleConceptIds, renamedConceptIds } = useMemo(() => {
+  // Display tree = the server order overlaid with the staged reorders, renames,
+  // and deletions, plus the dirty flags derived from comparing the two.
+  const {
+    tree,
+    isDirty,
+    conceptsReordered,
+    reorderedModuleConceptIds,
+    renamedConceptIds,
+    stagedConceptDeletes,
+    stagedModuleDeletes,
+  } = useMemo(() => {
     const conceptsById = new Map(concepts.map((c) => [c.concept_id, c]))
     const modulesById = new Map(modules.map((m) => [m.module_id, m]))
-    const serverConceptIds = serverTree.map((t) => t.concept.concept_id)
-    const serverModuleIds = new Map(
-      serverTree.map((t) => [t.concept.concept_id, t.modules.map((m) => m.module_id)])
+
+    // module_id -> owning concept_id per the server grouping (respects the
+    // concept_name fallback groupConceptTree applies), so a module under a
+    // staged-deleted concept is recognised even when its concept_id is absent.
+    const conceptIdByModuleId = new Map()
+    for (const t of serverTree) {
+      for (const m of t.modules) conceptIdByModuleId.set(m.module_id, t.concept.concept_id)
+    }
+
+    // Only count staged deletions whose target STILL exists server-side, so a
+    // completed (or partially-applied) delete doesn't linger as "dirty" or get
+    // retried after the row is already gone.
+    const deletedConceptSet = new Set([...deletedConceptIds].filter((id) => conceptsById.has(id)))
+    const delConceptIds = [...deletedConceptSet]
+    // Individually-staged module deletes, minus any already covered by a staged
+    // concept delete (that concept's cascade removes its modules for us).
+    const delModuleIds = [...deletedModuleIds].filter(
+      (id) => modulesById.has(id) && !deletedConceptSet.has(conceptIdByModuleId.get(id))
     )
-    const modIdsFor = (cid) => reconcileOrder(serverModuleIds.get(cid) ?? [], moduleOrders[cid])
-    const displayConceptIds = reconcileOrder(serverConceptIds, conceptOrder)
+
+    // Surviving server order (staged-deleted ids removed) — the baseline we diff
+    // the staged reorder against, so a pure delete isn't misread as a reorder.
+    const survivingConceptIds = serverTree
+      .map((t) => t.concept.concept_id)
+      .filter((cid) => !deletedConceptSet.has(cid))
+    const survivingModuleIds = new Map(
+      serverTree.map((t) => [
+        t.concept.concept_id,
+        t.modules.filter((m) => !deletedModuleIds.has(m.module_id)).map((m) => m.module_id),
+      ])
+    )
+    const modIdsFor = (cid) => reconcileOrder(survivingModuleIds.get(cid) ?? [], moduleOrders[cid])
+    const displayConceptIds = reconcileOrder(survivingConceptIds, conceptOrder)
 
     // Overlay a staged rename (that still differs from the server name) onto the
     // concept so both the tree AND the reorder save payload — which carries
@@ -197,17 +232,20 @@ export function ConfigurationTab() {
       return staged != null && server && staged !== server.concept_name
     })
     const reorderedMods = displayConceptIds.filter(
-      (cid) => !sameOrder(modIdsFor(cid), serverModuleIds.get(cid) ?? [])
+      (cid) => !sameOrder(modIdsFor(cid), survivingModuleIds.get(cid) ?? [])
     )
-    const conceptsMoved = !sameOrder(displayConceptIds, serverConceptIds)
+    const conceptsMoved = !sameOrder(displayConceptIds, survivingConceptIds)
+    const hasDeletions = delConceptIds.length > 0 || delModuleIds.length > 0
     return {
       tree: nextTree,
       conceptsReordered: conceptsMoved,
       reorderedModuleConceptIds: reorderedMods,
       renamedConceptIds: renamedIds,
-      isDirty: conceptsMoved || reorderedMods.length > 0 || renamedIds.length > 0,
+      stagedConceptDeletes: delConceptIds,
+      stagedModuleDeletes: delModuleIds,
+      isDirty: hasDeletions || conceptsMoved || reorderedMods.length > 0 || renamedIds.length > 0,
     }
-  }, [concepts, modules, serverTree, conceptOrder, moduleOrders, conceptNames])
+  }, [concepts, modules, serverTree, conceptOrder, moduleOrders, conceptNames, deletedConceptIds, deletedModuleIds])
 
   const conceptIds = tree.map((t) => t.concept.concept_id)
 
@@ -217,23 +255,42 @@ export function ConfigurationTab() {
   const stageModuleOrder = (conceptId, ordered) =>
     setModuleOrders((prev) => ({ ...prev, [conceptId]: ordered.map((m) => m.module_id) }))
 
-  // Discard every staged edit — reorder + renames — back to the last-saved
-  // (server) state. Powers the Undo button and the post-save reset.
+  // Discard every staged edit — reorder + renames + deletions — back to the
+  // last-saved (server) state. Powers the Undo button and the post-save reset.
   const discardChanges = () => {
     setConceptOrder(null)
     setModuleOrders({})
     setConceptNames({})
+    setDeletedConceptIds(new Set())
+    setDeletedModuleIds(new Set())
   }
 
-  // Persist all staged edits: concept renames first (each keeps its number),
+  // Persist all staged edits. Order matters: deletions first (so any renumbering
+  // operates on the survivors), then concept renames (each keeps its number),
   // then the concept reorder, then each changed concept's module order. The
   // reorder payload also carries concept_name, so a renamed+reordered concept
-  // stays consistent regardless of order. On failure each mutation rolls back
-  // its own cache and surfaces the inline error below; the staged edits are kept
-  // so the user can retry.
+  // stays consistent regardless of order. Deleting a concept cascades to its
+  // modules (S3 + rows), so modules under a staged-deleted concept are already
+  // excluded from stagedModuleDeletes. On failure each mutation rolls back its
+  // own cache and surfaces the inline error below; the staged edits are kept so
+  // the user can retry.
   const saveChanges = async () => {
     setSaving(true)
     try {
+      const conceptsById = new Map(concepts.map((c) => [c.concept_id, c]))
+      const modulesById = new Map(modules.map((m) => [m.module_id, m]))
+      const modulesByConceptId = new Map(serverTree.map((t) => [t.concept.concept_id, t.modules]))
+
+      for (const cid of stagedConceptDeletes) {
+        const concept = conceptsById.get(cid)
+        // Pass the concept's server modules so the cascade cleans up their S3 objects.
+        if (concept)
+          await deleteConcept.mutateAsync({ concept, modules: modulesByConceptId.get(cid) ?? [] })
+      }
+      for (const mid of stagedModuleDeletes) {
+        const mod = modulesById.get(mid)
+        if (mod) await deleteModule.mutateAsync(mod)
+      }
       for (const cid of renamedConceptIds) {
         const node = tree.find((t) => t.concept.concept_id === cid)
         if (node)
@@ -288,21 +345,24 @@ export function ConfigurationTab() {
     )
   }
 
-  const conceptHandlers = (concept, conceptModules) => ({
+  const conceptHandlers = (concept) => ({
     // Stage the rename locally (revert with Undo, persist on Save) rather than
     // writing through immediately. Dirtiness is derived by diffing against the
     // server name in the display memo, so a rename back to the original clears.
     onRename: (name) => setConceptNames((prev) => ({ ...prev, [concept.concept_id]: name })),
-    onDelete: () => setDeleteConceptTarget({ concept, modules: conceptModules }),
+    // Stage the deletion (revert with Undo, persist on Save) — the concept and
+    // its modules drop out of the display tree via the memo above.
+    onDelete: () => setDeletedConceptIds((prev) => new Set(prev).add(concept.concept_id)),
     onAddModule: () => navigate(`${moduleBasePath}/new?concept=${concept.concept_id}`),
     onReorderModules: (ordered) => stageModuleOrder(concept.concept_id, ordered),
     onEditModule: (m) => navigate(`${moduleBasePath}/${m.module_id}/edit`, { state: { module: m } }),
-    onDeleteModule: (m) => setDeleteModuleTarget(m),
+    // Stage the module deletion (revert with Undo, persist on Save).
+    onDeleteModule: (m) => setDeletedModuleIds((prev) => new Set(prev).add(m.module_id)),
   })
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Guard staged edits (reorder + renames) against navigation (tab switch / back / refresh). */}
+      {/* Guard staged edits (reorder + renames + deletions) against navigation (tab switch / back / refresh). */}
       <UnsavedChangesPrompt when={isDirty} />
       <div className="flex items-center justify-between gap-2 mb-8">
         <h2 className="text-sm leading-7 font-semibold text-neutral-900">Course configuration</h2>
@@ -366,7 +426,11 @@ export function ConfigurationTab() {
         </div>
       )}
 
-      {(renameConcept.isError || reorderConcepts.isError || reorderModules.isError) && (
+      {(deleteConcept.isError ||
+        deleteModule.isError ||
+        renameConcept.isError ||
+        reorderConcepts.isError ||
+        reorderModules.isError) && (
         <Alert variant="destructive">
           <AlertDescription>{"Couldn't save your changes. Please try again."}</AlertDescription>
         </Alert>
@@ -403,7 +467,7 @@ export function ConfigurationTab() {
                   modules={conceptModules}
                   number={i + 1}
                   courseId={courseId}
-                  {...conceptHandlers(concept, conceptModules)}
+                  {...conceptHandlers(concept)}
                 />
               ))}
             </div>
@@ -413,9 +477,9 @@ export function ConfigurationTab() {
 
       {/* Footer (Figma 365:2622) — Student view (left) previews the course as a
           student; Undo + Save changes (right) revert or persist the STAGED
-          concept/module reorder + concept renames together. Add/delete still
-          persist immediately, so the pair is only active while there's an unsaved
-          reorder or rename. */}
+          concept/module reorder + concept renames + concept/module deletions
+          together. Only ADD persists immediately, so the pair is active whenever
+          there's an unsaved reorder, rename, or deletion. */}
       <div className="flex items-center justify-between gap-4 border-t border-border pt-6">
         <Button variant="link" className="p-0" onClick={openStudentView}>
           Student view
@@ -454,48 +518,6 @@ export function ConfigurationTab() {
           </Button>
         </div>
       </div>
-
-      <ConfirmDialog
-        open={Boolean(deleteConceptTarget)}
-        onOpenChange={(open) => {
-          if (!open) {
-            setDeleteConceptTarget(null)
-            deleteConcept.reset?.()
-          }
-        }}
-        title="Delete concept?"
-        description="This also deletes the concept's modules and their files. This can't be undone."
-        confirmLabel="Delete"
-        loading={deleteConcept.isPending}
-        error={deleteConcept.isError ? toUserMessage(deleteConcept.error) : undefined}
-        onConfirm={() =>
-          deleteConcept.mutate(deleteConceptTarget, {
-            onSuccess: () => setDeleteConceptTarget(null),
-          })
-        }
-      />
-
-      <ConfirmDialog
-        open={Boolean(deleteModuleTarget)}
-        onOpenChange={(open) => {
-          if (!open) {
-            setDeleteModuleTarget(null)
-            deleteModule.reset?.()
-          }
-        }}
-        title="Delete module?"
-        description={
-          deleteModuleTarget ? `Delete "${deleteModuleTarget.module_name}" and its files? This can't be undone.` : ""
-        }
-        confirmLabel="Delete"
-        loading={deleteModule.isPending}
-        error={deleteModule.isError ? toUserMessage(deleteModule.error) : undefined}
-        onConfirm={() =>
-          deleteModule.mutate(deleteModuleTarget, {
-            onSuccess: () => setDeleteModuleTarget(null),
-          })
-        }
-      />
 
       {/* Create / Edit module render as centered modals over this tab (nested route). */}
       <Outlet />

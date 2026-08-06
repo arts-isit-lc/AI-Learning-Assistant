@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { toUserMessage } from "@/services/apiError"
-import { MdContentCopy } from "react-icons/md"
 import {
   useAdminCourses,
   useAdminInstructors,
@@ -17,12 +16,12 @@ import { instructorLabel } from "./InstructorList"
 import { courseCode } from "./CourseList"
 import { DuplicateCourseDialog } from "./DuplicateCourseDialog"
 import { ConfirmDialog } from "@/components/composed/ConfirmDialog"
+import { CopyButton } from "@/components/composed/CopyButton"
 import { ErrorState } from "@/components/composed/ErrorState"
 import { UnsavedChangesPrompt } from "@/components/composed/UnsavedChangesPrompt"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Toggle } from "@/components/ui/toggle"
-import { Icon } from "@/components/ui/icon"
 import { Skeleton } from "@/components/ui/skeleton"
 
 /** Off/On access toggle with labels (mockup: "Off [switch] On"). */
@@ -191,15 +190,6 @@ export function CourseDetail() {
     }
   }
 
-  const copyCode = async () => {
-    if (!course?.course_access_code) return
-    try {
-      await navigator.clipboard.writeText(course.course_access_code)
-    } catch {
-      // Clipboard copy is best-effort.
-    }
-  }
-
   if (coursesLoading) {
     // Skeleton the pane header + instructor list while the course list resolves,
     // rather than a line of "Loading course…" text.
@@ -256,14 +246,7 @@ export function CourseDetail() {
             <div className="flex items-center gap-2 text-[16px] text-foreground">
               {/* Access code: 16px, normal weight (per request; mockup Body is 18px). */}
               <span>Access Code: {course.course_access_code}</span>
-              <button
-                type="button"
-                onClick={copyCode}
-                aria-label="Copy access code"
-                className="flex rounded p-1 text-primary transition-colors hover:text-primary-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <Icon icon={MdContentCopy} size={16} />
-              </button>
+              <CopyButton value={course.course_access_code} label="Copy access code" />
             </div>
           )}
         </div>

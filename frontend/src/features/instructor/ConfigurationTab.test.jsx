@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen, within } from "@testing-library/react"
+import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { groupConceptTree, reconcileOrder, ConfigurationTab } from "./ConfigurationTab"
 
@@ -7,8 +7,8 @@ let conceptsResult
 let modulesResult
 const createConcept = { mutate: vi.fn(), isPending: false }
 const renameConcept = { mutate: vi.fn(), mutateAsync: vi.fn().mockResolvedValue(undefined), isError: false, isPending: false }
-const deleteConcept = { mutate: vi.fn(), isPending: false }
-const deleteModule = { mutate: vi.fn(), isPending: false }
+const deleteConcept = { mutate: vi.fn(), mutateAsync: vi.fn().mockResolvedValue(undefined), isError: false, isPending: false }
+const deleteModule = { mutate: vi.fn(), mutateAsync: vi.fn().mockResolvedValue(undefined), isError: false, isPending: false }
 const reorderConcepts = { mutate: vi.fn(), mutateAsync: vi.fn().mockResolvedValue(undefined), isError: false, isPending: false }
 const reorderModules = { mutate: vi.fn(), mutateAsync: vi.fn().mockResolvedValue(undefined), isError: false, isPending: false }
 const navigate = vi.fn()
@@ -141,15 +141,84 @@ describe("ConfigurationTab", () => {
     )
   })
 
-  it("deletes a concept (cascade) after confirmation", async () => {
+  // --- Staged concept/module deletions (Option A: no confirm dialog — deleting
+  // stages the removal, Undo reverts it, Save persists it, consistent with the
+  // reorder/rename staging model; add/delete no longer persist immediately). ---
+  it("stages a concept deletion — hiding it and its modules, enabling Undo + Save — without persisting", async () => {
+    const user = userEvent.setup()
     render(<ConfigurationTab />)
-    await userEvent.click(screen.getByRole("button", { name: "Delete concept" }))
-    const dialog = await screen.findByRole("dialog")
-    await userEvent.click(within(dialog).getByRole("button", { name: "Delete" }))
-    expect(deleteConcept.mutate).toHaveBeenCalled()
-    const [arg] = deleteConcept.mutate.mock.calls[0]
+    expect(screen.getByRole("heading", { name: "1. Algebra" })).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Delete concept" }))
+    // Staged only — nothing persisted, and no confirm dialog (Option A).
+    expect(deleteConcept.mutate).not.toHaveBeenCalled()
+    expect(deleteConcept.mutateAsync).not.toHaveBeenCalled()
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    // The concept and its modules drop out of the tree; Undo + Save light up.
+    expect(screen.queryByRole("heading", { name: "1. Algebra" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "i. Matrices" })).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Undo" })).toBeEnabled()
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled()
+  })
+
+  it("restores a staged concept deletion on Undo (nothing persisted)", async () => {
+    const user = userEvent.setup()
+    render(<ConfigurationTab />)
+    await user.click(screen.getByRole("button", { name: "Delete concept" }))
+    expect(screen.queryByRole("heading", { name: "1. Algebra" })).not.toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Undo" }))
+    // Concept back; nothing persisted; Undo + Save disabled again.
+    expect(screen.getByRole("heading", { name: "1. Algebra" })).toBeInTheDocument()
+    expect(deleteConcept.mutateAsync).not.toHaveBeenCalled()
+    expect(screen.getByRole("button", { name: "Undo" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled()
+  })
+
+  it("persists a staged concept deletion (with its modules for the S3 cascade) on Save changes", async () => {
+    const user = userEvent.setup()
+    render(<ConfigurationTab />)
+    await user.click(screen.getByRole("button", { name: "Delete concept" }))
+    await user.click(screen.getByRole("button", { name: "Save changes" }))
+    expect(deleteConcept.mutateAsync).toHaveBeenCalledTimes(1)
+    const [arg] = deleteConcept.mutateAsync.mock.calls[0]
     expect(arg.concept.concept_id).toBe("con1")
     expect(arg.modules).toHaveLength(2)
+    // A pure deletion must NOT be misread as a reorder.
+    expect(reorderConcepts.mutateAsync).not.toHaveBeenCalled()
+    expect(reorderModules.mutateAsync).not.toHaveBeenCalled()
+  })
+
+  it("stages a module deletion — hiding the row and renumbering siblings — without persisting", async () => {
+    const user = userEvent.setup()
+    render(<ConfigurationTab />)
+    // The module Delete link only exists once the row is expanded.
+    await user.click(screen.getByRole("button", { name: "i. Matrices" }))
+    await user.click(screen.getByRole("button", { name: "Delete module" }))
+    expect(deleteModule.mutate).not.toHaveBeenCalled()
+    expect(deleteModule.mutateAsync).not.toHaveBeenCalled()
+    // Matrices is gone; the surviving sibling renumbers from "ii." to "i. Vectors".
+    expect(screen.queryByRole("button", { name: "i. Matrices" })).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "i. Vectors" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Undo" })).toBeEnabled()
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled()
+  })
+
+  it("persists a staged module deletion on Save changes (no reorder side effect)", async () => {
+    const user = userEvent.setup()
+    render(<ConfigurationTab />)
+    await user.click(screen.getByRole("button", { name: "i. Matrices" }))
+    await user.click(screen.getByRole("button", { name: "Delete module" }))
+    await user.click(screen.getByRole("button", { name: "Save changes" }))
+    expect(deleteModule.mutateAsync).toHaveBeenCalledTimes(1)
+    const [arg] = deleteModule.mutateAsync.mock.calls[0]
+    expect(arg.module_id).toBe("m2")
+    expect(reorderModules.mutateAsync).not.toHaveBeenCalled()
+  })
+
+  it("surfaces an inline error when a staged deletion fails on Save", () => {
+    deleteModule.isError = true
+    render(<ConfigurationTab />)
+    expect(screen.getByRole("alert")).toHaveTextContent(/couldn't save/i)
+    deleteModule.isError = false
   })
 
   it("shows the empty state with no in-panel action button when there are no concepts", () => {
@@ -176,9 +245,9 @@ describe("ConfigurationTab", () => {
     expect(navigate).toHaveBeenCalledWith("/courses/c1")
   })
 
-  it("keeps Save changes and Undo disabled until a reorder or rename is staged", () => {
+  it("keeps Save changes and Undo disabled until a reorder, rename, or deletion is staged", () => {
     render(<ConfigurationTab />)
-    // Nothing staged yet → nothing to save or undo (add/delete persist immediately).
+    // Nothing staged yet → nothing to save or undo (only ADD persists immediately).
     expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled()
     expect(screen.getByRole("button", { name: "Undo" })).toBeDisabled()
   })
