@@ -58,7 +58,11 @@ describe("RouteError", () => {
     expect(reloadSpy).toHaveBeenCalledTimes(1)
     // Spinner (LoadingScreen) while the reload takes over — not the error screen.
     expect(screen.getByRole("status")).toBeInTheDocument()
-    expect(screen.getByText(/updating to the latest version/i)).toBeInTheDocument()
+    // The label must render a real ellipsis, NOT the literal escape "\u2026"
+    // (a JSX string attribute would not decode the escape — that showed the
+    // "\u2026" garbage centered on screen when navigating back after a deploy).
+    expect(screen.getByText("Updating to the latest version\u2026")).toBeInTheDocument()
+    expect(screen.queryByText(/\\u2026/)).not.toBeInTheDocument()
   })
 
   it("does not reload again for a repeat chunk error within the window — shows the error screen (no loop)", () => {

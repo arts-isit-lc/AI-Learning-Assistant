@@ -70,7 +70,10 @@ export function RouteError() {
     else setReloading(false)
   }, [isChunk])
 
-  if (isChunk && reloading) return <LoadingScreen label="Updating to the latest version\u2026" />
+  // NOTE: the label must be a JS expression, not a plain JSX string attribute —
+  // JSX does NOT interpret backslash escapes inside "..." attributes, so
+  // label="...\u2026" would render the literal characters \u2026 on screen.
+  if (isChunk && reloading) return <LoadingScreen label={"Updating to the latest version\u2026"} />
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-8">
