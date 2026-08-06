@@ -92,68 +92,61 @@ export function StudentsTab() {
     <div className="flex flex-col gap-4">
       <Searchbar value={query} onChange={setQuery} placeholder="Search students" />
 
-      <div
-        className="overflow-hidden rounded-sm border border-border"
-        role={isLoading ? "status" : undefined}
-        aria-label={isLoading ? "Loading roster" : undefined}
-        aria-busy={isLoading || undefined}
-      >
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead className="bg-primary font-semibold text-primary-foreground">Student</TableHead>
-              <TableHead className="bg-primary font-semibold text-primary-foreground">Contact</TableHead>
-              <TableHead className="bg-primary text-right font-semibold text-primary-foreground">
-                Remove
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              Array.from({ length: 6 }, (_, i) => (
-                <TableRow key={`sk-${i}`}>
-                  {[0, 1, 2].map((j) => (
-                    <TableCell key={j}>
-                      <Skeleton className="h-4 w-full" />
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : filtered.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
-                  No students match your search.
-                </TableCell>
+      {isLoading ? (
+        <div role="status" aria-label="Loading roster" className="flex flex-col gap-3">
+          {Array.from({ length: 6 }, (_, i) => (
+            <Skeleton key={i} className="h-12 w-full" />
+          ))}
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-sm border border-border">
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="bg-primary font-semibold text-primary-foreground">Student</TableHead>
+                <TableHead className="bg-primary font-semibold text-primary-foreground">Contact</TableHead>
+                <TableHead className="bg-primary text-right font-semibold text-primary-foreground">
+                  Remove
+                </TableHead>
               </TableRow>
-            ) : (
-              filtered.map((s) => (
-                <TableRow key={s.user_email}>
-                  <TableCell>
-                    <button
-                      type="button"
-                      onClick={() => setStudentParam(s.user_email)}
-                      className="text-left text-foreground hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      {rosterName(s)}
-                    </button>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{s.user_email}</TableCell>
-                  <TableCell className="text-right">
-                    <button
-                      type="button"
-                      aria-label={`Remove ${rosterName(s)}`}
-                      onClick={() => setRemoveTarget(s)}
-                      className="rounded p-1 text-primary hover:bg-primary-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <Icon icon={MdClose} size={24} />
-                    </button>
+            </TableHeader>
+            <TableBody>
+              {filtered.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
+                    No students match your search.
                   </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+              ) : (
+                filtered.map((s) => (
+                  <TableRow key={s.user_email}>
+                    <TableCell>
+                      <button
+                        type="button"
+                        onClick={() => setStudentParam(s.user_email)}
+                        className="text-left text-foreground hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        {rosterName(s)}
+                      </button>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{s.user_email}</TableCell>
+                    <TableCell className="text-right">
+                      <button
+                        type="button"
+                        aria-label={`Remove ${rosterName(s)}`}
+                        onClick={() => setRemoveTarget(s)}
+                        className="rounded p-1 text-primary hover:bg-primary-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <Icon icon={MdClose} size={24} />
+                      </button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      )}
 
       <ConfirmDialog
         open={Boolean(removeTarget)}

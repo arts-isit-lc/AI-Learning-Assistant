@@ -75,10 +75,14 @@ describe("StudentsTab", () => {
     expect(screen.getByRole("heading", { name: "No students enrolled yet" })).toBeInTheDocument()
   })
 
-  it("announces a labelled loading region while the roster loads", () => {
+  it("shows the block skeleton loader (no table chrome) while the roster loads", () => {
     studentsResult = { data: undefined, isLoading: true, isError: false }
     render(<StudentsTab />)
     expect(screen.getByRole("status", { name: /loading roster/i })).toBeInTheDocument()
+    // The table (and its purple header) is replaced by the block skeleton…
+    expect(screen.queryByRole("columnheader", { name: "Student" })).not.toBeInTheDocument()
+    // …while the search field stays, matching the other list screens.
+    expect(screen.getByRole("searchbox", { name: "Search students" })).toBeInTheDocument()
   })
 
   it("shows an accessible ErrorState with retry when the roster fails to load", async () => {

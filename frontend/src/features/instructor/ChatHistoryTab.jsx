@@ -84,7 +84,17 @@ export function ChatHistoryTab() {
     )
   }
 
-  if (!isLoading && messages.length === 0) {
+  if (isLoading) {
+    return (
+      <div role="status" aria-label="Loading chat history" className="flex flex-col gap-3">
+        {Array.from({ length: 8 }, (_, i) => (
+          <Skeleton key={i} className="h-12 w-full" />
+        ))}
+      </div>
+    )
+  }
+
+  if (messages.length === 0) {
     return (
       <EmptyState
         icon={MdForum}
@@ -96,12 +106,7 @@ export function ChatHistoryTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div
-        className="overflow-hidden rounded-sm border border-border"
-        role={isLoading ? "status" : undefined}
-        aria-label={isLoading ? "Loading chat history" : undefined}
-        aria-busy={isLoading || undefined}
-      >
+      <div className="overflow-hidden rounded-sm border border-border">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
@@ -113,34 +118,24 @@ export function ChatHistoryTab() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading
-              ? Array.from({ length: 8 }, (_, i) => (
-                  <TableRow key={`sk-${i}`}>
-                    {HEADERS.map((h) => (
-                      <TableCell key={h}>
-                        <Skeleton className="h-4 w-full" />
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              : messages.map((m, i) => (
-                  <TableRow key={`${m.session_id ?? "s"}-${i}`}>
-                    <TableCell className="text-foreground">{m.user_email || "—"}</TableCell>
-                    <TableCell>{m.module_name ? titleCase(m.module_name) : "—"}</TableCell>
-                    <TableCell>{m.concept_name ? titleCase(m.concept_name) : "—"}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {m.session_name || m.session_id || "—"}
-                    </TableCell>
-                    <TableCell className="max-w-md">
-                      <span className="block truncate">
-                        <span className="font-semibold text-muted-foreground">
-                          {m.student_sent ? "Student: " : "OCELIA: "}
-                        </span>
-                        {m.message_content || ""}
-                      </span>
-                    </TableCell>
-                  </TableRow>
-                ))}
+            {messages.map((m, i) => (
+              <TableRow key={`${m.session_id ?? "s"}-${i}`}>
+                <TableCell className="text-foreground">{m.user_email || "—"}</TableCell>
+                <TableCell>{m.module_name ? titleCase(m.module_name) : "—"}</TableCell>
+                <TableCell>{m.concept_name ? titleCase(m.concept_name) : "—"}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {m.session_name || m.session_id || "—"}
+                </TableCell>
+                <TableCell className="max-w-md">
+                  <span className="block truncate">
+                    <span className="font-semibold text-muted-foreground">
+                      {m.student_sent ? "Student: " : "OCELIA: "}
+                    </span>
+                    {m.message_content || ""}
+                  </span>
+                </TableCell>
+              </TableRow>
+            ))}
           </TableBody>
         </Table>
       </div>

@@ -110,10 +110,13 @@ describe("ChatHistoryTab", () => {
     expect(screen.getByRole("heading", { name: "No chat history yet" })).toBeInTheDocument()
   })
 
-  it("announces a labelled loading region while messages load", () => {
+  it("shows the block skeleton loader (no table or pagination chrome) while messages load", () => {
     useCourseMessages.mockReturnValue({ data: undefined, isLoading: true, isError: false })
     render(<ChatHistoryTab />)
     expect(screen.getByRole("status", { name: /loading chat history/i })).toBeInTheDocument()
+    // Block skeleton replaces the whole table + pagination footer while loading.
+    expect(screen.queryByRole("columnheader", { name: "User" })).not.toBeInTheDocument()
+    expect(screen.queryByText(/Page \d+ of/)).not.toBeInTheDocument()
   })
 
   it("shows an accessible ErrorState with retry when messages fail to load", async () => {
