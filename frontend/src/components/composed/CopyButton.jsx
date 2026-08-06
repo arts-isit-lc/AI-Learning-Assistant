@@ -3,11 +3,11 @@ import { MdCheck, MdContentCopy } from "react-icons/md"
 import { cn } from "@/lib/utils"
 import { Icon } from "@/components/ui/icon"
 
-/**
- * One "beat" of the copy confirmation, in ms. The sequence spans two beats
- * (Figma 1511:6872): click → wait one beat → checkmark → wait one beat → copy.
- */
-export const COPY_FEEDBACK_DELAY_MS = 1000
+/** Delay before the copy glyph swaps to the checkmark, in ms (Figma 1511:6872). */
+export const COPY_CONFIRM_DELAY_MS = 500
+
+/** How long the checkmark stays up before reverting to the copy glyph, in ms. */
+export const COPY_CONFIRM_DURATION_MS = 2000
 
 /**
  * Icon button that copies `value` to the clipboard and confirms with a brief
@@ -15,10 +15,10 @@ export const COPY_FEEDBACK_DELAY_MS = 1000
  *
  * The clipboard write fires immediately on click — that's the real copy. The
  * icon feedback is deliberately delayed to match the mockup: the copy glyph
- * holds for ~1s, swaps to a checkmark for ~1s, then reverts. Because the swap is
- * timer-driven (not tied to the clipboard promise), the confirmation looks the
- * same whether or not the write succeeds — clipboard access is best-effort and
- * can be denied or unavailable (e.g. insecure context).
+ * holds for ~0.5s, swaps to a checkmark that stays up ~2s, then reverts. Because
+ * the swap is timer-driven (not tied to the clipboard promise), the confirmation
+ * looks the same whether or not the write succeeds — clipboard access is
+ * best-effort and can be denied or unavailable (e.g. insecure context).
  *
  * @param {object} props
  * @param {string} props.value Text written to the clipboard on click.
@@ -48,12 +48,14 @@ export function CopyButton({ value, label = "Copy", size = 16, className, ...pro
     } catch {
       // Some environments throw synchronously when the clipboard is unavailable.
     }
-    // Restart the sequence cleanly on every click: back to the copy glyph, then
-    // checkmark after one beat, then copy again after the second beat.
+    // Restart the sequence cleanly on every click: back to the copy glyph, show
+    // the checkmark after the delay, then revert once it has been up long enough.
     clearTimers()
     setCopied(false)
-    timers.current.push(setTimeout(() => setCopied(true), COPY_FEEDBACK_DELAY_MS))
-    timers.current.push(setTimeout(() => setCopied(false), COPY_FEEDBACK_DELAY_MS * 2))
+    timers.current.push(setTimeout(() => setCopied(true), COPY_CONFIRM_DELAY_MS))
+    timers.current.push(
+      setTimeout(() => setCopied(false), COPY_CONFIRM_DELAY_MS + COPY_CONFIRM_DURATION_MS)
+    )
   }, [value, clearTimers])
 
   return (
