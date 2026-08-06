@@ -104,9 +104,9 @@ export function LearningJourneyBar({
             (there are no concepts to list yet, and the toggle is disabled). */}
         <Collapse open={open && !loading}>
           <div id={panelId} className="relative mt-4">
-            <ul className="flex gap-6 overflow-x-auto pb-2 pr-10">
+            <ul className="flex gap-6 overflow-x-auto pr-10">
               {concepts.map((concept, i) => (
-                <li key={concept.concept_id} className="flex min-w-[180px] shrink-0 pb-4 flex-col gap-3 border-r border-border pr-6 last:border-r-0">
+                <li key={concept.concept_id} className="flex min-w-[180px] shrink-0 pb-6 flex-col gap-3 border-r border-border pr-6 last:border-r-0">
                   <div className="flex items-center gap-3">
                     <span
                       className={cn(
@@ -119,7 +119,7 @@ export function LearningJourneyBar({
                       {concept.isComplete ? <Icon icon={MdCheckCircle} size={16} label="Complete" /> : i + 1}
                     </span>
                     <div className="flex min-w-0 flex-col">
-                      <span className="text-sm font-semibold text-foreground">
+                      <span className="text-base font-semibold">
                         {titleCase(concept.concept_name)}
                       </span>
                     </div>
