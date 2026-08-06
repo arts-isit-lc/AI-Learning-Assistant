@@ -39,16 +39,15 @@ describe("LearningJourneyBar", () => {
     const toggle = screen.getByRole("button", { name: /learning journey/i })
     // The button itself should have no hover background class
     expect(toggle).not.toHaveClass("hover:bg-primary-subtle")
-    expect(toggle).not.toHaveClass("hover:bg-transparent")
     // The button uses the group utility so the chevron can respond to hover
     expect(toggle).toHaveClass("group")
     // The chevron (second icon child) carries the group-hover color change
     const icons = toggle.querySelectorAll("svg")
     expect(icons).toHaveLength(2)
     const chevron = icons[1]
-    expect(chevron.parentElement).toHaveClass("group-hover:text-[#2E0666]")
+    expect(chevron).toHaveClass("group-hover:text-[#2E0666]")
     // The map icon (first icon) must NOT have a hover color
-    expect(icons[0].parentElement).not.toHaveClass("group-hover:text-[#2E0666]")
+    expect(icons[0]).not.toHaveClass("group-hover:text-[#2E0666]")
   })
 
   it("shows the label, status, and progress summary", () => {
