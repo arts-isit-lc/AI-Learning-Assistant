@@ -8,8 +8,9 @@ import { cn } from "@/lib/utils"
  * Every variant carries the full state set (hover / focus-visible / active /
  * disabled) from tokens. `loading` disables the control (prevents
  * double-submit) and, regardless of variant, swaps the button to the brand
- * purple (`bg-primary` / #6829C2) showing only a spinner — the label is hidden
- * for the duration of the animation. `asChild` renders the styles onto a child
+ * purple (`bg-primary` / #6829C2) at full opacity showing only a spinner — the
+ * label is hidden for the duration of the animation and the disabled fade is
+ * suppressed so the surface doesn't dim. `asChild` renders the styles onto a child
  * element (e.g. a router `<Link>`).
  */
 const buttonVariants = cva(
@@ -61,9 +62,10 @@ const Button = React.forwardRef(function Button(
         buttonVariants({ variant, size }),
         className,
         // While loading: brand purple (#6829C2) surface + white spinner
-        // (border-current), regardless of variant. Appended last so tailwind-merge
-        // lets it win over the variant's bg/text.
-        loading && "bg-primary text-primary-foreground"
+        // (border-current), regardless of variant, at full opacity (the button is
+        // disabled while loading, so defeat the base disabled:opacity-50 fade).
+        // Appended last so tailwind-merge lets it win over the variant's bg/text.
+        loading && "bg-primary text-primary-foreground disabled:opacity-100"
       )}
       disabled={disabled || loading}
       aria-busy={loading || undefined}

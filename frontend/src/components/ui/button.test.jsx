@@ -29,6 +29,13 @@ describe("Button", () => {
     expect(btn.querySelector(".animate-spin")).toBeInTheDocument()
   })
 
+  it("keeps full opacity while loading (no disabled fade)", () => {
+    render(<Button loading>Save</Button>)
+    const btn = screen.getByRole("button")
+    // Disabled while loading, but the fade is suppressed so the surface stays solid.
+    expect(btn).toHaveClass("disabled:opacity-100")
+  })
+
   it("forces the brand-purple loading surface even on a non-default variant", () => {
     render(
       <Button loading variant="outline">
