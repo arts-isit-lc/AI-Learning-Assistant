@@ -8,20 +8,84 @@ const Dialog = DialogPrimitive.Root
 const DialogTrigger = DialogPrimitive.Trigger
 const DialogClose = DialogPrimitive.Close
 
-const DialogOverlay = React.forwardRef(function DialogOverlay({ className, ...props }, ref) {
+// --- Stacked-modal awareness -------------------------------------------------
+// When a second modal (e.g. a ConfirmDialog) opens over an existing one, the
+// lower modal should recede so focus lands on the top modal. A modal that isn't
+// the top-most drops below the overlay layer (z-sticky < z-overlay) and hides
+// its own backdrop, so the top modal's overlay dims it like a normal receding
+// modal; closing the top modal restores it. Tracked via a tiny module-level
+// stack — mount order equals open order (Radix only mounts DialogContent while
+// open), so the last-mounted content is the active/top one. A module store (not
+// context) means no provider wrapping is required and isolated renders still
+// work.
+let dialogSeq = 0
+const openDialogIds = []
+const dialogListeners = new Set()
+
+function emitDialogStackChange() {
+  for (const listener of dialogListeners) listener()
+}
+function pushDialog(id) {
+  openDialogIds.push(id)
+  emitDialogStackChange()
+}
+function popDialog(id) {
+  const i = openDialogIds.indexOf(id)
+  if (i !== -1) {
+    openDialogIds.splice(i, 1)
+    emitDialogStackChange()
+  }
+}
+function subscribeDialogStack(listener) {
+  dialogListeners.add(listener)
+  return () => dialogListeners.delete(listener)
+}
+function getTopDialogId() {
+  return openDialogIds.length ? openDialogIds[openDialogIds.length - 1] : null
+}
+
+/**
+ * True when another DialogContent is stacked above this one — i.e. this modal is
+ * not the top-most open modal and should recede. Registers this modal in the
+ * shared stack on mount (via layout effect, so the recede/restore is applied
+ * before paint — no flash) and deregisters on unmount/close.
+ */
+function useIsBehindTopDialog() {
+  const [id] = React.useState(() => ++dialogSeq)
+  React.useLayoutEffect(() => {
+    pushDialog(id)
+    return () => popDialog(id)
+  }, [id])
+  const topId = React.useSyncExternalStore(subscribeDialogStack, getTopDialogId, getTopDialogId)
+  return topId !== null && topId !== id
+}
+
+const DialogOverlay = React.forwardRef(function DialogOverlay({ className, behind = false, ...props }, ref) {
   return (
     <DialogPrimitive.Overlay
       ref={ref}
-      className={cn("fixed inset-0 z-overlay animate-fade-in bg-black/50", className)}
+      data-dialog-overlay=""
+      className={cn(
+        "fixed inset-0 z-overlay animate-fade-in bg-black/50 transition-opacity",
+        // While behind a stacked modal, hide this backdrop so the top modal's
+        // overlay is the single dimming layer (avoids a double-dark stack).
+        behind && "opacity-0",
+        className
+      )}
       {...props}
     />
   )
 })
 
-const DialogContent = React.forwardRef(function DialogContent({ className, children, ...props }, ref) {
+// Portal only mounts its children while the dialog is open, so registering the
+// stack membership here (rather than in DialogContent's body) means a closed
+// dialog never counts toward the stack — only actually-open modals recede each
+// other.
+const DialogContentImpl = React.forwardRef(function DialogContentImpl({ className, children, ...props }, ref) {
+  const behind = useIsBehindTopDialog()
   return (
-    <DialogPrimitive.Portal>
-      <DialogOverlay />
+    <>
+      <DialogOverlay behind={behind} />
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
@@ -36,7 +100,11 @@ const DialogContent = React.forwardRef(function DialogContent({ className, child
           // screen and hide its actions. As a flex column, a `DialogBody` scrolls
           // (flex-1 + min-h-0 + overflow) while the shrink-0 header/footer stay
           // pinned. Short modals size to content — the cap only bites when tall.
-          "fixed left-1/2 top-1/2 z-modal flex max-h-[85vh] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col gap-8 rounded-sm border border-border bg-background px-9 pb-9 pt-14 shadow-modal animate-fade-in",
+          "fixed left-1/2 top-1/2 flex max-h-[85vh] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col gap-8 rounded-sm border border-border bg-background px-9 pb-9 pt-14 shadow-modal animate-fade-in transition-opacity",
+          // Top-most modal sits at z-modal (1300). A modal stacked beneath an
+          // open one drops to z-sticky (1100) — below the overlay layer (1200) —
+          // so the top modal's backdrop dims it as it recedes.
+          behind ? "z-sticky" : "z-modal",
           className
         )}
         {...props}
@@ -48,6 +116,14 @@ const DialogContent = React.forwardRef(function DialogContent({ className, child
           <Icon icon={MdClose} size={24} label="Close" />
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
+    </>
+  )
+})
+
+const DialogContent = React.forwardRef(function DialogContent(props, ref) {
+  return (
+    <DialogPrimitive.Portal>
+      <DialogContentImpl ref={ref} {...props} />
     </DialogPrimitive.Portal>
   )
 })

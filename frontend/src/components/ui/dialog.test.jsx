@@ -10,6 +10,8 @@ import {
   DialogDescription,
 } from "./dialog"
 
+const overlays = () => document.querySelectorAll("[data-dialog-overlay]")
+
 describe("Dialog", () => {
   it("renders content with an accessible name and a close control when open", () => {
     render(
@@ -109,6 +111,54 @@ describe("Dialog", () => {
       "pt-4",
       "[&>button]:text-base"
     )
+  })
+
+  it("recedes a lower modal when a second modal stacks over it, and restores it when the top closes", () => {
+    // A form modal (always open) plus a confirmation modal that opens over it —
+    // the CourseWizard / EditModule "discard?" pattern.
+    function Stacked({ confirmOpen }) {
+      return (
+        <>
+          <Dialog open>
+            <DialogContent data-testid="form">
+              <DialogTitle>Form</DialogTitle>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={confirmOpen}>
+            <DialogContent data-testid="confirm">
+              <DialogTitle>Confirm</DialogTitle>
+            </DialogContent>
+          </Dialog>
+        </>
+      )
+    }
+
+    const { rerender } = render(<Stacked confirmOpen={false} />)
+    // Alone, the form is the top modal: full z-modal, its own backdrop visible.
+    expect(screen.getByTestId("form")).toHaveClass("z-modal")
+    expect(screen.getByTestId("form")).not.toHaveClass("z-sticky")
+    expect(overlays()).toHaveLength(1)
+    expect(overlays()[0]).not.toHaveClass("opacity-0")
+
+    // Open the confirmation on top → the form recedes below the overlay layer
+    // (z-sticky, not z-modal) and hides its own backdrop; the confirm is the
+    // active top modal and provides the single dimming overlay.
+    rerender(<Stacked confirmOpen={true} />)
+    expect(screen.getByTestId("form")).toHaveClass("z-sticky")
+    expect(screen.getByTestId("form")).not.toHaveClass("z-modal")
+    expect(screen.getByTestId("confirm")).toHaveClass("z-modal")
+    expect(screen.getByTestId("confirm")).not.toHaveClass("z-sticky")
+    expect(overlays()).toHaveLength(2)
+    // Portals mount in open order: form's backdrop is hidden, confirm's dims.
+    expect(overlays()[0]).toHaveClass("opacity-0")
+    expect(overlays()[1]).not.toHaveClass("opacity-0")
+
+    // Cancel/close the confirmation → the form is top again and fully visible.
+    rerender(<Stacked confirmOpen={false} />)
+    expect(screen.getByTestId("form")).toHaveClass("z-modal")
+    expect(screen.getByTestId("form")).not.toHaveClass("z-sticky")
+    expect(overlays()).toHaveLength(1)
+    expect(overlays()[0]).not.toHaveClass("opacity-0")
   })
 
   it("renders the description as body-weight foreground text (Figma modal body)", () => {
