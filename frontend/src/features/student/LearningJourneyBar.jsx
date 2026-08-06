@@ -110,10 +110,10 @@ export function LearningJourneyBar({
                   <div className="flex items-center gap-3">
                     <span
                       className={cn(
-                        "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-caption text-neutral-900 font-semibold",
+                        "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-caption font-semibold",
                         concept.isComplete
                           ? "bg-success text-success-foreground"
-                          : "bg-muted text-muted-foreground"
+                          : "border border-neutral-900 bg-transparent text-neutral-900"
                       )}
                     >
                       {concept.isComplete ? <Icon icon={MdCheckCircle} size={16} label="Complete" /> : i + 1}
