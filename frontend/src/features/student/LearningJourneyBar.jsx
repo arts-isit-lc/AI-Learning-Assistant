@@ -1,6 +1,6 @@
 import { useId, useState } from "react"
 import { Link, useParams } from "react-router-dom"
-import { MdCheckCircle, MdMap, MdExpandMore, MdExpandLess, MdChevronRight } from "react-icons/md"
+import { MdCheck, MdMap, MdExpandMore, MdExpandLess, MdChevronRight } from "react-icons/md"
 import { titleCase } from "@/utils/formatters"
 import { cn } from "@/lib/utils"
 import { Icon } from "@/components/ui/icon"
@@ -108,6 +108,12 @@ export function LearningJourneyBar({
               {concepts.map((concept, i) => (
                 <li key={concept.concept_id} className="flex min-w-[180px] shrink-0 pb-6 flex-col gap-3 border-r border-border pr-6 last:border-r-0">
                   <div className="flex items-center gap-3">
+                    {/* Concept marker (Figma 859:6578 "UI/Done" vs 859:6613).
+                        Complete = filled #11A26F disc + bare white checkmark —
+                        MdCheck, NOT MdCheckCircle: the latter is a filled-circle
+                        glyph, so on the green disc it renders a white disc with
+                        the check knocked out (inverse of the design). Incomplete
+                        = outlined disc with the 1-based index. */}
                     <span
                       className={cn(
                         "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-caption font-semibold",
@@ -116,7 +122,7 @@ export function LearningJourneyBar({
                           : "border border-neutral-900 bg-transparent text-neutral-900"
                       )}
                     >
-                      {concept.isComplete ? <Icon icon={MdCheckCircle} size={16} label="Complete" /> : i + 1}
+                      {concept.isComplete ? <Icon icon={MdCheck} size={14} label="Complete" /> : i + 1}
                     </span>
                     <div className="flex min-w-0 flex-col">
                       <span className="text-base leading-5 font-semibold text-neutral-900">

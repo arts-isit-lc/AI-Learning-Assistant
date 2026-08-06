@@ -61,6 +61,24 @@ describe("LearningJourneyBar", () => {
     expect(list).toHaveClass("overflow-x-auto")
   })
 
+  it("marks a completed concept with a filled green check and numbers the rest", async () => {
+    renderBar()
+    await userEvent.click(screen.getByRole("button", { name: /learning journey/i }))
+
+    // Completed concept (c1 "maps") → checkmark instead of an index number.
+    const check = screen.getByRole("img", { name: /complete/i })
+    const completeMarker = check.closest("span")
+    expect(completeMarker).toHaveClass("bg-success", "text-success-foreground", "rounded-full")
+
+    // Incomplete concept (c2 "water") → its 1-based index, outlined not filled.
+    const incompleteMarker = screen.getByText("2")
+    expect(incompleteMarker).toHaveClass("border", "border-neutral-900", "bg-transparent")
+    expect(incompleteMarker).not.toHaveClass("bg-success")
+
+    // Only the completed concept gets a check — index 1 is replaced by it.
+    expect(screen.queryByText("1")).not.toBeInTheDocument()
+  })
+
   it("toggles the concept-tracker drawer, exposing/hiding it from assistive tech", async () => {
     renderBar()
     const toggle = screen.getByRole("button", { name: /learning journey/i })
