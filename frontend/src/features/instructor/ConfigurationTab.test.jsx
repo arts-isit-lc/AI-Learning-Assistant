@@ -242,6 +242,12 @@ describe("ConfigurationTab", () => {
     renameConcept.isError = false
   })
 
+  it("announces a labelled loading region while the course structure loads", () => {
+    conceptsResult = { data: undefined, isLoading: true, isError: false }
+    render(<ConfigurationTab />)
+    expect(screen.getByRole("status", { name: /loading course structure/i })).toBeInTheDocument()
+  })
+
   it("shows an accessible ErrorState with retry when concepts fail to load", async () => {
     const refetch = vi.fn()
     conceptsResult = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }

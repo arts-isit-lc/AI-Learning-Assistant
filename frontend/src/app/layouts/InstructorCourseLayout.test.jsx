@@ -94,10 +94,21 @@ describe("InstructorCourseLayout", () => {
     expect(screen.queryByRole("status", { name: "Unresolved prompt conflict" })).not.toBeInTheDocument()
   })
 
-  it("renders a neutral header while the course list is still loading", () => {
-    coursesResult = { data: [] }
+  it("renders a neutral 'Course' header when the course isn't in the list (loaded, not found)", () => {
+    coursesResult = { data: [], isLoading: false }
     renderLayout()
     expect(screen.getByRole("heading", { name: "Course" })).toBeInTheDocument()
+  })
+
+  it("skeletons the course code/name header while the list loads, keeping the tabs + active tab usable", () => {
+    coursesResult = { data: [], isLoading: true }
+    renderLayout()
+    // The course identity is a labelled skeleton — no stale "Course" placeholder.
+    expect(screen.getByRole("status", { name: /loading course/i })).toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "Course" })).not.toBeInTheDocument()
+    // Section tabs + the active tab (Outlet) stay usable and load independently.
+    expect(screen.getByRole("link", { name: "Configuration" })).toBeInTheDocument()
+    expect(screen.getByText("settings tab")).toBeInTheDocument()
   })
 
   it("toggles course Active/Inactive from the header switch (B7)", async () => {

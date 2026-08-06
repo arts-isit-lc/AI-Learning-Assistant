@@ -47,4 +47,14 @@ describe("SessionSidebar", () => {
     // collapsed, so the file button isn't reachable by role.
     expect(screen.queryByRole("button", { name: /syllabus\.pdf/i })).not.toBeInTheDocument()
   })
+
+  it("announces a loading region for the session list while sessions load", () => {
+    render(<SessionSidebar moduleName="Week 1" sessions={[]} loading />)
+    expect(screen.getByRole("status", { name: /loading chats/i })).toBeInTheDocument()
+  })
+
+  it("announces a loading region for materials while files load (materials open)", () => {
+    render(<SessionSidebar moduleName="Week 1" sessions={sessions} filesLoading materialsOpen />)
+    expect(screen.getByRole("status", { name: /loading materials/i })).toBeInTheDocument()
+  })
 })

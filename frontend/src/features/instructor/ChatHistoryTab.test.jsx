@@ -110,6 +110,12 @@ describe("ChatHistoryTab", () => {
     expect(screen.getByRole("heading", { name: "No chat history yet" })).toBeInTheDocument()
   })
 
+  it("announces a labelled loading region while messages load", () => {
+    useCourseMessages.mockReturnValue({ data: undefined, isLoading: true, isError: false })
+    render(<ChatHistoryTab />)
+    expect(screen.getByRole("status", { name: /loading chat history/i })).toBeInTheDocument()
+  })
+
   it("shows an accessible ErrorState with retry when messages fail to load", async () => {
     const refetch = vi.fn()
     useCourseMessages.mockReturnValue({ data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch })

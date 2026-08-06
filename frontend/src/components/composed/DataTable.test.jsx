@@ -19,8 +19,10 @@ describe("DataTable", () => {
     expect(screen.getByText("No students.")).toBeInTheDocument()
   })
 
-  it("shows skeleton rows while loading", () => {
+  it("shows skeleton rows and announces loading (role=status + aria-busy) while loading", () => {
     const { container } = render(<DataTable columns={columns} data={[]} loading />)
     expect(container.querySelectorAll(".animate-pulse").length).toBeGreaterThan(0)
+    expect(screen.getByRole("status", { name: /loading data/i })).toBeInTheDocument()
+    expect(screen.getByRole("table")).toHaveAttribute("aria-busy", "true")
   })
 })

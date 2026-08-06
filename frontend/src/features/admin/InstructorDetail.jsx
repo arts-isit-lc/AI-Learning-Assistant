@@ -207,7 +207,7 @@ export function InstructorDetail() {
 
         <div className="flex flex-col">
           {isLoading ? (
-            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-full" role="status" aria-label="Loading assigned courses" />
           ) : isError ? (
             <ErrorState
               className="border-0"

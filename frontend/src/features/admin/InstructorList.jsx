@@ -58,7 +58,7 @@ export function InstructorList() {
 
       <div className="flex max-h-[calc(100vh-18rem)] flex-col overflow-y-auto">
         {isLoading ? (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2" role="status" aria-label="Loading instructors">
             {[0, 1, 2].map((i) => (
               <Skeleton key={i} className="h-12 w-full" />
             ))}

@@ -76,6 +76,12 @@ describe("InsightsTab", () => {
     expect(screen.getByRole("heading", { name: "No analytics yet" })).toBeInTheDocument()
   })
 
+  it("announces a labelled loading region while analytics load", () => {
+    analyticsResult = { data: undefined, isLoading: true, isError: false }
+    render(<InsightsTab />)
+    expect(screen.getByRole("status", { name: /loading analytics/i })).toBeInTheDocument()
+  })
+
   it("shows an accessible ErrorState with retry when analytics fail to load", async () => {
     const refetch = vi.fn()
     analyticsResult = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }

@@ -5,6 +5,7 @@ import { titleCase } from "@/utils/formatters"
 import { cn } from "@/lib/utils"
 import { Icon } from "@/components/ui/icon"
 import { Collapse } from "@/components/ui/collapse"
+import { Skeleton } from "@/components/ui/skeleton"
 
 /**
  * Learning Journey bar (Figma course + module-chat frames): label + overall
@@ -29,13 +30,18 @@ import { Collapse } from "@/components/ui/collapse"
  * rule), so `overflow-hidden` can clip the height animation without cropping the
  * edge-to-edge divider.
  *
- * @param {{ concepts?: Array, completedConcepts?: number, totalConcepts?: number, percent?: number, contentClassName?: string, fullBleed?: boolean }} props
+ * While `loading`, the status + `NN% (x/y concepts completed)` summary renders as
+ * a skeleton and the tracker toggle is disabled, so the bar never shows a stale
+ * "NOT STARTED · 0%" before the real progress arrives.
+ *
+ * @param {{ concepts?: Array, completedConcepts?: number, totalConcepts?: number, percent?: number, loading?: boolean, contentClassName?: string, fullBleed?: boolean }} props
  */
 export function LearningJourneyBar({
   concepts = [],
   completedConcepts = 0,
   totalConcepts = 0,
   percent = 0,
+  loading = false,
   contentClassName,
   fullBleed = true,
 }) {
@@ -64,18 +70,29 @@ export function LearningJourneyBar({
         <div className="flex items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <span className="text-lg leading-7 font-semibold text-neutral-900">Learning Journey</span>
-            <span className={cn("text-base leading-7 font-semibold uppercase", status.cls)}>{status.label}</span>
-            <span className="text-caption text-foreground leading-7">
-              {percent}% ({completedConcepts}/{totalConcepts} concepts completed)
-            </span>
+            {loading ? (
+              // Progress is still resolving — skeleton the status + summary instead
+              // of flashing "NOT STARTED · 0% (0/0)".
+              <span role="status" aria-label="Loading progress" className="flex items-center">
+                <Skeleton className="h-5 w-60" />
+              </span>
+            ) : (
+              <>
+                <span className={cn("text-base leading-7 font-semibold uppercase", status.cls)}>{status.label}</span>
+                <span className="text-caption text-foreground leading-7">
+                  {percent}% ({completedConcepts}/{totalConcepts} concepts completed)
+                </span>
+              </>
+            )}
           </div>
           <button
             type="button"
             aria-label="Learning journey"
             aria-expanded={open}
             aria-controls={panelId}
+            disabled={loading}
             onClick={() => setOpen((v) => !v)}
-            className="inline-flex items-center gap-2 rounded-sm p-1 text-primary transition-colors hover:bg-primary-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex items-center gap-2 rounded-sm p-1 text-primary transition-colors hover:bg-primary-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
           >
             <Icon icon={MdMap} size={20} />
             <Icon icon={open ? MdExpandLess : MdExpandMore} size={24} />
@@ -83,8 +100,9 @@ export function LearningJourneyBar({
         </div>
 
         {/* Concept tracker — slides open/closed via the shared Collapse
-            primitive (same motion as every accordion). */}
-        <Collapse open={open}>
+            primitive (same motion as every accordion). Force-closed while loading
+            (there are no concepts to list yet, and the toggle is disabled). */}
+        <Collapse open={open && !loading}>
           <ul id={panelId} className="mt-4 flex flex-col gap-6">
             {concepts.map((concept, i) => (
               <li key={concept.concept_id} className="flex flex-col gap-3">

@@ -51,7 +51,7 @@ export function StudentDetail({ courseId, email, name, onBack }) {
       </div>
 
       {isLoading ? (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2" role="status" aria-label="Loading chat history">
           <Skeleton className="h-8 w-64" />
           <Skeleton className="h-24 w-full" />
         </div>

@@ -349,7 +349,7 @@ export function ConfigurationTab() {
       )}
 
       {isLoading ? (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3" role="status" aria-label="Loading course structure">
           <Skeleton className="h-24 w-full" />
           <Skeleton className="h-24 w-full" />
         </div>

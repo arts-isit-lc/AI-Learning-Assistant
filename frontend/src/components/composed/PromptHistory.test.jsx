@@ -17,6 +17,12 @@ describe("PromptHistory", () => {
     expect(screen.getByText("No previous versions yet.")).toBeInTheDocument()
   })
 
+  it("shows a labelled loading skeleton (not the empty message) while loading", () => {
+    render(<PromptHistory versions={[]} loading />)
+    expect(screen.getByRole("status", { name: /loading previous prompts/i })).toBeInTheDocument()
+    expect(screen.queryByText("No previous versions yet.")).not.toBeInTheDocument()
+  })
+
   it("lists every previous version's prompt text", () => {
     render(<PromptHistory versions={VERSIONS} />)
     expect(screen.getByText("newest version")).toBeInTheDocument()

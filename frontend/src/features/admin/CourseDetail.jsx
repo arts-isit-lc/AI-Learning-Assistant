@@ -58,7 +58,7 @@ export function CourseDetail() {
   const { courseId } = useParams()
   const navigate = useNavigate()
 
-  const { data: courses = [] } = useAdminCourses()
+  const { data: courses = [], isLoading: coursesLoading } = useAdminCourses()
   const { data: assigned = [], isLoading, isError, error, refetch } = useCourseInstructors(courseId)
   const { data: allInstructors = [] } = useAdminInstructors()
   const updateCourseAccess = useUpdateCourseAccess()
@@ -200,8 +200,28 @@ export function CourseDetail() {
     }
   }
 
+  if (coursesLoading) {
+    // Skeleton the pane header + instructor list while the course list resolves,
+    // rather than a line of "Loading course…" text.
+    return (
+      <div role="status" aria-label="Loading course" className="flex flex-col gap-4">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-6 w-72" />
+        <Skeleton className="h-16 w-full" />
+      </div>
+    )
+  }
+
   if (!course) {
-    return <p className="text-caption text-muted-foreground">Loading course…</p>
+    // A delete drops the course from the list a beat before the navigate-away
+    // effect fires — don't flash "not found" on the way out.
+    if (deleted) return null
+    return (
+      <ErrorState
+        title="Course not found"
+        description="This course may have been deleted, or you may not have access to it."
+      />
+    )
   }
 
   return (
@@ -260,7 +280,7 @@ export function CourseDetail() {
 
         <div className="mt-2 flex flex-col">
           {isLoading ? (
-            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-16 w-full" role="status" aria-label="Loading instructors" />
           ) : isError ? (
             <ErrorState
               className="border-0"

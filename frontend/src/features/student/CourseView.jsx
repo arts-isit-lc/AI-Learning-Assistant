@@ -69,6 +69,7 @@ export function CourseView() {
     <PageContainer>
       <CourseHeader
         course={course}
+        loading={coursesQuery.isLoading}
         collapsible
         collapsed={headerCollapsed}
         onToggleCollapse={() => setHeaderCollapsed((v) => !v)}
@@ -84,6 +85,7 @@ export function CourseView() {
             completedConcepts={completedConcepts}
             totalConcepts={totalConcepts}
             percent={percent}
+            loading={isLoading}
             fullBleed={false}
           />
         </Collapse>
@@ -126,7 +128,7 @@ export function CourseView() {
 
       <div>
         {isLoading ? (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2" role="status" aria-label="Loading concepts">
             {[0, 1, 2].map((i) => (
               <Skeleton key={i} className="h-14 w-full" />
             ))}

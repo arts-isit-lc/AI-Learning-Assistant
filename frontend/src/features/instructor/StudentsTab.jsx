@@ -92,7 +92,12 @@ export function StudentsTab() {
     <div className="flex flex-col gap-4">
       <Searchbar value={query} onChange={setQuery} placeholder="Search students" />
 
-      <div className="overflow-hidden rounded-sm border border-border">
+      <div
+        className="overflow-hidden rounded-sm border border-border"
+        role={isLoading ? "status" : undefined}
+        aria-label={isLoading ? "Loading roster" : undefined}
+        aria-busy={isLoading || undefined}
+      >
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">

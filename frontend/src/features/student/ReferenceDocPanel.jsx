@@ -28,7 +28,7 @@ export function ReferenceDocPanel({ fileId, fileName, onClose }) {
       </header>
       <div className="min-h-0 flex-1">
         {isLoading ? (
-          <div className="p-4">
+          <div className="p-4" role="status" aria-label="Loading document">
             <Skeleton className="h-full min-h-64 w-full" />
           </div>
         ) : isError || !data?.presignedurl ? (

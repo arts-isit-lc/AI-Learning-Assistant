@@ -6,6 +6,8 @@ const editModule = { mutate: vi.fn(), isPending: false }
 const deleteModule = { mutate: vi.fn(), isPending: false }
 const validate = { mutateAsync: vi.fn().mockResolvedValue({ has_conflicts: false }) }
 let filesResult
+let modulesResult
+let locationValue
 
 const MODULE = {
   module_id: "m1",
@@ -16,7 +18,7 @@ const MODULE = {
 }
 
 vi.mock("@/services/queries", () => ({
-  useModules: () => ({ data: [MODULE] }),
+  useModules: () => modulesResult,
   useConcepts: () => ({ data: [{ concept_id: "con1", concept_name: "algebra" }] }),
   useCourseFiles: () => ({ data: [] }),
   useModuleReferences: () => ({ data: [] }),
@@ -41,7 +43,7 @@ vi.mock("react-router-dom", async (importOriginal) => {
     ...actual,
     useParams: () => ({ courseId: "c1", moduleId: "m1" }),
     useNavigate: () => navigate,
-    useLocation: () => ({ state: { module: MODULE } }),
+    useLocation: () => locationValue,
     // The editor renders <UnsavedChangesPrompt>, whose useBlocker needs a data
     // router. Bare render — stub the blocker as never-blocking; the guard's own
     // behaviour is covered in UnsavedChangesPrompt.test.jsx.
@@ -53,6 +55,8 @@ import { EditModule } from "./EditModule"
 
 beforeEach(() => {
   filesResult = { data: [{ fileName: "notes.pdf", file_id: "f1", fileType: "pdf" }] }
+  modulesResult = { data: [MODULE], isLoading: false }
+  locationValue = { state: { module: MODULE } }
   editModule.mutate.mockClear()
   deleteModule.mutate.mockClear()
   navigate.mockClear()
@@ -131,5 +135,23 @@ describe("EditModule", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("A module with this name already exists.")
     editModule.isError = false
     editModule.error = null
+  })
+
+  it("skeletons the form (not 'Loading module…' text) while the record loads on a direct open", () => {
+    locationValue = { state: null }
+    modulesResult = { data: [], isLoading: true }
+    render(<EditModule />)
+    expect(screen.getByRole("status", { name: /loading module/i })).toBeInTheDocument()
+    expect(screen.queryByText("Loading module…")).not.toBeInTheDocument()
+    // The real form fields aren't mounted while the record resolves.
+    expect(screen.queryByLabelText("Module name")).not.toBeInTheDocument()
+  })
+
+  it("shows a not-found message once modules loaded without the module (no forever skeleton)", () => {
+    locationValue = { state: null }
+    modulesResult = { data: [], isLoading: false }
+    render(<EditModule />)
+    expect(screen.getByText(/could not be found/i)).toBeInTheDocument()
+    expect(screen.queryByRole("status", { name: /loading module/i })).not.toBeInTheDocument()
   })
 })

@@ -41,6 +41,17 @@ describe("LearningJourneyBar", () => {
     expect(screen.getByText("50% (1/2 concepts completed)")).toBeInTheDocument()
   })
 
+  it("skeletons the status/summary and disables the drawer toggle while loading", () => {
+    renderBar({ loading: true })
+    // Label stays; the "NOT STARTED · 0% (0/0)" summary is replaced by a
+    // role=status skeleton so no stale progress flashes.
+    expect(screen.getByText("Learning Journey")).toBeInTheDocument()
+    expect(screen.getByRole("status", { name: /loading progress/i })).toBeInTheDocument()
+    expect(screen.queryByText(/concepts completed/i)).not.toBeInTheDocument()
+    // The tracker can't be opened onto an empty list while loading.
+    expect(screen.getByRole("button", { name: /learning journey/i })).toBeDisabled()
+  })
+
   it("toggles the concept-tracker drawer, exposing/hiding it from assistive tech", async () => {
     renderBar()
     const toggle = screen.getByRole("button", { name: /learning journey/i })

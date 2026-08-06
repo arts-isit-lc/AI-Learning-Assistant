@@ -75,6 +75,12 @@ describe("StudentsTab", () => {
     expect(screen.getByRole("heading", { name: "No students enrolled yet" })).toBeInTheDocument()
   })
 
+  it("announces a labelled loading region while the roster loads", () => {
+    studentsResult = { data: undefined, isLoading: true, isError: false }
+    render(<StudentsTab />)
+    expect(screen.getByRole("status", { name: /loading roster/i })).toBeInTheDocument()
+  })
+
   it("shows an accessible ErrorState with retry when the roster fails to load", async () => {
     const refetch = vi.fn()
     studentsResult = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }

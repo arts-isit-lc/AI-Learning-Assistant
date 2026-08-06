@@ -104,4 +104,20 @@ describe("CourseHeader", () => {
     expect(screen.getByRole("link", { name: "ada@ubc.ca" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /reduce/i })).toBeInTheDocument()
   })
+
+  it("skeletons the course identity while loading — no placeholder 'Course' title flashes, back link stays", () => {
+    renderHeader({ loading: true })
+    // The wait is announced (role=status), matching the app-wide loading pattern.
+    expect(screen.getByRole("status", { name: /loading course/i })).toBeInTheDocument()
+    // No stale "Course" heading pops in before the real code resolves.
+    expect(screen.queryByRole("heading")).not.toBeInTheDocument()
+    // Static chrome (the back link) is still available during the wait.
+    expect(screen.getByRole("link", { name: /courses/i })).toBeInTheDocument()
+  })
+
+  it("shows a compact skeleton (not a 'Course' placeholder) when reduced while loading", () => {
+    renderHeader({ loading: true, collapsible: true, collapsed: true, onToggleCollapse: () => {} })
+    expect(screen.queryByText("Course")).not.toBeInTheDocument()
+    expect(screen.getByRole("link", { name: /courses/i })).toBeInTheDocument()
+  })
 })

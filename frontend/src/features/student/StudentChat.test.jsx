@@ -14,15 +14,14 @@ const stream = {
 }
 
 let sessionsResult
+let coursePageResult
 vi.mock("@/services/queries", () => ({
   useModuleSessions: () => sessionsResult,
   useSessionMessages: () => ({
     data: [{ message_id: "m1", message_content: "Hello student", student_sent: false }],
     isLoading: false,
   }),
-  useCoursePage: () => ({
-    data: [{ module_id: "mod1", module_name: "week 1 intro", concept_id: "c1", concept_name: "Maps" }],
-  }),
+  useCoursePage: () => coursePageResult,
   useModuleFiles: () => ({ data: [], isLoading: false }),
   useCourses: () => ({
     data: [{ course_id: "c1", course_department: "geog", course_number: "412", course_name: "water" }],
@@ -54,6 +53,10 @@ beforeEach(() => {
     isSuccess: true,
     isError: false,
   }
+  coursePageResult = {
+    data: [{ module_id: "mod1", module_name: "week 1 intro", concept_id: "c1", concept_name: "Maps" }],
+    isLoading: false,
+  }
 })
 
 describe("StudentChat page", () => {
@@ -81,6 +84,13 @@ describe("StudentChat page", () => {
     // Expand → the bar returns.
     await user.click(screen.getByRole("button", { name: /expand/i }))
     expect(screen.getByRole("button", { name: /learning journey/i })).toBeInTheDocument()
+  })
+
+  it("shows a loading placeholder for progress while the course page loads (no stale 0%)", () => {
+    coursePageResult = { data: undefined, isLoading: true }
+    renderChat()
+    expect(screen.getByRole("status", { name: /loading progress/i })).toBeInTheDocument()
+    expect(screen.queryByText(/concepts completed/i)).not.toBeInTheDocument()
   })
 
   it("shows an accessible ErrorState with retry when the session list fails to load", async () => {

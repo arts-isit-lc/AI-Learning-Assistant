@@ -24,6 +24,12 @@ describe("ReferenceDocPanel", () => {
     expect(screen.getByTitle("notes.pdf")).toBeInTheDocument()
   })
 
+  it("announces a labelled loading region while the document loads", () => {
+    urlResult = { data: undefined, isLoading: true, isError: false, refetch: vi.fn() }
+    render(<ReferenceDocPanel fileId="f1" fileName="notes.pdf" onClose={vi.fn()} />)
+    expect(screen.getByRole("status", { name: /loading document/i })).toBeInTheDocument()
+  })
+
   it("shows an accessible ErrorState with a working retry when the URL fails", async () => {
     const refetch = vi.fn()
     urlResult = { data: undefined, isLoading: false, isError: true, refetch }

@@ -49,6 +49,12 @@ describe("CourseList", () => {
     await waitFor(() => expect(screen.queryByText("GEOG 250")).not.toBeInTheDocument())
   })
 
+  it("announces a labelled loading region while courses load", () => {
+    coursesResult = { data: undefined, isLoading: true }
+    render(<CourseList />)
+    expect(screen.getByRole("status", { name: /loading courses/i })).toBeInTheDocument()
+  })
+
   it("shows an accessible ErrorState with retry when courses fail to load", async () => {
     const refetch = vi.fn()
     coursesResult = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }

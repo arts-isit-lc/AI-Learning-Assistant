@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Card } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
+import LoadingScreen from "@/app/LoadingScreen"
 import ubcLogo from "@/assets/ubc-logo.svg"
 
 /** Cognito password policy (ported from the legacy signup validation). */
@@ -299,6 +300,13 @@ export function Login() {
     } finally {
       setBusy(false)
     }
+  }
+
+  // While the session is still resolving — or for an already-signed-in visitor
+  // (the effect above bounces them to their role home) — show the shared loading
+  // screen instead of flashing the sign-in form.
+  if (isLoading || isAuthed) {
+    return <LoadingScreen />
   }
 
   return (

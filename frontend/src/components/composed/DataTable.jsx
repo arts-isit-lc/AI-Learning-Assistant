@@ -21,7 +21,13 @@ export function DataTable({ columns, data = [], loading = false, emptyMessage = 
   const colCount = columns.length
 
   return (
-    <Table>
+    <>
+      {loading && (
+        <span role="status" aria-label="Loading data" className="sr-only">
+          Loading data
+        </span>
+      )}
+      <Table aria-busy={loading || undefined}>
       <TableHeader>
         {table.getHeaderGroups().map((group) => (
           <TableRow key={group.id}>
@@ -64,6 +70,7 @@ export function DataTable({ columns, data = [], loading = false, emptyMessage = 
           </TableRow>
         )}
       </TableBody>
-    </Table>
+      </Table>
+    </>
   )
 }

@@ -3,12 +3,13 @@ import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
 let promptResult
+let previousPromptsResult
 const validate = { mutateAsync: vi.fn(), isPending: false }
 const save = { mutateAsync: vi.fn().mockResolvedValue({}), isPending: false }
 
 vi.mock("@/services/queries", () => ({
   useCoursePrompt: () => promptResult,
-  usePreviousPrompts: () => ({ data: [] }),
+  usePreviousPrompts: () => previousPromptsResult,
   useValidatePrompt: () => validate,
   useSavePrompt: () => save,
 }))
@@ -48,6 +49,7 @@ beforeEach(() => {
     data: { system_prompt: "Teach kindly", llm_model_id: "meta.llama3-70b-instruct-v1:0", conflict_metadata: null },
     isLoading: false,
   }
+  previousPromptsResult = { data: [], isLoading: false }
   validate.mutateAsync.mockReset()
   validate.isPending = false
   save.mutateAsync.mockReset().mockResolvedValue({})
@@ -84,6 +86,14 @@ describe("SettingsTab", () => {
     const wrapper = (await screen.findByText("No previous versions yet.")).parentElement
     expect(wrapper).toHaveClass("pb-0")
     expect(wrapper).not.toHaveClass("pb-4")
+  })
+
+  it("shows a loading skeleton in the previous-prompts disclosure while they load", async () => {
+    previousPromptsResult = { data: [], isLoading: true }
+    render(<SettingsTab />)
+    await userEvent.click(screen.getByRole("button", { name: "View previous prompts" }))
+    expect(screen.getByRole("status", { name: /loading previous prompts/i })).toBeInTheDocument()
+    expect(screen.queryByText("No previous versions yet.")).not.toBeInTheDocument()
   })
 
   it("no longer renders a separate 'Check for conflicts' button", () => {
@@ -185,6 +195,16 @@ describe("SettingsTab", () => {
     await waitFor(() =>
       expect(save.mutateAsync).toHaveBeenCalledWith(expect.objectContaining({ conflictMetadata: null }))
     )
+  })
+
+  it("shows a labelled skeleton (not plain 'Loading' text or the real form) while the prompt loads", () => {
+    promptResult = { data: undefined, isLoading: true }
+    render(<SettingsTab />)
+    expect(screen.getByRole("status", { name: /loading settings/i })).toBeInTheDocument()
+    // The real form controls aren't mounted while loading, and there's no
+    // stray "Loading settings…" text line.
+    expect(screen.queryByRole("textbox", { name: "Your prompt" })).not.toBeInTheDocument()
+    expect(screen.queryByText("Loading settings…")).not.toBeInTheDocument()
   })
 
   it("shows an accessible ErrorState with retry when the prompt fails to load", async () => {

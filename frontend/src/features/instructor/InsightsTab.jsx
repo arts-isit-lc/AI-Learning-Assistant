@@ -97,7 +97,7 @@ export function InsightsTab() {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-6" role="status" aria-label="Loading analytics">
         <Skeleton className="h-72 w-full" />
         <Skeleton className="h-6 w-64" />
         <Skeleton className="h-24 w-full" />

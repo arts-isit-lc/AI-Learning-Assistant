@@ -152,6 +152,12 @@ describe("InstructorDetail (staged editing)", () => {
     expect(screen.getByRole("button", { name: "Save changes" })).toHaveClass("text-primary", "border-primary")
   })
 
+  it("announces a labelled loading region while the assigned courses load", () => {
+    assignedResult = { data: undefined, isLoading: true }
+    render(<InstructorDetail />)
+    expect(screen.getByRole("status", { name: /loading assigned courses/i })).toBeInTheDocument()
+  })
+
   it("shows an ErrorState with retry when the assigned courses fail to load", async () => {
     const refetch = vi.fn()
     assignedResult = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }

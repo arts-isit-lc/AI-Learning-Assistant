@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 
 function formatTimestamp(ts) {
   if (!ts) return ""
@@ -23,9 +24,9 @@ function formatTimestamp(ts) {
  * editor. Consecutive entries are split by a horizontal divider, so it only
  * shows when there's more than one version.
  *
- * @param {{ versions?: Array<{ previous_prompt: string, timestamp?: string }>, onRestore?: (text: string) => void, disabled?: boolean }} props
+ * @param {{ versions?: Array<{ previous_prompt: string, timestamp?: string }>, onRestore?: (text: string) => void, disabled?: boolean, loading?: boolean }} props
  */
-export function PromptHistory({ versions = [], onRestore, disabled = false }) {
+export function PromptHistory({ versions = [], onRestore, disabled = false, loading = false }) {
   // Index of the expanded entry (the one showing its "Use prompt" action).
   const [selected, setSelected] = useState(null)
 
@@ -34,6 +35,17 @@ export function PromptHistory({ versions = [], onRestore, disabled = false }) {
   useEffect(() => {
     setSelected(null)
   }, [versions.length])
+
+  if (loading) {
+    // Skeleton rows while the history loads, so opening the disclosure mid-fetch
+    // doesn't flash "No previous versions yet." before the list arrives.
+    return (
+      <div role="status" aria-label="Loading previous prompts" className="flex flex-col gap-4">
+        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-16 w-full" />
+      </div>
+    )
+  }
 
   if (versions.length === 0) {
     return <p className="text-caption text-muted-foreground">No previous versions yet.</p>

@@ -14,6 +14,7 @@ import { Toggle } from "@/components/ui/toggle"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { ConfirmDialog } from "@/components/composed/ConfirmDialog"
 import { Icon } from "@/components/ui/icon"
+import { Skeleton } from "@/components/ui/skeleton"
 
 // Sub-tabs of the instructor course workspace (audit §7). Paths are relative to
 // /instructor/courses/:courseId.
@@ -56,7 +57,7 @@ const tabClass = ({ isActive }) =>
 export default function InstructorCourseLayout() {
   const { courseId } = useParams()
   const navigate = useNavigate()
-  const { data: courses = [] } = useInstructorCourses()
+  const { data: courses = [], isLoading: coursesLoading } = useInstructorCourses()
   const { data: prompt } = useCoursePrompt(courseId)
   const { data: accessCode } = useAccessCode(courseId)
   const updateAccess = useUpdateInstructorCourseAccess(courseId)
@@ -86,6 +87,16 @@ export default function InstructorCourseLayout() {
   return (
     <div className="flex flex-col">
       <div className="border-b border-border pb-6">
+        {coursesLoading ? (
+          // Course identity is still resolving — skeleton the code/name. The
+          // section tabs + active tab (Outlet) below stay usable and load their
+          // own content independently.
+          <div role="status" aria-label="Loading course" className="flex flex-col gap-3">
+            <Skeleton className="h-8 w-40" />
+            <Skeleton className="h-6 w-64" />
+          </div>
+        ) : (
+          <>
         <div className="flex items-start justify-between gap-4">
           <h1 className="text-2xl leading-normal font-semibold text-neutral-900">{code}</h1>
           {course && (
@@ -156,6 +167,8 @@ export default function InstructorCourseLayout() {
             </button>
           )}
         </div>
+          </>
+        )}
       </div>
 
       <nav

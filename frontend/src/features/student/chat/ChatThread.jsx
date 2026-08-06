@@ -29,7 +29,11 @@ export function ChatThread({
 
   if (loading) {
     return (
-      <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-6">
+      <div
+        role="status"
+        aria-label="Loading messages"
+        className="flex flex-1 flex-col gap-6 overflow-y-auto p-6"
+      >
         {[0, 1, 2].map((i) => (
           <Skeleton key={i} className="h-16 w-2/3" />
         ))}

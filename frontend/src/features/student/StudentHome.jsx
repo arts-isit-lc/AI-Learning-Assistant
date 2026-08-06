@@ -46,7 +46,7 @@ export function StudentHome() {
 
       <div className="mt-6">
         {isLoading ? (
-          <div className={GRID}>
+          <div className={GRID} role="status" aria-label="Loading courses">
             {[0, 1, 2].map((i) => (
               <Skeleton key={i} className="h-40 w-full" />
             ))}

@@ -62,7 +62,11 @@ export function SessionSidebar({
 
       <p className="text-lg leading-7 font-semibold text-neutral-900 py-4">Previous chats</p>
       <ScrollArea className="min-h-0 flex-1">
-        <div className="flex flex-col gap-2">
+        <div
+          className="flex flex-col gap-2"
+          role={loading ? "status" : undefined}
+          aria-label={loading ? "Loading chats" : undefined}
+        >
           {loading ? (
             [0, 1, 2].map((i) => <Skeleton key={i} className="h-10 w-full" />)
           ) : (
@@ -96,7 +100,11 @@ export function SessionSidebar({
         {/* Slides open/closed via the shared Collapse primitive (same motion as
             every accordion); the file list scrolls inside once past max height. */}
         <Collapse open={materialsOpen}>
-          <div className="flex max-h-48 flex-col gap-1 overflow-y-auto pb-1">
+          <div
+            className="flex max-h-48 flex-col gap-1 overflow-y-auto pb-1"
+            role={filesLoading ? "status" : undefined}
+            aria-label={filesLoading ? "Loading materials" : undefined}
+          >
             {filesLoading ? (
               [0, 1].map((i) => <Skeleton key={i} className="h-8 w-full" />)
             ) : files.length ? (

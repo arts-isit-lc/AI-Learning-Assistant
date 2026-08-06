@@ -51,6 +51,12 @@ describe("InstructorList", () => {
     await waitFor(() => expect(screen.queryByText("Lovelace, Ada")).not.toBeInTheDocument())
   })
 
+  it("announces a labelled loading region while instructors load", () => {
+    instructorsResult = { data: undefined, isLoading: true }
+    render(<InstructorList />)
+    expect(screen.getByRole("status", { name: /loading instructors/i })).toBeInTheDocument()
+  })
+
   it("shows an accessible ErrorState with retry when instructors fail to load", async () => {
     const refetch = vi.fn()
     instructorsResult = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }

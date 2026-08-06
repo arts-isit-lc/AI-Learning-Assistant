@@ -3,6 +3,7 @@ import { MdChevronLeft, MdExpandMore, MdExpandLess } from "react-icons/md"
 import { titleCase } from "@/utils/formatters"
 import { Icon } from "@/components/ui/icon"
 import { Collapse } from "@/components/ui/collapse"
+import { Skeleton } from "@/components/ui/skeleton"
 
 /** "‹ COURSES" back link (purple, uppercase). */
 function CoursesBackLink() {
@@ -58,9 +59,13 @@ function instructorName(instructor) {
  * is a bare token ("101"), so it's shown as "Section 101". The frame's Syllabus
  * button is intentionally omitted (no syllabus feature).
  *
- * @param {{ course?: object, collapsible?: boolean, collapsed?: boolean, onToggleCollapse?: () => void }} props
+ * While `loading`, the course-identity lines (code / name / instructors) render
+ * as skeletons instead of a placeholder "Course" title, so the header resolves
+ * in step with the page body rather than flashing stale chrome.
+ *
+ * @param {{ course?: object, loading?: boolean, collapsible?: boolean, collapsed?: boolean, onToggleCollapse?: () => void }} props
  */
-export function CourseHeader({ course, collapsible = false, collapsed = false, onToggleCollapse }) {
+export function CourseHeader({ course, loading = false, collapsible = false, collapsed = false, onToggleCollapse }) {
   const title = course
     ? `${String(course.course_department ?? "").toUpperCase()} ${course.course_number ?? ""}`.trim()
     : "Course"
@@ -74,12 +79,15 @@ export function CourseHeader({ course, collapsible = false, collapsed = false, o
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-4">
           <CoursesBackLink />
-          {collapsed && (
-            // Reduced one-liner (Figma 209:4781): the code stays beside the back
-            // link. It mirrors the h1 below — hidden from assistive tech while
-            // reduced — so the course is still announced exactly once.
-            <span className="text-h4 font-semibold text-neutral-900">{title}</span>
-          )}
+          {collapsed &&
+            (loading ? (
+              <Skeleton className="h-6 w-32" />
+            ) : (
+              // Reduced one-liner (Figma 209:4781): the code stays beside the back
+              // link. It mirrors the h1 below — hidden from assistive tech while
+              // reduced — so the course is still announced exactly once.
+              <span className="text-h4 font-semibold text-neutral-900">{title}</span>
+            ))}
         </div>
         {collapsible && <CollapseToggle collapsed={collapsed} onToggle={onToggleCollapse} />}
       </div>
@@ -88,6 +96,18 @@ export function CourseHeader({ course, collapsible = false, collapsed = false, o
           left, term/section top-right. Reduce/Expand slides this open/closed via
           the shared Collapse primitive (same motion as every accordion). */}
       <Collapse open={!collapsed}>
+        {loading ? (
+          // Course identity is still resolving — skeleton the code/name/instructor
+          // lines (role=status announces the wait) rather than showing a stale
+          // "Course" title that pops to the real value.
+          <div role="status" aria-label="Loading course" className="flex flex-col gap-6 pb-2 pt-6">
+            <div className="flex flex-col gap-4">
+              <Skeleton className="h-9 w-48" />
+              <Skeleton className="h-6 w-72" />
+            </div>
+            <Skeleton className="h-5 w-56" />
+          </div>
+        ) : (
         <div className="flex items-start justify-between gap-6 pb-2 pt-6">
           <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-4">
@@ -130,6 +150,7 @@ export function CourseHeader({ course, collapsible = false, collapsed = false, o
             </div>
           )}
         </div>
+        )}
       </Collapse>
     </div>
   )

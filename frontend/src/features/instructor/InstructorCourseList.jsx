@@ -3,6 +3,8 @@ import { useNavigate, useParams } from "react-router-dom"
 import { useInstructorCourses } from "@/services/queries"
 import { Searchbar } from "@/components/composed/Searchbar"
 import { ListRow } from "@/components/composed/ListRow"
+import { ErrorState } from "@/components/composed/ErrorState"
+import { toUserMessage } from "@/services/apiError"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -21,7 +23,7 @@ export function courseCode(course) {
 export function InstructorCourseList() {
   const navigate = useNavigate()
   const { courseId } = useParams()
-  const { data: courses = [], isLoading } = useInstructorCourses()
+  const { data: courses = [], isLoading, isError, error, refetch } = useInstructorCourses()
   const [query, setQuery] = useState("")
 
   const filtered = useMemo(() => {
@@ -41,11 +43,18 @@ export function InstructorCourseList() {
 
       <div className="flex max-h-[calc(100vh-18rem)] flex-col overflow-y-auto">
         {isLoading ? (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2" role="status" aria-label="Loading courses">
             {[0, 1, 2].map((i) => (
               <Skeleton key={i} className="h-16 w-full" />
             ))}
           </div>
+        ) : isError ? (
+          <ErrorState
+            className="border-0"
+            title="Couldn't load courses"
+            description={toUserMessage(error)}
+            onRetry={() => refetch()}
+          />
         ) : filtered.length === 0 ? (
           <p className="px-1 py-3 text-caption text-muted-foreground">No courses found.</p>
         ) : (

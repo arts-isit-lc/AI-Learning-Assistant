@@ -152,6 +152,7 @@ export function StudentChat() {
     <div className="mx-auto flex h-[calc(100vh-5rem)] w-full max-w-7xl flex-col py-6">
       <CourseHeader
         course={course}
+        loading={coursesQuery.isLoading}
         collapsible
         collapsed={headerCollapsed}
         onToggleCollapse={() => setHeaderCollapsed((v) => !v)}
@@ -167,6 +168,7 @@ export function StudentChat() {
             completedConcepts={completedConcepts}
             totalConcepts={totalConcepts}
             percent={percent}
+            loading={coursePage.isLoading}
             fullBleed={false}
           />
         </Collapse>

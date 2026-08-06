@@ -3,6 +3,7 @@ import { render, screen, within, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
 let instructorsAssigned
+let adminCourses
 const updateCourseAccess = { mutate: vi.fn(), mutateAsync: vi.fn().mockResolvedValue({}), isPending: false }
 const updateInstructorAccess = { mutate: vi.fn(), mutateAsync: vi.fn().mockResolvedValue({}), isPending: false }
 const enroll = { mutate: vi.fn(), mutateAsync: vi.fn().mockResolvedValue({}), isPending: false }
@@ -22,7 +23,7 @@ const COURSE = {
 }
 
 vi.mock("@/services/queries", () => ({
-  useAdminCourses: () => ({ data: [COURSE] }),
+  useAdminCourses: () => adminCourses,
   useCourseInstructors: () => instructorsAssigned,
   useAdminInstructors: () => ({
     data: [
@@ -53,6 +54,7 @@ vi.mock("react-router-dom", async (importOriginal) => {
 import { CourseDetail } from "./CourseDetail"
 
 beforeEach(() => {
+  adminCourses = { data: [COURSE], isLoading: false }
   instructorsAssigned = {
     data: [{ user_email: "ada@x.com", first_name: "ada", last_name: "lovelace", access_enabled: true }],
     isLoading: false,
@@ -74,6 +76,22 @@ describe("CourseDetail (staged editing)", () => {
     expect(screen.getByRole("switch", { name: "Course student access" })).toBeInTheDocument()
     expect(screen.getByText("Lovelace, Ada")).toBeInTheDocument()
     expect(screen.getByRole("switch", { name: "OCELIA access for Lovelace, Ada" })).toBeInTheDocument()
+  })
+
+  it("shows a labelled skeleton (not 'Loading course…' text) while the course list loads", () => {
+    adminCourses = { data: undefined, isLoading: true }
+    render(<CourseDetail />)
+    expect(screen.getByRole("status", { name: /loading course/i })).toBeInTheDocument()
+    expect(screen.queryByText("Loading course…")).not.toBeInTheDocument()
+    // The real header isn't mounted while the list is still resolving.
+    expect(screen.queryByRole("heading", { name: "GEOG 250" })).not.toBeInTheDocument()
+  })
+
+  it("shows a 'Course not found' state once the list loaded without the course (no forever-loading)", () => {
+    adminCourses = { data: [], isLoading: false }
+    render(<CourseDetail />)
+    expect(screen.getByRole("heading", { name: "Course not found" })).toBeInTheDocument()
+    expect(screen.queryByText("Loading course…")).not.toBeInTheDocument()
   })
 
   it("darkens the copy access code button to #2E0666 (primary-dark) on hover", () => {

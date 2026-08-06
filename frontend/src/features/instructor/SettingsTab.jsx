@@ -15,6 +15,7 @@ import { toUserMessage } from "@/services/apiError"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Accordion,
   AccordionItem,
@@ -41,7 +42,7 @@ const MODELS = Object.values(LLM_MODELS)
 export function SettingsTab() {
   const { courseId } = useParams()
   const { data: promptData, isLoading, isError, error, refetch } = useCoursePrompt(courseId)
-  const { data: previousPrompts = [] } = usePreviousPrompts(courseId)
+  const { data: previousPrompts = [], isLoading: previousPromptsLoading } = usePreviousPrompts(courseId)
   const validate = useValidatePrompt(courseId)
   const save = useSavePrompt(courseId)
 
@@ -116,7 +117,21 @@ export function SettingsTab() {
   }
 
   if (isLoading) {
-    return <p className="text-caption text-muted-foreground">Loading settings…</p>
+    // Mirror the form layout (model field, system-prompt block, editable prompt)
+    // so the tab resolves in place instead of flashing a line of text.
+    return (
+      <div
+        role="status"
+        aria-label="Loading settings"
+        className="flex max-w-3xl flex-col gap-6"
+      >
+        <Skeleton className="h-6 w-40" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-6 w-40" />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-32 w-full" />
+      </div>
+    )
   }
 
   if (isError) {
@@ -203,6 +218,7 @@ export function SettingsTab() {
           <AccordionContent className="pb-0">
             <PromptHistory
               versions={previousPrompts}
+              loading={previousPromptsLoading}
               onRestore={(text) => handlePromptChange({ target: { value: text } })}
               disabled={busy}
             />

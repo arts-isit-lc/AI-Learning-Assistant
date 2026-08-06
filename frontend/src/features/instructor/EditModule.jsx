@@ -28,6 +28,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Icon } from "@/components/ui/icon"
 import { Progress } from "@/components/ui/progress"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import {
@@ -50,7 +51,7 @@ export function EditModule() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  const { data: modules = [] } = useModules(courseId)
+  const { data: modules = [], isLoading: modulesLoading } = useModules(courseId)
   const moduleData = location.state?.module || modules.find((m) => m.module_id === moduleId)
 
   const { data: concepts = [] } = useConcepts(courseId)
@@ -221,7 +222,18 @@ export function EditModule() {
             </p>
 
             {!moduleData ? (
-              <p className="text-caption text-muted-foreground">Loading module…</p>
+              modulesLoading ? (
+                // Skeleton the form fields while the module record resolves, rather
+                // than a line of "Loading module…" text.
+                <div role="status" aria-label="Loading module" className="flex flex-col gap-8">
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-24 w-full" />
+                  <Skeleton className="h-24 w-full" />
+                </div>
+              ) : (
+                <p className="text-caption text-muted-foreground">This module could not be found.</p>
+              )
             ) : (
               <>
                 <div className="flex flex-col">

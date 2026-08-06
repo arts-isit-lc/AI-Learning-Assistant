@@ -56,6 +56,12 @@ describe("StudentHome", () => {
     expect(screen.getByRole("dialog")).toHaveAccessibleName("Join course")
   })
 
+  it("announces a labelled loading region while courses load", () => {
+    coursesResult = { data: undefined, isLoading: true, isError: false }
+    renderHome()
+    expect(screen.getByRole("status", { name: /loading courses/i })).toBeInTheDocument()
+  })
+
   it("shows an accessible ErrorState with a working retry when courses fail to load", async () => {
     const refetch = vi.fn()
     coursesResult = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }

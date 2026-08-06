@@ -58,6 +58,20 @@ describe("CourseView", () => {
     expect(screen.getByRole("button", { name: /learning journey/i })).toBeInTheDocument()
   })
 
+  it("shows a loading placeholder for progress (not a stale 0%) while the course page loads", () => {
+    coursePage = { data: undefined, isLoading: true, isError: false }
+    render(
+      <MemoryRouter initialEntries={["/courses/c1"]}>
+        <Routes>
+          <Route path="/courses/:courseId" element={<CourseView />} />
+        </Routes>
+      </MemoryRouter>
+    )
+    // The journey bar shows a loading skeleton instead of "0% (0/0 concepts completed)".
+    expect(screen.getByRole("status", { name: /loading progress/i })).toBeInTheDocument()
+    expect(screen.queryByText(/concepts completed/i)).not.toBeInTheDocument()
+  })
+
   it("Reduce/Expand collapses the header — hides the Learning Journey bar, keeps code + Concepts", async () => {
     renderCourse()
 

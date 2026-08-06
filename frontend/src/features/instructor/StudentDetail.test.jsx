@@ -53,6 +53,12 @@ describe("StudentDetail", () => {
     expect(screen.getByRole("heading", { name: "No chat history" })).toBeInTheDocument()
   })
 
+  it("announces a labelled loading region while chat history loads", () => {
+    messagesResult = { data: undefined, isLoading: true, isError: false }
+    render(<StudentDetail courseId="c1" email="ada@x.com" onBack={vi.fn()} />)
+    expect(screen.getByRole("status", { name: /loading chat history/i })).toBeInTheDocument()
+  })
+
   it("shows an accessible ErrorState with retry when chat history fails to load", async () => {
     const refetch = vi.fn()
     messagesResult = { data: undefined, isLoading: false, isError: true, error: { status: 500 }, refetch }

@@ -13,6 +13,8 @@ const h = vi.hoisted(() => ({
   apiClient: { post: vi.fn() },
   refresh: vi.fn(),
   navigate: vi.fn(),
+  isAuthed: false,
+  isLoading: false,
 }))
 vi.mock("aws-amplify/auth", () => ({
   signIn: h.signIn,
@@ -25,7 +27,7 @@ vi.mock("aws-amplify/auth", () => ({
 }))
 vi.mock("@/services/api", () => ({ default: h.apiClient }))
 vi.mock("@/context/AuthContext", () => ({
-  useAuth: () => ({ isAuthed: false, isLoading: false, refresh: h.refresh }),
+  useAuth: () => ({ isAuthed: h.isAuthed, isLoading: h.isLoading, refresh: h.refresh }),
 }))
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal()
@@ -40,6 +42,8 @@ beforeEach(() => {
   })
   h.refresh.mockResolvedValue(undefined)
   h.apiClient.post.mockResolvedValue({})
+  h.isAuthed = false
+  h.isLoading = false
 })
 
 describe("Login", () => {
@@ -53,6 +57,20 @@ describe("Login", () => {
     expect(screen.getByRole("button", { name: "Log in" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Forgot password?" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Create an account" })).toBeInTheDocument()
+  })
+
+  it("shows the loading screen (not the sign-in form) while the session is resolving", () => {
+    h.isLoading = true
+    render(<Login />)
+    expect(screen.getByRole("status")).toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "Please log in" })).not.toBeInTheDocument()
+  })
+
+  it("shows the loading screen for an already-signed-in visitor (pre-redirect), not the form", () => {
+    h.isAuthed = true
+    render(<Login />)
+    expect(screen.getByRole("status")).toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "Please log in" })).not.toBeInTheDocument()
   })
 
   it("gives the Forgot password / Create an account links px-4 + the #F2E8FF hover bg / #2E0666 hover text, no hover underline", () => {
