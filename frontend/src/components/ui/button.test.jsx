@@ -114,15 +114,25 @@ describe("Button", () => {
     expect(screen.getByRole("button", { name: "Cancel" })).toHaveClass("hover:bg-primary-subtle")
   })
 
-  it("outline: #6829C2 border+text at rest; hover darkens the border to #2E0666; press paints #AA78F0 with #2E0666 border+text", () => {
+  it("outline: #6829C2 border+text at rest; hover darkens border+text to #2E0666; press paints #AA78F0 with #2E0666 border+text", () => {
     render(<Button variant="outline">Add</Button>)
     const btn = screen.getByRole("button", { name: "Add" })
     // Rest: #6829C2 (primary) border + text on a white (bg-background) fill.
     expect(btn).toHaveClass("border", "border-primary", "bg-background", "text-primary")
-    // Hover: #F2E8FF (primary-subtle) surface + #2E0666 (primary-dark) border.
-    expect(btn).toHaveClass("hover:bg-primary-subtle", "hover:border-primary-dark")
+    // Hover: #F2E8FF (primary-subtle) surface + #2E0666 (primary-dark) border AND text.
+    expect(btn).toHaveClass("hover:bg-primary-subtle", "hover:border-primary-dark", "hover:text-primary-dark")
     // Press (active): #AA78F0 (primary-active) surface + #2E0666 border AND text.
     expect(btn).toHaveClass("active:bg-primary-active", "active:border-primary-dark", "active:text-primary-dark")
+  })
+
+  it("outline disabled (inactive): #BFBFBF (neutral-400) border+text on the white fill, no opacity fade", () => {
+    render(
+      <Button variant="outline" disabled>
+        Cancel
+      </Button>
+    )
+    const btn = screen.getByRole("button", { name: "Cancel" })
+    expect(btn).toHaveClass("bg-background", "disabled:border-neutral-400", "disabled:text-neutral-400", "disabled:opacity-100")
   })
 
   it("lets an Icon inside an outline button track the text colour via currentColor", () => {
