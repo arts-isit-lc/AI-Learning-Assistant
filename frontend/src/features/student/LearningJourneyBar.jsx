@@ -92,7 +92,7 @@ export function LearningJourneyBar({
             aria-controls={panelId}
             disabled={loading}
             onClick={() => setOpen((v) => !v)}
-            className="inline-flex items-center gap-2 rounded-sm p-1 text-primary transition-colors hover:bg-primary-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-sm p-1 text-primary transition-colors hover:bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
           >
             <Icon icon={MdMap} size={20} />
             <Icon icon={open ? MdExpandLess : MdExpandMore} size={24} />

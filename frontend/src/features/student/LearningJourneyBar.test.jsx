@@ -34,6 +34,13 @@ function renderBar(props) {
 }
 
 describe("LearningJourneyBar", () => {
+  it("toggle button has no hover background change", () => {
+    renderBar()
+    const toggle = screen.getByRole("button", { name: /learning journey/i })
+    expect(toggle).toHaveClass("hover:bg-transparent")
+    expect(toggle).not.toHaveClass("hover:bg-primary-subtle")
+  })
+
   it("shows the label, status, and progress summary", () => {
     renderBar()
     expect(screen.getByText("Learning Journey")).toBeInTheDocument()
