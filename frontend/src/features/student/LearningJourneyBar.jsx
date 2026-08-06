@@ -110,7 +110,7 @@ export function LearningJourneyBar({
                   <div className="flex items-center gap-3">
                     <span
                       className={cn(
-                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-caption font-semibold",
+                        "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-caption text-neutral-900 font-semibold",
                         concept.isComplete
                           ? "bg-success text-success-foreground"
                           : "bg-muted text-muted-foreground"
