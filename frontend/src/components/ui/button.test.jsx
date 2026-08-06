@@ -20,17 +20,21 @@ describe("Button", () => {
     expect(btn).toHaveAttribute("aria-busy", "true")
   })
 
-  it("visually hides the label (sr-only) and shows the brand-purple (#6829C2) spinner surface while loading", () => {
+  it("keeps the label in place (transparent, size-reserving) and overlays the brand-purple (#6829C2) spinner while loading", () => {
     render(<Button loading>Save</Button>)
     // Accessible name is preserved (button still findable by name) ...
     const btn = screen.getByRole("button", { name: "Save" })
-    // ... but the label is not visually shown — it lives in an sr-only span.
-    const label = btn.querySelector("span.sr-only")
+    // ... via a transparent (opacity-0) label that still occupies the button's box
+    // so the width/height don't change when the text swaps to the spinner.
+    const label = btn.querySelector("span.opacity-0")
     expect(label).toHaveTextContent("Save")
+    // The spinner is absolutely positioned so it doesn't add to the button's size.
+    expect(btn.querySelector(".animate-spin")).toBeInTheDocument()
+    expect(btn.querySelector("span.absolute.inset-0")).toBeInTheDocument()
+    // The button is a positioning context for the overlaid spinner.
+    expect(btn).toHaveClass("relative")
     // #6829C2 == bg-primary, with a white (text-primary-foreground) spinner.
     expect(btn).toHaveClass("bg-primary", "text-primary-foreground")
-    // Spinner element present.
-    expect(btn.querySelector(".animate-spin")).toBeInTheDocument()
   })
 
   it("keeps full opacity while loading (no disabled fade)", () => {
@@ -49,18 +53,20 @@ describe("Button", () => {
     const btn = screen.getByRole("button", { name: "Save" })
     expect(btn).toBeDisabled()
     expect(btn).toHaveClass("bg-primary", "text-primary-foreground")
-    // Label present only in the sr-only span, not shown visually.
-    expect(btn.querySelector("span.sr-only")).toHaveTextContent("Save")
+    // Label present in the transparent size-reserving span, not shown visually.
+    expect(btn.querySelector("span.opacity-0")).toHaveTextContent("Save")
   })
 
   it("shows the label again once loading resolves", () => {
     const { rerender } = render(<Button loading>Save</Button>)
-    // While loading the visible label is sr-only.
-    expect(screen.getByRole("button", { name: "Save" }).querySelector("span.sr-only")).toHaveTextContent("Save")
+    // While loading the label sits in a transparent, size-reserving span.
+    expect(screen.getByRole("button", { name: "Save" }).querySelector("span.opacity-0")).toHaveTextContent("Save")
     rerender(<Button>Save</Button>)
     const btn = screen.getByRole("button", { name: "Save" })
     expect(btn).toHaveTextContent("Save")
-    expect(btn.querySelector("span.sr-only")).toBeNull()
+    // Once resolved the label renders directly (no transparent wrapper, no spinner).
+    expect(btn.querySelector("span.opacity-0")).toBeNull()
+    expect(btn.querySelector(".animate-spin")).toBeNull()
     expect(btn).not.toBeDisabled()
   })
 

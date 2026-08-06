@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils"
  * element (e.g. a router `<Link>`).
  */
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-none text-caption font-semibold transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+  "relative inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-none text-caption font-semibold transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
@@ -99,12 +99,15 @@ const Button = React.forwardRef(function Button(
       {asChild ? (
         children
       ) : loading ? (
-        // Spinner only — the label is visually hidden (sr-only) rather than
-        // removed, so nothing shows during the animation while the button keeps
-        // its accessible name for screen readers.
+        // Keep the label in place but transparent so the button reserves its exact
+        // width + height (no shrink/jump when the text swaps to the spinner), then
+        // overlay a centred spinner. opacity-0 (not sr-only, which removes the box)
+        // preserves BOTH the layout size and the accessible name for screen readers.
         <>
-          <Spinner />
-          <span className="sr-only">{children}</span>
+          <span aria-hidden="true" className="absolute inset-0 flex items-center justify-center">
+            <Spinner />
+          </span>
+          <span className="opacity-0">{children}</span>
         </>
       ) : (
         children
