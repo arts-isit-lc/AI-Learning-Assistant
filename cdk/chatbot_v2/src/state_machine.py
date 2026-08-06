@@ -38,6 +38,14 @@ class SessionState:
     stage: Stage = "prior_knowledge"
     module_complete: bool = False
     completion_message_sent: bool = False
+    # Provenance of the delivered completion message, set only on the "complete"
+    # turn (kept alongside completion_message_sent, which stays the loop guard).
+    # "" = no completion message delivered yet; "generated" = normal completion
+    # cleared the guardrail; "guardrail_retry" = the constrained retry cleared it
+    # after the normal one was blocked; "blocked_fallback" = both were blocked
+    # and the student saw the generic redirect. Distinguishes the Option-C
+    # outcomes for debugging without overloading the boolean.
+    completion_message_source: str = ""
     interactions: int = 0
     engagement_score: float = 0.0
     concept_progress: dict[str, ConceptProgress] = field(default_factory=dict)
@@ -108,6 +116,7 @@ def serialize_state(state: SessionState) -> dict:
         "stage": state.stage,
         "module_complete": state.module_complete,
         "completion_message_sent": state.completion_message_sent,
+        "completion_message_source": state.completion_message_source,
         "interactions": state.interactions,
         "engagement_score": str(state.engagement_score),
         "concept_progress": serialized_progress,
@@ -156,6 +165,7 @@ def deserialize_state(item: dict) -> SessionState:
         stage=item.get("stage", "prior_knowledge"),
         module_complete=item.get("module_complete", False),
         completion_message_sent=item.get("completion_message_sent", False),
+        completion_message_source=item.get("completion_message_source", ""),
         interactions=int(item.get("interactions", 0)),
         engagement_score=float(item.get("engagement_score", 0.0)),
         concept_progress=concept_progress,

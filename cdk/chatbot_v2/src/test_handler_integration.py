@@ -423,10 +423,12 @@ def test_blocked_completion_turn_latches_completion_state(wire, monkeypatch):
 
     # State is now persisted on the blocked path (previously it was not persisted
     # at all), and both completion flags latch — the impossible state is gone.
-    wire.persist_state.assert_called_once()
+    # (The output block triggers the constrained retry, which is also blocked
+    # here since the stub returns the same blocked dict, so it's a fallback.)
     saved = wire.persist_state.call_args.args[0]
     assert saved.module_complete is True
     assert saved.completion_message_sent is True
+    assert saved.completion_message_source == "blocked_fallback"
 
 
 def test_blocked_completion_does_not_reloop_next_turn(wire, monkeypatch):
@@ -436,7 +438,12 @@ def test_blocked_completion_does_not_reloop_next_turn(wire, monkeypatch):
     _make_completion_ready(wire)
     wire.stream.return_value = {"message": "[blocked]", "blocked": True, "type": "output"}
     main.handler(_event(), _Ctx())  # blocked complete turn — latches the flag
+    persisted = wire.persist_state.call_args.args[0]
+    assert persisted.completion_message_sent is True
 
+    # Next turn loads the persisted state (as production would) — must be
+    # post_completion, NOT complete again (the infinite loop).
+    monkeypatch.setattr(main, "_load_session_state", lambda sid: persisted)
     wire.stream.return_value = "A normal follow-up answer."  # stream succeeds now
     main.handler(_event(), _Ctx())
     saved = wire.persist_state.call_args.args[0]  # most recent persist
@@ -452,12 +459,97 @@ def test_successful_completion_latches_state_and_next_turn_is_post_completion(wi
     saved = wire.persist_state.call_args.args[0]
     assert saved.module_complete is True
     assert saved.completion_message_sent is True
+    assert saved.completion_message_source == "generated"
     assert saved.last_mode == "complete"
 
-    # Next turn -> post_completion (no re-congratulation).
+    # Next turn loads the persisted state (as production would) -> post_completion
+    # (no re-congratulation).
+    monkeypatch.setattr(main, "_load_session_state", lambda sid: saved)
     main.handler(_event(), _Ctx())
     saved2 = wire.persist_state.call_args.args[0]
     assert saved2.last_mode == "post_completion"
+
+
+# ---------------------------------------------------------------------------
+# Option C: a completion message blocked by the OUTPUT guardrail is retried ONCE
+# with a constrained prompt (no recommendations / other modules, < 40 words)
+# instead of degrading to the generic "let me rephrase" redirect. The retry is
+# scoped to mode=="complete" + output block only.
+# ---------------------------------------------------------------------------
+
+
+def test_blocked_completion_retries_with_constrained_prompt_and_persists(wire, monkeypatch):
+    monkeypatch.setattr(main, "_load_other_module_names", lambda c, m: ["Graph Algorithms"])
+    _make_completion_ready(wire)
+    # Normal completion is output-blocked; the constrained retry succeeds.
+    wire.stream.side_effect = [
+        {"message": "[blocked]", "blocked": True, "type": "output"},
+        "Congratulations, you've completed this module.",
+    ]
+
+    resp = main.handler(_event(), _Ctx())
+    body = json.loads(resp["body"])
+
+    # The retry output is shown/persisted — NOT the guardrail redirect.
+    assert body["llm_output"] == "Congratulations, you've completed this module."
+    # Normal persistence path ran (message written to history) and state latched.
+    wire.persist_turn.assert_called_once()
+    saved = wire.persist_state.call_args.args[0]
+    assert saved.module_complete is True
+    assert saved.completion_message_sent is True
+    assert saved.completion_message_source == "guardrail_retry"
+    # The retry used the constrained prompt (the second stream call).
+    assert wire.stream.call_count == 2
+    retry_prompt = wire.stream.call_args_list[-1].kwargs["system_prompt"]
+    assert "under 40 words" in retry_prompt
+    assert "other modules" in retry_prompt
+
+
+def test_blocked_completion_retry_also_blocked_falls_back_and_latches(wire, monkeypatch):
+    monkeypatch.setattr(main, "_load_other_module_names", lambda c, m: [])
+    _make_completion_ready(wire)
+    wire.stream.side_effect = [
+        {"message": "[blocked]", "blocked": True, "type": "output"},
+        {"message": "[blocked again]", "blocked": True, "type": "output"},
+    ]
+
+    resp = main.handler(_event(), _Ctx())
+    body = json.loads(resp["body"])
+
+    # Retry also blocked -> keep the original redirect, but state STILL latches
+    # (correctness fix), so there is no infinite completion loop.
+    assert body["llm_output"] == "[blocked]"
+    assert wire.stream.call_count == 2
+    saved = wire.persist_state.call_args.args[0]
+    assert saved.module_complete is True
+    assert saved.completion_message_sent is True
+    assert saved.completion_message_source == "blocked_fallback"
+
+
+def test_non_completion_output_block_does_not_retry(wire):
+    # A blocked ASSESS turn (not complete) must NOT trigger the completion retry.
+    wire.state.interactions = 1  # bootstrapped; correct answer -> assess, not complete
+    wire.stream.return_value = {"message": "[blocked]", "blocked": True, "type": "output"}
+    main.handler(_event(), _Ctx())
+    assert wire.stream.call_count == 1  # no retry
+
+
+def test_completion_input_block_does_not_retry_and_does_not_burn_completion(wire, monkeypatch):
+    # An INPUT block on a completion turn is not retried (regenerating the output
+    # can't fix a blocked input). The student never saw a congratulation, so the
+    # one-shot completion is NOT burned — completion_message_sent stays False so
+    # the next clean turn re-attempts it — while the module_complete verdict
+    # (a metrics decision) still latches and state is persisted.
+    monkeypatch.setattr(main, "_load_other_module_names", lambda c, m: [])
+    _make_completion_ready(wire)
+    wire.stream.return_value = {"message": "[blocked]", "blocked": True, "type": "input"}
+    main.handler(_event(), _Ctx())
+    assert wire.stream.call_count == 1  # no retry
+    wire.persist_state.assert_called_once()  # state still persisted
+    saved = wire.persist_state.call_args.args[0]
+    assert saved.module_complete is True
+    assert saved.completion_message_sent is False
+    assert saved.completion_message_source == ""
 
 
 def test_state_load_failure_emits_error_terminal_message(wire, monkeypatch):

@@ -91,6 +91,30 @@ def build_system_prompt(
     return "\n".join(sections)
 
 
+def build_completion_retry_prompt() -> str:
+    """Constrained system prompt for the ONE completion-message retry after the
+    output guardrail blocks the normal "complete" response (Option C).
+
+    The normal completion message both summarizes concepts AND suggests other
+    modules; the "suggest other modules" content is the most likely off-topic
+    trigger for an output guardrail tuned to keep responses on the current
+    course material. This retry drops all recommendations and produces a short,
+    pure acknowledgement so it clears the guardrail while still telling the
+    student they finished. Kept deliberately minimal — no base identity, RAG
+    context, or grounding — so the model doesn't regenerate the content that
+    tripped the filter in the first place.
+
+    Returns:
+        A standalone system prompt string for the constrained completion retry.
+    """
+    return (
+        "Generate a brief completion acknowledgement for the student. "
+        "Confirm they have completed the module. Do not mention other modules, "
+        "courses, recommendations, resources, or additional topics. "
+        "Keep it under 40 words.\n\n" + NO_EMOJI_RULE
+    )
+
+
 def build_tutor_system_prompt(tutor_prompt: str, guardrail_tags: str) -> str:
     """Assemble the system prompt for an active math-tutor turn.
 

@@ -28,7 +28,7 @@ from state_machine import (create_default_state, serialize_state, deserialize_st
 from evaluation import evaluate_answer
 from concept_tracker import introduce_concepts, discuss_concepts, demonstrate_concepts, record_misunderstandings
 from mode_selector import select_mode
-from prompt_builder import build_system_prompt, build_tutor_system_prompt
+from prompt_builder import build_system_prompt, build_tutor_system_prompt, build_completion_retry_prompt
 from retrieval_client import invoke_retrieval, get_bounded_history as get_retrieval_history
 from streaming import stream_response, send_final
 from guardrails import load_guardrail_config, wrap_user_message, handle_guardrail_error, GUARDRAIL_SERVICE_ERROR_MESSAGE
@@ -730,10 +730,12 @@ def handler(event, context):
             state.hint_level += 1
             state.hint_count += 1
 
-        # Step 9: Handle completion mode
+        # Step 9: Handle completion mode. completion_message_sent is NOT latched
+        # here — it is set once the OUTCOME is known (below), so an input-blocked
+        # completion turn (where the student never saw a congratulation) does not
+        # burn the one-shot completion and re-attempts it on the next clean turn.
         other_modules: list[str] = []
         if mode == "complete":
-            state.completion_message_sent = True
             other_modules = _load_other_module_names(course_id, module_id)
 
         # Step 10: Retrieval. The sequential path runs it now with the
@@ -876,19 +878,61 @@ def handler(event, context):
             guardrail_id=guardrail_id,
         )
         _timings["generation_ms"] = round((time.perf_counter() - _gen_t) * 1000, 2)
+
+        # Option C: a blocked COMPLETION message must not degrade to the generic
+        # guardrail redirect ("Let me rephrase..."), which destroys the moment the
+        # student earned. Retry ONCE with a constrained prompt that drops the
+        # "suggest other modules" content (the likely off-topic trigger) and just
+        # acknowledges completion. Scoped narrowly: only a "complete" turn blocked
+        # on OUTPUT — input blocks (retrying the output can't fix the input) and
+        # every non-completion turn are untouched. If the retry also blocks,
+        # llm_output stays the original blocked result and falls through to the
+        # blocked path, which still persists completion state (so the loop can't
+        # recur regardless of the retry outcome).
+        completion_retry_succeeded = False
+        if (mode == "complete"
+                and isinstance(llm_output, dict) and llm_output.get("blocked")
+                and llm_output.get("type") == "output"):
+            logger.info("Completion message blocked on output; retrying with constrained prompt")
+            retry_output = _stream_with_guardrail_retry(
+                system_prompt=build_completion_retry_prompt(),
+                user_message=user_msg,
+                prompt_history=prompt_history,
+                session_id=session_id,
+                model_kwargs=model_kwargs,
+                guardrail_id=guardrail_id,
+            )
+            if isinstance(retry_output, dict) and retry_output.get("blocked"):
+                logger.warning("Constrained completion retry also blocked by guardrail")
+            else:
+                llm_output = retry_output
+                completion_retry_succeeded = True
+
         # If guardrail retry produced a blocked redirect, return it directly
         if isinstance(llm_output, dict) and llm_output.get("blocked"):
-            # Diagnostic: the stream-signal log only carried block_type, which
-            # made a real intervention a mystery. Surface WHICH side blocked, the
-            # mode/state at block time, and (when the ConverseStream trace is
-            # available) the Bedrock assessment naming the policy that fired, so
-            # an intervention is diagnosable without guessing.
+            block_stage = llm_output.get("type")  # "input" | "output" | "service_error"
+            # Completion latch decision (Option C UX):
+            # - OUTPUT block reaching here means the constrained retry ALSO failed
+            #   → latch so we don't retry every turn forever; the student saw the
+            #   fallback redirect, so the source is "blocked_fallback".
+            # - INPUT block means the STUDENT's message was blocked and no
+            #   completion message was ever produced → do NOT latch, so the next
+            #   clean turn re-attempts the congratulation. module_complete (a
+            #   metrics verdict) stays true regardless.
+            if mode == "complete" and block_stage == "output":
+                state.completion_message_sent = True
+                state.completion_message_source = "blocked_fallback"
+            # Diagnostic: capture stage + action + assessment EXPLICITLY (don't
+            # leave it to be inferred later) so a real intervention is diagnosable.
             logger.warning("Guardrail blocked turn", extra={
-                "guardrail_block_type": llm_output.get("type"),
+                "completion_attempt": mode == "complete",
+                "guardrail_trigger_stage": block_stage,
+                "guardrail_action": "GUARDRAIL_INTERVENED",
                 "guardrail_assessment": llm_output.get("assessment"),
                 "mode": mode,
                 "module_complete": state.module_complete,
                 "completion_message_sent": state.completion_message_sent,
+                "completion_message_source": state.completion_message_source,
             })
             # M16: a blocked turn is persisted to the RDS projection (so the UI
             # history still shows the exchange) but intentionally NOT to the
@@ -933,6 +977,16 @@ def handler(event, context):
                     "session_state": _session_state_view(state),
                 }),
             }
+
+        # A completion message was actually DELIVERED (llm_output is a string
+        # here, having cleared the guardrail either normally or on the retry).
+        # Latch the one-shot completion flag now, with its provenance: "generated"
+        # when the first attempt cleared, "guardrail_retry" when the constrained
+        # retry did. Only on the "complete" turn; post_completion keeps the
+        # source set on the original completion turn.
+        if mode == "complete":
+            state.completion_message_sent = True
+            state.completion_message_source = "guardrail_retry" if completion_retry_succeeded else "generated"
 
         # Discuss concepts that appear in the student's message
         if message_content and state.module_concepts:
