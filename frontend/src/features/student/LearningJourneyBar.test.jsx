@@ -52,6 +52,15 @@ describe("LearningJourneyBar", () => {
     expect(screen.getByRole("button", { name: /learning journey/i })).toBeDisabled()
   })
 
+  it("renders concepts in a horizontal scrollable row when expanded", async () => {
+    renderBar()
+    await userEvent.click(screen.getByRole("button", { name: /learning journey/i }))
+    const list = screen.getByRole("link", { name: /week 1/i }).closest("ul").parentElement.closest("ul")
+    expect(list).toHaveClass("flex")
+    expect(list).not.toHaveClass("flex-col")
+    expect(list).toHaveClass("overflow-x-auto")
+  })
+
   it("toggles the concept-tracker drawer, exposing/hiding it from assistive tech", async () => {
     renderBar()
     const toggle = screen.getByRole("button", { name: /learning journey/i })

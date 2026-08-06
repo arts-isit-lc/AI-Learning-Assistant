@@ -1,6 +1,6 @@
 import { useId, useState } from "react"
 import { Link, useParams } from "react-router-dom"
-import { MdCheckCircle, MdMap, MdExpandMore, MdExpandLess } from "react-icons/md"
+import { MdCheckCircle, MdMap, MdExpandMore, MdExpandLess, MdChevronRight } from "react-icons/md"
 import { titleCase } from "@/utils/formatters"
 import { cn } from "@/lib/utils"
 import { Icon } from "@/components/ui/icon"
@@ -103,44 +103,50 @@ export function LearningJourneyBar({
             primitive (same motion as every accordion). Force-closed while loading
             (there are no concepts to list yet, and the toggle is disabled). */}
         <Collapse open={open && !loading}>
-          <ul id={panelId} className="mt-4 flex flex-col gap-6">
-            {concepts.map((concept, i) => (
-              <li key={concept.concept_id} className="flex flex-col gap-3">
-                <div className="flex items-center gap-3">
-                  <span
-                    className={cn(
-                      "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-caption font-semibold",
-                      concept.isComplete
-                        ? "bg-success text-success-foreground"
-                        : "bg-muted text-muted-foreground"
-                    )}
-                  >
-                    {concept.isComplete ? <Icon icon={MdCheckCircle} size={16} label="Complete" /> : i + 1}
-                  </span>
-                  <div className="flex min-w-0 flex-col">
-                    <span className="truncate text-base font-semibold text-foreground">
-                      {titleCase(concept.concept_name)}
+          <div id={panelId} className="relative mt-4">
+            <ul className="flex gap-6 overflow-x-auto pb-2 pr-10">
+              {concepts.map((concept, i) => (
+                <li key={concept.concept_id} className="flex min-w-[180px] shrink-0 flex-col gap-3">
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={cn(
+                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-caption font-semibold",
+                        concept.isComplete
+                          ? "bg-success text-success-foreground"
+                          : "bg-muted text-muted-foreground"
+                      )}
+                    >
+                      {concept.isComplete ? <Icon icon={MdCheckCircle} size={16} label="Complete" /> : i + 1}
                     </span>
+                    <div className="flex min-w-0 flex-col">
+                      <span className="text-sm font-semibold text-foreground">
+                        {titleCase(concept.concept_name)}
+                      </span>
+                    </div>
                   </div>
-                </div>
 
-                {concept.modules?.length > 0 && (
-                  <ul className="flex flex-col gap-2">
-                    {concept.modules.map((module) => (
-                      <li key={module.module_id} className="flex items-center gap-3">
-                        <Link
-                          to={`/courses/${courseId}/modules/${module.module_id}`}
-                          className="rounded-[12.75px] border-[0.75px] px-1.5 py-[3px] border-primary bg-background text-[10.5px] text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
-                        >
-                          {titleCase(module.module_name)}
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </li>
-            ))}
-          </ul>
+                  {concept.modules?.length > 0 && (
+                    <ul className="flex flex-wrap gap-1.5 pl-11">
+                      {concept.modules.map((module) => (
+                        <li key={module.module_id}>
+                          <Link
+                            to={`/courses/${courseId}/modules/${module.module_id}`}
+                            className="rounded-[12.75px] border-[0.75px] px-1.5 py-[3px] border-primary bg-background text-[10.5px] text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
+                          >
+                            {titleCase(module.module_name)}
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              ))}
+            </ul>
+            {/* Scroll hint — fades into a chevron on the right edge */}
+            <div className="pointer-events-none absolute right-0 top-0 flex h-full w-10 items-center justify-end bg-gradient-to-l from-background to-transparent">
+              <Icon icon={MdChevronRight} size={24} className="text-muted-foreground" />
+            </div>
+          </div>
         </Collapse>
       </div>
     </div>
