@@ -106,7 +106,7 @@ export function LearningJourneyBar({
           <div id={panelId} className="relative mt-4">
             <ul className="flex gap-6 overflow-x-auto pr-10">
               {concepts.map((concept, i) => (
-                <li key={concept.concept_id} className="flex min-w-[180px] shrink-0 pb-6 flex-col gap-3 border-r border-border pr-6 last:border-r-0">
+                <li key={concept.concept_id} className="flex min-w-[180px] shrink-0 pb-4 flex-col gap-3 border-r border-border pr-6 last:border-r-0">
                   <div className="flex items-center gap-3">
                     <span
                       className={cn(
@@ -119,14 +119,14 @@ export function LearningJourneyBar({
                       {concept.isComplete ? <Icon icon={MdCheckCircle} size={16} label="Complete" /> : i + 1}
                     </span>
                     <div className="flex min-w-0 flex-col">
-                      <span className="text-base font-semibold">
+                      <span className="text-base font-semibold text-neutral-900">
                         {titleCase(concept.concept_name)}
                       </span>
                     </div>
                   </div>
 
                   {concept.modules?.length > 0 && (
-                    <ul className="flex flex-wrap gap-1.5 pl-11">
+                    <ul className="flex flex-wrap gap-1.5">
                       {concept.modules.map((module) => (
                         <li key={module.module_id}>
                           <Link
