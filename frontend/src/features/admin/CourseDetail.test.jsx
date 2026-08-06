@@ -58,6 +58,7 @@ beforeEach(() => {
   instructorsAssigned = {
     data: [{ user_email: "ada@x.com", first_name: "ada", last_name: "lovelace", access_enabled: true }],
     isLoading: false,
+    refetch: vi.fn().mockResolvedValue({}),
   }
   updateCourseAccess.mutateAsync.mockClear().mockResolvedValue({})
   updateInstructorAccess.mutateAsync.mockClear().mockResolvedValue({})
@@ -150,6 +151,35 @@ describe("CourseDetail (staged editing)", () => {
         access: false,
       })
     )
+  })
+
+  it("waits for the instructor-list refetch before clearing staged edits, so the toggle doesn't flip back", async () => {
+    // Deferred refetch: mirrors the real background refetch the mutation
+    // invalidations trigger. Save must await this before discarding the staged
+    // edit, otherwise the toggle briefly renders the stale server value
+    // (a visible on→off→on flip).
+    let resolveRefetch
+    instructorsAssigned.refetch = vi.fn(() => new Promise((resolve) => { resolveRefetch = resolve }))
+    render(<CourseDetail />)
+
+    const switchName = "OCELIA access for Lovelace, Ada"
+    // Stage access OFF (server value is ON).
+    await userEvent.click(screen.getByRole("switch", { name: switchName }))
+    expect(screen.getByRole("switch", { name: switchName })).toHaveAttribute("aria-checked", "false")
+
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }))
+
+    // The access mutation committed and the refetch was requested…
+    await waitFor(() => expect(updateInstructorAccess.mutateAsync).toHaveBeenCalled())
+    await waitFor(() => expect(instructorsAssigned.refetch).toHaveBeenCalled())
+
+    // …but while it's still in flight the staged (OFF) value holds — no revert
+    // to the stale server (ON) value.
+    expect(screen.getByRole("switch", { name: switchName })).toHaveAttribute("aria-checked", "false")
+
+    // Let the refetch land; the save settles cleanly.
+    resolveRefetch({})
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled())
   })
 
   it("stages an instructor removal (no confirm dialog) and commits it on Save", async () => {

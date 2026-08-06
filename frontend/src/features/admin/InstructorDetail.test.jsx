@@ -44,6 +44,7 @@ beforeEach(() => {
       { course_id: "c1", course_department: "geog", course_number: "250", course_name: "Intro", access_enabled: true },
     ],
     isLoading: false,
+    refetch: vi.fn().mockResolvedValue({}),
   }
   updateInstructorAccess.mutateAsync.mockClear().mockResolvedValue({})
   enroll.mutateAsync.mockClear().mockResolvedValue({})
@@ -102,6 +103,35 @@ describe("InstructorDetail (staged editing)", () => {
         access: false,
       })
     )
+  })
+
+  it("waits for the assigned-courses refetch before clearing staged edits, so the toggle doesn't flip back", async () => {
+    // Deferred refetch: mirrors the real background refetch the mutation
+    // invalidations trigger. Save must await this before discarding the staged
+    // edit, otherwise the toggle briefly renders the stale server value
+    // (a visible on→off→on flip).
+    let resolveRefetch
+    assignedResult.refetch = vi.fn(() => new Promise((resolve) => { resolveRefetch = resolve }))
+    render(<InstructorDetail />)
+
+    const switchName = "OCELIA access for GEOG 250 — Intro"
+    // Stage access OFF (server value is ON).
+    await userEvent.click(screen.getByRole("switch", { name: switchName }))
+    expect(screen.getByRole("switch", { name: switchName })).toHaveAttribute("aria-checked", "false")
+
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }))
+
+    // The access mutation committed and the refetch was requested…
+    await waitFor(() => expect(updateInstructorAccess.mutateAsync).toHaveBeenCalled())
+    await waitFor(() => expect(assignedResult.refetch).toHaveBeenCalled())
+
+    // …but while it's still in flight the staged (OFF) value holds — no revert
+    // to the stale server (ON) value.
+    expect(screen.getByRole("switch", { name: switchName })).toHaveAttribute("aria-checked", "false")
+
+    // Let the refetch land; the save settles cleanly.
+    resolveRefetch({})
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled())
   })
 
   it("stages a course removal (no confirm dialog) and commits it on Save", async () => {

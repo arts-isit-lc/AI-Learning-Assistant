@@ -215,6 +215,13 @@ export function CourseDetail() {
         if (pendingRemoves.has(em)) continue
         await updateInstructorAccess.mutateAsync({ courseId, instructorEmail: em, access })
       }
+      // Wait for the course-instructors cache to reflect the saved state before
+      // clearing the staged edits. The mutations' onSuccess invalidations kick
+      // off a *background* refetch; if we discard first, the toggles briefly
+      // render the stale pre-save server value (a visible on→off→on flip) until
+      // that refetch lands. Awaiting it means the staged value hands off to an
+      // identical server value with no intermediate render.
+      await refetch?.()
       discardChanges()
     } catch {
       setSaveError("Some changes couldn't be saved. Please review and try again.")
