@@ -42,6 +42,7 @@ export default {
           foreground: "hsl(var(--primary-foreground))",
           subtle: "hsl(var(--primary-subtle))",
           dark: "hsl(var(--primary-dark))",
+          active: "hsl(var(--primary-active))",
         },
         // Raw UBC / Arts ISIT neutrals — used where the design fills with a
         // specific neutral (e.g. the inactive Card/Course = #BFBFBF).

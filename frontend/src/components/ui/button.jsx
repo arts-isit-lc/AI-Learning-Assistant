@@ -31,6 +31,13 @@ const buttonVariants = cva(
         outline:
           "border border-primary bg-background text-primary hover:bg-primary-subtle disabled:border-neutral-400 disabled:text-neutral-400 disabled:opacity-100",
         ghost: "text-foreground hover:bg-accent hover:text-accent-foreground",
+        // Brand-purple text button: no border, no fill, #6829C2 (primary) text at
+        // rest. Hover paints the lavender #F2E8FF (primary-subtle) surface and
+        // darkens the text to #2E0666 (primary-dark); the press (active) deepens
+        // the surface to #AA78F0 (primary-active) with the same #2E0666 text,
+        // springing back to the resting state once the click is released.
+        ghostPrimary:
+          "text-primary hover:bg-primary-subtle hover:text-primary-dark active:bg-primary-active active:text-primary-dark",
         danger: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
         cta: "bg-navy text-navy-foreground hover:bg-navy/90",
         link: "text-primary underline-offset-4 hover:underline",

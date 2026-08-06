@@ -93,6 +93,20 @@ describe("Button", () => {
     expect(screen.getByRole("button", { name: "Delete" })).toHaveClass("bg-destructive")
   })
 
+  it("ghostPrimary: #6829C2 text with no border/fill at rest; hovers to #F2E8FF/#2E0666 and presses to #AA78F0/#2E0666", () => {
+    render(<Button variant="ghostPrimary">Add</Button>)
+    const btn = screen.getByRole("button", { name: "Add" })
+    // Rest: brand-purple text, no border, no background fill.
+    expect(btn).toHaveClass("text-primary")
+    expect(btn).not.toHaveClass("border")
+    expect(btn).not.toHaveClass("bg-primary", "bg-primary-subtle", "bg-primary-active")
+    // Hover: #F2E8FF (primary-subtle) surface + #2E0666 (primary-dark) text.
+    expect(btn).toHaveClass("hover:bg-primary-subtle", "hover:text-primary-dark")
+    // Press (active): #AA78F0 (primary-active) surface + #2E0666 text; no active
+    // override elsewhere means it springs back to the resting state on release.
+    expect(btn).toHaveClass("active:bg-primary-active", "active:text-primary-dark")
+  })
+
   it("gives the outline variant (every modal Cancel button) the #F2E8FF hover (hover:bg-primary-subtle)", () => {
     render(<Button variant="outline">Cancel</Button>)
     expect(screen.getByRole("button", { name: "Cancel" })).toHaveClass("hover:bg-primary-subtle")

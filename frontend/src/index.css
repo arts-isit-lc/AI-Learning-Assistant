@@ -62,6 +62,7 @@
     --primary-foreground: 0 0% 100%;
     --primary-subtle: 267 100% 95%; /* #F2E8FF Faculty of Arts/Lightest — hover / selected surface */
     --primary-dark: 265 89% 21%; /* #2E0666 Faculty of Arts/Dark — text on the subtle hover surface */
+    --primary-active: 265 80% 70.6%; /* #AA78F0 Faculty of Arts/Light — pressed (active) surface for ghost-primary text buttons */
     --secondary: 0 0% 96%; /* light neutral surface (systematic fill) */
     --secondary-foreground: 0 0% 25%;
     --muted: 0 0% 96%;
