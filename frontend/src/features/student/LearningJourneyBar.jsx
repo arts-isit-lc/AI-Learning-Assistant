@@ -119,7 +119,7 @@ export function LearningJourneyBar({
                       {concept.isComplete ? <Icon icon={MdCheckCircle} size={16} label="Complete" /> : i + 1}
                     </span>
                     <div className="flex min-w-0 flex-col">
-                      <span className="text-base font-semibold text-neutral-900">
+                      <span className="text-base leading-5 font-semibold text-neutral-900">
                         {titleCase(concept.concept_name)}
                       </span>
                     </div>
