@@ -135,7 +135,7 @@ export function StudentChat() {
   const selectedFile = files.data?.find((f) => f.file_id === docId)
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-5rem)] w-full max-w-7xl flex-col pt-4 pb-6">
+    <div className="mx-auto flex h-[calc(100vh-5rem)] w-full max-w-7xl flex-col py-6">
 
       {sessionsQuery.isError ? (
         <ErrorState
