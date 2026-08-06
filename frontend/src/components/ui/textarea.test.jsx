@@ -16,8 +16,8 @@ describe("Textarea", () => {
   it("turns the border #6829C2 (primary) on focus, staying red when invalid", () => {
     render(<Textarea placeholder="Prompt" />)
     const textarea = screen.getByPlaceholderText("Prompt")
-    // Clicking/focusing the field turns the border brand purple.
-    expect(textarea).toHaveClass("focus:border-primary")
+    // Clicking/focusing the field turns the border brand purple and thickens it to 2px.
+    expect(textarea).toHaveClass("focus:border-primary", "focus:border-2")
     // An invalid field keeps its destructive border even while focused.
     expect(textarea).toHaveClass("aria-[invalid=true]:focus:border-destructive")
   })

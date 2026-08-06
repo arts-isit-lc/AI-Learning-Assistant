@@ -21,8 +21,8 @@ describe("Input", () => {
   it("turns the border #6829C2 (primary) on focus, staying red when invalid", () => {
     render(<Input placeholder="Email" />)
     const input = screen.getByPlaceholderText("Email")
-    // Clicking/focusing the field turns the border brand purple.
-    expect(input).toHaveClass("focus:border-primary")
+    // Clicking/focusing the field turns the border brand purple and thickens it to 2px.
+    expect(input).toHaveClass("focus:border-primary", "focus:border-2")
     // An invalid field keeps its destructive border even while focused.
     expect(input).toHaveClass("aria-[invalid=true]:focus:border-destructive")
   })

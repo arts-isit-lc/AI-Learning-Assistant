@@ -49,8 +49,13 @@ describe("Select", () => {
       </Select>
     )
     const trigger = screen.getByRole("combobox", { name: "Language model" })
-    // Border becomes brand purple on focus (click) and while the menu is open.
-    expect(trigger).toHaveClass("focus:border-primary", "data-[state=open]:border-primary")
+    // Border becomes brand purple AND thickens to 2px on focus (click) and while the menu is open.
+    expect(trigger).toHaveClass(
+      "focus:border-primary",
+      "focus:border-2",
+      "data-[state=open]:border-primary",
+      "data-[state=open]:border-2"
+    )
     // The old hover-greying of the chevron is gone.
     expect(trigger.querySelector("svg")).not.toHaveClass("group-hover:text-neutral-400")
   })

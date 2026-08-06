@@ -17,9 +17,10 @@ const SelectTrigger = React.forwardRef(function SelectTrigger({ className, child
         // Radix marks the trigger with data-placeholder while the placeholder is
         // shown (SelectValue is a span, so the native placeholder: pseudo never
         // applied) — grey it to match the other fields.
-        // Border turns brand purple (#6829C2 / primary) when the trigger is clicked:
-        // while the menu is open (data-state) and while it holds focus. No wrapping ring.
-        "data-[placeholder]:text-muted-foreground focus:border-primary data-[state=open]:border-primary focus-visible:outline-none",
+        // Border turns brand purple (#6829C2 / primary) AND thickens to 2px when
+        // the trigger is clicked: while the menu is open (data-state) and while it
+        // holds focus. No wrapping ring. (border-box keeps the field size stable.)
+        "data-[placeholder]:text-muted-foreground focus:border-2 focus:border-primary data-[state=open]:border-2 data-[state=open]:border-primary focus-visible:outline-none",
         "disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
         className
       )}
