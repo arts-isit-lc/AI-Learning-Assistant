@@ -140,6 +140,15 @@
     font-weight: var(--font-weight-book);
     text-rendering: optimizeLegibility;
   }
+
+  /* Suppress the native WebKit clear/decoration on type="search" fields — the
+     Searchbar renders its own token-styled clear "x" (see Searchbar.jsx), so the
+     browser default would otherwise show a second, unstyled clear button. */
+  input[type="search"]::-webkit-search-cancel-button,
+  input[type="search"]::-webkit-search-decoration {
+    -webkit-appearance: none;
+    appearance: none;
+  }
 }
 
 /* KaTeX overflow safety net: keep wide (or mis-parsed) math from stretching the
