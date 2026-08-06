@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
+import { MdAdd } from "react-icons/md"
 import { toUserMessage } from "@/services/apiError"
 import {
   useAdminInstructors,
@@ -19,6 +20,15 @@ import { ErrorState } from "@/components/composed/ErrorState"
 import { UnsavedChangesPrompt } from "@/components/composed/UnsavedChangesPrompt"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import { Icon } from "@/components/ui/icon"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogBody,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog"
 import { Toggle } from "@/components/ui/toggle"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -83,6 +93,7 @@ export function InstructorDetail() {
   const [pendingRemoves, setPendingRemoves] = useState(() => new Set())
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
+  const [addOpen, setAddOpen] = useState(false)
   const [removeOpen, setRemoveOpen] = useState(false)
   const [deleted, setDeleted] = useState(false)
 
@@ -114,6 +125,13 @@ export function InstructorDetail() {
     return out
   }, [assigned, allCourses, pendingAccess, pendingAdds, pendingRemoves])
 
+  // Courses not already shown (assigned or staged) — the pool the "+" picker
+  // offers to assign this instructor to.
+  const unassigned = useMemo(() => {
+    const shownIds = new Set(displayed.map((c) => c.course_id))
+    return allCourses.filter((c) => !shownIds.has(c.course_id))
+  }, [displayed, allCourses])
+
   const isDirty =
     Object.keys(pendingAccess).length > 0 || pendingAdds.size > 0 || pendingRemoves.size > 0
 
@@ -137,6 +155,21 @@ export function InstructorDetail() {
       }
       return next
     })
+  }
+
+  const addCourse = (courseId) => {
+    // Re-adding a course staged for removal just cancels the removal.
+    setPendingRemoves((r) => {
+      if (!r.has(courseId)) return r
+      const next = new Set(r)
+      next.delete(courseId)
+      return next
+    })
+    // A brand-new assignment (not already a server course) → stage an add.
+    if (!assigned.some((c) => c.course_id === courseId)) {
+      setPendingAdds((a) => new Set(a).add(courseId))
+    }
+    setAddOpen(false)
   }
 
   const removeCourse = (courseId) => {
@@ -201,6 +234,15 @@ export function InstructorDetail() {
         <div className="flex items-center justify-between gap-4 mb-6 mt-2.5">
           <div className="flex items-center gap-1">
             <h2 className="text-caption font-semibold text-foreground">Assigned courses</h2>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => setAddOpen(true)}
+              aria-label="Assign course"
+            >
+              <Icon icon={MdAdd} size={18} />
+            </Button>
           </div>
           <span className="text-caption font-semibold text-foreground">OCELIA access</span>
         </div>
@@ -299,6 +341,36 @@ export function InstructorDetail() {
           </Button>
         </div>
       </div>
+
+      {/* Assign-course picker (staged — commits on Save changes). */}
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assign a course</DialogTitle>
+          </DialogHeader>
+          <DialogBody>
+            <DialogDescription>Give this instructor access to a course.</DialogDescription>
+            <div className="flex flex-col">
+              {unassigned.length === 0 ? (
+                <p className="py-3 text-caption text-muted-foreground">
+                  This instructor is already assigned to every course.
+                </p>
+              ) : (
+                unassigned.map((course) => (
+                  <button
+                    key={course.course_id}
+                    type="button"
+                    onClick={() => addCourse(course.course_id)}
+                    className="border-b border-border px-1 py-3 text-left text-caption font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  >
+                    <span className="block truncate">{courseLabel(course)}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          </DialogBody>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
         open={removeOpen}

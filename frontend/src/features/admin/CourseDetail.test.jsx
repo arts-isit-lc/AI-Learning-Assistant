@@ -230,4 +230,37 @@ describe("CourseDetail (staged editing)", () => {
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }))
     expect(await screen.findByRole("alert")).toHaveTextContent(/couldn't be saved/i)
   })
+
+  it("adds an instructor via the '+' picker (staged) and commits the enrolment on Save", async () => {
+    render(<CourseDetail />)
+    // The picker only offers instructors not already assigned (Ada is assigned).
+    await userEvent.click(screen.getByRole("button", { name: "Add instructor" }))
+    const dialog = await screen.findByRole("dialog")
+    expect(within(dialog).queryByText("Lovelace, Ada")).not.toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole("button", { name: /Turing, Alan/ }))
+
+    // Staged: the picker closes, the row appears, nothing enrolled yet.
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+    expect(screen.getByText("Turing, Alan")).toBeInTheDocument()
+    expect(enroll.mutateAsync).not.toHaveBeenCalled()
+
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }))
+    await waitFor(() =>
+      expect(enroll.mutateAsync).toHaveBeenCalledWith({ courseId: "c1", instructorEmail: "alan@x.com" })
+    )
+  })
+
+  it("tells the picker when every instructor is already assigned", async () => {
+    instructorsAssigned = {
+      data: [
+        { user_email: "ada@x.com", first_name: "ada", last_name: "lovelace", access_enabled: true },
+        { user_email: "alan@x.com", first_name: "alan", last_name: "turing", access_enabled: true },
+      ],
+      isLoading: false,
+    }
+    render(<CourseDetail />)
+    await userEvent.click(screen.getByRole("button", { name: "Add instructor" }))
+    const dialog = await screen.findByRole("dialog")
+    expect(within(dialog).getByText(/all instructors are already assigned/i)).toBeInTheDocument()
+  })
 })

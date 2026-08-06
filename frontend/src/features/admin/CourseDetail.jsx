@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
+import { MdAdd } from "react-icons/md"
 import { toUserMessage } from "@/services/apiError"
 import {
   useAdminCourses,
@@ -21,6 +22,15 @@ import { ErrorState } from "@/components/composed/ErrorState"
 import { UnsavedChangesPrompt } from "@/components/composed/UnsavedChangesPrompt"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import { Icon } from "@/components/ui/icon"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogBody,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog"
 import { Toggle } from "@/components/ui/toggle"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -75,6 +85,7 @@ export function CourseDetail() {
   const [pendingRemoves, setPendingRemoves] = useState(() => new Set())
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
+  const [addOpen, setAddOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleted, setDeleted] = useState(false)
 
@@ -108,6 +119,13 @@ export function CourseDetail() {
     return out
   }, [assigned, allInstructors, pendingAccess, pendingAdds, pendingRemoves])
 
+  // Instructors not already shown (assigned or staged) — the pool the "+"
+  // picker offers to add to this course.
+  const unassigned = useMemo(() => {
+    const shown = new Set(displayed.map((i) => i.user_email))
+    return allInstructors.filter((i) => !shown.has(i.user_email))
+  }, [displayed, allInstructors])
+
   const isDirty =
     pendingActive !== null ||
     Object.keys(pendingAccess).length > 0 ||
@@ -136,6 +154,21 @@ export function CourseDetail() {
       }
       return next
     })
+  }
+
+  const addInstructor = (email) => {
+    // Re-adding an instructor staged for removal just cancels the removal.
+    setPendingRemoves((r) => {
+      if (!r.has(email)) return r
+      const next = new Set(r)
+      next.delete(email)
+      return next
+    })
+    // A brand-new assignment (not already a server enrolment) → stage an add.
+    if (!assigned.some((i) => i.user_email === email)) {
+      setPendingAdds((a) => new Set(a).add(email))
+    }
+    setAddOpen(false)
   }
 
   const removeInstructor = (email) => {
@@ -257,6 +290,15 @@ export function CourseDetail() {
         <div className="flex items-center justify-between gap-4 mt-2.5 mb-6">
           <div className="flex items-center gap-1">
             <h2 className="text-caption leading-7 mr-4 font-semibold text-foreground">Instructor(s)</h2>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => setAddOpen(true)}
+              aria-label="Add instructor"
+            >
+              <Icon icon={MdAdd} size={18} />
+            </Button>
           </div>
           <span className="text-caption leading-7 font-semibold text-foreground">OCELIA access</span>
         </div>
@@ -356,6 +398,37 @@ export function CourseDetail() {
           </Button>
         </div>
       </div>
+
+      {/* Add-instructor picker (staged — commits on Save changes). */}
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add an instructor</DialogTitle>
+          </DialogHeader>
+          <DialogBody>
+            <DialogDescription>Give an instructor access to this course.</DialogDescription>
+            <div className="flex flex-col">
+              {unassigned.length === 0 ? (
+                <p className="py-3 text-caption text-muted-foreground">
+                  All instructors are already assigned.
+                </p>
+              ) : (
+                unassigned.map((inst) => (
+                  <button
+                    key={inst.user_email}
+                    type="button"
+                    onClick={() => addInstructor(inst.user_email)}
+                    className="flex items-center justify-between gap-3 border-b border-border px-1 py-3 text-left text-caption transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  >
+                    <span className="truncate font-medium text-foreground">{instructorLabel(inst)}</span>
+                    <span className="shrink-0 text-muted-foreground">{inst.user_email}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          </DialogBody>
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
         open={deleteOpen}
