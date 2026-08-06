@@ -144,7 +144,7 @@ export function LearningJourneyBar({
             </ul>
             {/* Scroll hint — fades into a chevron on the right edge */}
             <div className="pointer-events-none absolute right-0 top-0 flex h-full w-10 items-center justify-end bg-gradient-to-l from-background to-transparent">
-              <Icon icon={MdChevronRight} size={24} className="text-muted-foreground" />
+              <Icon icon={MdChevronRight} size={32} className="text-muted-foreground" />
             </div>
           </div>
         </Collapse>
