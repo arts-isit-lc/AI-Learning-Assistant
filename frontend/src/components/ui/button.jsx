@@ -25,11 +25,17 @@ const buttonVariants = cva(
         default:
           "bg-primary text-primary-foreground hover:bg-primary-dark active:bg-neutral-900",
         secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        // Disabled outline = the neutral-400 (#BFBFBF) "inactive/disabled control"
-        // token on border + text (icons inherit via currentColor), at full opacity
-        // so it renders true grey — overriding the base disabled:opacity-50 fade.
+        // Primary-bordered button (#6829C2 border + text on white). Hover paints
+        // the lavender #F2E8FF (primary-subtle) surface and darkens the border to
+        // #2E0666 (primary-dark); the press (active) deepens the surface to #AA78F0
+        // (primary-active) and turns both the border AND the text #2E0666, springing
+        // back to the resting state on release. Any icon inherits the text colour
+        // via currentColor, so it tracks these transitions automatically. Disabled
+        // uses the neutral-400 (#BFBFBF) "inactive/disabled control" token on border
+        // + text at full opacity so it renders true grey — overriding the base
+        // disabled:opacity-50 fade.
         outline:
-          "border border-primary bg-background text-primary hover:bg-primary-subtle disabled:border-neutral-400 disabled:text-neutral-400 disabled:opacity-100",
+          "border border-primary bg-background text-primary hover:border-primary-dark hover:bg-primary-subtle active:border-primary-dark active:bg-primary-active active:text-primary-dark disabled:border-neutral-400 disabled:text-neutral-400 disabled:opacity-100",
         ghost: "text-foreground hover:bg-accent hover:text-accent-foreground",
         // Brand-purple text button: no border, no fill, #6829C2 (primary) text at
         // rest. Hover paints the lavender #F2E8FF (primary-subtle) surface and
