@@ -55,6 +55,7 @@ describe("Login", () => {
     expect(screen.getByLabelText("Email")).toBeInTheDocument()
     expect(screen.getByLabelText("Password")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Log in" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Log in" })).toHaveClass("hover:bg-primary-dark")
     expect(screen.getByRole("button", { name: "Forgot password?" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Create an account" })).toBeInTheDocument()
   })

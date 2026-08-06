@@ -360,7 +360,7 @@ export function Login() {
                     <FieldError id="password-error">{fieldErrors.password}</FieldError>
                   </div>
                 </div>
-                <Button type="submit" loading={busy} className="w-full text-base">Log in</Button>
+                <Button type="submit" loading={busy} className="w-full text-base hover:bg-primary-dark">Log in</Button>
               </div>
               <div className="flex items-center justify-between border-t border-border pt-2">
                 <Button

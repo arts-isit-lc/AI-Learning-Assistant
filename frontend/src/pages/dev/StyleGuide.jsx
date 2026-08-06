@@ -237,7 +237,7 @@ export default function StyleGuide() {
           <div className="flex flex-wrap items-center gap-4">
             <button
               type="button"
-              className="rounded-md bg-primary px-4 py-2 text-caption font-semibold text-primary-foreground transition-colors duration-fast hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-95"
+              className="rounded-md bg-primary px-4 py-2 text-caption font-semibold text-primary-foreground transition-colors duration-fast hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               Default / hover / focus / active
             </button>
