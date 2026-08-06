@@ -45,6 +45,7 @@ export function useChatStream({ courseId, moduleId }) {
   const [isTyping, setIsTyping] = useState(false)
   const [retryError, setRetryError] = useState(null)
   const [activeStreamSessionId, setActiveStreamSessionId] = useState(null)
+  const [sessionState, setSessionState] = useState(null)
 
   const wsRef = useRef(null)
   const watchdogRef = useRef(null)
@@ -94,6 +95,17 @@ export function useChatStream({ courseId, moduleId }) {
       const finalText = payload.llm_output ?? accumulatedTextRef.current ?? ""
       const parsed = parseBlocks(payload.blocks)
       const streamedName = payload.session_name
+
+      // Capture session_state (completion progress) from either the WS stream
+      // (JSON string) or the HTTP POST response (object).
+      if (payload.session_state) {
+        try {
+          const ss = typeof payload.session_state === "string"
+            ? JSON.parse(payload.session_state)
+            : payload.session_state
+          setSessionState(ss)
+        } catch { /* best-effort */ }
+      }
       const autoName =
         streamedName && streamedName !== "New Chat" && streamedName !== "New chat"
           ? streamedName
@@ -169,7 +181,7 @@ export function useChatStream({ courseId, moduleId }) {
               type: "start",
               payload: {
                 data: JSON.stringify({
-                  query: `subscription OnChatChunk($session_id: String!) { onChatChunk(session_id: $session_id) { session_id chunk done llm_output blocks session_name llm_verdict error } }`,
+                  query: `subscription OnChatChunk($session_id: String!) { onChatChunk(session_id: $session_id) { session_id chunk done llm_output blocks session_name llm_verdict session_state error } }`,
                   variables: { session_id: sessionId },
                 }),
                 extensions: {
@@ -299,6 +311,7 @@ export function useChatStream({ courseId, moduleId }) {
     isTyping,
     retryError,
     activeStreamSessionId,
+    sessionState,
     runTurn,
     retry,
   }

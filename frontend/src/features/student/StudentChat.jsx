@@ -24,6 +24,7 @@ import { ChatThread } from "./chat/ChatThread"
 import { ChatInput } from "./chat/ChatInput"
 import { useChatStream } from "./chat/useChatStream"
 import { ReferenceDocPanel } from "./ReferenceDocPanel"
+import { ProgressPopover } from "@/components/composed/ProgressPopover"
 
 /**
  * Student module chat — Figma frames 162:3817 / 214:5316 / 209:5164. Embedded
@@ -215,9 +216,13 @@ export function StudentChat() {
             docId && "lg:col-span-1"
           )}
         >
-          <h2 className="pt-4 pb-10 text-center text-h4 font-semibold text-neutral-900">
-            OCELIA ASSISTANT
-          </h2>
+          <div className="flex items-center justify-between px-4 pt-4 pb-10">
+            <div />
+            <h2 className="text-h4 font-semibold text-neutral-900">
+              OCELIA ASSISTANT
+            </h2>
+            <ProgressPopover sessionState={stream.sessionState} />
+          </div>
           <ChatThread
             messages={messages}
             streamingText={streamingText}

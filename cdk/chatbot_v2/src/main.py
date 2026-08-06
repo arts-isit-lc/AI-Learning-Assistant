@@ -113,7 +113,7 @@ def _get_appsync_url() -> str:
 
 def _stream_final(session_id: str, *, llm_output: str | None = None, blocks=None,
                   session_name: str | None = None, llm_verdict: bool | None = None,
-                  error: bool = False) -> None:
+                  error: bool = False, session_state: dict | None = None) -> None:
     """Emit the SINGLE terminal stream message for a turn (best-effort).
 
     The AppSync stream is the authoritative delivery channel — the HTTP POST is a
@@ -125,7 +125,8 @@ def _stream_final(session_id: str, *, llm_output: str | None = None, blocks=None
         return
     try:
         send_final(_get_appsync_url(), session_id, llm_output=llm_output, blocks=blocks,
-                   session_name=session_name, llm_verdict=llm_verdict, error=error)
+                   session_name=session_name, llm_verdict=llm_verdict, error=error,
+                   session_state=session_state)
     except Exception:
         logger.exception("Failed to emit terminal stream message (best-effort)")
 
@@ -421,6 +422,11 @@ def _session_state_view(state) -> dict:
         "engagement_score": state.engagement_score,
         "concepts_demonstrated": state.concepts_demonstrated,
         "tutor_active": is_tutor_active(state),
+        "interactions": state.interactions,
+        "concepts_discussed_count": len(state.concepts_discussed),
+        "module_concepts_count": len(state.module_concepts),
+        "required_concepts": required_concepts_discussed(len(state.module_concepts)),
+        "missing_requirements": completion_missing_requirements(state),
     }
 
 
@@ -557,7 +563,8 @@ def handler(event, context):
                     # tutor turn streamed nothing final and the client hung until
                     # its watchdog fired.
                     _stream_final(session_id, llm_output=llm_output["message"], blocks=blocked_blocks,
-                                  session_name=session_name, llm_verdict=state.module_complete)
+                                  session_name=session_name, llm_verdict=state.module_complete,
+                                  session_state=_session_state_view(state))
                     return {"statusCode": 200, "headers": CORS_HEADERS, "body": json.dumps({
                         "session_name": session_name,
                         "llm_output": llm_output["message"],
@@ -580,7 +587,8 @@ def handler(event, context):
                 # so a slow tutor turn (past API Gateway's 29s cap) still renders
                 # on the client instead of hanging until its watchdog fires.
                 _stream_final(session_id, llm_output=llm_output, blocks=tutor_blocks,
-                              session_name=session_name, llm_verdict=state.module_complete)
+                              session_name=session_name, llm_verdict=state.module_complete,
+                              session_state=_session_state_view(state))
 
                 return {
                     "statusCode": 200,
@@ -885,7 +893,8 @@ def handler(event, context):
             # Authoritative delivery over the stream. A guardrail redirect is a
             # shown message, not a failure — no error flag.
             _stream_final(session_id, llm_output=llm_output["message"], blocks=blocked_blocks,
-                          session_name=session_name, llm_verdict=state.module_complete)
+                          session_name=session_name, llm_verdict=state.module_complete,
+                          session_state=_session_state_view(state))
             return {
                 "statusCode": 200,
                 "headers": CORS_HEADERS,
@@ -946,7 +955,8 @@ def handler(event, context):
         # multi-image turn the POST below has likely already 504'd at API
         # Gateway's 29s cap, so the client renders from THIS terminal message.
         _stream_final(session_id, llm_output=llm_output, blocks=blocks,
-                      session_name=session_name, llm_verdict=state.module_complete)
+                      session_name=session_name, llm_verdict=state.module_complete,
+                      session_state=_session_state_view(state))
 
         # Structured HTTP response — best-effort ack (used when the turn finished
         # within 29s; ignored by the client on a timed-out slow turn).

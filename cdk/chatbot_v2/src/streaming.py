@@ -38,8 +38,8 @@ def buffer_chunks(token_stream: Iterator[str], chunk_size: int = CHUNK_SIZE) -> 
 
 
 _SEND_MUTATION = '''
-mutation SendChatChunk($session_id: String!, $chunk: String!, $done: Boolean!, $llm_output: String, $blocks: AWSJSON, $session_name: String, $llm_verdict: Boolean, $error: Boolean) {
-    sendChatChunk(session_id: $session_id, chunk: $chunk, done: $done, llm_output: $llm_output, blocks: $blocks, session_name: $session_name, llm_verdict: $llm_verdict, error: $error) {
+mutation SendChatChunk($session_id: String!, $chunk: String!, $done: Boolean!, $llm_output: String, $blocks: AWSJSON, $session_name: String, $llm_verdict: Boolean, $error: Boolean, $session_state: AWSJSON) {
+    sendChatChunk(session_id: $session_id, chunk: $chunk, done: $done, llm_output: $llm_output, blocks: $blocks, session_name: $session_name, llm_verdict: $llm_verdict, error: $error, session_state: $session_state) {
         session_id
         chunk
         done
@@ -48,6 +48,7 @@ mutation SendChatChunk($session_id: String!, $chunk: String!, $done: Boolean!, $
         session_name
         llm_verdict
         error
+        session_state
     }
 }
 '''
@@ -55,7 +56,7 @@ mutation SendChatChunk($session_id: String!, $chunk: String!, $done: Boolean!, $
 
 def _send(appsync_url: str, session_id: str, chunk: str, done: bool,
           llm_output=None, blocks=None, session_name=None,
-          llm_verdict=None, error=False) -> None:
+          llm_verdict=None, error=False, session_state=None) -> None:
     """POST a sendChatChunk mutation to AppSync. Best-effort: failures are logged
     but never interrupt the turn."""
     if not appsync_url:
@@ -67,7 +68,7 @@ def _send(appsync_url: str, session_id: str, chunk: str, done: bool,
                 "session_id": session_id, "chunk": chunk, "done": done,
                 "llm_output": llm_output, "blocks": blocks,
                 "session_name": session_name, "llm_verdict": llm_verdict,
-                "error": error,
+                "error": error, "session_state": json.dumps(session_state) if session_state is not None else None,
             },
         }
         headers = {"Content-Type": "application/json", "Authorization": "API_KEY"}
@@ -85,7 +86,8 @@ def send_chunk(appsync_url: str, session_id: str, chunk: str, done: bool = False
 
 def send_final(appsync_url: str, session_id: str, *, llm_output: str | None = None,
                blocks: list | None = None, session_name: str | None = None,
-               llm_verdict: bool | None = None, error: bool = False) -> None:
+               llm_verdict: bool | None = None, error: bool = False,
+               session_state: dict | None = None) -> None:
     """Emit the SINGLE terminal (done=true) stream message carrying the authoritative
     final payload — the render blocks + session metadata — or an error flag. This is
     what makes the WebSocket stream authoritative so the HTTP POST can be a
@@ -95,6 +97,7 @@ def send_final(appsync_url: str, session_id: str, *, llm_output: str | None = No
         llm_output=llm_output,
         blocks=json.dumps(blocks) if blocks is not None else None,
         session_name=session_name, llm_verdict=llm_verdict, error=bool(error),
+        session_state=session_state,
     )
 
 
