@@ -4,10 +4,11 @@ import { describe, it, expect } from "vitest"
 import { ProgressPopover } from "./ProgressPopover"
 
 describe("ProgressPopover", () => {
-  it("renders a disabled button when sessionState is null", () => {
+  it("explains the empty state when sessionState is null", async () => {
+    const user = userEvent.setup()
     render(<ProgressPopover sessionState={null} />)
-    const btn = screen.getByRole("button", { name: /module progress/i })
-    expect(btn).toBeDisabled()
+    await user.click(screen.getByRole("button", { name: /module progress/i }))
+    expect(screen.getByText(/no progress data for this turn yet/i)).toBeInTheDocument()
   })
 
   it("shows completion gates when popover is opened", async () => {

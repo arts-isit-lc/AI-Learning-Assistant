@@ -48,9 +48,20 @@ function GateRow({ label, met, detail }) {
 export function ProgressPopover({ sessionState }) {
   if (!sessionState) {
     return (
-      <Button variant="ghost" size="icon" disabled aria-label="Module progress">
-        <Icon icon={MdBarChart} size={20} className="text-muted-foreground" />
-      </Button>
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="ghost" size="icon" aria-label="Module progress">
+            <Icon icon={MdBarChart} size={20} className="text-muted-foreground" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-80">
+          <h3 className="text-caption font-semibold text-foreground">Module Progress</h3>
+          <p className="mt-2 text-xs text-muted-foreground">
+            No progress data for this turn yet. Send a message and it will appear here once
+            the assistant replies.
+          </p>
+        </PopoverContent>
+      </Popover>
     )
   }
 
