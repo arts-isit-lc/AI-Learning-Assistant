@@ -10,7 +10,7 @@ function CoursesBackLink() {
   return (
     <Link
       to="/courses"
-      className="inline-flex items-center gap-2 text-base leading-7 uppercase underline text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      className="inline-flex items-center gap-2 text-base leading-7 uppercase underline text-primary hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
       <Icon icon={MdChevronLeft} size={24} />
       Courses
@@ -24,7 +24,7 @@ function CollapseToggle({ collapsed, onToggle }) {
     <button
       type="button"
       onClick={onToggle}
-      className="inline-flex items-center gap-2 text-base leading-7 text-primary underline"
+      className="inline-flex items-center gap-2 text-base leading-7 text-primary underline hover:no-underline"
     >
       {collapsed ? "Expand" : "Reduce"}
       <Icon icon={collapsed ? MdExpandMore : MdExpandLess} size={24} />

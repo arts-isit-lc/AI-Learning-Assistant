@@ -26,6 +26,16 @@ const COURSE = {
 }
 
 describe("CourseHeader", () => {
+  it("removes the Courses link underline on hover", () => {
+    renderHeader({ course: COURSE })
+    expect(screen.getByRole("link", { name: /courses/i })).toHaveClass("underline", "hover:no-underline")
+  })
+
+  it("removes the Reduce control underline on hover", () => {
+    renderHeader({ course: COURSE, collapsible: true, onToggleCollapse: () => {} })
+    expect(screen.getByRole("button", { name: /reduce/i })).toHaveClass("underline", "hover:no-underline")
+  })
+
   it("renders the course code as the heading", () => {
     renderHeader({ course: COURSE })
     expect(screen.getByRole("heading", { name: "GEOG 412" })).toBeInTheDocument()
