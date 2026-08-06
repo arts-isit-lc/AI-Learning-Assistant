@@ -21,9 +21,12 @@ const buttonVariants = cva(
       variant: {
         // Primary CTA (#6829C2 / white): hover darkens to #2E0666 (primary-dark),
         // and the press (active) goes to #000 (neutral-900), springing back to
-        // #6829C2 once the click is released.
+        // #6829C2 once the click is released. Inactive (disabled) is #BFBFBF
+        // (neutral-400) fill with white text at full opacity — overriding the base
+        // disabled:opacity-50 fade so it renders a true grey. (The loading state
+        // re-forces the brand-purple surface via disabled:bg-primary below.)
         default:
-          "bg-primary text-primary-foreground hover:bg-primary-dark active:bg-neutral-900",
+          "bg-primary text-primary-foreground hover:bg-primary-dark active:bg-neutral-900 disabled:bg-neutral-400 disabled:text-primary-foreground disabled:opacity-100",
         secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         // Primary-bordered button (#6829C2 border + text on white) — modal-footer
         // secondary/Cancel action + the "Add X" triggers. Hover paints the lavender
@@ -83,8 +86,11 @@ const Button = React.forwardRef(function Button(
         // While loading: brand purple (#6829C2) surface + white spinner
         // (border-current), regardless of variant, at full opacity (the button is
         // disabled while loading, so defeat the base disabled:opacity-50 fade).
+        // `disabled:bg-primary` keeps the surface purple even though the button is
+        // disabled — otherwise the default variant's disabled:bg-neutral-400 (a
+        // higher-specificity :disabled rule) would grey out the loading surface.
         // Appended last so tailwind-merge lets it win over the variant's bg/text.
-        loading && "bg-primary text-primary-foreground disabled:opacity-100"
+        loading && "bg-primary text-primary-foreground disabled:bg-primary disabled:opacity-100"
       )}
       disabled={disabled || loading}
       aria-busy={loading || undefined}

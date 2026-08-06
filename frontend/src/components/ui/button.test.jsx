@@ -162,10 +162,20 @@ describe("Button", () => {
     expect(btn).not.toHaveClass("disabled:opacity-50")
   })
 
-  it("keeps the default opacity fade for non-outline disabled buttons (change is scoped to outline)", () => {
+  it("default disabled (inactive): #BFBFBF (neutral-400) fill + white text, no opacity fade and no border", () => {
     render(<Button disabled>Save</Button>)
     const btn = screen.getByRole("button", { name: "Save" })
-    expect(btn).toHaveClass("disabled:opacity-50")
+    // Inactive CTA = solid #BFBFBF with white text (not the old faded purple).
+    expect(btn).toHaveClass("disabled:bg-neutral-400", "disabled:text-primary-foreground", "disabled:opacity-100")
+    expect(btn).not.toHaveClass("disabled:opacity-50")
+    // Still a fill button — no outline-style border treatment.
     expect(btn).not.toHaveClass("disabled:border-neutral-400")
+  })
+
+  it("keeps the brand-purple surface while loading even with the new grey disabled fill", () => {
+    render(<Button loading>Save</Button>)
+    const btn = screen.getByRole("button")
+    // disabled:bg-primary re-forces purple over the default's disabled:bg-neutral-400.
+    expect(btn).toHaveClass("bg-primary", "disabled:bg-primary", "disabled:opacity-100")
   })
 })
