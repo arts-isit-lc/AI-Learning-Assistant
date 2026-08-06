@@ -7,20 +7,24 @@ import { Icon } from "@/components/ui/icon"
 import { cn } from "@/lib/utils"
 
 /**
- * Admin tab (Figma `Button/UI/Desktop/Tertiary`): the active tab is black with a
- * black underline. Inactive tabs are the brand purple; on hover they take the
- * same state as the instructor nav tabs — a rounded brand-"lightest" fill
- * (#F2E8FF / --primary-subtle) with "Faculty of Arts/Dark" text (#2E0666 /
- * --primary-dark). The full-width divider that separates the section header from
- * the master-detail body lives on the row wrapper (below), not on the tab itself.
+ * Admin tab (Figma `Button/UI/Desktop/Tertiary`). Inactive tabs are the brand
+ * purple (text-primary) at a 4px radius with no fill; hover takes the same state
+ * as the instructor nav tabs — the brand-"lightest" fill (#F2E8FF /
+ * --primary-subtle) with "Faculty of Arts/Dark" text (#2E0666 / --primary-dark);
+ * the press (active) deepens the surface to #AA78F0 (--primary-active), keeping
+ * the #2E0666 text. The selected tab is black (#000 / neutral-900) with a 3px
+ * --primary underline and no fill or hover; the 3px bottom border is reserved on
+ * every tab (transparent when inactive) so selecting one never shifts the row.
+ * The full-width divider that separates the section header from the
+ * master-detail body lives on the row wrapper (below), not on the tab itself.
  */
 const navLinkClass = ({ isActive }) =>
   cn(
-    "border-b-2 py-1 px-6 text-caption font-semibold text-sm transition-colors duration-fast",
+    "border-b-[3px] py-1 px-6 text-caption font-semibold text-sm transition-colors duration-fast",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
     isActive
       ? "border-primary text-neutral-900"
-      : "rounded border-transparent text-primary hover:bg-primary-subtle hover:text-primary-dark"
+      : "rounded border-transparent text-primary hover:bg-primary-subtle hover:text-primary-dark active:bg-primary-active active:text-primary-dark"
   )
 
 /**

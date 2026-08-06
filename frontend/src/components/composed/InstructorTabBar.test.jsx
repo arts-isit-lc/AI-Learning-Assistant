@@ -29,16 +29,20 @@ describe("InstructorTabBar", () => {
       expect(tab).toHaveClass("hover:bg-primary-subtle")
       expect(tab).toHaveClass("hover:text-primary-dark")
       expect(tab).toHaveClass("rounded")
+      // Press (active): #AA78F0 (primary-active) surface + #2E0666 (primary-dark) text.
+      expect(tab).toHaveClass("active:bg-primary-active", "active:text-primary-dark")
     }
   })
 
-  it("marks the active tab black (#000 / neutral-900) with a border-primary underline and no hover, matching admin", () => {
+  it("marks the active tab black (#000 / neutral-900) with a 3px border-primary underline and no fill/hover, matching admin", () => {
     renderAt("/instructor/courses")
     const active = screen.getByRole("link", { name: "Courses" })
-    expect(active).toHaveClass("border-primary", "text-neutral-900")
+    // Selected: #000 text + a 3px #6829C2 underline, no fill or hover/press.
+    expect(active).toHaveClass("border-b-[3px]", "border-primary", "text-neutral-900")
     expect(active).not.toHaveClass("rounded")
     expect(active).not.toHaveClass("hover:bg-primary-subtle")
     expect(active).not.toHaveClass("hover:text-primary-dark")
+    expect(active).not.toHaveClass("active:bg-primary-active")
   })
 
   it("is expanded (greeting shown) on the courses landing", () => {

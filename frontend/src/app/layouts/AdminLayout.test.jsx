@@ -43,20 +43,23 @@ describe("AdminLayout", () => {
     expect(courses).toHaveClass("rounded")
     expect(courses).toHaveClass("hover:bg-primary-subtle")
     expect(courses).toHaveClass("hover:text-primary-dark")
+    // Press (active): #AA78F0 (primary-active) surface + #2E0666 (primary-dark) text.
+    expect(courses).toHaveClass("active:bg-primary-active", "active:text-primary-dark")
     // The old faded-purple text hover is gone.
     expect(courses).not.toHaveClass("hover:text-primary/80")
   })
 
-  it("gives the active nav tab no hover fill and no rounded corners", () => {
+  it("gives the active nav tab a 3px #6829C2 underline, #000 text, and no fill/hover/press", () => {
     render(
       <MemoryRouter initialEntries={["/admin/instructors"]}>
         <AdminLayout />
       </MemoryRouter>
     )
     const active = screen.getByRole("link", { name: "Instructors" })
-    expect(active).toHaveClass("border-primary", "text-neutral-900")
+    expect(active).toHaveClass("border-b-[3px]", "border-primary", "text-neutral-900")
     expect(active).not.toHaveClass("rounded")
     expect(active).not.toHaveClass("hover:bg-primary-subtle")
+    expect(active).not.toHaveClass("active:bg-primary-active")
   })
 
   it("shows the Add instructor action on the instructors section", () => {
