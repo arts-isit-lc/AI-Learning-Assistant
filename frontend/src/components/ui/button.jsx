@@ -9,8 +9,9 @@ import { cn } from "@/lib/utils"
  * disabled) from tokens. `loading` disables the control (prevents
  * double-submit) and, regardless of variant, swaps the button to the brand
  * purple (`bg-primary` / #6829C2) at full opacity showing only a spinner — the
- * label is hidden for the duration of the animation and the disabled fade is
- * suppressed so the surface doesn't dim. `asChild` renders the styles onto a child
+ * label is visually hidden (kept `sr-only` for the accessible name) for the
+ * duration of the animation and the disabled fade is suppressed so the surface
+ * doesn't dim. `asChild` renders the styles onto a child
  * element (e.g. a router `<Link>`).
  */
 const buttonVariants = cva(
@@ -18,7 +19,11 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        // Primary CTA (#6829C2 / white): hover darkens to #2E0666 (primary-dark),
+        // and the press (active) goes to #000 (neutral-900), springing back to
+        // #6829C2 once the click is released.
+        default:
+          "bg-primary text-primary-foreground hover:bg-primary-dark active:bg-neutral-900",
         secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         // Disabled outline = the neutral-400 (#BFBFBF) "inactive/disabled control"
         // token on border + text (icons inherit via currentColor), at full opacity
@@ -74,8 +79,13 @@ const Button = React.forwardRef(function Button(
       {asChild ? (
         children
       ) : loading ? (
-        // No label while the animation runs — spinner only.
-        <Spinner />
+        // Spinner only — the label is visually hidden (sr-only) rather than
+        // removed, so nothing shows during the animation while the button keeps
+        // its accessible name for screen readers.
+        <>
+          <Spinner />
+          <span className="sr-only">{children}</span>
+        </>
       ) : (
         children
       )}

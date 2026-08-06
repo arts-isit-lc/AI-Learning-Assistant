@@ -18,11 +18,13 @@ describe("Button", () => {
     expect(btn).toHaveAttribute("aria-busy", "true")
   })
 
-  it("hides the label and shows the brand-purple (#6829C2) spinner surface while loading", () => {
+  it("visually hides the label (sr-only) and shows the brand-purple (#6829C2) spinner surface while loading", () => {
     render(<Button loading>Save</Button>)
-    const btn = screen.getByRole("button")
-    // Label is hidden for the duration of the animation.
-    expect(btn).not.toHaveTextContent("Save")
+    // Accessible name is preserved (button still findable by name) ...
+    const btn = screen.getByRole("button", { name: "Save" })
+    // ... but the label is not visually shown — it lives in an sr-only span.
+    const label = btn.querySelector("span.sr-only")
+    expect(label).toHaveTextContent("Save")
     // #6829C2 == bg-primary, with a white (text-primary-foreground) spinner.
     expect(btn).toHaveClass("bg-primary", "text-primary-foreground")
     // Spinner element present.
@@ -42,18 +44,21 @@ describe("Button", () => {
         Save
       </Button>
     )
-    const btn = screen.getByRole("button")
+    const btn = screen.getByRole("button", { name: "Save" })
     expect(btn).toBeDisabled()
     expect(btn).toHaveClass("bg-primary", "text-primary-foreground")
-    expect(btn).not.toHaveTextContent("Save")
+    // Label present only in the sr-only span, not shown visually.
+    expect(btn.querySelector("span.sr-only")).toHaveTextContent("Save")
   })
 
   it("shows the label again once loading resolves", () => {
     const { rerender } = render(<Button loading>Save</Button>)
-    expect(screen.getByRole("button")).not.toHaveTextContent("Save")
+    // While loading the visible label is sr-only.
+    expect(screen.getByRole("button", { name: "Save" }).querySelector("span.sr-only")).toHaveTextContent("Save")
     rerender(<Button>Save</Button>)
     const btn = screen.getByRole("button", { name: "Save" })
     expect(btn).toHaveTextContent("Save")
+    expect(btn.querySelector("span.sr-only")).toBeNull()
     expect(btn).not.toBeDisabled()
   })
 
@@ -69,6 +74,18 @@ describe("Button", () => {
       </Button>
     )
     expect(screen.getByRole("link", { name: "Go" })).toBeInTheDocument()
+  })
+
+  it("default variant (#6829C2 / white): hovers to #2E0666 and presses to #000, springing back to #6829C2", () => {
+    render(<Button>Save</Button>)
+    const btn = screen.getByRole("button", { name: "Save" })
+    // Resting state is the brand purple with white text.
+    expect(btn).toHaveClass("bg-primary", "text-primary-foreground")
+    // Hover -> #2E0666 (primary-dark).
+    expect(btn).toHaveClass("hover:bg-primary-dark")
+    // Active/press -> #000 (neutral-900); no active override means it returns to
+    // bg-primary once released.
+    expect(btn).toHaveClass("active:bg-neutral-900")
   })
 
   it("applies the requested variant", () => {
