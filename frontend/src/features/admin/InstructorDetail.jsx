@@ -26,9 +26,11 @@ import {
   DialogContent,
   DialogHeader,
   DialogBody,
+  DialogFooter,
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
+import { MultiSelect } from "@/components/composed/MultiSelect"
 import { Toggle } from "@/components/ui/toggle"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -94,6 +96,7 @@ export function InstructorDetail() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
   const [addOpen, setAddOpen] = useState(false)
+  const [picked, setPicked] = useState([]) // courses selected in the assign picker (uncommitted)
   const [removeOpen, setRemoveOpen] = useState(false)
   const [deleted, setDeleted] = useState(false)
 
@@ -169,7 +172,18 @@ export function InstructorDetail() {
     if (!assigned.some((c) => c.course_id === courseId)) {
       setPendingAdds((a) => new Set(a).add(courseId))
     }
-    setAddOpen(false)
+  }
+
+  // Open/close the assign picker, discarding any uncommitted selection on close.
+  const setPickerOpen = (open) => {
+    setAddOpen(open)
+    if (!open) setPicked([])
+  }
+
+  // Commit the picker's multi-selection: stage every chosen course, then close.
+  const assignPicked = () => {
+    picked.forEach(addCourse)
+    setPickerOpen(false)
   }
 
   const removeCourse = (courseId) => {
@@ -245,7 +259,7 @@ export function InstructorDetail() {
               variant="ghost"
               size="icon"
               className="h-7 w-7"
-              onClick={() => setAddOpen(true)}
+              onClick={() => setPickerOpen(true)}
               aria-label="Assign course"
             >
               <Icon icon={MdAdd} size={18} />
@@ -353,33 +367,48 @@ export function InstructorDetail() {
         </div>
       </div>
 
-      {/* Assign-course picker (staged — commits on Save changes). */}
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+      {/* Assign-course picker (staged — commits on Save changes). Multi-select
+          from the unassigned pool, then Assign stages every pick at once. */}
+      <Dialog open={addOpen} onOpenChange={setPickerOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Assign a course</DialogTitle>
+            <DialogTitle>Assign courses</DialogTitle>
           </DialogHeader>
           <DialogBody>
-            <DialogDescription>Give this instructor access to a course.</DialogDescription>
-            <div className="flex flex-col">
-              {unassigned.length === 0 ? (
-                <p className="py-3 text-caption text-muted-foreground">
-                  This instructor is already assigned to every course.
-                </p>
-              ) : (
-                unassigned.map((course) => (
-                  <button
-                    key={course.course_id}
-                    type="button"
-                    onClick={() => addCourse(course.course_id)}
-                    className="border-b border-border px-1 py-3 text-left text-caption font-medium text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                  >
-                    <span className="block truncate">{courseLabel(course)}</span>
-                  </button>
-                ))
-              )}
-            </div>
+            {unassigned.length === 0 ? (
+              <DialogDescription>
+                This instructor is already assigned to every course.
+              </DialogDescription>
+            ) : (
+              <>
+                <DialogDescription>
+                  Give this instructor access to one or more courses.
+                </DialogDescription>
+                <MultiSelect
+                  aria-label="Courses to assign"
+                  placeholder="Select courses"
+                  options={unassigned.map((course) => ({
+                    value: course.course_id,
+                    label: courseLabel(course),
+                  }))}
+                  value={picked}
+                  onChange={setPicked}
+                />
+              </>
+            )}
           </DialogBody>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPickerOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="hover:bg-primary-dark"
+              onClick={assignPicked}
+              disabled={picked.length === 0}
+            >
+              Assign
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

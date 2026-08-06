@@ -267,15 +267,20 @@ describe("CourseDetail (staged editing)", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/couldn't be saved/i)
   })
 
-  it("adds an instructor via the '+' picker (staged) and commits the enrolment on Save", async () => {
+  it("adds an instructor via the '+' picker multiselect (staged) and commits the enrolment on Save", async () => {
     render(<CourseDetail />)
-    // The picker only offers instructors not already assigned (Ada is assigned).
     await userEvent.click(screen.getByRole("button", { name: "Add instructor" }))
     const dialog = await screen.findByRole("dialog")
-    expect(within(dialog).queryByText("Lovelace, Ada")).not.toBeInTheDocument()
-    await userEvent.click(within(dialog).getByRole("button", { name: /Turing, Alan/ }))
+    // Open the multiselect and tick Alan (Ada is already assigned, so the pool
+    // never offers her).
+    await userEvent.click(within(dialog).getByRole("button", { name: "Instructors to assign" }))
+    expect(within(dialog).queryByRole("checkbox", { name: /Lovelace, Ada/ })).not.toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole("checkbox", { name: /Turing, Alan/ }))
+    await userEvent.click(within(dialog).getByRole("button", { name: "Apply" }))
 
-    // Staged: the picker closes, the row appears, nothing enrolled yet.
+    // Assign stages the pick and closes the picker; the row appears, nothing
+    // enrolled yet.
+    await userEvent.click(within(dialog).getByRole("button", { name: "Assign" }))
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
     expect(screen.getByText("Turing, Alan")).toBeInTheDocument()
     expect(enroll.mutateAsync).not.toHaveBeenCalled()
@@ -284,6 +289,27 @@ describe("CourseDetail (staged editing)", () => {
     await waitFor(() =>
       expect(enroll.mutateAsync).toHaveBeenCalledWith({ courseId: "c1", instructorEmail: "alan@x.com" })
     )
+  })
+
+  it("keeps Assign disabled until a selection is applied, and Cancel closes without staging", async () => {
+    render(<CourseDetail />)
+    await userEvent.click(screen.getByRole("button", { name: "Add instructor" }))
+    const dialog = await screen.findByRole("dialog")
+    // Nothing picked yet → Assign is inactive.
+    expect(within(dialog).getByRole("button", { name: "Assign" })).toBeDisabled()
+
+    // Cancel discards the (empty) selection and closes; nothing staged.
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }))
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+    expect(screen.queryByText("Turing, Alan")).not.toBeInTheDocument()
+
+    // Re-open, pick + apply → Assign activates.
+    await userEvent.click(screen.getByRole("button", { name: "Add instructor" }))
+    const dialog2 = await screen.findByRole("dialog")
+    await userEvent.click(within(dialog2).getByRole("button", { name: "Instructors to assign" }))
+    await userEvent.click(within(dialog2).getByRole("checkbox", { name: /Turing, Alan/ }))
+    await userEvent.click(within(dialog2).getByRole("button", { name: "Apply" }))
+    expect(within(dialog2).getByRole("button", { name: "Assign" })).toBeEnabled()
   })
 
   it("tells the picker when every instructor is already assigned", async () => {
