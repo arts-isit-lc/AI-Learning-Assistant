@@ -160,6 +160,26 @@ describe("ConfigurationTab", () => {
     expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled()
   })
 
+  it("disables Add module and shows the placeholder once the last concept is staged for deletion", async () => {
+    const user = userEvent.setup()
+    render(<ConfigurationTab />)
+    // One concept exists → Add module starts enabled.
+    expect(screen.getByRole("button", { name: "Add module" })).toBeEnabled()
+
+    // Stage deletion of the only concept.
+    await user.click(screen.getByRole("button", { name: "Delete concept" }))
+
+    // The button reflects the DISPLAYED tree (staged), not the raw query — so it
+    // disables again, and the "No concepts yet" placeholder appears.
+    expect(screen.getByRole("button", { name: "Add module" })).toBeDisabled()
+    expect(screen.getByRole("heading", { name: "No concepts yet" })).toBeInTheDocument()
+
+    // Undo restores the concept → Add module re-enables, placeholder gone.
+    await user.click(screen.getByRole("button", { name: "Undo" }))
+    expect(screen.getByRole("button", { name: "Add module" })).toBeEnabled()
+    expect(screen.queryByRole("heading", { name: "No concepts yet" })).not.toBeInTheDocument()
+  })
+
   it("restores a staged concept deletion on Undo (nothing persisted)", async () => {
     const user = userEvent.setup()
     render(<ConfigurationTab />)

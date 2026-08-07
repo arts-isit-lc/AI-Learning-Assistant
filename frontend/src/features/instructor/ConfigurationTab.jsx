@@ -387,7 +387,7 @@ export function ConfigurationTab() {
             className="h-[30px] gap-2 rounded-sm px-2"
             aria-label="Add module"
             onClick={() => navigate(`${moduleBasePath}/new`)}
-            disabled={concepts.length === 0}
+            disabled={conceptIds.length === 0}
           >
             Module <Icon icon={MdAdd} size={20} />
           </Button>
@@ -447,9 +447,12 @@ export function ConfigurationTab() {
           description={toUserMessage(error)}
           onRetry={() => refetch()}
         />
-      ) : concepts.length === 0 ? (
+      ) : conceptIds.length === 0 ? (
         // Figma 1099:6510: a filled muted panel with just the icon + copy — no
         // in-panel action button (the header "Concept" button is the add path).
+        // Keyed off the DISPLAYED tree (conceptIds), not the raw query, so
+        // staging a delete of the last concept immediately shows the placeholder
+        // and disables "Add module" — kept in sync with the button above.
         <EmptyState
           icon={MdAccountTree}
           title="No concepts yet"
