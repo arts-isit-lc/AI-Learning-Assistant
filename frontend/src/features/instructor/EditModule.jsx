@@ -411,9 +411,13 @@ export function EditModule() {
             )}
             <div className="h-px w-full bg-border" aria-hidden="true" />
             <div className="flex items-center justify-between gap-2 [&_button]:text-base">
+              {/* Destructive text button matching the instructor "Delete course"
+                  action (InstructorCourseLayout): red semibold text, no fill, no
+                  hover underline — via the shared link-variant delete pattern. The
+                  footer's [&_button]:text-base keeps its 16px size unchanged. */}
               <Button
-                variant="danger"
-                className="hover:bg-destructive"
+                variant="link"
+                className="p-0 leading-7 text-destructive hover:no-underline"
                 onClick={() => setDeleteOpen(true)}
                 disabled={deleteModule.isPending}
               >

@@ -68,11 +68,15 @@ describe("EditModule", () => {
     expect(screen.getByRole("button", { name: "Save changes" })).toHaveClass("hover:bg-primary-dark")
   })
 
-  it("gives the Delete module button no hover state (background unchanged on hover)", () => {
+  it("styles Delete module as a destructive text button (matching instructor Delete course): red text, no fill, no hover underline", () => {
     render(<EditModule />)
     const del = screen.getByRole("button", { name: "Delete module" })
-    expect(del).toHaveClass("hover:bg-destructive")
-    expect(del).not.toHaveClass("hover:bg-destructive/90")
+    // Red destructive text, no solid fill (was variant="danger" / bg-destructive).
+    expect(del).toHaveClass("text-destructive", "p-0", "hover:no-underline")
+    expect(del).not.toHaveClass("bg-destructive", "hover:bg-destructive")
+    // Font size is left alone: no size override is added on the button, so the
+    // footer's [&_button]:text-base (16px) still governs it.
+    expect(del.closest("div")).toHaveClass("[&_button]:text-base")
   })
 
   it("seeds the form from the module record", () => {
