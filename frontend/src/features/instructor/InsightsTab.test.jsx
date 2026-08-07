@@ -71,9 +71,12 @@ describe("InsightsTab", () => {
     expect(screen.getByRole("button", { name: "Clear data" })).toBeDisabled()
   })
 
-  it("shows the empty state when there is no analytics data", () => {
+  it("shows the empty state when there is no analytics data, styled like the Configuration placeholder (muted fill, no border)", () => {
     render(<InsightsTab />)
-    expect(screen.getByRole("heading", { name: "No analytics yet" })).toBeInTheDocument()
+    const heading = screen.getByRole("heading", { name: "No analytics yet" })
+    expect(heading).toBeInTheDocument()
+    // Matches the ConfigurationTab "No concepts yet" placeholder styling.
+    expect(heading.closest("div")).toHaveClass("border-0", "bg-muted")
   })
 
   it("announces a labelled loading region while analytics load", () => {

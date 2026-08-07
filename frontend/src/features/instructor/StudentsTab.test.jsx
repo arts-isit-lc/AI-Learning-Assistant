@@ -77,10 +77,12 @@ describe("StudentsTab", () => {
     expect(deleteStudent.mutate).toHaveBeenCalledWith("ada@x.com", expect.any(Object))
   })
 
-  it("shows the empty state when no students are enrolled", () => {
+  it("shows the empty state when no students are enrolled, styled like the Configuration placeholder (muted fill, no border)", () => {
     studentsResult = { data: [], isLoading: false, isError: false }
     render(<StudentsTab />)
-    expect(screen.getByRole("heading", { name: "No students enrolled yet" })).toBeInTheDocument()
+    const heading = screen.getByRole("heading", { name: "No students enrolled yet" })
+    expect(heading).toBeInTheDocument()
+    expect(heading.closest("div")).toHaveClass("border-0", "bg-muted")
   })
 
   it("shows the block skeleton loader (no table chrome) while the roster loads", () => {

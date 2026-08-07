@@ -100,6 +100,7 @@ export function ChatHistoryTab() {
         icon={MdForum}
         title="No chat history yet"
         description="Messages appear here once students start chatting with this course's modules."
+        className="border-0 bg-muted"
       />
     )
   }

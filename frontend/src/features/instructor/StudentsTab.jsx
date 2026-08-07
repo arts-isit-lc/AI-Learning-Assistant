@@ -84,6 +84,7 @@ export function StudentsTab() {
         icon={MdPeople}
         title="No students enrolled yet"
         description="Students appear here once they join with the course access code."
+        className="border-0 bg-muted"
       />
     )
   }

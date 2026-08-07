@@ -105,9 +105,11 @@ describe("ChatHistoryTab", () => {
     )
   })
 
-  it("shows the empty state when there are no messages", () => {
+  it("shows the empty state when there are no messages, styled like the Configuration placeholder (muted fill, no border)", () => {
     render(<ChatHistoryTab />)
-    expect(screen.getByRole("heading", { name: "No chat history yet" })).toBeInTheDocument()
+    const heading = screen.getByRole("heading", { name: "No chat history yet" })
+    expect(heading).toBeInTheDocument()
+    expect(heading.closest("div")).toHaveClass("border-0", "bg-muted")
   })
 
   it("shows the block skeleton loader (no table or pagination chrome) while messages load", () => {

@@ -121,6 +121,7 @@ export function InsightsTab() {
         icon={MdInsights}
         title="No analytics yet"
         description="Analytics appear once students start chatting with this course's modules."
+        className="border-0 bg-muted"
       />
     )
   }
