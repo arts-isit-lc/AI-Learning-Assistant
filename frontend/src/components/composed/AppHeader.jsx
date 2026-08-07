@@ -74,7 +74,7 @@ export function AppHeader({ userRole }) {
             so the stacked full-width rows clip to the card's rounded corners.
           */}
           <DropdownMenuContent
-            align="end"
+            align="start"
             sideOffset={0}
             className="w-[180px] rounded-[4px] p-0 shadow-modal"
           >
