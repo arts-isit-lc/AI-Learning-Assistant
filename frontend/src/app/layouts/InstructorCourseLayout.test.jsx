@@ -62,7 +62,7 @@ describe("InstructorCourseLayout", () => {
     )
   })
 
-  it("gives inactive section tabs the top-nav styling: purple text + rounded brand hover (bg #F2E8FF / text #2E0666)", () => {
+  it("gives inactive section tabs the top-nav styling incl. every state: purple text, rounded brand hover (bg #F2E8FF / text #2E0666), and the #AA78F0 press", () => {
     renderLayout() // Settings is active here → inactive styling applies to the other four.
     for (const name of ["Configuration", "Insights", "Chat history", "Students"]) {
       const tab = screen.getByRole("link", { name })
@@ -70,16 +70,20 @@ describe("InstructorCourseLayout", () => {
       expect(tab).toHaveClass("hover:bg-primary-subtle")
       expect(tab).toHaveClass("hover:text-primary-dark")
       expect(tab).toHaveClass("rounded")
+      // Pressed state must match the top nav (was previously missing here).
+      expect(tab).toHaveClass("active:bg-primary-active", "active:text-primary-dark")
     }
   })
 
-  it("marks the active section tab black (#000 / neutral-900) with a border-primary underline and no hover, matching the top nav", () => {
+  it("marks the active section tab black (#000 / neutral-900) with a 3px border-primary underline and no fill/hover/press, matching the top nav", () => {
     renderLayout()
     const active = screen.getByRole("link", { name: "Settings" })
-    expect(active).toHaveClass("border-primary", "text-neutral-900")
+    // 3px underline (border-b-[3px]) matches InstructorTabBar exactly (was border-b-2).
+    expect(active).toHaveClass("border-b-[3px]", "border-primary", "text-neutral-900")
     expect(active).not.toHaveClass("rounded")
     expect(active).not.toHaveClass("hover:bg-primary-subtle")
     expect(active).not.toHaveClass("hover:text-primary-dark")
+    expect(active).not.toHaveClass("active:bg-primary-active")
   })
 
   it("flags the Settings tab with a dot when there is an unresolved prompt conflict", () => {
