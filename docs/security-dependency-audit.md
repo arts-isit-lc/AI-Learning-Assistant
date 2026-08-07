@@ -114,6 +114,34 @@ Steps 1–3 of the plan were executed. Steps 4–5 remain open (behavior-changin
 - **Test impact:** the `aws-cdk-lib` bump moved several **CDK-internal helper** Lambda runtimes (log retention, custom-resource / trigger providers) to `nodejs24.x`, which failed `test/lambda-config.test.ts`. Fixed by excluding functions without an explicit `FunctionName` — application Lambdas always set `functionName` (`${id}-<name>`) per CDK conventions, while CDK-generated helpers do not. App-function runtime assertions are unchanged.
 
 ### Still open
-- **#11** — S3 CORS `allowedOrigins: ["*"]` tightening (behavior-changing; verify presigned flows).
 - **#13** — confirm whether `frontend` actually uses `aws-jwt-verify`; remove or bump 4 → 5.
 - **Deferred majors** — Vite / React / Tailwind / recharts / eslint / react-table upgrades.
+
+---
+
+## Remediation applied — 2026-08-06 (part 2)
+
+Two further items from the plan were completed.
+
+### #11 — S3 CORS tightened to configured origins
+
+The four browser-facing presigned-URL buckets (`embeddingStorageBucket`, `dataIngestionBucket`, `chatlogsBucket` in `ApiGatewayStack`; `irBucket` in `MultimodalRagStack`) no longer use `allowedOrigins: ["*"]`.
+
+- New helper `cdk/lib/constants/cors.ts` → `resolveAllowedOrigins(scope, environment)` with precedence: **`-c allowedOrigins=<csv>` context → per-environment defaults → `["*"]` fallback (with a synth-time warning)**.
+- **Dev default:** the dev Amplify SPA origin + `http://localhost:5173` (Vite dev) + `http://localhost:4173` (preview).
+- **Prod:** intentionally has **no baked-in default** (the prod Amplify domain isn't known at author time). Until an operator sets `-c allowedOrigins=https://<prod-origin>` (or fills in `DEFAULT_ALLOWED_ORIGINS.prod`), prod **falls back to `"*"` with a visible synth warning** — deliberately, so a prod deploy never silently breaks uploads/downloads. **Action required for prod: set the prod origin.**
+- `allowedHeaders: ["*"]` was **left as-is**: presigned browser uploads send a variable set of headers (`Content-Type`, etc.), and origin scoping is the material control. Tightening headers risks breaking uploads for little gain.
+- Tests: added `cdk/test/s3-cors.test.ts` (7 assertions) — no bucket allows `"*"` in dev, all use the dev default list, and `resolveAllowedOrigins` precedence/fallback is covered.
+
+### ts-jest / TypeScript 6 peer conflict resolved
+
+- Bumped `ts-jest` `^29.1.2 → ^29.4.7` (29.4.7+ declares `peerDependencies.typescript: ">=4.3 <7"`, i.e. supports the repo's TypeScript 6). Within the existing `^29` range — patch-level, no behavior change.
+- **`npm install` in `cdk/` no longer needs `--legacy-peer-deps`.**
+
+### Verification (part 2)
+- **CDK:** `npx tsc --noEmit` passes; `npm test` — **305/305** pass (298 prior + 7 new CORS tests), Docker.
+- **CDK install:** `npm install` succeeds with no peer-dependency flags.
+- **Frontend:** `npm run build` still passes (no frontend changes).
+
+### Now fully addressed
+Findings **#1–#5, #7–#12** and the pre-existing `ts-jest` peer conflict are resolved. Remaining/deferred: **#6** (esbuild/vite major), **frontend react-router** advisory (likely N/A — RSC-mode), bundled `brace-expansion` in `aws-cdk-lib` (upstream), **#13** (aws-jwt-verify usage check), and the optional major-version upgrades.

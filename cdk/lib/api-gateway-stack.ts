@@ -15,6 +15,7 @@ import * as cognito from "aws-cdk-lib/aws-cognito";
 import { VpcStack } from "./vpc-stack";
 import { DatabaseStack } from "./database-stack";
 import { MultimodalRagStack } from "./multimodal-rag-stack";
+import { resolveAllowedOrigins } from "./constants/cors";
 import { Fn } from "aws-cdk-lib";
 import { Asset } from "aws-cdk-lib/aws-s3-assets";
 import * as s3 from "aws-cdk-lib/aws-s3";
@@ -78,6 +79,8 @@ export class ApiGatewayStack extends cdk.Stack {
     const environment = props?.environment || 'dev';
     const isProd = environment === 'prod';
     const logRetention = isProd ? logs.RetentionDays.THREE_MONTHS : logs.RetentionDays.ONE_MONTH;
+    // Browser origins allowed to reach the presigned-URL S3 buckets below.
+    const allowedOrigins = resolveAllowedOrigins(this, environment);
     this.layerList = {};
 
     const embeddingStorageBucket = new s3.Bucket(
@@ -95,7 +98,7 @@ export class ApiGatewayStack extends cdk.Stack {
               s3.HttpMethods.POST,
               s3.HttpMethods.DELETE,
             ],
-            allowedOrigins: ["*"],
+            allowedOrigins: allowedOrigins,
           },
         ],
         // When deleting the stack, need to empty the Bucket and delete it manually
@@ -1431,7 +1434,7 @@ export class ApiGatewayStack extends cdk.Stack {
             s3.HttpMethods.POST,
             s3.HttpMethods.DELETE,
           ],
-          allowedOrigins: ["*"],
+          allowedOrigins: allowedOrigins,
         },
       ],
       // When deleting the stack, need to empty the Bucket and delete it manually
@@ -2211,7 +2214,7 @@ export class ApiGatewayStack extends cdk.Stack {
               s3.HttpMethods.POST,
               s3.HttpMethods.DELETE,
             ],
-            allowedOrigins: ["*"],
+            allowedOrigins: allowedOrigins,
           },
         ],
         // When deleting the stack, need to empty the Bucket and delete it manually

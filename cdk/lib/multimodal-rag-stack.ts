@@ -11,6 +11,7 @@ import { Construct } from "constructs";
 import { Duration } from "aws-cdk-lib";
 import { DatabaseStack } from "./database-stack";
 import { VpcStack } from "./vpc-stack";
+import { resolveAllowedOrigins } from "./constants/cors";
 import {
   SONNET_45,
   HAIKU_45,
@@ -45,6 +46,8 @@ export class MultimodalRagStack extends cdk.Stack {
     const logRetention = isProd
       ? logs.RetentionDays.THREE_MONTHS
       : logs.RetentionDays.ONE_MONTH;
+    // Browser origins allowed to reach the presigned-URL IR bucket below.
+    const allowedOrigins = resolveAllowedOrigins(this, environment);
 
     // ─── S3: IR Persistence Bucket ────────────────────────────────────────────
     // S3 bucket names are GLOBALLY unique across every AWS account. dev and prod
@@ -74,7 +77,7 @@ export class MultimodalRagStack extends cdk.Stack {
             s3.HttpMethods.PUT,
             s3.HttpMethods.HEAD,
           ],
-          allowedOrigins: ["*"],
+          allowedOrigins: allowedOrigins,
         },
       ],
     });
