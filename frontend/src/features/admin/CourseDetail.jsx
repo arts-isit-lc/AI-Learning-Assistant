@@ -90,6 +90,7 @@ export function CourseDetail() {
   const [addOpen, setAddOpen] = useState(false)
   const [picked, setPicked] = useState([]) // instructors selected in the add picker (uncommitted)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false)
   const [deleted, setDeleted] = useState(false)
 
   // Discard staged edits when switching to another course.
@@ -242,6 +243,23 @@ export function CourseDetail() {
     } finally {
       setSaving(false)
     }
+  }
+
+  // "Save changes" gates on staged instructor removals: unenrolling an
+  // instructor tears down their access and (per the invite model) means a fresh
+  // invite to restore it, so we confirm before committing. Any other edits
+  // (active toggle, access, adds) save straight through.
+  const handleSaveClick = () => {
+    if (pendingRemoves.size > 0) setRemoveConfirmOpen(true)
+    else saveChanges()
+  }
+
+  // Confirmed removal → run the actual save, then close the confirm. saveChanges
+  // owns its own error handling (the page-level Alert) and clears the staged
+  // edits on success; on failure the staged edits remain so the user can retry.
+  const confirmRemoveAndSave = async () => {
+    await saveChanges()
+    setRemoveConfirmOpen(false)
   }
 
   if (coursesLoading) {
@@ -415,7 +433,7 @@ export function CourseDetail() {
               "h-7 rounded border hover:bg-primary-subtle hover:text-primary-dark active:bg-primary-active active:text-primary-dark disabled:opacity-100",
               isDirty ? "border-primary text-primary" : "border-transparent bg-background text-neutral-400"
             )}
-            onClick={saveChanges}
+            onClick={handleSaveClick}
             disabled={!isDirty || saving}
             loading={saving}
           >
@@ -465,6 +483,29 @@ export function CourseDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Remove-instructor confirmation (mockup 859:7133). Gates "Save changes"
+          whenever an instructor is staged for removal. Confirm commits the save;
+          Cancel just closes (the removal stays staged — Undo restores it). */}
+      <ConfirmDialog
+        open={removeConfirmOpen}
+        onOpenChange={setRemoveConfirmOpen}
+        title="Remove instructor account?"
+        description={
+          <>
+            You are about to remove this instructor from{" "}
+            <span className="font-semibold text-neutral-900">{courseCode(course)}</span>.
+            <br />
+            <br />
+            Please be aware that if they need to be added back to the OCELIA system you will
+            have to generate a new invite.
+          </>
+        }
+        confirmLabel="Remove instructor"
+        cancelLabel="Cancel"
+        loading={saving}
+        onConfirm={confirmRemoveAndSave}
+      />
 
       <ConfirmDialog
         open={deleteOpen}
