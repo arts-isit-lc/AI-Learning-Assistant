@@ -141,7 +141,6 @@ export function CreateCourse() {
             </Label>
             <Input
               id="add-course-code"
-              className="h-7"
               value={code}
               onChange={(e) => setCode(e.target.value)}
               placeholder="e.g. GEOG 210"
@@ -155,7 +154,6 @@ export function CreateCourse() {
             </Label>
             <Input
               id="add-course-title"
-              className="h-7"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               maxLength={50}
@@ -167,7 +165,7 @@ export function CreateCourse() {
               Term <span className="text-destructive">*</span>
             </Label>
             <Select value={term} onValueChange={setTerm}>
-              <SelectTrigger id="add-course-term" aria-label="Term" className="h-7">
+              <SelectTrigger id="add-course-term" aria-label="Term">
                 <SelectValue placeholder="Select a term" />
               </SelectTrigger>
               <SelectContent>
@@ -184,7 +182,6 @@ export function CreateCourse() {
             <Label htmlFor="add-course-section">Section</Label>
             <Input
               id="add-course-section"
-              className="h-7"
               value={section}
               onChange={(e) => setSection(e.target.value)}
               placeholder="e.g. 001"
@@ -199,7 +196,6 @@ export function CreateCourse() {
               aria-label="Instructors"
               placeholder="Select instructors"
               emptyText="No instructors to assign yet."
-              triggerClassName="h-7"
               options={instructors.map((i) => ({
                 value: i.user_email,
                 label: instructorLabel(i),

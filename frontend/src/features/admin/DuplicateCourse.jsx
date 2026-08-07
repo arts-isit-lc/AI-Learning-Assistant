@@ -136,7 +136,7 @@ export function DuplicateCourse() {
               Course to duplicate <span className="text-destructive">*</span>
             </Label>
             <Select value={sourceCourseId} onValueChange={handleSourceChange}>
-              <SelectTrigger id="dup-course-source" aria-label="Course to duplicate" className="h-7">
+              <SelectTrigger id="dup-course-source" aria-label="Course to duplicate">
                 <SelectValue placeholder="Select a course" />
               </SelectTrigger>
               <SelectContent>
@@ -159,7 +159,6 @@ export function DuplicateCourse() {
                 </Label>
                 <Input
                   id="dup-course-code"
-                  className="h-7"
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
                   placeholder="e.g. GEOG 210"
@@ -173,7 +172,6 @@ export function DuplicateCourse() {
                 </Label>
                 <Input
                   id="dup-course-title"
-                  className="h-7"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   maxLength={50}
@@ -183,7 +181,7 @@ export function DuplicateCourse() {
               <div className="flex flex-col">
                 <Label htmlFor="dup-course-term">Term</Label>
                 <Select value={term} onValueChange={setTerm}>
-                  <SelectTrigger id="dup-course-term" aria-label="Term" className="h-7">
+                  <SelectTrigger id="dup-course-term" aria-label="Term">
                     <SelectValue placeholder="Select a term" />
                   </SelectTrigger>
                   <SelectContent>
@@ -200,7 +198,6 @@ export function DuplicateCourse() {
                 <Label htmlFor="dup-course-section">Section</Label>
                 <Input
                   id="dup-course-section"
-                  className="h-7"
                   value={section}
                   onChange={(e) => setSection(e.target.value)}
                   placeholder="e.g. 001"

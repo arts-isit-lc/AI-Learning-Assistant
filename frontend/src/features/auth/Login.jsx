@@ -16,7 +16,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Card } from "@/components/ui/card"
-import { cn } from "@/lib/utils"
 import LoadingScreen from "@/app/LoadingScreen"
 import ubcLogo from "@/assets/ubc-logo.svg"
 
@@ -31,12 +30,12 @@ function validatePassword(pw) {
 }
 
 /**
- * Login inputs stand 44px tall (`h-11`) to match the OCELIA login frame — taller
- * than the app-wide 40px `Input` default. Scoped to this page so the shared
- * primitive (used by every other form) is untouched.
+ * Login inputs use the app-wide 40px `Input` default (`h-10`) so every form
+ * input field in the app is a consistent height. Kept as a thin wrapper so the
+ * login page has a single place to adjust its field styling if needed.
  */
 function LoginInput({ className, ...props }) {
-  return <Input className={cn("h-11", className)} {...props} />
+  return <Input className={className} {...props} />
 }
 
 /**
