@@ -72,6 +72,20 @@ describe("CopyButton", () => {
     expect(screen.queryByTestId("icon-check")).not.toBeInTheDocument()
   })
 
+  it("fades each glyph in on swap (fade-in animation, disabled under reduced motion)", () => {
+    render(<CopyButton value="ABCD-1234" label="Copy access code" />)
+
+    // The copy glyph's wrapper carries the fade-in (and opts out of motion).
+    const copyWrap = screen.getByTestId("icon-copy").parentElement
+    expect(copyWrap).toHaveClass("animate-fade-in", "motion-reduce:animate-none")
+
+    // On swap to the checkmark, the freshly-mounted glyph fades in the same way.
+    fireEvent.click(screen.getByRole("button", { name: "Copy access code" }))
+    act(() => vi.advanceTimersByTime(COPY_CONFIRM_DELAY_MS))
+    const checkWrap = screen.getByTestId("icon-check").parentElement
+    expect(checkWrap).toHaveClass("animate-fade-in", "motion-reduce:animate-none")
+  })
+
   it("still confirms with the checkmark when the clipboard write is rejected", () => {
     writeText.mockRejectedValueOnce(new Error("denied"))
     render(<CopyButton value="ABCD-1234" label="Copy access code" />)

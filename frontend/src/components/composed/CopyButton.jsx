@@ -72,7 +72,13 @@ export function CopyButton({ value, label = "Copy", size = 16, className, ...pro
       )}
       {...props}
     >
-      <Icon icon={copied ? MdCheck : MdContentCopy} size={size} />
+      {/* Keyed wrapper: the glyph swap (copy ⇄ check) remounts this span, which
+          replays the app's `fade-in` (opacity 0→1, 250ms) so the new icon eases
+          in rather than snapping. motion-reduce disables it for reduced-motion
+          users (instant swap). */}
+      <span key={copied ? "check" : "copy"} className="flex animate-fade-in motion-reduce:animate-none">
+        <Icon icon={copied ? MdCheck : MdContentCopy} size={size} />
+      </span>
     </button>
   )
 }
