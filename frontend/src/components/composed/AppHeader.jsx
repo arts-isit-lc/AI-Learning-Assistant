@@ -92,7 +92,7 @@ export function AppHeader() {
           */}
           <DropdownMenuContent
             align="start"
-            sideOffset={0}
+            sideOffset={4}
             className="w-[180px] rounded-[4px] p-0 shadow-modal"
           >
             {account && (
