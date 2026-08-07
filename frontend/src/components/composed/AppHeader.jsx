@@ -9,7 +9,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
 import ubcLogo from "@/assets/ubc-logo.svg"
 
@@ -67,20 +66,36 @@ export function AppHeader({ userRole }) {
             </Avatar>
             {account && <span className="hidden max-w-[16rem] truncate sm:inline">{account}</span>}
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          {/*
+            Account menu — Figma `Modal/UserAccount` (1679:7719). A 180px white
+            card: black email header, then purple icon+text rows separated by
+            #808080 (border) dividers, each row filling with #F2E8FF
+            (primary-subtle) on hover/focus. p-0 + rounded-[4px] + overflow-hidden
+            so the stacked full-width rows clip to the card's rounded corners.
+          */}
+          <DropdownMenuContent
+            align="end"
+            sideOffset={0}
+            className="w-[180px] rounded-[4px] p-0 shadow-modal"
+          >
             {account && (
-              <>
-                <DropdownMenuLabel className="max-w-[16rem] truncate">{account}</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-              </>
+              <DropdownMenuLabel className="truncate border-b border-border px-2 py-2 font-normal text-neutral-900">
+                {account}
+              </DropdownMenuLabel>
             )}
             {userRole === "instructor" && (
-              <DropdownMenuItem onClick={() => setIsInstructorAsStudent((v) => !v)}>
+              <DropdownMenuItem
+                onClick={() => setIsInstructorAsStudent((v) => !v)}
+                className="rounded-none border-b border-border px-2 py-2 text-primary hover:bg-primary-subtle focus:bg-primary-subtle focus:text-primary"
+              >
                 <Icon icon={isInstructorAsStudent ? MdVisibilityOff : MdVisibility} size={16} />
                 {isInstructorAsStudent ? "Exit student view" : "View as student"}
               </DropdownMenuItem>
             )}
-            <DropdownMenuItem onClick={signOut}>
+            <DropdownMenuItem
+              onClick={signOut}
+              className="rounded-none rounded-b-[4px] px-2 py-2 text-primary hover:bg-primary-subtle focus:bg-primary-subtle focus:text-primary"
+            >
               <Icon icon={MdLogout} size={16} />
               Sign out
             </DropdownMenuItem>

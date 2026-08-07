@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router"
 import { AppHeader } from "./AppHeader"
@@ -75,5 +75,25 @@ describe("AppHeader", () => {
     await user.click(screen.getByRole("button", { name: /account menu/i }))
     expect(await screen.findByRole("menuitem", { name: /sign out/i })).toBeInTheDocument()
     expect(screen.queryByRole("menuitem", { name: /view as student/i })).toBeNull()
+  })
+
+  it("styles the account menu to the mockup: 180px card, black email header, purple rows with a primary-subtle hover", async () => {
+    const user = userEvent.setup()
+    renderHeader("instructor")
+    await user.click(screen.getByRole("button", { name: /account menu/i }))
+
+    // 180px card (Figma Modal/UserAccount 1679:7719).
+    const menu = await screen.findByRole("menu")
+    expect(menu).toHaveClass("w-[180px]")
+
+    // Black email header, divided from the rows below.
+    const header = within(menu).getByText("instructor@ubc.ca")
+    expect(header).toHaveClass("text-neutral-900", "border-b", "border-border")
+
+    // Purple rows that fill with #F2E8FF (primary-subtle) on hover/focus.
+    const viewAs = screen.getByRole("menuitem", { name: /view as student/i })
+    expect(viewAs).toHaveClass("text-primary", "hover:bg-primary-subtle", "focus:bg-primary-subtle")
+    const signOutItem = screen.getByRole("menuitem", { name: /sign out/i })
+    expect(signOutItem).toHaveClass("text-primary", "hover:bg-primary-subtle", "focus:bg-primary-subtle")
   })
 })
