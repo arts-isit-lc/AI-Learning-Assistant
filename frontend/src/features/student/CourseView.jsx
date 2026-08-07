@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { Link, useParams } from "react-router-dom"
+import { Link, useParams } from "react-router"
 import { MdCheckCircle, MdRadioButtonUnchecked } from "react-icons/md"
 import { cn } from "@/lib/utils"
 import { useCoursePage, useCourses } from "@/services/queries"

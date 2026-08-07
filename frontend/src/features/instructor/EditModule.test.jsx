@@ -37,7 +37,7 @@ vi.mock("./hooks/useModuleTopics", () => ({
   useModuleTopics: () => ({ generate: vi.fn(), isGenerating: false }),
 }))
 const navigate = vi.fn()
-vi.mock("react-router-dom", async (importOriginal) => {
+vi.mock("react-router", async (importOriginal) => {
   const actual = await importOriginal()
   return {
     ...actual,

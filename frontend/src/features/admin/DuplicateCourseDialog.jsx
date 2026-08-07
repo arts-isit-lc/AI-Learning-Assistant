@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate } from "react-router"
 import { useDuplicateCourse } from "@/services/queries"
 import { generateAccessCode, COURSE_EXISTS_MESSAGE } from "./CreateCourse"
 import { Button } from "@/components/ui/button"

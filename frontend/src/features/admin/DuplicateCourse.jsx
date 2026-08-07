@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate } from "react-router"
 import { useAdminCourses, useDuplicateCourse } from "@/services/queries"
 import { COURSE_TERMS } from "@/constants/courseTerms"
 import { generateAccessCode, parseCourseCode, COURSE_EXISTS_MESSAGE } from "./CreateCourse"

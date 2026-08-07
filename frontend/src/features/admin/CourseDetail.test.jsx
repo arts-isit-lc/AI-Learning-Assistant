@@ -38,7 +38,7 @@ vi.mock("@/services/queries", () => ({
   useDeleteCourse: () => del,
   useDuplicateCourse: () => duplicate,
 }))
-vi.mock("react-router-dom", async (importOriginal) => {
+vi.mock("react-router", async (importOriginal) => {
   const actual = await importOriginal()
   return {
     ...actual,

@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom"
+import { Link } from "react-router"
 
 /**
  * Generic "screen arrives in a later phase" placeholder. Lets the full route

@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { NavLink, Outlet, useNavigate, useParams } from "react-router-dom"
+import { NavLink, Outlet, useNavigate, useParams } from "react-router"
 import { toUserMessage } from "@/services/apiError"
 import { cn } from "@/lib/utils"
 import {

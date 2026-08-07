@@ -13,7 +13,7 @@ vi.mock("./StudentDetail", () => ({ StudentDetail: () => <div>student detail</di
 
 let params
 const setSearchParams = vi.fn()
-vi.mock("react-router-dom", async (importOriginal) => {
+vi.mock("react-router", async (importOriginal) => {
   const actual = await importOriginal()
   return {
     ...actual,

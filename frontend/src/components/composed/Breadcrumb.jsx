@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom"
+import { Link } from "react-router"
 import { MdChevronRight } from "react-icons/md"
 import { cn } from "@/lib/utils"
 import { Icon } from "@/components/ui/icon"

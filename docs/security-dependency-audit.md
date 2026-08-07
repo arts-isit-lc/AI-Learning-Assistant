@@ -191,3 +191,56 @@ done
 Then `npm run deploy`. After this deploy CloudFormation owns the groups, so subsequent deploys need no cleanup.
 
 **Prod (no log loss):** do **not** run the delete. Instead bring the existing groups under management via **CloudFormation resource import** during a maintenance window (or accept a one-off deletion). Track separately before promoting to prod.
+
+---
+
+## Remediation applied — 2026-08-06 (part 4): CLI bump + deprecated-API cleanup
+
+Follow-ups discovered while deploying the `aws-cdk-lib` 2.263.0 upgrade.
+
+### aws-cdk CLI schema mismatch (deploy-blocking)
+`aws-cdk-lib` 2.263.0 emits cloud-assembly **schema v54**, which the pinned CLI (`aws-cdk` 2.1118.2, max v53) couldn't read (`cdk deploy` failed: *"You need at least CLI version 2.1135.0"*). Fixes:
+- Bumped the `aws-cdk` devDependency **2.1118.2 → 2.1135.0** (project-local CLI, used by `npm run deploy`).
+- Upgraded the developer's **npm-global** CLI the same way (`npm install -g aws-cdk@2.1135.0`) — it turned out to be an npm-global package symlinked under `/opt/homebrew/bin`, not a Homebrew formula. Global and project-local now match.
+- **Takeaway:** keep the `aws-cdk` CLI and `aws-cdk-lib` versions in step, and prefer `npm run deploy` (uses the git-pinned CLI) over a bare `cdk deploy` (uses whatever is global).
+
+### Cross-stack reference strength warning
+2.263.0 introduced the `@aws-cdk/core:defaultCrossStackReferences` feature flag. Set it explicitly to `"strong"` in `cdk.json` to lock in current producer-protecting behavior (zero functional change) and silence the warning.
+
+### Deprecated `addDependency` APIs
+Renamed to their non-deprecated equivalents (confirmed drop-in renames in the aws-cdk-lib type defs — identical behavior):
+- `bin/cdk.ts` — 3× `Stack#addDependency` → `addStackDependency` (multimodalRag→db, api→multimodalRag, observability→api).
+- `api-gateway-stack.ts` — 1× `CfnResource#addDependency` → `addResourceDependency` (guardrail version → guardrail).
+
+### Verification
+- `npx tsc --noEmit` clean; `npm test` — **306/306** pass.
+- `npx cdk ls -c environment=dev` — **0** `logRetention is deprecated`, **0** `addDependency is deprecated`, and **0** cross-stack-reference warnings. (The remaining "Deploying with new VPC…" line is an informational `console.log` in the VPC stack, not a deprecation.)
+- Deploy to dev succeeded after the one-time log-group cleanup (part 3).
+
+---
+
+## Remediation applied — 2026-08-06 (part 5): frontend vulns fully cleared (React 19 + Router 8)
+
+Closes the last open frontend findings (#6, react-router chain, #13). **Frontend `npm audit` is now `found 0 vulnerabilities`.**
+
+### aws-jwt-verify removed (#13)
+Confirmed imported nowhere in `frontend/` (JWT verification is server-side, CDK layer 5.1.1) — removed the dead dependency.
+
+### esbuild (moderate, #6) — vite 5 → 8
+Bumped `vite` 5 → 8.2.1 and `@vitejs/plugin-react` 4 → 6 (vitest 4 already supports vite 8; config is data-mode SPA, no SSR). Also modernized `vite.config.js` (`__dirname` → `import.meta.url`) to clear a vite-8 native-configLoader warning.
+
+### react-router chain (2 high, RSC-mode CSRF) — the "proper" fix required React 19
+`react-router-dom` topped out at 7.18.2 (→ vulnerable `react-router@7.18.2`); the fix only exists forward in `react-router@8.2.1+`, which **removed `react-router-dom`** and **hard-requires React 19.2.7+ / Node 22.22+**. Per decision (Option B) we did the full migration rather than risk-accept or downgrade:
+
+- **React 18.3.1 → 19.2.8** (`react`, `react-dom`, `@types/react`, `@types/react-dom`). No code changes needed — swept for every React 19 removal (`defaultProps`/`findDOMNode`/`ReactDOM.render`/legacy context/string refs/`react-dom/test-utils`): none present. The only `propTypes` use is the `ErrorBoundary` **class** component (React 19's removal is function-components-only) — harmless, left as-is.
+- **recharts 2.12.7 → 2.15.4** — React 19 support landed in recharts 2.15.0, so a *minor* bump avoided the recharts 3.x breaking API. Radix UI already peered React 19 (no churn).
+- **react-router 7 → 8.3.0**, `react-router-dom` uninstalled. Imports rewritten across ~68 files: everything from `react-router`, except `RouterProvider` which moves to `react-router/dom` (`AppV2.jsx` + `UnsavedChangesPrompt.test.jsx`). Data-mode APIs (`createBrowserRouter`, `createRoutesFromElements`, `useBlocker`, hooks) all carry over; no `meta`/`loaderData` usage, so that breaking change doesn't apply.
+- **Amplify build Node pin** — `amplify-stack.ts` buildSpec `preBuild` now runs `nvm install 22 && nvm use 22` (+ `frontend/.nvmrc` = 22) so the cloud build satisfies vite 8 / RR8's Node ≥ 22.22. **Requires an `AmplifyStack` redeploy.**
+
+### Verification
+- **Frontend:** `npm run build` ✓, `npm run test` **608/608** ✓, `npm run lint` **0 errors**, `npm audit` **0 vulnerabilities**, Playwright style-guide render smoke ✓ (the 3 auth-gated smokes skip without Cognito test creds — environment limitation).
+- **CDK:** `npx tsc --noEmit` ✓, `npm test` **306/306** ✓ (amplify-stack buildSpec change).
+
+### Final audit state
+- **Frontend: 0 vulnerabilities.**
+- **CDK: 1 high remaining** — `brace-expansion` **bundled inside the `aws-cdk-lib` 2.263.0 tarball** (build/synth-time only, never deployed). Not reachable by `npm audit fix`/`overrides`; already on latest `aws-cdk-lib`. Genuinely upstream-only — clears when AWS re-bundles. This is the sole remaining item and is **not actionable from this repo**.

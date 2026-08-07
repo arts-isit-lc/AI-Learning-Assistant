@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom"
+import { Link } from "react-router"
 import { MdChevronLeft, MdExpandMore, MdExpandLess } from "react-icons/md"
 import { titleCase } from "@/utils/formatters"
 import { Icon } from "@/components/ui/icon"

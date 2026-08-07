@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState } from "react"
-import { createBrowserRouter, RouterProvider } from "react-router-dom"
+import { createBrowserRouter } from "react-router"
+import { RouterProvider } from "react-router/dom"
 import { QueryClientProvider } from "@tanstack/react-query"
 import ErrorBoundary from "@/components/ErrorBoundary"
 import { AuthProvider } from "@/context/AuthContext"

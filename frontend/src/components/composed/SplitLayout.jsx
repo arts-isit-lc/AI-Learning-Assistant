@@ -1,4 +1,4 @@
-import { Outlet } from "react-router-dom"
+import { Outlet } from "react-router"
 
 /**
  * Master-detail layout (admin + instructor lists): a persistent left list pane

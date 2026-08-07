@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom"
+import { Link } from "react-router"
 import { MdLogout, MdVisibility, MdVisibilityOff } from "react-icons/md"
 import { useAuth } from "@/context/AuthContext"
 import { Icon } from "@/components/ui/icon"

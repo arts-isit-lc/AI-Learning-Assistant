@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { useRouteError } from "react-router-dom"
+import { useRouteError } from "react-router"
 import LoadingScreen from "./LoadingScreen"
 import { ErrorState } from "@/components/composed/ErrorState"
 

@@ -1,5 +1,5 @@
 import { useId, useState } from "react"
-import { Link, useParams } from "react-router-dom"
+import { Link, useParams } from "react-router"
 import { MdCheck, MdMap, MdExpandMore, MdExpandLess, MdChevronRight } from "react-icons/md"
 import { titleCase } from "@/utils/formatters"
 import { cn } from "@/lib/utils"

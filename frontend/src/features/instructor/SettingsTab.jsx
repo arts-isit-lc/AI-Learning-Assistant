@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { useParams } from "react-router-dom"
+import { useParams } from "react-router"
 import { useCoursePrompt, usePreviousPrompts, useValidatePrompt, useSavePrompt } from "@/services/queries"
 import { LLM_MODELS, DEFAULT_LLM_MODEL_ID } from "@/constants/llmModels"
 import { SYSTEM_LEVEL_PROMPT } from "@/constants/systemPrompt"

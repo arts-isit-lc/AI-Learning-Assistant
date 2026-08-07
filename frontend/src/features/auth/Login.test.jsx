@@ -29,7 +29,7 @@ vi.mock("@/services/api", () => ({ default: h.apiClient }))
 vi.mock("@/context/AuthContext", () => ({
   useAuth: () => ({ isAuthed: h.isAuthed, isLoading: h.isLoading, refresh: h.refresh }),
 }))
-vi.mock("react-router-dom", async (importOriginal) => {
+vi.mock("react-router", async (importOriginal) => {
   const actual = await importOriginal()
   return { ...actual, useNavigate: () => h.navigate }
 })

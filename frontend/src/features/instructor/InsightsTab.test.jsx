@@ -6,7 +6,7 @@ let analyticsResult
 vi.mock("@/services/queries", () => ({
   useAnalytics: () => analyticsResult,
 }))
-vi.mock("react-router-dom", async (importOriginal) => {
+vi.mock("react-router", async (importOriginal) => {
   const actual = await importOriginal()
   return { ...actual, useParams: () => ({ courseId: "c1" }) }
 })

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { useParams, useSearchParams } from "react-router-dom"
+import { useParams, useSearchParams } from "react-router"
 import { toUserMessage } from "@/services/apiError"
 import { MdClose, MdPeople } from "react-icons/md"
 import { useStudents, useDeleteStudent } from "@/services/queries"

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { useNavigate, useParams } from "react-router-dom"
+import { useNavigate, useParams } from "react-router"
 import { MdAdd } from "react-icons/md"
 import { toUserMessage } from "@/services/apiError"
 import {

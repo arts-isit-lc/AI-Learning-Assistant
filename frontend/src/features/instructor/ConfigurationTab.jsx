@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { Outlet, useNavigate, useParams } from "react-router-dom"
+import { Outlet, useNavigate, useParams } from "react-router"
 import { useAuth } from "@/context/AuthContext"
 import {
   DndContext,

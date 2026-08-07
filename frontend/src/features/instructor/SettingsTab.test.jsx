@@ -13,7 +13,7 @@ vi.mock("@/services/queries", () => ({
   useValidatePrompt: () => validate,
   useSavePrompt: () => save,
 }))
-vi.mock("react-router-dom", async (importOriginal) => {
+vi.mock("react-router", async (importOriginal) => {
   const actual = await importOriginal()
   return {
     ...actual,

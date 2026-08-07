@@ -1,4 +1,4 @@
-import { Link, NavLink, Outlet, useLocation } from "react-router-dom"
+import { Link, NavLink, Outlet, useLocation } from "react-router"
 import { MdAdd, MdAddToPhotos } from "react-icons/md"
 import { AppHeader } from "@/components/composed/AppHeader"
 import { AddInstructorDialog } from "@/features/admin/AddInstructorDialog"

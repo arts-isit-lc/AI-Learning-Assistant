@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate } from "react-router"
 import { MdAdd, MdSchool } from "react-icons/md"
 import { useCourses, useCourseProgressSummary } from "@/services/queries"
 import { useAuth } from "@/context/AuthContext"

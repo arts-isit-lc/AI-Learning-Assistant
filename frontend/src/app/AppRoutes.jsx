@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react"
-import { createRoutesFromElements, Navigate, Outlet, Route } from "react-router-dom"
+import { createRoutesFromElements, Navigate, Outlet, Route } from "react-router"
 import { useAuth } from "@/context/AuthContext"
 import { CourseProvider } from "@/context/CourseContext"
 import { roleHomePath } from "./roleHome"

@@ -1,4 +1,4 @@
-import { Outlet } from "react-router-dom"
+import { Outlet } from "react-router"
 import { AppHeader } from "@/components/composed/AppHeader"
 import { InstructorTabBar } from "@/components/composed/InstructorTabBar"
 

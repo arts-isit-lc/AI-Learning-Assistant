@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useParams } from "react-router-dom"
+import { useParams } from "react-router"
 import { MdForum } from "react-icons/md"
 import { useCourseMessages, useChatlogs, useChatlogStatus } from "@/services/queries"
 import { http } from "@/services/http"

@@ -17,7 +17,7 @@ vi.mock("@/services/queries", () => ({
 }))
 vi.mock("@/services/http", () => ({ http }))
 vi.mock("./hooks/useJobNotification", () => ({ useJobNotification: () => ({ subscribe }) }))
-vi.mock("react-router-dom", async (importOriginal) => {
+vi.mock("react-router", async (importOriginal) => {
   const actual = await importOriginal()
   return { ...actual, useParams: () => ({ courseId: "c1" }) }
 })

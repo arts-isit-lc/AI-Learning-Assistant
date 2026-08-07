@@ -1,4 +1,4 @@
-import { Navigate, Outlet } from "react-router-dom"
+import { Navigate, Outlet } from "react-router"
 import { useAuth } from "@/context/AuthContext"
 import { roleHomePath } from "../roleHome"
 import LoadingScreen from "../LoadingScreen"

@@ -28,7 +28,7 @@ vi.mock("@/services/queries", () => ({
   useModuleReferences: () => ({ data: [] }),
   useModuleAllFiles: () => ({ data: [] }),
 }))
-vi.mock("react-router-dom", async (importOriginal) => {
+vi.mock("react-router", async (importOriginal) => {
   const actual = await importOriginal()
   return {
     ...actual,

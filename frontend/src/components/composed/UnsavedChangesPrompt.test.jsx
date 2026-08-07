@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from "vitest"
 import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { createMemoryRouter, Link, RouterProvider } from "react-router-dom"
+import { createMemoryRouter, Link } from "react-router"
+import { RouterProvider } from "react-router/dom"
 import { UnsavedChangesPrompt } from "./UnsavedChangesPrompt"
 
 // The guard relies on React Router's useBlocker, which only works under a data

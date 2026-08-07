@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate } from "react-router"
 import { useAdminInstructors, useCreateCourse } from "@/services/queries"
 import { COURSE_TERMS } from "@/constants/courseTerms"
 import { instructorLabel } from "./InstructorList"

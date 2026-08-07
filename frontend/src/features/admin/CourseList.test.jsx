@@ -6,7 +6,7 @@ let coursesResult
 const navigate = vi.fn()
 
 vi.mock("@/services/queries", () => ({ useAdminCourses: () => coursesResult }))
-vi.mock("react-router-dom", async (importOriginal) => {
+vi.mock("react-router", async (importOriginal) => {
   const actual = await importOriginal()
   return { ...actual, useNavigate: () => navigate, useParams: () => ({}) }
 })

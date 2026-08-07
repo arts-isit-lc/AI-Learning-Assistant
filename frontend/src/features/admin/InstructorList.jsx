@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { useNavigate, useParams } from "react-router-dom"
+import { useNavigate, useParams } from "react-router"
 import { useAdminInstructors } from "@/services/queries"
 import { titleCase } from "@/utils/formatters"
 import { cn } from "@/lib/utils"

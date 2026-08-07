@@ -3,10 +3,10 @@ import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { isChunkLoadError, RouteError } from "./RouteError"
 
-// The only react-router-dom surface RouteError touches is useRouteError; drive it
+// The only react-router surface RouteError touches is useRouteError; drive it
 // per-test. (LoadingScreen / ErrorState pull in no router APIs.)
 let routeError
-vi.mock("react-router-dom", () => ({
+vi.mock("react-router", () => ({
   useRouteError: () => routeError,
 }))
 

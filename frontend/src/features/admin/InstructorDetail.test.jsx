@@ -23,7 +23,7 @@ vi.mock("@/services/queries", () => ({
   useUnenrollInstructor: () => unenroll,
   useLowerInstructor: () => lower,
 }))
-vi.mock("react-router-dom", async (importOriginal) => {
+vi.mock("react-router", async (importOriginal) => {
   const actual = await importOriginal()
   return {
     ...actual,
