@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest"
 import { render, screen } from "@testing-library/react"
-import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
 import { InstructorTabBar } from "./InstructorTabBar"
 
@@ -45,71 +44,19 @@ describe("InstructorTabBar", () => {
     expect(active).not.toHaveClass("active:bg-primary-active")
   })
 
-  it("is expanded (greeting shown) on the courses landing", () => {
+  it("always shows the greeting on the courses landing (no expand/collapse toggle)", () => {
     renderAt("/instructor/courses")
     expect(screen.getByRole("heading", { name: /hi, instructor/i })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /collapse/i })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /collapse/i })).toBeNull()
+    expect(screen.queryByRole("button", { name: /expand/i })).toBeNull()
   })
 
-  it("auto-collapses (greeting hidden) inside a course", () => {
+  it("keeps the greeting visible inside a course too (no auto-collapse, no toggle)", () => {
     renderAt("/instructor/courses/c1/configuration")
-    expect(screen.queryByRole("heading", { name: /hi, instructor/i })).toBeNull()
-    expect(screen.getByRole("button", { name: /expand/i })).toBeInTheDocument()
-    // tabs still present
-    expect(screen.getByRole("link", { name: "Courses" })).toBeInTheDocument()
-  })
-
-  it("lets the instructor collapse the expanded bar manually", async () => {
-    const user = userEvent.setup()
-    renderAt("/instructor/courses")
     expect(screen.getByRole("heading", { name: /hi, instructor/i })).toBeInTheDocument()
-    await user.click(screen.getByRole("button", { name: /collapse/i }))
-    expect(screen.queryByRole("heading", { name: /hi, instructor/i })).toBeNull()
-    expect(screen.getByRole("button", { name: /expand/i })).toBeInTheDocument()
-  })
-
-  it("exposes the collapse state via aria-expanded on the toggle (disclosure)", async () => {
-    const user = userEvent.setup()
-    renderAt("/instructor/courses")
-    expect(screen.getByRole("button", { name: /collapse/i })).toHaveAttribute("aria-expanded", "true")
-    await user.click(screen.getByRole("button", { name: /collapse/i }))
-    expect(screen.getByRole("button", { name: /expand/i })).toHaveAttribute("aria-expanded", "false")
-  })
-
-  // Regression: the toggle used to be rendered in two different slots (top-right
-  // when expanded, inline with the tabs when collapsed), so it teleported on
-  // every click and lost focus. It now lives in one fixed, always-rendered
-  // container of its OWN — sharing no wrapper with the greeting text or tabs.
-  it("puts the toggle in its own container, separate from the greeting, when expanded", () => {
-    renderAt("/instructor/courses") // expanded
-    const greeting = document.getElementById("instructor-greeting")
-    const nav = screen.getByRole("navigation", { name: /instructor navigation/i })
-    const toggle = screen.getByRole("button", { name: /collapse/i })
-    const heading = screen.getByRole("heading", { name: /hi, instructor/i })
-    // The toggle is not inside the greeting container, nor the tab row…
-    expect(greeting).not.toContainElement(toggle)
-    expect(nav.parentElement).not.toContainElement(toggle)
-    // …and the greeting text is not inside the toggle's own container.
-    expect(toggle.parentElement).not.toContainElement(heading)
-  })
-
-  it("keeps the toggle visible in its own container when collapsed (inside a course)", () => {
-    renderAt("/instructor/courses/c1/configuration") // collapsed
-    const greeting = document.getElementById("instructor-greeting")
-    const toggle = screen.getByRole("button", { name: /expand/i })
-    expect(toggle).toBeInTheDocument()
-    expect(greeting).not.toContainElement(toggle)
-  })
-
-  it("toggles in place: the same button element keeps focus across collapse (no remount/jump)", async () => {
-    const user = userEvent.setup()
-    renderAt("/instructor/courses") // expanded
-    const collapseBtn = screen.getByRole("button", { name: /collapse/i })
-    await user.click(collapseBtn)
-    const expandBtn = screen.getByRole("button", { name: /expand/i })
-    // One stable slot means it's the SAME DOM node, just relabeled — so focus
-    // stays on it instead of dropping to <body> when it was re-created elsewhere.
-    expect(expandBtn).toBe(collapseBtn)
-    expect(expandBtn).toHaveFocus()
+    expect(screen.queryByRole("button", { name: /collapse/i })).toBeNull()
+    expect(screen.queryByRole("button", { name: /expand/i })).toBeNull()
+    // Tabs still present.
+    expect(screen.getByRole("link", { name: "Courses" })).toBeInTheDocument()
   })
 })
