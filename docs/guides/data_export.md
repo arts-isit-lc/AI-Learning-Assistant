@@ -4,6 +4,13 @@ Connect to the AILA RDS database via an SSM tunnel through a temporary bastion E
 
 **Cost:** ~$0.01 per session | **Time:** ~2 minutes to connect
 
+> **Self-cleaning:** each bastion launches with a 3-hour auto-terminate timer
+> (`shutdown -h +180` in user-data + `--instance-initiated-shutdown-behavior terminate`),
+> so a forgotten one tears itself down instead of billing for weeks. Still run the
+> **Cleanup** step when you finish — don't lean on the timer. For a long-running
+> export, SSM onto the box and run `sudo shutdown -c` to cancel the timer (or
+> `sudo shutdown -h +360` to push it out to 6 hours).
+
 ---
 
 ## Prerequisites (Install Once)
@@ -43,9 +50,11 @@ INSTANCE_ID=$(aws ec2 run-instances --region ca-central-1 \
   --subnet-id subnet-071e1f8011d6613dd \
   --security-group-ids sg-01b40b148d50b1d2d \
   --iam-instance-profile Name=AILA-BastionProfile \
+  --instance-initiated-shutdown-behavior terminate \
+  --user-data $'#!/bin/bash\nshutdown -h +180' \
   --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=AILA-DataExport-Bastion}]' \
   --query 'Instances[0].InstanceId' --output text)
-echo "Instance: $INSTANCE_ID"
+echo "Instance: $INSTANCE_ID (self-terminates ~3h after launch)"
 
 # Wait ~60s, then verify
 aws ssm describe-instance-information --region ca-central-1 \
@@ -74,8 +83,15 @@ PGPASSWORD="<password>" /opt/homebrew/opt/libpq/bin/psql -h localhost -p 5432 -U
 ### Cleanup
 
 ```bash
-# Ctrl+C in tunnel terminal, then:
+# Ctrl+C in tunnel terminal, then terminate this session's bastion:
 aws ec2 terminate-instances --region ca-central-1 --instance-ids $INSTANCE_ID
+
+# Safety net — sweep any stray AILA-DataExport-Bastion instances still running.
+# (Bastions also self-terminate ~3h after launch, but this clears earlier ones now.)
+STRAY=$(aws ec2 describe-instances --region ca-central-1 --no-cli-pager \
+  --filters "Name=tag:Name,Values=AILA-DataExport-Bastion" "Name=instance-state-name,Values=pending,running" \
+  --query 'Reservations[].Instances[].InstanceId' --output text)
+[ -n "$STRAY" ] && aws ec2 terminate-instances --region ca-central-1 --no-cli-pager --instance-ids $STRAY || echo "No stray bastions."
 ```
 
 ---
@@ -107,9 +123,11 @@ INSTANCE_ID=$(aws ec2 run-instances --region ca-central-1 \
   --subnet-id subnet-0ce505eb9b20b0737 \
   --security-group-ids sg-01d2afae7c37b515c \
   --iam-instance-profile Name=AILA-BastionProfile \
+  --instance-initiated-shutdown-behavior terminate \
+  --user-data $'#!/bin/bash\nshutdown -h +180' \
   --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=AILA-DataExport-Bastion}]' \
   --query 'Instances[0].InstanceId' --output text)
-echo "Instance: $INSTANCE_ID"
+echo "Instance: $INSTANCE_ID (self-terminates ~3h after launch)"
 
 # Wait ~60s, then verify
 aws ssm describe-instance-information --region ca-central-1 \
@@ -138,8 +156,15 @@ PGPASSWORD="<password>" /opt/homebrew/opt/libpq/bin/psql -h localhost -p 5432 -U
 ### Cleanup
 
 ```bash
-# Ctrl+C in tunnel terminal, then:
+# Ctrl+C in tunnel terminal, then terminate this session's bastion:
 aws ec2 terminate-instances --region ca-central-1 --instance-ids $INSTANCE_ID
+
+# Safety net — sweep any stray AILA-DataExport-Bastion instances still running.
+# (Bastions also self-terminate ~3h after launch, but this clears earlier ones now.)
+STRAY=$(aws ec2 describe-instances --region ca-central-1 --no-cli-pager \
+  --filters "Name=tag:Name,Values=AILA-DataExport-Bastion" "Name=instance-state-name,Values=pending,running" \
+  --query 'Reservations[].Instances[].InstanceId' --output text)
+[ -n "$STRAY" ] && aws ec2 terminate-instances --region ca-central-1 --no-cli-pager --instance-ids $STRAY || echo "No stray bastions."
 ```
 
 ---
@@ -252,7 +277,8 @@ pg_dump ... -t '"Course_Modules"' -t '"Users"' -f subset.dump
 | SSO token expired | Re-run `aws sso login --profile ...` and re-export credentials. |
 | `pg_dump`: "server version mismatch" / "aborting because of server version mismatch" | Your local `pg_dump` is older than the RDS server. Run `brew upgrade libpq` to get a newer client (client version must be ≥ server version). |
 | Port 5432 in use | Use `localPortNumber:["15432"]` in tunnel and connect to that port. |
-| Forgot to terminate bastion | Find and kill: `aws ec2 describe-instances --region ca-central-1 --filters "Name=tag:Name,Values=AILA-DataExport-Bastion" "Name=instance-state-name,Values=running" --query 'Reservations[].Instances[].InstanceId' --output text` |
+| Forgot to terminate bastion | Each bastion self-terminates ~3h after launch, so strays clear on their own. To kill them now: `aws ec2 terminate-instances --region ca-central-1 --no-cli-pager --instance-ids $(aws ec2 describe-instances --region ca-central-1 --no-cli-pager --filters "Name=tag:Name,Values=AILA-DataExport-Bastion" "Name=instance-state-name,Values=running" --query 'Reservations[].Instances[].InstanceId' --output text)` |
+| Auto-terminate killed a long export | The 3h timer is a safety net. SSM onto the bastion and run `sudo shutdown -c` to cancel it, or `sudo shutdown -h +360` to extend to 6h. Relaunch if it's already gone. |
 
 ---
 
