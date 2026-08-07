@@ -316,14 +316,7 @@ export function Login() {
         <div className="flex flex-col items-center gap-8">
           <div className="flex w-full items-center gap-6">
             <img src={ubcLogo} alt="University of British Columbia" className="h-14 w-auto shrink-0" />
-            {/* tracking is the OCELIA logotype letter-spacing — no spacing token covers it. */}
-            <span
-              role="img"
-              aria-label="OCELIA"
-              className="flex-1 text-center text-3xl font-semibold uppercase leading-none tracking-[0.35em] text-primary"
-            >
-              OCELIA
-            </span>
+            <img src="/OCELIA_logo.svg" alt="OCELIA" className="h-10 w-auto flex-1 object-contain" />
           </div>
           <p className="w-full text-body text-foreground">
             Welcome to OCELIA, your course learning assistant. Sign in to pick up where you left
