@@ -1,5 +1,4 @@
 import { Component } from "react";
-import PropTypes from "prop-types";
 
 /**
  * Generic render-error boundary.
@@ -20,6 +19,12 @@ import PropTypes from "prop-types";
  * error and retries rendering its children. That is what lets a streaming
  * message recover on the next chunk once the accumulated text becomes
  * well-formed again, rather than staying stuck on the fallback.
+ *
+ * Props:
+ * - `children`         nodes to protect.
+ * - `fallback`         static node rendered when a child throws.
+ * - `fallbackRender`   render-prop alternative to `fallback`; receives the caught error.
+ * - `resetKeys`        array; changing any entry clears the error and retries the children.
  */
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -59,15 +64,5 @@ class ErrorBoundary extends Component {
     return this.props.children;
   }
 }
-
-ErrorBoundary.propTypes = {
-  children: PropTypes.node,
-  // Static node rendered when a child throws.
-  fallback: PropTypes.node,
-  // Render-prop alternative to `fallback`; receives the caught error.
-  fallbackRender: PropTypes.func,
-  // Changing any entry clears the error and retries the children.
-  resetKeys: PropTypes.array,
-};
 
 export default ErrorBoundary;

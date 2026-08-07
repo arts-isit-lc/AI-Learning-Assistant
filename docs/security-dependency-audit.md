@@ -244,3 +244,30 @@ Bumped `vite` 5 → 8.2.1 and `@vitejs/plugin-react` 4 → 6 (vitest 4 already s
 ### Final audit state
 - **Frontend: 0 vulnerabilities.**
 - **CDK: 1 high remaining** — `brace-expansion` **bundled inside the `aws-cdk-lib` 2.263.0 tarball** (build/synth-time only, never deployed). Not reachable by `npm audit fix`/`overrides`; already on latest `aws-cdk-lib`. Genuinely upstream-only — clears when AWS re-bundles. This is the sole remaining item and is **not actionable from this repo**.
+
+---
+
+## Hygiene sweep — 2026-08-06 (part 6): in-range updates + dead-dep cleanup
+
+Post-migration "are we current, secure, and clean" pass. No new vulnerabilities; routine currency + cleanup only.
+
+### Security state (re-confirmed)
+- **Frontend: `npm audit` = 0 vulnerabilities.**
+- **CDK: 1 high** — `brace-expansion` bundled in the `aws-cdk-lib@2.263.0` tarball (build/synth-time only, upstream-fix-only, not reachable via `npm audit fix`/overrides). Unchanged; the sole non-actionable item.
+
+### In-range dependency updates (`npm update`, no major crossings)
+- **Frontend:** Radix UI → 1.1.23 / 2.x latest, `@tanstack/react-query`(+devtools) → 5.101.4, `aws-amplify` → 6.20.0, `react-hook-form` → 7.84.0, `@hookform/resolvers` → 5.7.1, `@playwright/test` → 1.62.1, `@testing-library/user-event` → 14.6.3, eslint plugins (`react`, `react-refresh`), `autoprefixer`, `katex`, `ldrs`, `postcss`. `package.json` caret ranges unchanged; only resolved (lockfile) versions bumped.
+- **CDK:** `constructs` → 10.8.1, `yaml` → 2.9.0, `@types/node` (in-range). `aws-cdk-lib` intentionally held at 2.263.0 (a bump would re-raise the cloud-assembly schema and require another CLI bump).
+
+### Dead-dependency cleanup
+- Removed **`prop-types`** — after the React 19 upgrade its `propTypes` validation no longer runs, and its only use was `ErrorBoundary.jsx` (a class component). Converted the per-prop notes to a JSDoc `Props:` block on the class (matches the repo's "JSDoc for typed models" convention) and uninstalled the package. 0 residual references.
+
+### Migration cleanliness (verified)
+Repo-wide: **zero** lingering `react-router-dom` or `aws-jwt-verify` references (src, e2e, config); the `RouterProvider`-from-`react-router/dom` split is correct in the two files that need it.
+
+### Verification
+- **Frontend:** build ✓, **608/608** tests ✓, lint **0 errors** (warnings 43 → 23 after the eslint-plugin updates), audit 0.
+- **CDK:** `tsc --noEmit` ✓, **306/306** tests ✓.
+
+### Deferred (optional majors — no CVE, each needs its own testing pass)
+`tailwindcss` 3→4 · `@tanstack/react-table` 8→9 · `react-icons` 4→5 · `recharts` 2→3 · `eslint` 9→10 · `jest` 29→30 · `typescript` 6→7 · `katex` 0.16→0.18 · `@types/*` majors.
