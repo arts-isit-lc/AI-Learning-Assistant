@@ -26,7 +26,7 @@ npx cdk synth          # Full synthesis (requires Docker)
 
 ## Requirements
 
-- Node.js 20+, npm
+- Node.js 22+, npm
 - Docker (running) — required for container Lambda image builds
 - AWS CLI configured with appropriate credentials
 - No AWS credentials needed for `npm test` (Jest uses mock templates)

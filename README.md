@@ -34,7 +34,7 @@ For detailed documentation:
 
 See the [Deployment Guide](docs/guides/deploymentGuide.md) for full instructions.
 
-**Requirements:** git, AWS Account, AWS CLI, AWS CDK v2, npm, Node.js 20+, Docker
+**Requirements:** git, AWS Account, AWS CLI, AWS CDK v2, npm, Node.js 22+ (Vite 8 / React Router 8 require ≥ 22.22), Docker
 
 ## User Guide
 
@@ -64,12 +64,16 @@ See the [Troubleshooting Guide](docs/guides/troubleshootingGuide.md) for common 
 │   ├── graphql/            # AppSync schema
 │   └── test/               # Jest CDK assertion tests
 ├── docs/                   # Project documentation
-└── frontend/               # React 18 SPA (Vite + Tailwind + MUI v9)
+└── frontend/               # React 19 SPA (Vite + Tailwind + shadcn/ui — OCELIA)
     ├── src/
-    │   ├── components/     # Shared components (AIMessage, chat, file viewers)
-    │   ├── pages/          # Role-based pages (admin, instructor, student)
-    │   ├── services/       # API client
-    │   └── utils/          # Auth, formatters
+    │   ├── components/ui/       # shadcn/ui primitives
+    │   ├── components/composed/ # Composed components (cards, tables, dialogs)
+    │   ├── features/            # Feature modules (student, instructor, admin, auth)
+    │   ├── app/                 # App root (AppV2), routes, layouts, route guards
+    │   ├── context/            # AuthContext, CourseContext, NotificationContext
+    │   ├── services/           # API client, http, TanStack Query hooks + Zod schemas
+    │   ├── lib/                 # cn() + shared utils
+    │   └── constants/          # LLM models, etc.
     └── public/
 ```
 

@@ -6,11 +6,11 @@ fileMatchPattern: "frontend/**"
 # Frontend Conventions
 
 > The frontend runs on a single **Tailwind + shadcn/ui** system (the OCELIA rebuild per
-> `docs/ocelia-interface-rebuild-plan.md`). The legacy MUI interface was **fully removed in the Phase 8
+> `docs/completed-work/2026-ocelia-rebuild/ocelia-interface-rebuild-plan.md`). The legacy MUI interface was **fully removed in the Phase 8
 > purge (2026-07-20)** — MUI/emotion, `lucide-react`, and `material-react-table` are no longer dependencies.
 
 ## Stack
-React 18 (JSX only) · Vite 5 · React Router 7 (**data router**: `createBrowserRouter` + `RouterProvider`, nested layout routes, lazy routes) · **Tailwind 3 + shadcn/ui** (single UI system) · **Material Symbols icons** as per-icon SVG components via an `<Icon>` wrapper · **TanStack Query** (server state) · **React Hook Form + Zod** (forms + runtime API contracts) · Amplify v6 (auth/API) · react-markdown + react-syntax-highlighter · rehype-katex + remark-math · Recharts · react-pdf
+React 19 (JSX only) · Vite 8 · React Router 8 (**data router**: `createBrowserRouter` + `RouterProvider`, nested layout routes, lazy routes — import everything from `react-router`, except `RouterProvider` from `react-router/dom`; the `react-router-dom` package was removed in the v8 migration) · **Tailwind 3 + shadcn/ui** (single UI system) · **Material Symbols icons** as per-icon SVG components via an `<Icon>` wrapper · **TanStack Query** (server state) · **React Hook Form + Zod** (forms + runtime API contracts) · Amplify v6 (auth/API) · react-markdown + react-syntax-highlighter · rehype-katex + remark-math · Recharts · react-pdf
 
 ## Key Rules
 - Functional components only, no class components

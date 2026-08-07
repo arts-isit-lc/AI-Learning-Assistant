@@ -6,8 +6,9 @@ fileMatchPattern: "cdk/**/*.ts"
 # CDK Conventions
 
 ## Versions
-TypeScript `~6.0.3` · `aws-cdk-lib ^2.249.0` · `constructs ^10.4.2`
+TypeScript `~6.0.3` · `aws-cdk-lib ^2.263.0` · `constructs ^10.4.2` · `aws-cdk` CLI `2.1135.0`
 Runtimes: `NODEJS_22_X` (zip) · `PYTHON_3_11` (Docker)
+Keep the `aws-cdk` CLI and `aws-cdk-lib` in step (a lib bump can raise the cloud-assembly schema past an older CLI). Deploy via `npm run deploy` (uses the git-pinned local CLI).
 
 ## Naming
 - Stack: `${StackPrefix}-${StackName}` — never hardcode
@@ -28,7 +29,8 @@ const logRetention = isProd ? logs.RetentionDays.THREE_MONTHS : logs.RetentionDa
 ```
 
 ## Lambda Required Properties
-`runtime` · `tracing: Tracing.ACTIVE` · `logRetention` (env-derived) · `functionName: \`${id}-<name>\`` · scoped IAM role
+`runtime` · `tracing: Tracing.ACTIVE` · `logGroup` (explicit `logs.LogGroup`) · `functionName: \`${id}-<name>\`` · scoped IAM role
+Use an explicit `logs.LogGroup` named `/aws/lambda/${functionName}` with env-derived `retention` (see the local `makeLogGroup` helper in `api-gateway-stack.ts` / `multimodal-rag-stack.ts`) — **not** the deprecated `logRetention` prop (removed 2026-08). The `/aws/lambda/<functionName>` name must match so IAM scoping + ObservabilityStack alarms resolve.
 
 ## overrideLogicalId() — Never Remove
 Pins CloudFormation logical ID. Removing = delete + recreate = downtime.

@@ -21,7 +21,7 @@ The system processes uploaded course materials (PDF, PPTX, DOCX, LaTeX, CSV, HTM
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                              FRONTEND                                         │
-│                     React 18 SPA (Vite + Tailwind)                           │
+│                     React 19 SPA (Vite + Tailwind)                           │
 │                                                                              │
 │   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                     │
 │   │  Admin Panel │  │  Instructor  │  │  Student     │                     │

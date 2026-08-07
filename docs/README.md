@@ -1,5 +1,12 @@
 # Documentation
 
+**Index / router — start here to find the right doc.** Rules that govern how code is
+written live in `.kiro/steering/` (auto-loaded); this folder is on-demand reference.
+Several system docs come as a **pair**: a technical deep-dive (`*-pipeline.md` / `*-flow.md`)
+and a plain-language `*-explained.md` for non-technical readers — for engineering work use
+the deep-dive. `completed-work/` is a historical archive (implemented plans); it is not
+current reference.
+
 ## Structure
 
 ```
@@ -24,6 +31,13 @@ docs/
 | `chatbot-v2-explained.md` | Non-technical explanation of the learning chatbot (how a lesson, hints, and completion work) |
 | `data-flow.md` | End-to-end data journey from file upload to student answer |
 | `v1-vs-v2-data-comparison.md` | V1 vs V2 data formats and migration rationale |
+
+## Audits & Reports
+
+| File | Purpose |
+|------|---------|
+| `security-dependency-audit.md` | Dependency/security audit + remediation log (npm/pip audits, upgrades, CDK/frontend hardening) |
+| `frontend-accessibility-audit.md` | WCAG 2.1/2.2 AA static-analysis audit of the OCELIA frontend |
 
 ## Guides
 
@@ -60,3 +74,4 @@ Archive of planning documents for features that have been implemented.
 | `2025-math-compute` | Verified math computation with SymPy |
 | `2025-observability` | CloudWatch alarms, X-Ray, structured logging, dashboard |
 | `2025-v1-architecture` | Archived V1 text_generation module docs |
+| `2026-ocelia-rebuild` | OCELIA frontend rebuild plan + Phase 0 design audit (React/Tailwind/shadcn migration — completed) |

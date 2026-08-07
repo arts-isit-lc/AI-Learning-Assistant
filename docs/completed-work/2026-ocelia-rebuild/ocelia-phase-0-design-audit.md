@@ -1,7 +1,7 @@
 # OCELIA Interface Rebuild — Phase 0: Design Audit & Punch-List
 
 **Status:** Complete — Phase 0 closed, all open questions resolved · **Date:** 2026-07-17
-**Owner:** Frontend rebuild · **Parent:** `docs/ocelia-interface-rebuild-plan.md` (§13 Phase 0)
+**Owner:** Frontend rebuild · **Parent:** `./ocelia-interface-rebuild-plan.md` (§13 Phase 0)
 **Design source:** Figma `OCELIA - May 2026` — file key `9Kt3RPFlZalJnPtCuHLObU`, page `0:1`.
 Page `846:6698` (`Inspo + draft work`) holds inspiration + the deferred mobile student set — **out of scope**.
 
