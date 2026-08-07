@@ -54,7 +54,10 @@ export function CourseView() {
   const [open, setOpen] = useState([])
   // Collapsible course header (Reduce/Expand, top-right), mirroring the module chat.
   const [headerCollapsed, setHeaderCollapsed] = useState(false)
-  // Expand/Collapse-all toggle — "Collapse all" is active by default (all closed on load).
+  // Expand/Collapse-all actions. All accordions start closed, so the actionable
+  // control is "Expand all" — rendered active (purple, underlined, hover removes
+  // the underline). "Collapse all" is inactive/disabled until something is open,
+  // and vice-versa once everything is expanded.
   const [expandedMode, setExpandedMode] = useState(false)
 
   return (
@@ -88,7 +91,6 @@ export function CourseView() {
         <div className="flex items-center gap-2 text-caption">
           <button
             type="button"
-            aria-pressed={expandedMode}
             disabled={expandedMode}
             onClick={() => {
               setExpandedMode(true)
@@ -96,9 +98,11 @@ export function CourseView() {
             }}
             className={cn(
               "text-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              // Active (all closed → the available action): purple + underline,
+              // underline drops on hover. Inactive (already expanded): grey, idle.
               expandedMode
-                ? "font-semibold text-primary cursor-default"
-                : "font-normal text-neutral-500 hover:underline"
+                ? "font-normal text-neutral-500 cursor-default"
+                : "font-semibold text-primary underline hover:no-underline"
             )}
           >
             Expand all
@@ -106,7 +110,6 @@ export function CourseView() {
           <span className="text-border" aria-hidden="true">|</span>
           <button
             type="button"
-            aria-pressed={!expandedMode}
             disabled={!expandedMode}
             onClick={() => {
               setExpandedMode(false)
@@ -114,9 +117,11 @@ export function CourseView() {
             }}
             className={cn(
               "text-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              // Active (all open → the available action): purple + underline,
+              // underline drops on hover. Inactive (already collapsed): grey, idle.
               !expandedMode
-                ? "font-semibold text-primary cursor-default"
-                : "font-normal text-neutral-500 hover:underline"
+                ? "font-normal text-neutral-500 cursor-default"
+                : "font-semibold text-primary underline hover:no-underline"
             )}
           >
             Collapse all

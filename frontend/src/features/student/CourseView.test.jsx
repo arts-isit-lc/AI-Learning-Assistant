@@ -100,23 +100,26 @@ describe("CourseView", () => {
     expect(screen.getByRole("button", { name: /learning journey/i })).toBeInTheDocument()
   })
 
-  it("toggles Expand all / Collapse all — Collapse all active by default (all closed on load)", async () => {
+  it("toggles Expand all / Collapse all — Expand all is the active action by default (all closed on load)", async () => {
     renderCourse()
     const expandBtn = screen.getByRole("button", { name: "Expand all" })
     const collapseBtn = screen.getByRole("button", { name: "Collapse all" })
 
-    // Default: Collapse all is the active option (bold + primary); Expand all is inactive.
-    expect(collapseBtn).toHaveAttribute("aria-pressed", "true")
-    expect(collapseBtn).toHaveClass("font-semibold", "text-primary")
-    expect(expandBtn).toHaveAttribute("aria-pressed", "false")
-    expect(expandBtn).toHaveClass("font-normal", "text-neutral-500")
-
-    // Clicking Expand all flips the active option.
-    await userEvent.click(expandBtn)
-    expect(expandBtn).toHaveAttribute("aria-pressed", "true")
-    expect(expandBtn).toHaveClass("font-semibold", "text-primary")
-    expect(collapseBtn).toHaveAttribute("aria-pressed", "false")
+    // Default (all closed): "Expand all" is the active/available action — purple,
+    // semibold, underlined (underline drops on hover) and enabled. "Collapse all"
+    // is the inactive/disabled one (grey).
+    expect(expandBtn).toHaveClass("font-semibold", "text-primary", "underline", "hover:no-underline")
+    expect(expandBtn).toBeEnabled()
     expect(collapseBtn).toHaveClass("font-normal", "text-neutral-500")
+    expect(collapseBtn).toBeDisabled()
+
+    // Clicking Expand all flips it: now everything is open, so "Collapse all" is
+    // the active action and "Expand all" goes inactive.
+    await userEvent.click(expandBtn)
+    expect(collapseBtn).toHaveClass("font-semibold", "text-primary", "underline", "hover:no-underline")
+    expect(collapseBtn).toBeEnabled()
+    expect(expandBtn).toHaveClass("font-normal", "text-neutral-500")
+    expect(expandBtn).toBeDisabled()
   })
 
   it("shows an accessible ErrorState with a working retry when the course fails to load", async () => {
