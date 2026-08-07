@@ -60,7 +60,7 @@ describe("AppRoutes — student", () => {
     renderAt("/courses/c1/modules/m1")
     expect(await screen.findByText("module chat")).toBeInTheDocument()
     // shell renders for the role
-    expect(screen.getByText("OCELIA")).toBeInTheDocument()
+    expect(screen.getByRole("img", { name: "OCELIA" })).toBeInTheDocument()
   })
 
   it("redirects '/' to the student home", async () => {

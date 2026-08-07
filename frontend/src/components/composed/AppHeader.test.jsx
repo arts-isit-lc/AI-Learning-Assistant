@@ -36,7 +36,7 @@ beforeEach(() => {
 describe("AppHeader", () => {
   it("shows the OCELIA brand + UBC crest linking home, for every role", () => {
     renderHeader("student")
-    expect(screen.getByText("OCELIA")).toBeInTheDocument()
+    expect(screen.getByRole("img", { name: "OCELIA" })).toBeInTheDocument()
     const logo = screen.getByRole("img", { name: /university of british columbia/i })
     expect(logo.closest("a")).toHaveAttribute("href", "/")
   })

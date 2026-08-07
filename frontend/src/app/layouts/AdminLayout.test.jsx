@@ -29,7 +29,7 @@ describe("AdminLayout", () => {
     expect(screen.getByRole("link", { name: "Instructors" })).toBeInTheDocument()
     expect(screen.getByRole("link", { name: "Courses" })).toBeInTheDocument()
     // banner brand still present
-    expect(screen.getByText("OCELIA")).toBeInTheDocument()
+    expect(screen.getByRole("img", { name: "OCELIA" })).toBeInTheDocument()
   })
 
   it("gives inactive nav tabs the instructor rounded brand hover (bg #F2E8FF / text #2E0666)", () => {

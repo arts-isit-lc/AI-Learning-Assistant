@@ -50,8 +50,8 @@ export function AppHeader({ userRole }) {
           <span className="flex items-center border-r border-border px-6 py-4">
             <img src={ubcLogo} alt="University of British Columbia" className="h-12 w-auto" />
           </span>
-          <span className="flex items-center px-6 text-h2 font-semibold tracking-[0.5em] text-primary">
-            OCELIA
+          <span className="flex items-center px-6">
+            <img src="/OCELIA_logo.svg" alt="OCELIA" className="h-9 w-auto" />
           </span>
         </Link>
 
