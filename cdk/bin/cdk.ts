@@ -20,9 +20,9 @@ const environment = app.node.tryGetContext("environment");
 const vpcStack = new VpcStack(app, `${StackPrefix}-VpcStack`, { env, environment });
 const dbStack = new DatabaseStack(app, `${StackPrefix}-DatabaseStack`, vpcStack, { env, environment });
 const multimodalRagStack = new MultimodalRagStack(app, `${StackPrefix}-MultimodalRagStack`, dbStack, vpcStack, { env, environment });
-multimodalRagStack.addDependency(dbStack);
+multimodalRagStack.addStackDependency(dbStack);
 const apiStack = new ApiGatewayStack(app, `${StackPrefix}-ApiGatewayStack`, dbStack, vpcStack, multimodalRagStack, { env, environment });
-apiStack.addDependency(multimodalRagStack);
+apiStack.addStackDependency(multimodalRagStack);
 const observabilityStack = new ObservabilityStack(app, `${StackPrefix}-ObservabilityStack`, {
   env,
   environment: environment || 'dev',
@@ -41,7 +41,7 @@ const observabilityStack = new ObservabilityStack(app, `${StackPrefix}-Observabi
     .filter((fn) => fn.isContainer)
     .map((fn) => fn.functionName),
 });
-observabilityStack.addDependency(apiStack);
+observabilityStack.addStackDependency(apiStack);
 const dbFlowStack = new DBFlowStack(app, `${StackPrefix}-DBFlowStack`, vpcStack, dbStack, apiStack, { env });
 const amplifyStack = new AmplifyStack(app, `${StackPrefix}-AmplifyStack`, apiStack, { env });
 Tags.of(app).add("app", "AI-Learning-Assistant");

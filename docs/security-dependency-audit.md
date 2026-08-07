@@ -133,6 +133,10 @@ The four browser-facing presigned-URL buckets (`embeddingStorageBucket`, `dataIn
 - `allowedHeaders: ["*"]` was **left as-is**: presigned browser uploads send a variable set of headers (`Content-Type`, etc.), and origin scoping is the material control. Tightening headers risks breaking uploads for little gain.
 - Tests: added `cdk/test/s3-cors.test.ts` (7 assertions) — no bucket allows `"*"` in dev, all use the dev default list, and `resolveAllowedOrigins` precedence/fallback is covered.
 
+### aws-cdk CLI bumped to match aws-cdk-lib (deploy-blocking follow-up)
+
+The `aws-cdk-lib` 2.263.0 bump made the app emit **cloud-assembly schema v54**, which the pinned CLI (`aws-cdk` 2.1118.2, max schema v53) could not read — `cdk deploy` failed with *"CDK CLI is not compatible with the CDK library... You need at least CLI version 2.1135.0"*. Bumped the `aws-cdk` devDependency **2.1118.2 → 2.1135.0**. Verified with `npx cdk ls -c environment=dev` (synths + lists all 7 stacks, no schema error). Takeaway: keep the `aws-cdk` CLI and `aws-cdk-lib` versions in step.
+
 ### ts-jest / TypeScript 6 peer conflict resolved
 
 - Bumped `ts-jest` `^29.1.2 → ^29.4.7` (29.4.7+ declares `peerDependencies.typescript: ">=4.3 <7"`, i.e. supports the repo's TypeScript 6). Within the existing `^29` range — patch-level, no behavior change.
@@ -145,3 +149,45 @@ The four browser-facing presigned-URL buckets (`embeddingStorageBucket`, `dataIn
 
 ### Now fully addressed
 Findings **#1–#5, #7–#12** and the pre-existing `ts-jest` peer conflict are resolved. Remaining/deferred: **#6** (esbuild/vite major), **frontend react-router** advisory (likely N/A — RSC-mode), bundled `brace-expansion` in `aws-cdk-lib` (upstream), **#13** (aws-jwt-verify usage check), and the optional major-version upgrades.
+
+---
+
+## Remediation applied — 2026-08-06 (part 3): logRetention → explicit LogGroups
+
+Follow-up to the `aws-cdk-lib` 2.263.0 bump, which surfaced a deprecation warning: `aws-cdk-lib.aws_lambda.FunctionOptions#logRetention is deprecated`.
+
+### What changed
+All **27** application Lambdas (21 in `ApiGatewayStack`, 6 in `MultimodalRagStack`) were migrated off the deprecated `logRetention` prop to an explicit `logs.LogGroup` passed via `logGroup:`. Each stack got a local `makeLogGroup(functionName)` helper that creates:
+
+- `logGroupName: /aws/lambda/<functionName>` — **must** match Lambda's default name so the existing IAM log-group scoping and the ObservabilityStack alarms/metric filters keep resolving.
+- `retention: logRetention` — unchanged values (dev 30 days, prod 90 days).
+- `removalPolicy: DESTROY` — matches prior ephemeral-in-dev behavior.
+
+This also removes the CDK `Custom::LogRetention` custom resource (and its helper Lambda) from the synthesized templates.
+
+### Verification
+- `npx tsc --noEmit` clean; `npm test` — **306/306** pass (rewrote `test/log-retention.test.ts` to assert explicit `/aws/lambda/*` LogGroups with the right retention and **zero** `Custom::LogRetention` resources).
+- `npx cdk ls -c environment=dev` — **0** `logRetention is deprecated` warnings (was ~20+).
+
+### ⚠️ Required one-time step before the next deploy (deploy-blocking)
+
+The log groups `/aws/lambda/AILA-*Stack-*` already exist in the account (created at runtime by the old custom resource). CloudFormation will now try to **create** them as managed resources and fail with `ResourceAlreadyExists` unless they're removed first.
+
+**Dev (Option A — brief log loss, acceptable):** after `aws sso login`, before `npm run deploy`:
+
+```bash
+REGION=ca-central-1
+for prefix in AILA-ApiGatewayStack AILA-MultimodalRagStack; do
+  aws logs describe-log-groups \
+    --log-group-name-prefix "/aws/lambda/$prefix-" --region "$REGION" \
+    --query 'logGroups[].logGroupName' --output text \
+  | tr '\t' '\n' | while read -r lg; do
+    [ -n "$lg" ] && aws logs delete-log-group --log-group-name "$lg" --region "$REGION" \
+      && echo "deleted $lg"
+  done
+done
+```
+
+Then `npm run deploy`. After this deploy CloudFormation owns the groups, so subsequent deploys need no cleanup.
+
+**Prod (no log loss):** do **not** run the delete. Instead bring the existing groups under management via **CloudFormation resource import** during a maintenance window (or accept a one-off deletion). Track separately before promoting to prod.

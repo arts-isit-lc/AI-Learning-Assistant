@@ -81,6 +81,19 @@ export class ApiGatewayStack extends cdk.Stack {
     const logRetention = isProd ? logs.RetentionDays.THREE_MONTHS : logs.RetentionDays.ONE_MONTH;
     // Browser origins allowed to reach the presigned-URL S3 buckets below.
     const allowedOrigins = resolveAllowedOrigins(this, environment);
+
+    // Explicit CloudWatch log group per Lambda, replacing the deprecated
+    // `logRetention` prop (which managed the group via a custom resource).
+    // Named to match Lambda's default (`/aws/lambda/<functionName>`) so the IAM
+    // log-group scoping and the ObservabilityStack alarms/metric filters keep
+    // resolving. DESTROY removal matches the prior ephemeral-in-dev behavior.
+    const makeLogGroup = (functionName: string) =>
+      new logs.LogGroup(this, `${functionName}-LogGroup`, {
+        logGroupName: `/aws/lambda/${functionName}`,
+        retention: logRetention,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      });
+
     this.layerList = {};
 
     const embeddingStorageBucket = new s3.Bucket(
@@ -647,7 +660,7 @@ export class ApiGatewayStack extends cdk.Stack {
       handler: "studentFunction.handler",
       timeout: Duration.seconds(60),
       tracing: lambda.Tracing.ACTIVE,
-      logRetention: logRetention,
+      logGroup: makeLogGroup(`${id}-studentFunction`),
       vpc: vpcStack.vpc,
       environment: {
         SM_DB_CREDENTIALS: db.secretPathUser.secretName,
@@ -681,7 +694,7 @@ export class ApiGatewayStack extends cdk.Stack {
         handler: "instructorFunction.handler",
         timeout: Duration.seconds(60),
         tracing: lambda.Tracing.ACTIVE,
-        logRetention: logRetention,
+        logGroup: makeLogGroup(`${id}-instructorFunction`),
         vpc: vpcStack.vpc,
         environment: {
           SM_DB_CREDENTIALS: db.secretPathUser.secretName,
@@ -786,7 +799,7 @@ export class ApiGatewayStack extends cdk.Stack {
       handler: "adminFunction.handler",
       timeout: Duration.seconds(60),
       tracing: lambda.Tracing.ACTIVE,
-      logRetention: logRetention,
+      logGroup: makeLogGroup(`${id}-adminFunction`),
       vpc: vpcStack.vpc,
       environment: {
         SM_DB_CREDENTIALS: db.secretPathTableCreator.secretName,
@@ -858,7 +871,7 @@ export class ApiGatewayStack extends cdk.Stack {
       handler: "preSignup.handler",
       timeout: Duration.seconds(30),
       tracing: lambda.Tracing.ACTIVE,
-      logRetention: logRetention,
+      logGroup: makeLogGroup(`${id}-preSignupLambda`),
       environment: {
         ALLOWED_EMAIL_DOMAINS: "/AILA/AllowedEmailDomains",
       },
@@ -955,7 +968,7 @@ export class ApiGatewayStack extends cdk.Stack {
       handler: "addStudentOnSignUp.handler",
       timeout: Duration.seconds(30),
       tracing: lambda.Tracing.ACTIVE,
-      logRetention: logRetention,
+      logGroup: makeLogGroup(`${id}-addStudentOnSignUp`),
       environment: {
         SM_DB_CREDENTIALS: db.secretPathTableCreator.secretName,
         RDS_PROXY_ENDPOINT: db.rdsProxyEndpointTableCreator,
@@ -973,7 +986,7 @@ export class ApiGatewayStack extends cdk.Stack {
       handler: "adjustUserRoles.handler",
       timeout: Duration.seconds(60),
       tracing: lambda.Tracing.ACTIVE,
-      logRetention: logRetention,
+      logGroup: makeLogGroup(`${id}-adjustUserRoles-v9`),
       environment: {
         SM_DB_CREDENTIALS: db.secretPathTableCreator.secretName,
         RDS_PROXY_ENDPOINT: db.rdsProxyEndpointTableCreator,
@@ -1064,7 +1077,7 @@ export class ApiGatewayStack extends cdk.Stack {
         handler: "adminAuthorizerFunction.handler",
         timeout: Duration.seconds(30),
         tracing: lambda.Tracing.ACTIVE,
-        logRetention: logRetention,
+        logGroup: makeLogGroup(`${id}-adminLambdaAuthorizer`),
         environment: {
           SM_COGNITO_CREDENTIALS: this.secret.secretName,
         },
@@ -1098,7 +1111,7 @@ export class ApiGatewayStack extends cdk.Stack {
         handler: "studentAuthorizerFunction.handler",
         timeout: Duration.seconds(30),
         tracing: lambda.Tracing.ACTIVE,
-        logRetention: logRetention,
+        logGroup: makeLogGroup(`${id}-studentLambdaAuthorizer`),
         environment: {
           SM_COGNITO_CREDENTIALS: this.secret.secretName,
         },
@@ -1134,7 +1147,7 @@ export class ApiGatewayStack extends cdk.Stack {
         handler: "instructorAuthorizerFunction.handler",
         timeout: Duration.seconds(30),
         tracing: lambda.Tracing.ACTIVE,
-        logRetention: logRetention,
+        logGroup: makeLogGroup(`${id}-instructorLambdaAuthorizer`),
         environment: {
           SM_COGNITO_CREDENTIALS: this.secret.secretName,
         },
@@ -1273,7 +1286,7 @@ export class ApiGatewayStack extends cdk.Stack {
     const guardrailVersion = new bedrock.CfnGuardrailVersion(this, `${id}-TextGenGuardrailVersion`, {
       guardrailIdentifier: guardrail.attrGuardrailId,
     });
-    guardrailVersion.addDependency(guardrail);
+    guardrailVersion.addResourceDependency(guardrail);
 
     // SSM Parameters for guardrail runtime config.
     // Deterministic path (/AILA/${environment}/...) so the chatbotV2Function in
@@ -1297,7 +1310,7 @@ export class ApiGatewayStack extends cdk.Stack {
       memorySize: 1024,
       timeout: cdk.Duration.seconds(300),
       tracing: lambda.Tracing.ACTIVE,
-      logRetention: logRetention,
+      logGroup: makeLogGroup(`${id}-TextGenLambdaDockerFunc`),
       vpc: vpcStack.vpc,
       functionName: `${id}-TextGenLambdaDockerFunc`,
       environment: {
@@ -1458,7 +1471,7 @@ export class ApiGatewayStack extends cdk.Stack {
         handler: "generatePreSignedURL.lambda_handler",
         timeout: Duration.seconds(60),
         tracing: lambda.Tracing.ACTIVE,
-        logRetention: logRetention,
+        logGroup: makeLogGroup(`${id}-GeneratePreSignedURLFunc`),
         memorySize: 256,
         vpc: vpcStack.vpc,
         environment: {
@@ -1625,7 +1638,7 @@ export class ApiGatewayStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(300),
       memorySize: 256,
       tracing: lambda.Tracing.ACTIVE,
-      logRetention: logRetention,
+      logGroup: makeLogGroup(`${id}-orphanCleanupFunc`),
       vpc: vpcStack.vpc,
       role: orphanCleanupRole,
       layers: [powertoolsLayer, psycopgLayer],
@@ -1654,7 +1667,7 @@ export class ApiGatewayStack extends cdk.Stack {
       handler: "getFilesFunction.lambda_handler",
       timeout: Duration.seconds(30),
       tracing: lambda.Tracing.ACTIVE,
-      logRetention: logRetention,
+      logGroup: makeLogGroup(`${id}-GetFilesFunction`),
       memorySize: 128,
       vpc: vpcStack.vpc,
       environment: {
@@ -1718,7 +1731,7 @@ export class ApiGatewayStack extends cdk.Stack {
       handler: "deleteFile.lambda_handler",
       timeout: Duration.seconds(30),
       tracing: lambda.Tracing.ACTIVE,
-      logRetention: logRetention,
+      logGroup: makeLogGroup(`${id}-DeleteFileFunc`),
       memorySize: 128,
       vpc: vpcStack.vpc,
       environment: {
@@ -1781,7 +1794,7 @@ export class ApiGatewayStack extends cdk.Stack {
       handler: "deleteModule.lambda_handler",
       timeout: Duration.seconds(60),
       tracing: lambda.Tracing.ACTIVE,
-      logRetention: logRetention,
+      logGroup: makeLogGroup(`${id}-DeleteModuleFunc`),
       memorySize: 128,
       environment: {
         BUCKET: dataIngestionBucket.bucketName,
@@ -1829,7 +1842,7 @@ export class ApiGatewayStack extends cdk.Stack {
       handler: "deleteLastMessage.lambda_handler",
       timeout: Duration.seconds(30),
       tracing: lambda.Tracing.ACTIVE,
-      logRetention: logRetention,
+      logGroup: makeLogGroup(`${id}-DeleteLastMessage`),
       memorySize: 128,
       vpc: vpcStack.vpc,
       environment: {
@@ -1906,7 +1919,7 @@ export class ApiGatewayStack extends cdk.Stack {
       code: lambda.Code.fromAsset("lambda/lib"),
       handler: "appsync.handler",
       tracing: lambda.Tracing.ACTIVE,
-      logRetention: logRetention,
+      logGroup: makeLogGroup(`${id}-AuthHandler`),
       functionName: `${id}-AuthHandler`,
     });
 
@@ -2027,7 +2040,7 @@ export class ApiGatewayStack extends cdk.Stack {
         code: lambda.Code.fromAsset("lambda/eventNotification"),
         handler: "eventNotification.lambda_handler",
         tracing: lambda.Tracing.ACTIVE,
-        logRetention: logRetention,
+        logGroup: makeLogGroup(`${id}-NotificationFunction`),
         layers: [powertoolsLayer],
         environment: {
           APPSYNC_API_URL: this.eventApi.graphqlUrl,
@@ -2164,7 +2177,7 @@ export class ApiGatewayStack extends cdk.Stack {
       handler: "sqsFunction.handler",
       timeout: Duration.seconds(60),
       tracing: lambda.Tracing.ACTIVE,
-      logRetention: logRetention,
+      logGroup: makeLogGroup(`${id}-sqsFunction`),
       environment: {
         SQS_QUEUE_URL: this.messagesQueue.queueUrl,
         SM_DB_CREDENTIALS: db.secretPathUser.secretName,
@@ -2238,7 +2251,7 @@ export class ApiGatewayStack extends cdk.Stack {
       memorySize: 512,
       timeout: cdk.Duration.seconds(300),
       tracing: lambda.Tracing.ACTIVE,
-      logRetention: logRetention,
+      logGroup: makeLogGroup(`${id}-SQSTriggerDockerFunc`),
       vpc: vpcStack.vpc, // Pass the VPC
       functionName: `${id}-SQSTriggerDockerFunc`,
       environment: {
@@ -2325,7 +2338,7 @@ export class ApiGatewayStack extends cdk.Stack {
       handler: "getChatLogsFunction.lambda_handler",
       timeout: Duration.seconds(60),
       tracing: lambda.Tracing.ACTIVE,
-      logRetention: logRetention,
+      logGroup: makeLogGroup(`${id}-GetChatLogsFunction`),
       memorySize: 128,
       vpc: vpcStack.vpc,
       environment: {

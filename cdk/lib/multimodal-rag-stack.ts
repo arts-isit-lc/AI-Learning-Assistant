@@ -49,6 +49,18 @@ export class MultimodalRagStack extends cdk.Stack {
     // Browser origins allowed to reach the presigned-URL IR bucket below.
     const allowedOrigins = resolveAllowedOrigins(this, environment);
 
+    // Explicit CloudWatch log group per Lambda, replacing the deprecated
+    // `logRetention` prop (which managed the group via a custom resource).
+    // Named to match Lambda's default (`/aws/lambda/<functionName>`) so the IAM
+    // log-group scoping and the ObservabilityStack alarms/metric filters keep
+    // resolving. DESTROY removal matches the prior ephemeral-in-dev behavior.
+    const makeLogGroup = (functionName: string) =>
+      new logs.LogGroup(this, `${functionName}-LogGroup`, {
+        logGroupName: `/aws/lambda/${functionName}`,
+        retention: logRetention,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      });
+
     // ─── S3: IR Persistence Bucket ────────────────────────────────────────────
     // S3 bucket names are GLOBALLY unique across every AWS account. dev and prod
     // share the same StackPrefix and deploy to different accounts, so an
@@ -417,7 +429,7 @@ export class MultimodalRagStack extends cdk.Stack {
         memorySize: 1024,
         timeout: Duration.seconds(300),
         tracing: lambda.Tracing.ACTIVE,
-        logRetention: logRetention,
+        logGroup: makeLogGroup(`${id}-ragIngestionFunction`),
         vpc: vpc.vpc,
         functionName: `${id}-ragIngestionFunction`,
         role: ragIngestionRole,
@@ -445,7 +457,7 @@ export class MultimodalRagStack extends cdk.Stack {
         memorySize: 2048,
         timeout: Duration.seconds(900),
         tracing: lambda.Tracing.ACTIVE,
-        logRetention: logRetention,
+        logGroup: makeLogGroup(`${id}-ragEnrichmentFunction`),
         vpc: vpc.vpc,
         functionName: `${id}-ragEnrichmentFunction`,
         role: ragEnrichmentRole,
@@ -473,7 +485,7 @@ export class MultimodalRagStack extends cdk.Stack {
         memorySize: 1024,
         timeout: Duration.seconds(60),
         tracing: lambda.Tracing.ACTIVE,
-        logRetention: logRetention,
+        logGroup: makeLogGroup(`${id}-ragRetrievalFunction`),
         vpc: vpc.vpc,
         functionName: `${id}-ragRetrievalFunction`,
         role: ragRetrievalRole,
@@ -563,7 +575,7 @@ export class MultimodalRagStack extends cdk.Stack {
         memorySize: 256,
         timeout: Duration.seconds(30),
         tracing: lambda.Tracing.ACTIVE,
-        logRetention: logRetention,
+        logGroup: makeLogGroup(`${id}-mathComputeFunction`),
         functionName: `${id}-mathComputeFunction`,
         role: mathComputeRole,
         environment: {
@@ -782,7 +794,7 @@ export class MultimodalRagStack extends cdk.Stack {
         memorySize: 1024,
         timeout: Duration.seconds(120),
         tracing: lambda.Tracing.ACTIVE,
-        logRetention: logRetention,
+        logGroup: makeLogGroup(`${id}-chatbotV2Function`),
         functionName: `${id}-chatbotV2Function`,
         role: chatbotV2Role,
         vpc: vpc.vpc,
@@ -921,7 +933,7 @@ export class MultimodalRagStack extends cdk.Stack {
         memorySize: 256,
         timeout: Duration.seconds(60),
         tracing: lambda.Tracing.ACTIVE,
-        logRetention: logRetention,
+        logGroup: makeLogGroup(`${id}-rdsProjectionConsumerFunction`),
         functionName: `${id}-rdsProjectionConsumerFunction`,
         role: rdsProjectionConsumerRole,
         vpc: vpc.vpc,
