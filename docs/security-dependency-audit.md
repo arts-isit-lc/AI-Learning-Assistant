@@ -271,3 +271,31 @@ Repo-wide: **zero** lingering `react-router-dom` or `aws-jwt-verify` references 
 
 ### Deferred (optional majors — no CVE, each needs its own testing pass)
 `tailwindcss` 3→4 · `@tanstack/react-table` 8→9 · `react-icons` 4→5 · `recharts` 2→3 · `eslint` 9→10 · `jest` 29→30 · `typescript` 6→7 · `katex` 0.16→0.18 · `@types/*` majors.
+
+---
+
+## Optional major upgrades — 2026-08-06 (part 7): batched, risk-ordered
+
+Tackled the deferred optional majors in risk-ordered batches (each gated by build/test/lint). No CVEs involved — pure currency. Several were **deferred with cause** where the ecosystem isn't ready or the payoff didn't justify a breaking rewrite.
+
+### Applied
+| Package | From → To | Notes |
+|---|---|---|
+| `@types/node` (frontend + cdk) | 22/24 → 26 | type-only; cdk `tsc` clean |
+| `katex` (frontend) | 0.16 → 0.18.1 | markdown/KaTeX render tests pass |
+| `jest` + `@types/jest` (cdk) | 29 → 30 | `ts-jest@29.4.12` supports jest `^30` |
+| `react-icons` (frontend) | 4 → 5.7.0 | `/md` subpath stable; all icons resolve |
+| `recharts` (frontend) | 2 → 3.10.1 | only `AnalyticsChart` consumes it; core components stable |
+
+### Deferred (with reason)
+- **`eslint` 9 → 10** — `eslint-plugin-react@7.37.5` peers only eslint `^9.7` and `eslint-plugin-jsx-a11y@6.10.2` peers `^9`; neither declares eslint 10 support. Forcing it would break `npm run lint`. Revisit when those plugins ship eslint-10 support.
+- **`typescript` 6 → 7** — `ts-jest` peers `typescript <7` (would break the CDK test transform), and TS 7 is the native ("tsgo") rewrite = high ecosystem-compat risk. Revisit when `ts-jest`/`ts-node`/`aws-cdk` declare TS 7 support.
+- **`@tanstack/react-table` 8 → 9** — attempted; v9 is a ground-up **feature-composition rewrite** (`useReactTable`→`useTable`, `getCoreRowModel`→`createCoreRowModel` + `tableFeatures`). It broke the build (`MISSING_EXPORT`) and `DataTable`. Reverted to 8.21.3 — a full `DataTable` rewrite against a brand-new API for zero security/functional gain isn't warranted (v8 is fully supported, not vulnerable).
+- **`tailwindcss` 3 → 4** — not attempted here; the CSS-first engine + config-format + PostCSS-pipeline change is coupled to the design-system tokens (`ui-design-system.md`) and warrants its own planning pass.
+
+### Verification (post-batches)
+- **Frontend:** build ✓, **608/608** tests ✓, lint **0 errors**, `npm audit` **0 vulnerabilities**.
+- **CDK:** `tsc --noEmit` ✓, **306/306** tests ✓, audit unchanged (1 high = bundled `brace-expansion`, upstream-only). Note: jest 30 prints a benign "worker failed to exit gracefully" teardown warning (leaked timer/handle in a synth test) — non-fatal, suite passes.
+
+### Net dependency posture
+Everything is on its latest **compatible** major. The only versions not on latest-major are the four deferred above, each blocked by a concrete peer/ecosystem constraint or a cost/benefit call — not by neglect.
