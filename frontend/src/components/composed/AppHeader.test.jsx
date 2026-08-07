@@ -4,9 +4,10 @@ import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router"
 import { AppHeader } from "./AppHeader"
 
-const { signOut, setAsStudent } = vi.hoisted(() => ({
+const { signOut, setAsStudent, navigate } = vi.hoisted(() => ({
   signOut: vi.fn(),
   setAsStudent: vi.fn(),
+  navigate: vi.fn(),
 }))
 
 let authState
@@ -14,10 +15,20 @@ vi.mock("@/context/AuthContext", () => ({
   useAuth: () => authState,
 }))
 
-function renderHeader(role) {
+vi.mock("react-router", async (importOriginal) => ({
+  ...(await importOriginal()),
+  useNavigate: () => navigate,
+}))
+
+// AppHeader reads the role (and the preview flag) from AuthContext — no role
+// prop. `asStudent` models an instructor previewing the student UI: role stays
+// "instructor" while the flag is on.
+function renderHeader(role, { asStudent = false } = {}) {
+  authState.role = role
+  authState.isInstructorAsStudent = asStudent
   return render(
     <MemoryRouter>
-      <AppHeader userRole={role} />
+      <AppHeader />
     </MemoryRouter>
   )
 }
@@ -25,12 +36,14 @@ function renderHeader(role) {
 beforeEach(() => {
   authState = {
     user: { email: "instructor@ubc.ca" },
+    role: "instructor",
     signOut,
     isInstructorAsStudent: false,
     setIsInstructorAsStudent: setAsStudent,
   }
   signOut.mockClear()
   setAsStudent.mockClear()
+  navigate.mockClear()
 })
 
 describe("AppHeader", () => {
@@ -75,6 +88,27 @@ describe("AppHeader", () => {
     await user.click(screen.getByRole("button", { name: /account menu/i }))
     expect(await screen.findByRole("menuitem", { name: /sign out/i })).toBeInTheDocument()
     expect(screen.queryByRole("menuitem", { name: /view as student/i })).toBeNull()
+  })
+
+  it("enters the student view: sets the flag and navigates to the student home", async () => {
+    const user = userEvent.setup()
+    renderHeader("instructor")
+    await user.click(screen.getByRole("button", { name: /account menu/i }))
+    await user.click(await screen.findByRole("menuitem", { name: /view as student/i }))
+    expect(setAsStudent).toHaveBeenCalledWith(true)
+    expect(navigate).toHaveBeenCalledWith("/courses")
+  })
+
+  it("shows 'Exit student view' while previewing (student layout) and returns to the instructor home", async () => {
+    const user = userEvent.setup()
+    // Instructor previewing: on the student route, so userRole is "student",
+    // but the real role stays "instructor" and the flag is on.
+    renderHeader("instructor", { asStudent: true })
+    await user.click(screen.getByRole("button", { name: /account menu/i }))
+    const exit = await screen.findByRole("menuitem", { name: /exit student view/i })
+    await user.click(exit)
+    expect(setAsStudent).toHaveBeenCalledWith(false)
+    expect(navigate).toHaveBeenCalledWith("/instructor/courses")
   })
 
   it("styles the account menu to the mockup: 180px card, black email header, purple rows with a primary-subtle hover", async () => {

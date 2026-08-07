@@ -4,7 +4,7 @@ import { AppHeader } from "@/components/composed/AppHeader"
 export default function StudentLayout() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <AppHeader userRole="student" />
+      <AppHeader />
       {/* overflow-x-clip absorbs the LearningJourneyBar's full-bleed (w-screen)
           break-out so the vw/scrollbar overshoot never adds a horizontal scrollbar.
           `clip` (not `hidden`) creates no scroll container and leaves the sticky

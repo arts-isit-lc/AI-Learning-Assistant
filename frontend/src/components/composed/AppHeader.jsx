@@ -1,4 +1,4 @@
-import { Link } from "react-router"
+import { Link, useNavigate } from "react-router"
 import { MdLogout, MdVisibility, MdVisibilityOff } from "react-icons/md"
 import { useAuth } from "@/context/AuthContext"
 import { Icon } from "@/components/ui/icon"
@@ -30,13 +30,30 @@ function initialsFrom(text) {
  * with a solid-purple avatar + the account **email** in purple. Brand + account
  * ONLY — role navigation lives in the bars below (instructor → `InstructorTabBar`;
  * admin → its layout nav), never in the banner. All dividers use `border-border`
- * (#808080), per the frame.
- *
- * @param {{ userRole: "student"|"instructor"|"admin" }} props
+ * (#808080), per the frame. The role-specific affordance (the "View as student"
+ * toggle) is keyed off the derived `role` from AuthContext, so the component
+ * needs no role prop.
  */
-export function AppHeader({ userRole }) {
-  const { user, signOut, isInstructorAsStudent, setIsInstructorAsStudent } = useAuth()
+export function AppHeader() {
+  const { user, role, signOut, isInstructorAsStudent, setIsInstructorAsStudent } = useAuth()
+  const navigate = useNavigate()
   const account = user?.email || user?.username || ""
+
+  // "View as student" is an instructor-only affordance, keyed off the real
+  // derived `role`. While previewing, the instructor is on the student route
+  // (inside StudentLayout), yet their role stays "instructor" — so gating on the
+  // true role keeps the "Exit student view" control reachable there to flip back.
+  const canViewAsStudent = role === "instructor"
+
+  // The app chooses the experience from the URL (see roleHome), not from the
+  // flag alone — so the toggle must set the flag AND navigate to the matching
+  // home. Same seam as ConfigurationTab's `openStudentView`. Pass an explicit
+  // boolean (not an updater) so the flag and the navigation target stay in sync.
+  const toggleStudentView = () => {
+    const next = !isInstructorAsStudent
+    setIsInstructorAsStudent(next)
+    navigate(next ? "/courses" : "/instructor/courses")
+  }
 
   return (
     <header className="sticky top-0 z-sticky border-b border-border bg-background">
@@ -83,9 +100,9 @@ export function AppHeader({ userRole }) {
                 {account}
               </DropdownMenuLabel>
             )}
-            {userRole === "instructor" && (
+            {canViewAsStudent && (
               <DropdownMenuItem
-                onClick={() => setIsInstructorAsStudent((v) => !v)}
+                onClick={toggleStudentView}
                 className="rounded-none border-b border-border px-2 py-2 text-primary hover:bg-primary-subtle focus:bg-primary-subtle focus:text-primary"
               >
                 <Icon icon={isInstructorAsStudent ? MdVisibilityOff : MdVisibility} size={16} />
