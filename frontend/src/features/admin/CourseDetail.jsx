@@ -428,7 +428,7 @@ export function CourseDetail() {
       <Dialog open={addOpen} onOpenChange={setPickerOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Assign courses</DialogTitle>
+            <DialogTitle>Assign instructors</DialogTitle>
           </DialogHeader>
           <DialogBody>
             {unassigned.length === 0 ? (
