@@ -109,12 +109,13 @@ function SortableModuleRow({ module, number, courseId, conceptName, onEdit, onDe
                 <span>
                   {toRoman(number)}. {titleCase(module.module_name)}
                 </span>
-                {/* Chevron greys to #BFBFBF (neutral-400) while the trigger is hovered. */}
+                {/* Chevron matches the concept pencil/trash icons: muted at rest,
+                    primary-dark on hover (via the trigger `group`). */}
                 <Icon
                   icon={MdExpandMore}
                   size={24}
                   className={cn(
-                    "shrink-0 transition duration-fast group-hover:text-neutral-400",
+                    "shrink-0 text-muted-foreground transition duration-fast group-hover:text-primary-dark",
                     open && "rotate-180"
                   )}
                 />

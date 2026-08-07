@@ -54,11 +54,13 @@ describe("ModuleAccordion", () => {
     expect(del).not.toHaveClass("hover:underline")
   })
 
-  it("greys the module disclosure chevron while its trigger is hovered (group-hover:text-neutral-400)", () => {
+  it("styles the module disclosure chevron like the concept pencil/trash icons (muted → primary-dark on hover)", () => {
     renderAccordion()
     const trigger = screen.getByRole("button", { name: "i. Vectors" })
     expect(trigger).toHaveClass("group")
-    expect(trigger.querySelector("svg")).toHaveClass("group-hover:text-neutral-400")
+    const chevron = trigger.querySelector("svg")
+    expect(chevron).toHaveClass("text-muted-foreground")
+    expect(chevron).toHaveClass("group-hover:text-primary-dark")
   })
 
   it("gives the expanded module body the same bg-muted surface as the heading/box", async () => {
