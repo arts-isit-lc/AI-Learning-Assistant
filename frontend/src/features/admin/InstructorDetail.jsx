@@ -98,6 +98,7 @@ export function InstructorDetail() {
   const [addOpen, setAddOpen] = useState(false)
   const [picked, setPicked] = useState([]) // courses selected in the assign picker (uncommitted)
   const [removeOpen, setRemoveOpen] = useState(false)
+  const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false)
   const [deleted, setDeleted] = useState(false)
 
   // Discard staged edits when switching to another instructor.
@@ -242,6 +243,30 @@ export function InstructorDetail() {
     }
   }
 
+  // Courses staged for removal (resolved to their objects) — drives the confirm
+  // copy ("remove <instructor> from <course code(s)>").
+  const removedCourses = [...pendingRemoves]
+    .map((id) => assigned.find((c) => c.course_id === id))
+    .filter(Boolean)
+  const removedCodes = removedCourses.map(courseCode).join(", ")
+
+  // "Save changes" gates on staged course removals: unenrolling an instructor
+  // tears down their access to that course and (per the invite model) means
+  // re-adding them to restore it, so we confirm before committing. Any other
+  // edits (access toggles, adds) save straight through.
+  const handleSaveClick = () => {
+    if (pendingRemoves.size > 0) setRemoveConfirmOpen(true)
+    else saveChanges()
+  }
+
+  // Confirmed removal → run the actual save, then close the confirm. saveChanges
+  // owns its own error handling (the page-level Alert) and clears the staged
+  // edits on success; on failure the staged edits remain so the user can retry.
+  const confirmRemoveAndSave = async () => {
+    await saveChanges()
+    setRemoveConfirmOpen(false)
+  }
+
   return (
     <div className="flex flex-col">
       <UnsavedChangesPrompt when={isDirty && !deleted} />
@@ -358,7 +383,7 @@ export function InstructorDetail() {
               "h-7 rounded border hover:bg-primary-subtle hover:text-primary-dark active:bg-primary-active active:text-primary-dark disabled:opacity-100",
               isDirty ? "border-primary text-primary" : "border-transparent bg-background text-neutral-400"
             )}
-            onClick={saveChanges}
+            onClick={handleSaveClick}
             disabled={!isDirty || saving}
             loading={saving}
           >
@@ -411,6 +436,32 @@ export function InstructorDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Remove-course confirmation (mockup 859:7167). Gates "Save changes"
+          whenever a course is staged for removal. Confirm commits the save;
+          Cancel just closes (the removal stays staged — Undo restores it). */}
+      <ConfirmDialog
+        open={removeConfirmOpen}
+        onOpenChange={setRemoveConfirmOpen}
+        title="Remove course?"
+        description={
+          <>
+            You are about to remove{" "}
+            <span className="font-semibold text-neutral-900">
+              {instructor ? instructorLabel(instructor) : titleCase(email)}
+            </span>{" "}
+            from <span className="font-semibold text-neutral-900">{removedCodes}</span>.
+            <br />
+            <br />
+            If the instructor needs to access this course in the future, you will need to add
+            them again.
+          </>
+        }
+        confirmLabel="Remove course"
+        cancelLabel="Cancel"
+        loading={saving}
+        onConfirm={confirmRemoveAndSave}
+      />
 
       <ConfirmDialog
         open={removeOpen}

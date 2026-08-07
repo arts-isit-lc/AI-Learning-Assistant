@@ -134,17 +134,63 @@ describe("InstructorDetail (staged editing)", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled())
   })
 
-  it("stages a course removal (no confirm dialog) and commits it on Save", async () => {
+  it("stages a course removal immediately (no dialog), then confirms it on Save before committing", async () => {
     render(<InstructorDetail />)
+    // Staging the removal opens no dialog and drops the row right away.
     await userEvent.click(screen.getByRole("button", { name: "Remove" }))
-    // Staged only: no confirm dialog, and the row disappears immediately.
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
     expect(screen.queryByText("GEOG 250")).not.toBeInTheDocument()
-    expect(unenroll.mutateAsync).not.toHaveBeenCalled()
+
+    // Save changes now asks to confirm before the unenrolment runs.
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }))
+    const dialog = await screen.findByRole("dialog")
+    expect(within(dialog).getByText("Remove course?")).toBeInTheDocument()
+    // Body follows the mockup: names the instructor, the course, and the caveat.
+    expect(within(dialog).getByText(/Lovelace, Ada/)).toBeInTheDocument()
+    expect(within(dialog).getByText(/GEOG 250/)).toBeInTheDocument()
+    expect(within(dialog).getByText(/need to add\s+them again/i)).toBeInTheDocument()
+    expect(unenroll.mutateAsync).not.toHaveBeenCalled()
+
+    // "Remove course" commits the unenrolment.
+    await userEvent.click(within(dialog).getByRole("button", { name: "Remove course" }))
     await waitFor(() =>
       expect(unenroll.mutateAsync).toHaveBeenCalledWith({ courseId: "c1", instructorEmail: "ada@x.com" })
     )
+  })
+
+  it("Cancel on the remove confirmation aborts the save but keeps the removal staged; Undo restores", async () => {
+    render(<InstructorDetail />)
+    await userEvent.click(screen.getByRole("button", { name: "Remove" }))
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }))
+    const dialog = await screen.findByRole("dialog")
+
+    // Cancel just closes the confirmation — nothing is unenrolled…
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }))
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+    expect(unenroll.mutateAsync).not.toHaveBeenCalled()
+    // …and the removal is still staged (row absent, Save still active).
+    expect(screen.queryByText("GEOG 250")).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled()
+
+    // Undo is what actually adds the course back.
+    await userEvent.click(screen.getByRole("button", { name: "Undo" }))
+    expect(screen.getByText("GEOG 250")).toBeInTheDocument()
+    expect(unenroll.mutateAsync).not.toHaveBeenCalled()
+  })
+
+  it("saves directly (no remove confirmation) when no course is staged for removal", async () => {
+    render(<InstructorDetail />)
+    // A non-removal edit (access toggle) saves straight through.
+    await userEvent.click(screen.getByRole("switch", { name: "OCELIA access for GEOG 250 — Intro" }))
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }))
+    await waitFor(() =>
+      expect(updateInstructorAccess.mutateAsync).toHaveBeenCalledWith({
+        courseId: "c1",
+        instructorEmail: "ada@x.com",
+        access: false,
+      })
+    )
+    expect(screen.queryByText("Remove course?")).not.toBeInTheDocument()
   })
 
   it("deletes (demotes) the instructor immediately after confirmation", async () => {
