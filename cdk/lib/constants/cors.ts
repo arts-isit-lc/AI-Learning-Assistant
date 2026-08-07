@@ -23,7 +23,8 @@ import { Construct } from "constructs";
  */
 export const DEFAULT_ALLOWED_ORIGINS: Record<string, string[]> = {
   dev: [
-    "https://frontend.d35ufva5r2ltvd.amplifyapp.com", // dev Amplify SPA
+    "https://dev.dbqfar7gbtstn.amplifyapp.com", // dev Amplify SPA (dev branch)
+    "https://main.dbqfar7gbtstn.amplifyapp.com", // dev Amplify SPA (main branch)
     "http://localhost:5173", // Vite dev server
     "http://localhost:4173", // Vite preview
   ],

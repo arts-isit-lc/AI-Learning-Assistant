@@ -70,6 +70,22 @@ describe('S3 CORS configuration', () => {
       }
     }
   });
+
+  test('dev origins point at the live Amplify app, not the retired one', () => {
+    // Regression guard for the CORS-403 upload failure: the allow-list once
+    // hardcoded a since-replaced Amplify domain, so the live SPA's preflight
+    // was rejected. Keep the allow-list pinned to the current app id and never
+    // reintroduce the dead domain.
+    expect(DEFAULT_ALLOWED_ORIGINS.dev).toEqual(
+      expect.arrayContaining([
+        'https://dev.dbqfar7gbtstn.amplifyapp.com',
+        'https://main.dbqfar7gbtstn.amplifyapp.com',
+      ])
+    );
+    for (const origin of DEFAULT_ALLOWED_ORIGINS.dev) {
+      expect(origin).not.toContain('d35ufva5r2ltvd');
+    }
+  });
 });
 
 describe('resolveAllowedOrigins', () => {
