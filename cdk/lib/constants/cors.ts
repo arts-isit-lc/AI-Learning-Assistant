@@ -23,8 +23,9 @@ import { Construct } from "constructs";
  */
 export const DEFAULT_ALLOWED_ORIGINS: Record<string, string[]> = {
   dev: [
-    "https://dev.dbqfar7gbtstn.amplifyapp.com", // dev Amplify SPA (dev branch)
-    "https://main.dbqfar7gbtstn.amplifyapp.com", // dev Amplify SPA (main branch)
+    "https://ocelia-dev.arts.ubc.ca", // dev SPA custom domain (Amplify) — primary origin
+    "https://dev.dbqfar7gbtstn.amplifyapp.com", // dev Amplify default domain (dev branch) — fallback
+    "https://main.dbqfar7gbtstn.amplifyapp.com", // dev Amplify default domain (main branch) — fallback
     "http://localhost:5173", // Vite dev server
     "http://localhost:4173", // Vite preview
   ],

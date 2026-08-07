@@ -78,6 +78,9 @@ describe('S3 CORS configuration', () => {
     // reintroduce the dead domain.
     expect(DEFAULT_ALLOWED_ORIGINS.dev).toEqual(
       expect.arrayContaining([
+        // The SPA is served from a custom domain — this is the origin the
+        // browser actually sends, so it MUST be in the allow-list.
+        'https://ocelia-dev.arts.ubc.ca',
         'https://dev.dbqfar7gbtstn.amplifyapp.com',
         'https://main.dbqfar7gbtstn.amplifyapp.com',
       ])
