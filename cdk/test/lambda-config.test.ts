@@ -40,9 +40,14 @@ function collectLambdaFunctions(
     const props = (res.Properties as Record<string, unknown>) ?? {};
     // Skip Docker image functions — they don't have a Runtime property
     if (props.PackageType === 'Image') continue;
-    // Skip CDK-internal functions (e.g., BucketNotificationsHandler) — their runtime
-    // is managed by CDK itself, not the application
-    if (logicalId.startsWith('BucketNotificationsHandler')) continue;
+    // Skip CDK-generated internal helper functions (log retention, bucket
+    // notifications, custom-resource / trigger providers). Their runtime is managed
+    // by aws-cdk-lib itself and CDK bumps them independently of our app functions
+    // (several moved to nodejs24.x in 2.263.0). Per our CDK conventions, every
+    // application Lambda sets an explicit `functionName` (`${id}-<name>`), while these
+    // CDK-generated helpers do not — so the absence of FunctionName reliably marks a
+    // non-application function.
+    if (!props.FunctionName) continue;
     results.push({ logicalId, properties: props });
   }
 

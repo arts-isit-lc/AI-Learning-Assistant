@@ -24,8 +24,8 @@
     "typescript": "~6.0.3"
   },
   "dependencies": {
-    "@aws-cdk/aws-amplify-alpha": "2.249.0-alpha.0",
-    "aws-cdk-lib": "^2.249.0",
+    "@aws-cdk/aws-amplify-alpha": "2.263.0-alpha.0",
+    "aws-cdk-lib": "^2.263.0",
     "constructs": "^10.4.2",
     "source-map-support": "^0.5.21",
     "yaml": "^2.4.5"
