@@ -1236,29 +1236,39 @@ exports.handler = async (event) => {
 
             const enrolment_id = enrollmentResult[0]?.enrolment_id;
 
-            if (enrolment_id) {
-              // Step 4: Retrieve all module IDs for the course
-              const modulesResult = await sqlConnection`
-                    SELECT module_id
-                    FROM "Course_Modules"
-                    WHERE concept_id IN (
-                        SELECT concept_id
-                        FROM "Course_Concepts"
-                        WHERE course_id = ${course_id}
-                    );
-                `;
-
-              // Step 5: Insert a record into Student_Modules for each module
-              const studentModuleInsertions = modulesResult.map((module) => {
-                return sqlConnection`
-                      INSERT INTO "Student_Modules" (student_module_id, course_module_id, enrolment_id, module_score, last_accessed, module_context_embedding)
-                      VALUES (uuid_generate_v4(), ${module.module_id}, ${enrolment_id}, 0, NULL, NULL);
-                  `;
+            // ON CONFLICT (course_id, user_id) DO NOTHING returns no row when the
+            // student is already enrolled. Surface that as a 409 so the join modal
+            // can tell the student they've already joined, instead of silently
+            // reporting success.
+            if (!enrolment_id) {
+              response.statusCode = 409;
+              response.body = JSON.stringify({
+                error: "You have already joined this course.",
               });
-
-              // Execute all insertions
-              await Promise.all(studentModuleInsertions);
+              break;
             }
+
+            // Step 4: Retrieve all module IDs for the course
+            const modulesResult = await sqlConnection`
+                  SELECT module_id
+                  FROM "Course_Modules"
+                  WHERE concept_id IN (
+                      SELECT concept_id
+                      FROM "Course_Concepts"
+                      WHERE course_id = ${course_id}
+                  );
+              `;
+
+            // Step 5: Insert a record into Student_Modules for each module
+            const studentModuleInsertions = modulesResult.map((module) => {
+              return sqlConnection`
+                    INSERT INTO "Student_Modules" (student_module_id, course_module_id, enrolment_id, module_score, last_accessed, module_context_embedding)
+                    VALUES (uuid_generate_v4(), ${module.module_id}, ${enrolment_id}, 0, NULL, NULL);
+                `;
+            });
+
+            // Execute all insertions
+            await Promise.all(studentModuleInsertions);
 
             response.statusCode = 201; // Set status to 201 on successful enrollment
             response.body = JSON.stringify({

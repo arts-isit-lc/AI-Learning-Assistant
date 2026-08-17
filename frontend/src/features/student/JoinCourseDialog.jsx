@@ -47,12 +47,18 @@ export function JoinCourseDialog({ open, onOpenChange }) {
         onOpenChange(false)
       },
       onError: (err) => {
-        setError("code", {
-          message:
-            err?.status === 404 || err?.status === 400
-              ? "That access code isn't valid."
-              : "Couldn't join the course. Please try again.",
-        })
+        let message
+        if (err?.status === 409) {
+          // Already enrolled — the backend signals this case with a 409 so we can
+          // point the student at their existing course rather than "invalid code".
+          message =
+            "You've already joined this course. To access it, close this dialog window and find the course on your Courses dashboard."
+        } else if (err?.status === 404 || err?.status === 400) {
+          message = "That access code isn't valid."
+        } else {
+          message = "Couldn't join the course. Please try again."
+        }
+        setError("code", { message })
       },
     })
   }
@@ -73,7 +79,7 @@ export function JoinCourseDialog({ open, onOpenChange }) {
             <div className="flex flex-col gap-1.5">
               <Input
                 aria-label="Access code"
-                placeholder="Enter course code"
+                placeholder="Enter access code"
                 autoFocus
                 aria-invalid={errors.code ? true : undefined}
                 {...register("code")}
