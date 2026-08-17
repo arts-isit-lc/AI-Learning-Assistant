@@ -296,6 +296,20 @@ jest.mock("../lambda/adminFunction/libadmin.js", () => ({
   }),
 }));
 
+// duplicate_course copies files via @aws-sdk/client-s3. The SDK is provided by
+// the Lambda runtime (not a repo dependency), so it is not resolvable in tests
+// — mock it virtually. `mockS3Send` lets individual tests make CopyObject
+// succeed or fail. Prefixed `mock*` so jest allows it inside the factory.
+const mockS3Send = jest.fn();
+jest.mock(
+  "@aws-sdk/client-s3",
+  () => ({
+    S3Client: jest.fn(() => ({ send: mockS3Send })),
+    CopyObjectCommand: jest.fn((input) => ({ __type: "CopyObjectCommand", input })),
+  }),
+  { virtual: true }
+);
+
 // Ensure the handler's module-level capture picks up the mock at require time.
 (global as any).sqlConnectionTableCreator = mockSql;
 
@@ -458,6 +472,8 @@ describe("adminFunction — POST /admin/duplicate_course (B2)", () => {
   beforeEach(() => {
     mockSql.reset();
     (global as any).sqlConnectionTableCreator = mockSql;
+    mockS3Send.mockReset();
+    mockS3Send.mockResolvedValue({}); // CopyObject succeeds by default
   });
 
   const VALID_QS = {
@@ -470,32 +486,80 @@ describe("adminFunction — POST /admin/duplicate_course (B2)", () => {
   };
   const BODY = JSON.stringify({ system_prompt: "You are a tutor." });
 
-  it("200: creates the course, then clones the concept/module outline (metadata only)", async () => {
+  // Queue the DB results for a course with ONE concept -> ONE module -> ONE
+  // file -> ONE cross-module reference, in the handler's call order.
+  const queueOneOfEach = () => {
     mockSql
-      .queueResult([{ course_id: "new-course", course_name: "Intro Geography (copy)" }]) // INSERT...SELECT Courses RETURNING *
-      .queueResult([{ concept_id: "c1", concept_name: "Basics", concept_number: 1 }]) // source concepts
-      .queueResult([{ concept_id: "new-c1" }]) // INSERT concept RETURNING
-      .queueResult([]); // INSERT...SELECT modules
+      .queueResult([{ course_id: "new-course", course_name: "Intro Geography (copy)" }]) // 1 INSERT Courses RETURNING *
+      .queueResult([{ concept_id: "c1", concept_name: "Basics", concept_number: 1 }]) // 2 source concepts
+      .queueResult([{ concept_id: "new-c1" }]) // 3 INSERT concept RETURNING
+      .queueResult([{ module_id: "m1" }]) // 4 SELECT source module_ids for concept
+      .queueResult([{ module_id: "new-m1" }]) // 5 INSERT...SELECT module RETURNING module_id
+      .queueResult([
+        { file_id: "f1", module_id: "m1", filetype: "pdf", filepath: "courses/src-1/m1/f1.pdf", filename: "lecture" },
+      ]) // 6 SELECT source files
+      .queueResult([]) // 7 INSERT...SELECT Module_Files
+      .queueResult([{ source_module_id: "m1", referenced_file_id: "f1" }]) // 8 SELECT references
+      .queueResult([]); // 9 INSERT reference
+  };
 
-    const res = await handler(
-      makeEvent("POST", "/admin/duplicate_course", VALID_QS, BODY)
-    );
+  it("200: clones the course, module outline, files (S3 copy) and cross-module references", async () => {
+    queueOneOfEach();
+
+    const res = await handler(makeEvent("POST", "/admin/duplicate_course", VALID_QS, BODY));
 
     expect(res.statusCode).toBe(200);
-    expect(JSON.parse(res.body).course_id).toBe("new-course");
+    const body = JSON.parse(res.body);
+    expect(body.course_id).toBe("new-course");
+    // Best-effort file-copy summary: one file copied, none failed, one ref copied.
+    expect(body.file_copy).toEqual({ copied: 1, failed: [], references_copied: 1 });
 
     const joined = mockSql.calls.join(" ; ");
     expect(joined).toContain('INSERT INTO "Courses"');
     expect(joined).toContain('FROM "Courses"'); // INSERT...SELECT copies llm_model_id
-    expect(joined).toContain('FROM "Course_Concepts"');
     expect(joined).toContain('INSERT INTO "Course_Concepts"');
-    // The module clone is an INSERT ... SELECT keeping jsonb (key_topics /
-    // generated_topics) in the DB, scoped to active modules only.
-    const moduleInsert = mockSql.calls[3];
+    // Module clone: per-module INSERT...SELECT with RETURNING (to map old->new id),
+    // jsonb kept in-DB, active-only.
+    const moduleInsert = mockSql.calls[4];
     expect(moduleInsert).toContain('INSERT INTO "Course_Modules"');
     expect(moduleInsert).toContain("key_topics");
-    expect(moduleInsert).toContain("status = 'active'");
-    expect(moduleInsert).toContain("'active'");
+    expect(moduleInsert).toContain("RETURNING module_id");
+    // Files: raw S3 object copied, then a Module_Files row inserted (pending) via
+    // INSERT...SELECT so metadata jsonb is copied in-DB.
+    expect(mockS3Send).toHaveBeenCalledTimes(1);
+    expect(joined).toContain('INSERT INTO "Module_Files"');
+    expect(joined).toContain("'pending'");
+    // Cross-module references remapped onto the new module + new file.
+    expect(joined).toContain('INSERT INTO "Module_File_References"');
+  });
+
+  it("200: a file that fails to copy after retries is skipped and reported (best-effort)", async () => {
+    mockS3Send.mockRejectedValue(new Error("s3 down")); // all CopyObject attempts fail
+    mockSql
+      .queueResult([{ course_id: "new-course" }]) // 1 INSERT Courses
+      .queueResult([{ concept_id: "c1", concept_name: "Basics", concept_number: 1 }]) // 2 concepts
+      .queueResult([{ concept_id: "new-c1" }]) // 3 INSERT concept
+      .queueResult([{ module_id: "m1" }]) // 4 SELECT module_ids
+      .queueResult([{ module_id: "new-m1" }]) // 5 INSERT module
+      .queueResult([
+        { file_id: "f1", module_id: "m1", filetype: "pdf", filepath: "courses/src-1/m1/f1.pdf", filename: "lecture" },
+      ]) // 6 SELECT files
+      // NO Module_Files insert (copy failed) -> next call is the references SELECT
+      .queueResult([{ source_module_id: "m1", referenced_file_id: "f1" }]); // 7 SELECT references
+
+    const res = await handler(makeEvent("POST", "/admin/duplicate_course", VALID_QS, BODY));
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.file_copy.copied).toBe(0);
+    expect(body.file_copy.failed).toEqual([{ file_id: "f1", filename: "lecture", filetype: "pdf" }]);
+    // Reference is skipped because its target file was not copied.
+    expect(body.file_copy.references_copied).toBe(0);
+    // 3 CopyObject attempts, then give up; no Module_Files / reference inserts.
+    expect(mockS3Send).toHaveBeenCalledTimes(3);
+    const joined = mockSql.calls.join(" ; ");
+    expect(joined).not.toContain('INSERT INTO "Module_Files"');
+    expect(joined).not.toContain('INSERT INTO "Module_File_References"');
   });
 
   it("404: when the source course does not exist (INSERT...SELECT returns no row)", async () => {

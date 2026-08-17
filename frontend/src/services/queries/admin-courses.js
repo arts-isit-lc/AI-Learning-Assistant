@@ -198,7 +198,10 @@ export function useUpdateInstructorAccess() {
  * it makes the backend keep the source course's term (COALESCE), so the
  * course-detail Duplicate dialog (which sends no term) is unaffected. `section`
  * is optional too and only sent when non-empty — omitting it keeps the source
- * course's section (COALESCE). Returns the new `{ course_id }`. Variables:
+ * course's section (COALESCE). Returns the new course row
+ * plus a best-effort `file_copy` summary `{ copied, failed[], references_copied }`
+ * (files that failed to copy after retries are listed in `failed`, skipped not
+ * fatal), so the caller can surface a non-blocking note. Variables:
  * `{ sourceCourseId, courseName, department, number, term?, section?, accessCode, active, systemPrompt }`.
  */
 export function useDuplicateCourse() {

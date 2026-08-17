@@ -22,7 +22,8 @@ import {
  * trigger + a dialog pre-filled from the source course (name + " (copy)",
  * department, number) with a freshly generated access code. On submit it calls
  * duplicate_course (backend track B2 — clones the course + concept/module outline
- * server-side; not files or student data) and opens the new course.
+ * + each module's uploaded files server-side; not embeddings or student data)
+ * and opens the new course.
  */
 export function DuplicateCourseDialog({ course }) {
   const navigate = useNavigate()
@@ -32,6 +33,10 @@ export function DuplicateCourseDialog({ course }) {
   const [department, setDepartment] = useState("")
   const [number, setNumber] = useState("")
   const [section, setSection] = useState("")
+  // Set when the duplicate succeeded but some files couldn't be copied. Holds
+  // the new course id + failed count so we surface an inline note and let the
+  // admin proceed to the new course (rather than silently swallowing it).
+  const [copyWarning, setCopyWarning] = useState(null)
 
   // Re-seed the form from the current source course each time the dialog opens.
   const handleOpenChange = (next) => {
@@ -40,6 +45,7 @@ export function DuplicateCourseDialog({ course }) {
       setDepartment(course.course_department ?? "")
       setNumber(course.course_number != null ? String(course.course_number) : "")
       setSection(course.section ?? "")
+      setCopyWarning(null)
     }
     setOpen(next)
   }
@@ -68,6 +74,13 @@ export function DuplicateCourseDialog({ course }) {
       },
       {
         onSuccess: (data) => {
+          const failed = data.file_copy?.failed ?? []
+          if (failed.length) {
+            // Duplicate succeeded; some files were skipped. Hold in the dialog
+            // so the admin sees the note, then proceeds to the new course.
+            setCopyWarning({ courseId: data.course_id, failedCount: failed.length })
+            return
+          }
           setOpen(false)
           navigate(`/admin/courses/${data.course_id}`)
         },
@@ -99,8 +112,8 @@ export function DuplicateCourseDialog({ course }) {
             </DialogHeader>
             <DialogBody>
               <DialogDescription>
-                Review and update the fields below. This copies the course and its concept/module
-                outline — reference files and student data are not copied.
+                Review and update the fields below. This copies the course, its concept/module
+                outline, and the uploaded module files. Student data is not copied.
               </DialogDescription>
               <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
@@ -152,20 +165,43 @@ export function DuplicateCourseDialog({ course }) {
                   </AlertDescription>
                 </Alert>
               )}
+              {copyWarning && (
+                <Alert>
+                  <AlertDescription>
+                    Course duplicated, but {copyWarning.failedCount}{" "}
+                    {copyWarning.failedCount === 1 ? "file" : "files"} could not be copied and{" "}
+                    {copyWarning.failedCount === 1 ? "was" : "were"} skipped. You can re-upload{" "}
+                    {copyWarning.failedCount === 1 ? "it" : "them"} in the new course.
+                  </AlertDescription>
+                </Alert>
+              )}
             </DialogBody>
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 Cancel
               </Button>
-              <Button
-                type="submit"
-                className="hover:bg-primary-dark"
-                loading={duplicate.isPending}
-                disabled={!canSubmit}
-              >
-                Duplicate
-              </Button>
+              {copyWarning ? (
+                <Button
+                  type="button"
+                  className="hover:bg-primary-dark"
+                  onClick={() => {
+                    setOpen(false)
+                    navigate(`/admin/courses/${copyWarning.courseId}`)
+                  }}
+                >
+                  Go to course
+                </Button>
+              ) : (
+                <Button
+                  type="submit"
+                  className="hover:bg-primary-dark"
+                  loading={duplicate.isPending}
+                  disabled={!canSubmit}
+                >
+                  Duplicate
+                </Button>
+              )}
             </DialogFooter>
           </form>
         </DialogContent>

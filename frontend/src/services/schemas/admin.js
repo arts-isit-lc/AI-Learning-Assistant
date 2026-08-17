@@ -47,8 +47,32 @@ export const InstructorCourseSchema = z
   .passthrough()
 export const InstructorCoursesSchema = z.array(InstructorCourseSchema)
 
-// --- Created course (POST admin/create_course RETURNING *) ---
-export const CreatedCourseSchema = z.object({ course_id: z.string() }).passthrough()
+// --- File-copy summary (POST admin/duplicate_course) ---
+// duplicate_course best-effort copies each source file's S3 object + Module_Files
+// row. `failed` lists files that couldn't be copied after retries (skipped, not
+// fatal). Absent on create_course. Lenient so backend additions don't break.
+export const FileCopySummarySchema = z
+  .object({
+    copied: z.number(),
+    failed: z
+      .array(
+        z
+          .object({
+            file_id: z.string().optional(),
+            filename: z.string().nullable().optional(),
+            filetype: z.string().nullable().optional(),
+          })
+          .passthrough()
+      )
+      .default([]),
+    references_copied: z.number().optional(),
+  })
+  .passthrough()
+
+// --- Created course (POST admin/create_course / duplicate_course RETURNING *) ---
+export const CreatedCourseSchema = z
+  .object({ course_id: z.string(), file_copy: FileCopySummarySchema.optional() })
+  .passthrough()
 
 /** @typedef {z.infer<typeof AdminInstructorSchema>} AdminInstructor */
 /** @typedef {z.infer<typeof AdminCourseSchema>} AdminCourse */

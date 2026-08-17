@@ -141,6 +141,28 @@ describe("ConfigurationTab", () => {
     )
   })
 
+  it("shows a duplicate-concept error inline under the field on a 400 (add row stays open)", async () => {
+    // Drive the create mutation to fail with a duplicate (400) on this attempt.
+    createConcept.mutate.mockImplementationOnce((_vars, { onError }) => onError({ status: 400 }))
+    render(<ConfigurationTab />)
+    await userEvent.click(screen.getByRole("button", { name: /add concept/i }))
+    const input = screen.getByRole("textbox", { name: "New concept name" })
+    await userEvent.type(input, "Algebra")
+    await userEvent.click(screen.getByRole("button", { name: "Add" }))
+
+    const err = await screen.findByText("You've already added this concept to this course.")
+    // Rendered in red, wired to the field, and the add row is still open.
+    expect(err).toHaveClass("text-caption", "text-destructive")
+    expect(input).toHaveAttribute("aria-invalid", "true")
+    expect(input).toHaveAttribute("aria-describedby", err.id)
+
+    // Editing the field clears the error.
+    await userEvent.type(input, "2")
+    expect(
+      screen.queryByText("You've already added this concept to this course.")
+    ).not.toBeInTheDocument()
+  })
+
   // --- Staged concept/module deletions (Option A: no confirm dialog — deleting
   // stages the removal, Undo reverts it, Save persists it, consistent with the
   // reorder/rename staging model; add/delete no longer persist immediately). ---

@@ -93,4 +93,26 @@ describe("DuplicateCourseDialog", () => {
     duplicate.isError = false
     duplicate.error = null
   })
+
+  it("surfaces a non-blocking note when some files fail to copy, then navigates on confirm", async () => {
+    // One-off: duplicate succeeds but the response reports a skipped file.
+    duplicate.mutate.mockImplementationOnce((_vars, opts) =>
+      opts?.onSuccess?.({
+        course_id: "new-course",
+        file_copy: { copied: 1, failed: [{ file_id: "f1", filename: "lecture", filetype: "pdf" }], references_copied: 0 },
+      })
+    )
+    render(<DuplicateCourseDialog course={COURSE} />)
+    await userEvent.click(screen.getByRole("button", { name: "Duplicate" }))
+    const dialog = await screen.findByRole("dialog")
+    await userEvent.click(within(dialog).getByRole("button", { name: "Duplicate" }))
+
+    // Does not navigate immediately; shows the skipped-files note instead.
+    expect(navigate).not.toHaveBeenCalled()
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(/could not be copied/i)
+
+    // Acknowledging proceeds to the new course.
+    await userEvent.click(within(dialog).getByRole("button", { name: "Go to course" }))
+    expect(navigate).toHaveBeenCalledWith("/admin/courses/new-course")
+  })
 })

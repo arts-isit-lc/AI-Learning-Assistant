@@ -155,4 +155,25 @@ describe("DuplicateCourse", () => {
     duplicate.isError = false
     duplicate.error = null
   })
+
+  it("surfaces a non-blocking note when some files fail to copy, then navigates on confirm", async () => {
+    // duplicate succeeds but the response reports a skipped file.
+    duplicate.mutate.mockImplementationOnce((_vars, opts) =>
+      opts?.onSuccess?.({
+        course_id: "new-course",
+        file_copy: { copied: 0, failed: [{ file_id: "f1", filename: "lecture", filetype: "pdf" }], references_copied: 0 },
+      })
+    )
+    render(<DuplicateCourse />)
+    await pickSource()
+    await userEvent.click(screen.getByRole("button", { name: "Duplicate course" }))
+
+    // The skipped-files note appears and we have NOT navigated yet.
+    expect(await screen.findByText(/could not be copied/i)).toBeInTheDocument()
+    expect(navigate).not.toHaveBeenCalled()
+
+    // Confirming navigates to the new course (via the leaveTo effect).
+    await userEvent.click(screen.getByRole("button", { name: "Go to course" }))
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/admin/courses/new-course"))
+  })
 })

@@ -21,8 +21,21 @@ const {
   computeRolesAfterElevation,
   computeRolesAfterDemotion,
 } = require("./roleHelpers.js");
+const { randomUUID } = require("crypto");
+const { S3Client, CopyObjectCommand } = require("@aws-sdk/client-s3");
+const {
+  buildFileKey,
+  resolveSourceKey,
+  copyWithRetry,
+  runWithConcurrency,
+  remapReferences,
+} = require("./duplicateHelpers.js");
 
-let { SM_DB_CREDENTIALS, RDS_PROXY_ENDPOINT } = process.env;
+let { SM_DB_CREDENTIALS, RDS_PROXY_ENDPOINT, BUCKET, REGION } = process.env;
+
+// Module-level S3 client (reused across warm invocations). Only used by
+// duplicate_course to copy raw course files onto the new course's prefix.
+const s3Client = new S3Client({ region: REGION });
 
 // SQL conneciton from global variable at libadmin.js
 let sqlConnectionTableCreator = global.sqlConnectionTableCreator;
@@ -287,13 +300,17 @@ exports.handler = async (event) => {
         break;
       case "POST /admin/duplicate_course":
         // Duplicate a course (backend track B2). Clones the Courses row (with the
-        // provided, editable fields + the source's llm_model_id) AND the
-        // Course_Concepts -> Course_Modules OUTLINE (metadata only). It does NOT
-        // copy Module_Files, pgvector embeddings, enrolments, sessions, or any
-        // student progress — the new modules start empty, ready for materials.
-        // Only 'active' modules are cloned (skips 'draft'/'deleting'). jsonb
-        // columns (key_topics, generated_topics) are copied via INSERT ... SELECT
-        // so they never round-trip through JS.
+        // provided, editable fields + the source's llm_model_id), the
+        // Course_Concepts -> Course_Modules outline, each active module's
+        // uploaded files (S3 CopyObject onto the new course prefix + a new
+        // Module_Files row), and the cross-module Module_File_References. It does
+        // NOT copy pgvector embeddings / IR artifacts (re-ingestion regenerates
+        // them from the copied raw object), nor enrolments, sessions, or student
+        // progress. Only 'active' modules are cloned (skips 'draft'/'deleting').
+        // jsonb columns are copied via INSERT ... SELECT so they never round-trip
+        // through JS. File copies are best-effort (3 attempts each, bounded
+        // concurrency); files that still fail are skipped and reported in the
+        // response's file_copy summary.
         if (
           event.queryStringParameters != null &&
           event.queryStringParameters.source_course_id &&
@@ -374,11 +391,20 @@ exports.handler = async (event) => {
 
             // 2. Clone the concept -> module outline. Each source concept gets a
             //    fresh id; its active modules are copied under the new concept.
+            //    Modules are inserted one at a time (rather than a single bulk
+            //    INSERT ... SELECT) so we can capture the source -> new module_id
+            //    mapping that the file copy + reference remap below depend on.
+            //    Each insert is still an INSERT ... SELECT for one module, so the
+            //    jsonb columns (key_topics, generated_topics) never round-trip
+            //    through JS.
             const concepts = await sqlConnectionTableCreator`
                 SELECT concept_id, concept_name, concept_number
                 FROM "Course_Concepts"
                 WHERE course_id = ${source_course_id};
               `;
+
+            // source module_id -> new module_id, across the whole course.
+            const moduleMap = new Map();
 
             for (const concept of concepts) {
               const newConcept = await sqlConnectionTableCreator`
@@ -388,22 +414,147 @@ exports.handler = async (event) => {
                 `;
               const newConceptId = newConcept[0].concept_id;
 
-              await sqlConnectionTableCreator`
-                  INSERT INTO "Course_Modules" (
-                      module_id, concept_id, module_name, module_number,
-                      module_prompt, key_topics, generated_topics,
-                      status, created_at, updated_at
-                  )
-                  SELECT
-                      uuid_generate_v4(), ${newConceptId}, module_name, module_number,
-                      module_prompt, key_topics, generated_topics,
-                      'active', NOW(), NOW()
+              const sourceModules = await sqlConnectionTableCreator`
+                  SELECT module_id
                   FROM "Course_Modules"
                   WHERE concept_id = ${concept.concept_id} AND status = 'active';
                 `;
+
+              for (const mod of sourceModules) {
+                const newModule = await sqlConnectionTableCreator`
+                    INSERT INTO "Course_Modules" (
+                        module_id, concept_id, module_name, module_number,
+                        module_prompt, key_topics, generated_topics,
+                        status, created_at, updated_at
+                    )
+                    SELECT
+                        uuid_generate_v4(), ${newConceptId}, module_name, module_number,
+                        module_prompt, key_topics, generated_topics,
+                        'active', NOW(), NOW()
+                    FROM "Course_Modules"
+                    WHERE module_id = ${mod.module_id}
+                    RETURNING module_id;
+                  `;
+                moduleMap.set(mod.module_id, newModule[0].module_id);
+              }
             }
 
-            response.body = JSON.stringify(newCourse[0]);
+            // 3. Copy each active module's uploaded files. For every Module_Files
+            //    row we mint a fresh file_id, CopyObject the raw S3 object onto
+            //    the new course/module prefix (which re-fires the ingestion event
+            //    for the new file_id), then INSERT ... SELECT the Module_Files row
+            //    (metadata jsonb copied in-SQL). Copies run with bounded
+            //    concurrency and up to 3 attempts each; a file that still fails is
+            //    skipped (best-effort) and reported. Only the raw object is
+            //    copied — embeddings / IR artifacts / retrieval_units are
+            //    regenerated by re-ingestion, so no derived state is hand-copied.
+            const sourceModuleIds = [...moduleMap.keys()];
+            const sourceFiles = sourceModuleIds.length
+              ? await sqlConnectionTableCreator`
+                  SELECT file_id, module_id, filetype, filepath, filename
+                  FROM "Module_Files"
+                  WHERE module_id = ANY(${sourceModuleIds}::uuid[]);
+                `
+              : [];
+
+            // source file_id -> new file_id (successfully copied files only).
+            const fileMap = new Map();
+            const failedFiles = [];
+
+            await runWithConcurrency(sourceFiles, async (file) => {
+              const newModuleId = moduleMap.get(file.module_id);
+              if (!newModuleId) return; // defensive: every file's module is mapped
+              const newFileId = randomUUID();
+              const sourceKey = resolveSourceKey(file, source_course_id);
+              const destKey = buildFileKey(
+                newCourseId,
+                newModuleId,
+                newFileId,
+                file.filetype
+              );
+
+              try {
+                await copyWithRetry(() =>
+                  s3Client.send(
+                    new CopyObjectCommand({
+                      Bucket: BUCKET,
+                      CopySource: encodeURI(`${BUCKET}/${sourceKey}`),
+                      Key: destKey,
+                    })
+                  )
+                );
+              } catch (err) {
+                console.log("duplicate_course: file copy failed after retries", {
+                  source_file_id: file.file_id,
+                  source_key: sourceKey,
+                  error: err?.message,
+                });
+                failedFiles.push({
+                  file_id: file.file_id,
+                  filename: file.filename,
+                  filetype: file.filetype,
+                });
+                return;
+              }
+
+              // Copy succeeded -> persist the row pointing at the new object.
+              // processing_status='pending' so the UI shows the ingestion
+              // spinner; the copy's S3 event drives re-ingestion, which fills
+              // content_hash / chunk_count / embeddings for the new file_id.
+              await sqlConnectionTableCreator`
+                  INSERT INTO "Module_Files" (
+                      file_id, module_id, filetype, s3_bucket_reference, filepath,
+                      filename, time_uploaded, metadata, processing_status
+                  )
+                  SELECT
+                      ${newFileId}, ${newModuleId}, filetype, s3_bucket_reference,
+                      ${destKey}, filename, NOW(), metadata, 'pending'
+                  FROM "Module_Files"
+                  WHERE file_id = ${file.file_id};
+                `;
+              fileMap.set(file.file_id, newFileId);
+            });
+
+            // 4. Duplicate cross-module file references, remapping both endpoints
+            //    onto the new course. References whose target file was not copied
+            //    (points outside this course, or its copy failed) are skipped and
+            //    logged (see remapReferences).
+            let referencesCopied = 0;
+            if (sourceModuleIds.length) {
+              const refRows = await sqlConnectionTableCreator`
+                  SELECT source_module_id, referenced_file_id
+                  FROM "Module_File_References"
+                  WHERE source_module_id = ANY(${sourceModuleIds}::uuid[]);
+                `;
+              const { mapped, skipped } = remapReferences(refRows, moduleMap, fileMap);
+              if (skipped.length) {
+                console.log("duplicate_course: skipped unmappable file references", {
+                  count: skipped.length,
+                });
+              }
+              if (mapped.length) {
+                await Promise.all(
+                  mapped.map(
+                    (ref) => sqlConnectionTableCreator`
+                        INSERT INTO "Module_File_References" (source_module_id, referenced_file_id)
+                        VALUES (${ref.source_module_id}, ${ref.referenced_file_id});
+                      `
+                  )
+                );
+              }
+              referencesCopied = mapped.length;
+            }
+
+            // Return the new course row plus a best-effort file-copy summary so
+            // the UI can surface a non-blocking note when some files failed.
+            response.body = JSON.stringify({
+              ...newCourse[0],
+              file_copy: {
+                copied: fileMap.size,
+                failed: failedFiles,
+                references_copied: referencesCopied,
+              },
+            });
           } catch (err) {
             // 23505 = unique_violation on ux_courses_identity: the duplicate's
             // resolved identity (name+dept+number + COALESCEd term/section) already

@@ -39,8 +39,8 @@ function courseOptionLabel(c) {
  * and prefills the editable fields — Course code, title (" (copy)"), Term,
  * Section, and a freshly generated Access code — to review before duplicating.
  * Submits duplicate_course (backend track B2 — clones the course row + the
- * concept/module OUTLINE server-side; NOT files, embeddings, enrolments, or
- * student data), then opens the new course.
+ * concept/module outline + each module's uploaded files server-side; NOT
+ * embeddings, enrolments, or student data), then opens the new course.
  *
  * Mirrors the Add-course modal's chrome/heights. DATA-GAP NOTE (flagged): the
  * mockup's Primary/Secondary instructor fields have no schema backing and
@@ -62,6 +62,10 @@ export function DuplicateCourse() {
   // Set to the destination once the course is duplicated, so the unsaved-changes
   // guard is disarmed before we navigate to the new course (see effect below).
   const [leaveTo, setLeaveTo] = useState(null)
+  // Set when the duplicate succeeded but some files couldn't be copied: holds
+  // the new course id + failed count so we show an inline note and let the admin
+  // proceed, instead of navigating away and losing the signal.
+  const [copyWarning, setCopyWarning] = useState(null)
 
   const source = courses.find((c) => c.course_id === sourceCourseId)
   const { department, number } = parseCourseCode(code)
@@ -111,6 +115,11 @@ export function DuplicateCourse() {
       },
       {
         onSuccess: (data) => {
+          const failed = data.file_copy?.failed ?? []
+          if (failed.length) {
+            setCopyWarning({ courseId: data.course_id, failedCount: failed.length })
+            return
+          }
           setLeaveTo(`/admin/courses/${data.course_id}`)
         },
       }
@@ -233,20 +242,39 @@ export function DuplicateCourse() {
               </AlertDescription>
             </Alert>
           )}
+          {copyWarning && (
+            <Alert>
+              <AlertDescription>
+                Course duplicated, but {copyWarning.failedCount}{" "}
+                {copyWarning.failedCount === 1 ? "file" : "files"} could not be copied and{" "}
+                {copyWarning.failedCount === 1 ? "was" : "were"} skipped. You can re-upload{" "}
+                {copyWarning.failedCount === 1 ? "it" : "them"} in the new course.
+              </AlertDescription>
+            </Alert>
+          )}
         </DialogBody>
 
         <DialogFooter>
           <Button variant="outline" onClick={close}>
             Cancel
           </Button>
-          <Button
-            className="hover:bg-primary-dark"
-            onClick={handleDuplicate}
-            loading={duplicate.isPending}
-            disabled={!canDuplicate}
-          >
-            Duplicate course
-          </Button>
+          {copyWarning ? (
+            <Button
+              className="hover:bg-primary-dark"
+              onClick={() => setLeaveTo(`/admin/courses/${copyWarning.courseId}`)}
+            >
+              Go to course
+            </Button>
+          ) : (
+            <Button
+              className="hover:bg-primary-dark"
+              onClick={handleDuplicate}
+              loading={duplicate.isPending}
+              disabled={!canDuplicate}
+            >
+              Duplicate course
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

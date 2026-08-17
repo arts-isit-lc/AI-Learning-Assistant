@@ -793,17 +793,36 @@ export class ApiGatewayStack extends cdk.Stack {
       })
     );
 
+    // Grant the admin function S3 copy access on the IR bucket's course files.
+    // duplicate_course copies each source file (CopyObject = GetObject on the
+    // source key + PutObject on the destination key) onto the new course's
+    // `courses/` prefix, which re-triggers ingestion. Scoped to `/courses/*`
+    // (no ListBucket — the file set is driven off Module_Files, not S3 listing).
+    adminLambdaRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ["s3:GetObject", "s3:PutObject"],
+        resources: [`${ragStack.irBucket.bucketArn}/courses/*`],
+      })
+    );
+
     const lambdaAdminFunction = new lambda.Function(this, `${id}-adminFunction`, {
       runtime: lambda.Runtime.NODEJS_22_X,
       code: lambda.Code.fromAsset("lambda/adminFunction"),
       handler: "adminFunction.handler",
-      timeout: Duration.seconds(60),
+      // 300s (not the default 60s): duplicate_course fans out synchronous
+      // S3 CopyObject + Module_Files inserts across every file in the source
+      // course. Re-ingestion itself is async (S3 event), but the copies are not.
+      timeout: Duration.seconds(300),
       tracing: lambda.Tracing.ACTIVE,
       logGroup: makeLogGroup(`${id}-adminFunction`),
       vpc: vpcStack.vpc,
       environment: {
         SM_DB_CREDENTIALS: db.secretPathTableCreator.secretName,
         RDS_PROXY_ENDPOINT: db.rdsProxyEndpointTableCreator,
+        // duplicate_course copies raw course files within the IR bucket.
+        BUCKET: ragStack.irBucket.bucketName,
+        REGION: this.region,
       },
       functionName: `${id}-adminFunction`,
       memorySize: 256,
@@ -2452,7 +2471,7 @@ export class ApiGatewayStack extends cdk.Stack {
     this.lambdaFunctionInfos = [
       { functionName: `${id}-studentFunction`, timeoutSeconds: 60, isContainer: false },
       { functionName: `${id}-instructorFunction`, timeoutSeconds: 60, isContainer: false },
-      { functionName: `${id}-adminFunction`, timeoutSeconds: 60, isContainer: false },
+      { functionName: `${id}-adminFunction`, timeoutSeconds: 300, isContainer: false },
       { functionName: `${id}-preSignupLambda`, timeoutSeconds: 30, isContainer: false },
       { functionName: `${id}-addStudentOnSignUp`, timeoutSeconds: 30, isContainer: false },
       { functionName: `${id}-adjustUserRoles-v9`, timeoutSeconds: 60, isContainer: false },

@@ -915,4 +915,43 @@ describe('IAM Policy Guardrails', () => {
       }
     }
   });
+
+  /**
+   * duplicate_course (adminFunction) copies each source course file within the
+   * IR bucket via S3 CopyObject (GetObject + PutObject). Access must be scoped to
+   * the bucket's `courses/*` prefix — never the whole bucket and never wildcard
+   * '*' — and must NOT include ListBucket (the file set is driven off
+   * Module_Files, not S3 listing).
+   */
+  test('adminLambdaRole S3 copy access is scoped to irBucket courses/* (no ListBucket, no wildcard)', () => {
+    const statements = collectPolicyStatements(apiTemplate);
+
+    // The admin S3 grant is the statement carrying s3:PutObject scoped to a
+    // `courses/*` prefix (distinguishes it from the presigned-URL function's
+    // bucket-wide `/*` grant).
+    const adminS3 = statements.filter(
+      ({ statement }) =>
+        statementHasAction(statement, 's3:PutObject') &&
+        JSON.stringify(statement.Resource ?? '').includes('courses/*')
+    );
+
+    expect(adminS3.length).toBeGreaterThanOrEqual(1);
+
+    for (const { statement } of adminS3) {
+      // Both copy actions present.
+      expect(statementHasAction(statement, 's3:GetObject')).toBe(true);
+      expect(statementHasAction(statement, 's3:PutObject')).toBe(true);
+      // No broad delete/list on this grant.
+      expect(statementHasAction(statement, 's3:ListBucket')).toBe(false);
+      expect(statementHasAction(statement, 's3:DeleteObject')).toBe(false);
+      // Scoped: never a bare wildcard, and pinned to the courses/ prefix.
+      const resources = Array.isArray(statement.Resource)
+        ? statement.Resource
+        : [statement.Resource];
+      for (const r of resources) {
+        expect(r).not.toBe('*');
+      }
+      expect(JSON.stringify(statement.Resource)).toContain('courses/*');
+    }
+  });
 });

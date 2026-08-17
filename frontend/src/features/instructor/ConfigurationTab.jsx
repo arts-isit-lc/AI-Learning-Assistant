@@ -142,6 +142,7 @@ export function ConfigurationTab() {
 
   const [addingConcept, setAddingConcept] = useState(false)
   const [newConceptName, setNewConceptName] = useState("")
+  const [conceptError, setConceptError] = useState("")
 
   // Staged edits — concept/module drag reorders (id lists; null/absent = follow
   // the server order), concept renames ({ [conceptId]: newName }), AND concept/
@@ -334,12 +335,21 @@ export function ConfigurationTab() {
   const submitNewConcept = () => {
     const name = newConceptName.trim()
     if (!name) return
+    setConceptError("")
     createConcept.mutate(
       { conceptName: name, nextNumber: concepts.length + 1 },
       {
         onSuccess: () => {
           setNewConceptName("")
+          setConceptError("")
           setAddingConcept(false)
+        },
+        // A duplicate concept comes back as a 400; surface it inline under the
+        // field (keeping the add row open) rather than as a form-level error.
+        onError: (err) => {
+          setConceptError(
+            toUserMessage(err, { 400: "You've already added this concept to this course." })
+          )
         },
       }
     )
@@ -395,34 +405,48 @@ export function ConfigurationTab() {
       </div>
 
       {addingConcept && (
-        <div className="flex items-center gap-2">
-          <Input
-            value={newConceptName}
-            onChange={(e) => setNewConceptName(e.target.value)}
-            placeholder="Concept name"
-            aria-label="New concept name"
-            maxLength={50}
-            autoFocus
-            onKeyDown={(e) => {
-              if (e.key === "Enter") submitNewConcept()
-              if (e.key === "Escape") {
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-2">
+            <Input
+              value={newConceptName}
+              onChange={(e) => {
+                setNewConceptName(e.target.value)
+                if (conceptError) setConceptError("")
+              }}
+              placeholder="Concept name"
+              aria-label="New concept name"
+              maxLength={50}
+              autoFocus
+              aria-invalid={conceptError ? true : undefined}
+              aria-describedby={conceptError ? "new-concept-error" : undefined}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") submitNewConcept()
+                if (e.key === "Escape") {
+                  setAddingConcept(false)
+                  setNewConceptName("")
+                  setConceptError("")
+                }
+              }}
+            />
+            <Button onClick={submitNewConcept} loading={createConcept.isPending}>
+              Add
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => {
                 setAddingConcept(false)
                 setNewConceptName("")
-              }
-            }}
-          />
-          <Button onClick={submitNewConcept} loading={createConcept.isPending}>
-            Add
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              setAddingConcept(false)
-              setNewConceptName("")
-            }}
-          >
-            Cancel
-          </Button>
+                setConceptError("")
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+          {conceptError && (
+            <p id="new-concept-error" className="text-caption text-destructive">
+              {conceptError}
+            </p>
+          )}
         </div>
       )}
 

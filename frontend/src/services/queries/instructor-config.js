@@ -31,6 +31,9 @@ export function useModules(courseId) {
 export function useCreateConcept(courseId) {
   const qc = useQueryClient()
   return useMutation({
+    // A duplicate concept (backend 400) is shown inline under the add-concept
+    // field, so opt out of the global error handler.
+    meta: { suppressGlobalError: true },
     mutationFn: async ({ conceptName, nextNumber }) =>
       http.post(
         "instructor/create_concept",
