@@ -145,7 +145,9 @@ describe("Login", () => {
     await userEvent.type(screen.getByLabelText("Confirm password"), "short")
     await userEvent.click(screen.getByRole("button", { name: "Sign up" }))
 
-    const pwErr = await screen.findByText("Password must be at least 10 characters long.")
+    const pwErr = await screen.findByText(
+      "Password must be at least 10 characters and include a lowercase letter, an uppercase letter, a number, and a special character.",
+    )
     expect(pwErr).toHaveClass("text-caption", "text-destructive")
     // Wired to the password control (rendered directly under the field).
     expect(screen.getByLabelText("Password")).toHaveAttribute("aria-describedby", pwErr.id)

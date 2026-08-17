@@ -19,14 +19,22 @@ import { Card } from "@/components/ui/card"
 import LoadingScreen from "@/app/LoadingScreen"
 import ubcLogo from "@/assets/ubc-logo.svg"
 
-/** Cognito password policy (ported from the legacy signup validation). */
+/**
+ * Cognito password policy (ported from the legacy signup validation). Returns a
+ * single message stating the full policy if any requirement is unmet, so the user
+ * sees every rule at once rather than fixing them one at a time.
+ */
+const PASSWORD_POLICY_MESSAGE =
+  "Password must be at least 10 characters and include a lowercase letter, an uppercase letter, a number, and a special character."
+
 function validatePassword(pw) {
-  if (pw.length < 10) return "Password must be at least 10 characters long."
-  if (!/[a-z]/.test(pw)) return "Password must contain a lowercase letter."
-  if (!/[A-Z]/.test(pw)) return "Password must contain an uppercase letter."
-  if (!/[0-9]/.test(pw)) return "Password must contain a number."
-  if (!/[^a-zA-Z0-9\s]/.test(pw)) return "Password must contain a special character."
-  return ""
+  const meetsPolicy =
+    pw.length >= 10 &&
+    /[a-z]/.test(pw) &&
+    /[A-Z]/.test(pw) &&
+    /[0-9]/.test(pw) &&
+    /[^a-zA-Z0-9\s]/.test(pw)
+  return meetsPolicy ? "" : PASSWORD_POLICY_MESSAGE
 }
 
 /**
