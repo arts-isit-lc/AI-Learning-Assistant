@@ -514,6 +514,7 @@ exports.handler = async (event) => {
                 SELECT
                   "Course_Concepts".concept_id,
                   "Course_Concepts".concept_name,
+                  "Course_Concepts".concept_number,
                   "Course_Modules".module_id,
                   "Course_Modules".module_name,
                   "Course_Modules".module_number,
@@ -534,7 +535,8 @@ exports.handler = async (event) => {
                   "Course_Concepts".course_id = ${courseId}
                   AND "Course_Modules".status = 'active'
                 ORDER BY
-                  "Course_Modules".module_number;
+                  "Course_Concepts".concept_number ASC,
+                  "Course_Modules".module_number ASC;
               `;
 
             // OPT-7: Fixed — use user_id (not user_email) and enrolment_id from CTE

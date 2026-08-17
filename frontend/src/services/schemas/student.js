@@ -59,8 +59,10 @@ export const CoursePageRowSchema = z
   .object({
     concept_id: z.string(),
     concept_name: z.string(),
+    concept_number: z.number().nullable().optional(),
     module_id: z.string(),
     module_name: z.string(),
+    module_number: z.number().nullable().optional(),
     module_score: z.number().nullable().optional(),
     last_accessed: z.string().nullable().optional(),
   })

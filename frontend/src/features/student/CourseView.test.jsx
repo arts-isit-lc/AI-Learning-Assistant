@@ -38,6 +38,31 @@ describe("groupConcepts", () => {
     expect(grouped[0].modules).toHaveLength(2)
     expect(grouped[0].average).toBe(50)
   })
+
+  it("orders concepts by concept_number regardless of row arrival order", () => {
+    // Rows arrive with concept 2 first (as an unstable SQL tie could produce).
+    const shuffled = [
+      { concept_id: "b", concept_name: "second", concept_number: 2, module_id: "m1", module_name: "b1", module_number: 1 },
+      { concept_id: "a", concept_name: "first", concept_number: 1, module_id: "m2", module_name: "a1", module_number: 1 },
+    ]
+    const grouped = groupConcepts(shuffled)
+    expect(grouped.map((c) => c.concept_id)).toEqual(["a", "b"])
+  })
+
+  it("orders modules within a concept by module_number regardless of row arrival order", () => {
+    // The instructor moved 'intro' to position 1; rows still arrive out of order.
+    const shuffled = [
+      { concept_id: "a", concept_name: "c", concept_number: 1, module_id: "m2", module_name: "advanced", module_number: 2 },
+      { concept_id: "a", concept_name: "c", concept_number: 1, module_id: "m1", module_name: "intro", module_number: 1 },
+    ]
+    const grouped = groupConcepts(shuffled)
+    expect(grouped[0].modules.map((m) => m.module_name)).toEqual(["intro", "advanced"])
+  })
+
+  it("falls back to arrival order when rows carry no ordering numbers (older cache)", () => {
+    const grouped = groupConcepts(rows)
+    expect(grouped[0].modules.map((m) => m.module_id)).toEqual(["m1", "m2"])
+  })
 })
 
 describe("CourseView", () => {

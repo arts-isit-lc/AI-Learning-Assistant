@@ -7,7 +7,16 @@
  * when its modules average 100 — the same rule the Learning Journey uses.
  */
 
-/** Group flat course_page rows into concepts, each with its modules + avg score. */
+/**
+ * Group flat course_page rows into concepts, each with its modules + avg score.
+ *
+ * Concepts are ordered by `concept_number` and modules within a concept by
+ * `module_number` — the same keys the instructor Configuration tree sorts on
+ * (see `groupConceptTree`). This mirrors the server `ORDER BY concept_number,
+ * module_number` so an instructor's reorder is reflected here deterministically
+ * rather than relying on SQL row-arrival order. Both sorts are stable, so rows
+ * missing a number (older cache) fall back to their arrival order.
+ */
 export function groupConcepts(rows) {
   const map = new Map()
   for (const row of rows) {
@@ -15,16 +24,21 @@ export function groupConcepts(rows) {
       map.set(row.concept_id, {
         concept_id: row.concept_id,
         concept_name: row.concept_name,
+        concept_number: row.concept_number,
         modules: [],
       })
     }
     map.get(row.concept_id).modules.push(row)
   }
-  return Array.from(map.values()).map((concept) => {
-    const scores = concept.modules.map((m) => m.module_score || 0)
-    const average = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0
-    return { ...concept, average }
-  })
+  const byNumber = (key) => (a, b) => (a[key] ?? 0) - (b[key] ?? 0)
+  return Array.from(map.values())
+    .sort(byNumber("concept_number"))
+    .map((concept) => {
+      const modules = [...concept.modules].sort(byNumber("module_number"))
+      const scores = modules.map((m) => m.module_score || 0)
+      const average = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0
+      return { ...concept, modules, average }
+    })
 }
 
 /**
