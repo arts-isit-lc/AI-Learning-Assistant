@@ -1630,16 +1630,19 @@ export class ApiGatewayStack extends cdk.Stack {
       resources: ['*'],
     }));
 
-    // S3 access to data ingestion bucket (list + delete for cleanup)
+    // S3 access to the irBucket (V2 file storage — where uploads land and
+    // getFilesFunction reads). list + delete for orphan cleanup. Previously
+    // scoped to dataIngestionBucket, which no longer holds V2 files, so orphaned
+    // module objects were never removed.
     orphanCleanupRole.addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: ['s3:ListBucket'],
-      resources: [dataIngestionBucket.bucketArn],
+      resources: [ragStack.irBucket.bucketArn],
     }));
     orphanCleanupRole.addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
       actions: ['s3:DeleteObject'],
-      resources: [`${dataIngestionBucket.bucketArn}/*`],
+      resources: [`${ragStack.irBucket.bucketArn}/*`],
     }));
 
     // X-Ray tracing (resource '*' acceptable — service doesn't support resource-level)
@@ -1664,7 +1667,8 @@ export class ApiGatewayStack extends cdk.Stack {
       environment: {
         SM_DB_CREDENTIALS: db.secretPathAdminName,
         RDS_PROXY_ENDPOINT: db.rdsProxyEndpointAdmin,
-        DATA_INGESTION_BUCKET: dataIngestionBucket.bucketName,
+        // V2 files live in the irBucket (see generatePreSignedURL/getFilesFunction).
+        BUCKET: ragStack.irBucket.bucketName,
         REGION: this.region,
       },
     });
@@ -1756,7 +1760,11 @@ export class ApiGatewayStack extends cdk.Stack {
       environment: {
         SM_DB_CREDENTIALS: db.secretPathUser.secretName, // Database User Credentials
         RDS_PROXY_ENDPOINT: db.rdsProxyEndpoint, // RDS Proxy Endpoint
-        BUCKET: dataIngestionBucket.bucketName,
+        // V2 files live in the irBucket (uploads go there via generatePreSignedURL
+        // and getFilesFunction reads from it). deleteFile MUST target the same
+        // bucket — pointing it at dataIngestionBucket deleted nothing and left the
+        // real object orphaned, which get_all_files then re-surfaced by its UUID.
+        BUCKET: ragStack.irBucket.bucketName,
         REGION: this.region,
       },
       functionName: `${id}-DeleteFileFunc`,
@@ -1767,8 +1775,9 @@ export class ApiGatewayStack extends cdk.Stack {
     const cfndeleteFile = deleteFile.node.defaultChild as lambda.CfnFunction;
     cfndeleteFile.overrideLogicalId("DeleteFileFunc");
 
-    // Grant the Lambda function the necessary permissions
-    dataIngestionBucket.grantDelete(deleteFile);
+    // Grant delete on the irBucket (V2 file storage) — the bucket the files
+    // actually live in, matching generatePreSignedURL/getFilesFunction.
+    ragStack.irBucket.grantDelete(deleteFile);
 
     // Grant access to Secret Manager scoped to secretPathUser
     deleteFile.addToRolePolicy(
@@ -1816,7 +1825,10 @@ export class ApiGatewayStack extends cdk.Stack {
       logGroup: makeLogGroup(`${id}-DeleteModuleFunc`),
       memorySize: 128,
       environment: {
-        BUCKET: dataIngestionBucket.bucketName,
+        // V2 files live in the irBucket (see generatePreSignedURL/getFilesFunction).
+        // Was dataIngestionBucket, which no longer holds V2 files — so deleting a
+        // module removed nothing from S3.
+        BUCKET: ragStack.irBucket.bucketName,
         REGION: this.region,
       },
       functionName: `${id}-DeleteModuleFunc`,
@@ -1828,9 +1840,10 @@ export class ApiGatewayStack extends cdk.Stack {
       .defaultChild as lambda.CfnFunction;
     cfnDeleteModuleFunction.overrideLogicalId("DeleteModuleFunc");
 
-    // Grant the Lambda function the necessary permissions
-    dataIngestionBucket.grantRead(deleteModuleFunction);
-    dataIngestionBucket.grantDelete(deleteModuleFunction);
+    // Grant list + delete on the irBucket (V2 file storage), matching where the
+    // module's objects actually live.
+    ragStack.irBucket.grantRead(deleteModuleFunction);
+    ragStack.irBucket.grantDelete(deleteModuleFunction);
 
     // Add the permission to the Lambda function's policy to allow API Gateway access
     deleteModuleFunction.addPermission("AllowApiGatewayInvoke", {

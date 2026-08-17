@@ -37,6 +37,27 @@ function collectS3Buckets(): Array<{ logicalId: string; properties: Record<strin
 }
 
 /**
+ * Helper: return the BUCKET env var (a CloudFormation intrinsic referencing the
+ * target bucket) for a Lambda function identified by its physical FunctionName.
+ */
+function bucketEnvForFunction(functionName: string): unknown {
+  const json = apiTemplate.toJSON();
+  const resources = json.Resources ?? {};
+
+  for (const resource of Object.values(resources)) {
+    const res = resource as Record<string, unknown>;
+    if (res.Type !== 'AWS::Lambda::Function') continue;
+    const props = (res.Properties as Record<string, unknown>) ?? {};
+    if (props.FunctionName !== functionName) continue;
+    const env = props.Environment as Record<string, unknown> | undefined;
+    const vars = (env?.Variables as Record<string, unknown>) ?? {};
+    return vars.BUCKET;
+  }
+
+  return undefined;
+}
+
+/**
  * Helper: collect all S3 bucket policy resources from the template.
  */
 function collectBucketPolicies(): Array<{ logicalId: string; properties: Record<string, unknown> }> {
@@ -166,6 +187,31 @@ describe('S3 Bucket Security', () => {
           expect.objectContaining({ hasArchiveAccessTier: false })
         );
       }
+    }
+  });
+
+  /**
+   * Regression: deleteFile must delete from the SAME bucket that uploads land in
+   * and getFilesFunction reads from (the irBucket). Previously deleteFile was
+   * wired to a different bucket (dataIngestionBucket), so a delete removed the DB
+   * row but never the object — get_all_files then re-surfaced the orphaned object
+   * under its raw UUID key.
+   */
+  test('file-deletion Lambdas target the same bucket getFilesFunction reads (irBucket)', () => {
+    const getFilesBucket = bucketEnvForFunction('Test-ApiGatewayStack-GetFilesFunction');
+    expect(getFilesBucket).toBeDefined();
+
+    // Every Lambda that deletes a file/module's S3 objects must operate on the
+    // SAME bucket uploads land in and getFilesFunction reads from. A mismatch
+    // deletes the DB row but orphans the object, which then re-surfaces by UUID.
+    for (const fnName of [
+      'Test-ApiGatewayStack-DeleteFileFunc',
+      'Test-ApiGatewayStack-DeleteModuleFunc',
+      'Test-ApiGatewayStack-orphanCleanupFunc',
+    ]) {
+      const bucket = bucketEnvForFunction(fnName);
+      expect(bucket).toBeDefined();
+      expect(bucket).toEqual(getFilesBucket);
     }
   });
 

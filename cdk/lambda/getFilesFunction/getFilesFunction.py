@@ -171,6 +171,10 @@ def lambda_handler(event, context):
             else:
                 # S3 object with no matching Module_Files row (orphan): surface it
                 # by its raw key so it stays visible, but without metadata.
+                logger.warning(
+                    "Orphan S3 object (no Module_Files row) — shown under its raw UUID key",
+                    extra={"object_name": object_name, "stem": file_id},
+                )
                 document_files_urls[object_name] = {"url": presigned_url, "metadata": None}
 
         logger.info("Presigned URLs and metadata generated successfully", extra={

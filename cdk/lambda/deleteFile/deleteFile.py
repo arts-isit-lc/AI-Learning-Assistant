@@ -11,6 +11,9 @@ BUCKET = os.environ["BUCKET"]
 DB_SECRET_NAME = os.environ["SM_DB_CREDENTIALS"]
 RDS_PROXY_ENDPOINT = os.environ["RDS_PROXY_ENDPOINT"]
 
+
+
+
 # AWS Clients
 secrets_manager_client = boto3.client('secretsmanager')
 
@@ -105,12 +108,23 @@ def delete_file_from_db(module_id, file_name, file_type):
 
 @logger.inject_lambda_context
 def lambda_handler(event, context):
-    query_params = event.get("queryStringParameters", {})
+    query_params = event.get("queryStringParameters", {}) or {}
 
     course_id = query_params.get("course_id", "")
     module_id = query_params.get("module_id", "")
     file_name = query_params.get("file_name", "")
     file_type = query_params.get("file_type", "")
+
+    # DIAGNOSTIC: exactly what the frontend sent us to delete.
+    logger.info(
+        "delete_file request",
+        extra={
+            "course_id": course_id,
+            "module_id": module_id,
+            "file_name": file_name,
+            "file_type": file_type,
+        },
+    )
 
     if not course_id or not module_id or not file_name or not file_type:
         logger.error("Missing required parameters", extra={
@@ -136,7 +150,11 @@ def lambda_handler(event, context):
         # S3 object.
         try:
             file_id, filepath = delete_file_from_db(module_id, file_name, file_type)
-            logger.info(f"File {file_name}.{file_type} deleted from the database.")
+            # DIAGNOSTIC: what the DB row actually held (or None if no row matched).
+            logger.info(
+                "Resolved Module_Files row",
+                extra={"file_id": file_id, "stored_filepath": filepath},
+            )
         except Exception as e:
             logger.error(f"Error deleting file {file_name}.{file_type} from the database: {e}")
             return {
@@ -159,17 +177,28 @@ def lambda_handler(event, context):
         # fall back to reconstruction when filepath is absent (legacy rows).
         if file_id:
             object_key = filepath or f"courses/{course_id}/{module_id}/{file_id}.{file_type}"
+            reconstructed_key = f"courses/{course_id}/{module_id}/{file_id}.{file_type}"
+
+            # Quiet=False so the response includes both Deleted and Errors — a
+            # silent permission/key failure shows up here instead of a bare 200.
             response = s3.delete_objects(
                 Bucket=BUCKET,
-                Delete={"Objects": [{"Key": object_key}], "Quiet": True},
+                Delete={"Objects": [{"Key": object_key}], "Quiet": False},
             )
+            # DIAGNOSTIC: the exact key we removed, whether it came from the stored
+            # filepath or was reconstructed, and the full S3 response (incl. Errors).
+            # Compare `key` here against the object keys logged by getFilesFunction
+            # to see if we're deleting the wrong key.
             logger.info(
                 "Deleted file object from S3",
                 extra={
                     "file_id": file_id,
                     "key": object_key,
+                    "reconstructed_key": reconstructed_key,
                     "used_stored_filepath": bool(filepath),
-                    "s3_response": response,
+                    "bucket": BUCKET,
+                    "s3_deleted": response.get("Deleted") if isinstance(response, dict) else None,
+                    "s3_errors": response.get("Errors") if isinstance(response, dict) else None,
                 },
             )
         else:

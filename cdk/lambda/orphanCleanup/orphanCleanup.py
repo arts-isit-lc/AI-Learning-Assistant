@@ -34,7 +34,10 @@ logger = Logger(service="orphan-cleanup")
 # Environment variables
 DB_SECRET_NAME = os.environ["SM_DB_CREDENTIALS"]
 RDS_PROXY_ENDPOINT = os.environ["RDS_PROXY_ENDPOINT"]
-DATA_INGESTION_BUCKET = os.environ.get("DATA_INGESTION_BUCKET", "")
+# V2 files live in the irBucket (uploads land there and getFilesFunction reads it).
+# Was DATA_INGESTION_BUCKET, which no longer holds V2 files, so orphaned module
+# objects were never removed from S3.
+BUCKET = os.environ.get("BUCKET", "")
 REGION = os.environ.get("REGION", "ca-central-1")
 
 # AWS clients
@@ -123,20 +126,22 @@ def cleanup_module(conn, module_id, course_id):
         cur.execute('DELETE FROM "Module_Files" WHERE module_id = %s', (module_id,))
     conn.commit()
 
-    # Step 4: Delete S3 objects under the module prefix
-    if DATA_INGESTION_BUCKET and course_id:
+    # Step 4: Delete S3 objects under the module prefix. V2 objects are keyed
+    # under courses/{course_id}/{module_id}/... (the pre-V2 layout was
+    # {course_id}/{module_id}/..., which no longer exists).
+    if BUCKET and course_id:
         try:
-            prefix = f"{course_id}/{module_id}/"
+            prefix = f"courses/{course_id}/{module_id}/"
             continuation_token = None
             while True:
-                params = {"Bucket": DATA_INGESTION_BUCKET, "Prefix": prefix}
+                params = {"Bucket": BUCKET, "Prefix": prefix}
                 if continuation_token:
                     params["ContinuationToken"] = continuation_token
                 response = s3_client.list_objects_v2(**params)
                 objects = response.get("Contents", [])
                 if objects:
                     s3_client.delete_objects(
-                        Bucket=DATA_INGESTION_BUCKET,
+                        Bucket=BUCKET,
                         Delete={"Objects": [{"Key": obj["Key"]} for obj in objects], "Quiet": True}
                     )
                 if not response.get("IsTruncated"):

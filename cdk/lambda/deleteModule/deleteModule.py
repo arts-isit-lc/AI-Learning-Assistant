@@ -31,7 +31,9 @@ def lambda_handler(event, context):
         }
 
     try:
-        module_prefix = f"{course_id}/{module_id}/"
+        # V2 objects are keyed under courses/{course_id}/{module_id}/... (the
+        # pre-V2 layout was {course_id}/{module_id}/..., which no longer exists).
+        module_prefix = f"courses/{course_id}/{module_id}/"
 
         objects_to_delete = []
         continuation_token = None
