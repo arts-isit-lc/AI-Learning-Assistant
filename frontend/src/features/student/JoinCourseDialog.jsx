@@ -1,7 +1,8 @@
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { useEnrollCourse } from "@/services/queries"
+import { useCourses, useEnrollCourse } from "@/services/queries"
+import { useAuth } from "@/context/AuthContext"
 import {
   Dialog,
   DialogContent,
@@ -18,6 +19,9 @@ const schema = z.object({
   code: z.string().trim().min(1, "Enter your access code"),
 })
 
+const ALREADY_JOINED_MESSAGE =
+  "You've already joined this course. To access it, close this dialog window and find the course on your Courses dashboard."
+
 /**
  * Join-by-code modal — Figma `Modal/Join course` (859:6784): title over a
  * divider, instructions, a course-code input, a privacy notice, and Cancel /
@@ -26,6 +30,10 @@ const schema = z.object({
  * "6-digit" — the access code is the 16-char code, per decision B3.)
  */
 export function JoinCourseDialog({ open, onOpenChange }) {
+  const { isInstructorAsStudent } = useAuth()
+  // Same cached query StudentHome already loads (matching the asInstructor flag),
+  // so this adds no extra request. Each course carries its access code.
+  const { data: courses = [] } = useCourses({ asInstructor: isInstructorAsStudent })
   const enroll = useEnrollCourse()
   const {
     register,
@@ -41,6 +49,14 @@ export function JoinCourseDialog({ open, onOpenChange }) {
   }
 
   const onSubmit = ({ code }) => {
+    // `code` is already trimmed by the Zod schema. Pre-check it against the
+    // student's enrolled courses so an already-joined code shows the message
+    // (and keeps the modal open) without a round trip that would otherwise
+    // report success and close the modal.
+    if (courses.some((c) => c.course_access_code === code)) {
+      setError("code", { message: ALREADY_JOINED_MESSAGE })
+      return
+    }
     enroll.mutate(code, {
       onSuccess: () => {
         reset()
@@ -49,10 +65,9 @@ export function JoinCourseDialog({ open, onOpenChange }) {
       onError: (err) => {
         let message
         if (err?.status === 409) {
-          // Already enrolled — the backend signals this case with a 409 so we can
-          // point the student at their existing course rather than "invalid code".
-          message =
-            "You've already joined this course. To access it, close this dialog window and find the course on your Courses dashboard."
+          // Backend backstop for the already-enrolled case (e.g. a course not in
+          // the cached list yet), mirroring the pre-check above.
+          message = ALREADY_JOINED_MESSAGE
         } else if (err?.status === 404 || err?.status === 400) {
           message = "That access code isn't valid."
         } else {

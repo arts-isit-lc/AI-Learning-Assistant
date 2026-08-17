@@ -3,13 +3,21 @@ import { render, screen, waitFor, act } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
 const mutate = vi.fn()
+let courses = []
 vi.mock("@/services/queries", () => ({
   useEnrollCourse: () => ({ mutate, isPending: false }),
+  useCourses: () => ({ data: courses }),
+}))
+vi.mock("@/context/AuthContext", () => ({
+  useAuth: () => ({ isInstructorAsStudent: false }),
 }))
 
 import { JoinCourseDialog } from "./JoinCourseDialog"
 
-beforeEach(() => mutate.mockReset())
+beforeEach(() => {
+  mutate.mockReset()
+  courses = []
+})
 
 describe("JoinCourseDialog", () => {
   it("hovers the Join course button to #2E0666 (primary-dark)", () => {
@@ -25,6 +33,33 @@ describe("JoinCourseDialog", () => {
   })
 
   it("submits a valid access code", async () => {
+    render(<JoinCourseDialog open onOpenChange={() => {}} />)
+    await userEvent.type(screen.getByLabelText(/access code/i), "65XH19000jo12")
+    await userEvent.click(screen.getByRole("button", { name: "Join course" }))
+    await waitFor(() =>
+      expect(mutate).toHaveBeenCalledWith("65XH19000jo12", expect.any(Object))
+    )
+  })
+
+  it("pre-checks an already-joined code inline without calling enroll (modal stays open)", async () => {
+    courses = [{ course_id: "c1", course_access_code: "65XH19000jo12" }]
+    render(<JoinCourseDialog open onOpenChange={() => {}} />)
+    await userEvent.type(screen.getByLabelText(/access code/i), "65XH19000jo12")
+    await userEvent.click(screen.getByRole("button", { name: "Join course" }))
+
+    const err = await screen.findByText(
+      "You've already joined this course. To access it, close this dialog window and find the course on your Courses dashboard.",
+    )
+    // Shown in red under the field, and no enroll round trip was attempted.
+    expect(err).toHaveClass("text-caption", "text-destructive")
+    expect(screen.getByLabelText(/access code/i)).toHaveAttribute("aria-invalid", "true")
+    expect(mutate).not.toHaveBeenCalled()
+    // Modal is still mounted (never closed).
+    expect(screen.getByRole("button", { name: "Join course" })).toBeInTheDocument()
+  })
+
+  it("submits when the typed code doesn't match an enrolled course", async () => {
+    courses = [{ course_id: "c1", course_access_code: "OTHERCODE123" }]
     render(<JoinCourseDialog open onOpenChange={() => {}} />)
     await userEvent.type(screen.getByLabelText(/access code/i), "65XH19000jo12")
     await userEvent.click(screen.getByRole("button", { name: "Join course" }))

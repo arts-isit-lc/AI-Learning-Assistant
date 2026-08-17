@@ -31,6 +31,10 @@ export const CourseSchema = z
     term: z.string().nullable().optional(),
     section: z.string().nullable().optional(),
     instructors: z.array(CourseInstructorSchema).optional().default([]),
+    // Comes free with "Courses".* from GET /student/course. Declared explicitly
+    // (not just via passthrough) so the Join-course modal can pre-check a typed
+    // access code against the student's already-enrolled courses.
+    course_access_code: z.string().nullable().optional(),
   })
   .passthrough()
 export const CoursesSchema = z.array(CourseSchema)
