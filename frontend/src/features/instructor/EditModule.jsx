@@ -342,7 +342,7 @@ export function EditModule() {
                             <Button
                               size="icon"
                               variant="ghost"
-                              className="mr-4 text-primary hover:bg-transparent hover:text-primary-dark active:bg-transparent active:text-neutral-900"
+                              className="text-primary hover:bg-transparent hover:text-primary-dark active:bg-transparent active:text-neutral-900"
                               aria-label={`Download ${f.fileName}`}
                               onClick={() => downloadFile(f)}
                             >

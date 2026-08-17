@@ -84,19 +84,23 @@ def _invoke(file_name="Algorithms_in_Production-v5", file_type="pdf"):
     return df.lambda_handler(event, _CTX)
 
 
-def test_deletes_uuid_s3_key_and_retrieval_units(monkeypatch):
+def test_deletes_stored_filepath_object_and_retrieval_units(monkeypatch):
     recorder: list[tuple] = []
-    monkeypatch.setattr(df, "connect_to_db", lambda: _FakeConn(recorder, (_UUID,)))
+    # The stored filepath diverges from the reconstructed courses/c1/m1/{uuid}.pdf
+    # key — the delete must follow the authoritative stored key, otherwise the S3
+    # object is orphaned and get_all_files re-surfaces it under its raw UUID name.
+    stored_filepath = f"courses/c1/m1/{_UUID}.PDF"
+    monkeypatch.setattr(df, "connect_to_db", lambda: _FakeConn(recorder, (_UUID, stored_filepath)))
     fake_s3 = MagicMock()
     monkeypatch.setattr(df, "s3", fake_s3)
 
     resp = _invoke()
     assert resp["statusCode"] == 200
 
-    # S3 delete addresses the canonical V2 UUID key — not the old documents/ path.
+    # S3 delete addresses the exact stored key — not a reconstructed one.
     _, kwargs = fake_s3.delete_objects.call_args
     keys = [o["Key"] for o in kwargs["Delete"]["Objects"]]
-    assert keys == [f"courses/c1/m1/{_UUID}.pdf"]
+    assert keys == [stored_filepath]
     assert all("/documents/" not in k for k in keys)
 
     # retrieval_units + Module_Files are both deleted by the UUID file_id.
@@ -104,6 +108,22 @@ def test_deletes_uuid_s3_key_and_retrieval_units(monkeypatch):
     mf = [(s, p) for s, p in recorder if 'DELETE FROM "Module_Files"' in s]
     assert ru and ru[0][1] == (_UUID,)
     assert mf and mf[0][1] == (_UUID,)
+
+
+def test_falls_back_to_reconstructed_key_when_filepath_missing(monkeypatch):
+    # Legacy rows have no persisted filepath — reconstruct the canonical V2 key.
+    recorder: list[tuple] = []
+    monkeypatch.setattr(df, "connect_to_db", lambda: _FakeConn(recorder, (_UUID, None)))
+    fake_s3 = MagicMock()
+    monkeypatch.setattr(df, "s3", fake_s3)
+
+    resp = _invoke()
+    assert resp["statusCode"] == 200
+
+    _, kwargs = fake_s3.delete_objects.call_args
+    keys = [o["Key"] for o in kwargs["Delete"]["Objects"]]
+    assert keys == [f"courses/c1/m1/{_UUID}.pdf"]
+    assert all("/documents/" not in k for k in keys)
 
 
 def test_no_matching_row_skips_s3_delete_and_succeeds(monkeypatch):

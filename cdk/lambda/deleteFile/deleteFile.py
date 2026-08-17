@@ -50,20 +50,21 @@ def connect_to_db():
     return connection
 
 def delete_file_from_db(module_id, file_name, file_type):
-    """Delete a file's Module_Files row and its retrieval_units; return its file_id.
+    """Delete a file's Module_Files row and its retrieval_units; return its identity.
 
-    Resolves the canonical UUID file_id first (needed both to delete the correct
-    UUID-keyed S3 object and to remove the file's vector units), then deletes the
-    retrieval_units and the Module_Files row in one transaction.
+    Resolves the canonical UUID file_id AND the stored S3 filepath first (needed
+    both to delete the correct S3 object and to remove the file's vector units),
+    then deletes the retrieval_units and the Module_Files row in one transaction.
 
     Returns:
-        The UUID file_id (str) if a matching row existed, else None.
+        A (file_id, filepath) tuple if a matching row existed — filepath may be
+        None for legacy rows written before it was persisted — else (None, None).
     """
     connection = connect_to_db()
     cur = connection.cursor()
     try:
         cur.execute(
-            'SELECT file_id FROM "Module_Files" WHERE module_id = %s AND filename = %s AND filetype = %s',
+            'SELECT file_id, filepath FROM "Module_Files" WHERE module_id = %s AND filename = %s AND filetype = %s',
             (module_id, file_name, file_type),
         )
         row = cur.fetchone()
@@ -73,9 +74,10 @@ def delete_file_from_db(module_id, file_name, file_type):
                 extra={"module_id": module_id, "file_name": file_name, "file_type": file_type},
             )
             cur.close()
-            return None
+            return None, None
 
         file_id = str(row[0])
+        filepath = row[1]
 
         # Delete the file's vector units. retrieval_units is keyed by the canonical
         # UUID file_id (cross-module-file-referencing); without this they are
@@ -91,7 +93,7 @@ def delete_file_from_db(module_id, file_name, file_type):
             "Deleted file from database",
             extra={"file_id": file_id, "retrieval_units_deleted": units_deleted},
         )
-        return file_id
+        return file_id, filepath
     except Exception:
         connection.rollback()
         try:
@@ -130,9 +132,10 @@ def lambda_handler(event, context):
 
     try:
         # Delete the DB row + the file's vector units first. This also resolves
-        # the canonical UUID file_id, which is needed to address the S3 object.
+        # the canonical UUID file_id + stored S3 filepath, needed to address the
+        # S3 object.
         try:
-            file_id = delete_file_from_db(module_id, file_name, file_type)
+            file_id, filepath = delete_file_from_db(module_id, file_name, file_type)
             logger.info(f"File {file_name}.{file_type} deleted from the database.")
         except Exception as e:
             logger.error(f"Error deleting file {file_name}.{file_type} from the database: {e}")
@@ -147,19 +150,27 @@ def lambda_handler(event, context):
                 'body': json.dumps(f"Error deleting file {file_name}.{file_type} from the database")
             }
 
-        # Delete the raw uploaded object at the canonical V2 key
-        # courses/{course_id}/{module_id}/{file_id}.{file_type}. (The pre-V2 key
-        # was {course}/{module}/documents/{filename}.{ext}, which no longer exists;
-        # the object is now keyed by the UUID file_id, not the filename.)
+        # Delete the raw uploaded object. Prefer the authoritative S3 key stored
+        # in Module_Files.filepath (written on every upload) — reconstructing it as
+        # courses/{course_id}/{module_id}/{file_id}.{file_type} can miss the real
+        # object whenever the stored key diverges from that shape (e.g. a filetype
+        # that differs from the request, or a legacy key), which orphans the object
+        # in S3 and makes get_all_files re-surface it under its raw UUID name. Only
+        # fall back to reconstruction when filepath is absent (legacy rows).
         if file_id:
-            object_key = f"courses/{course_id}/{module_id}/{file_id}.{file_type}"
+            object_key = filepath or f"courses/{course_id}/{module_id}/{file_id}.{file_type}"
             response = s3.delete_objects(
                 Bucket=BUCKET,
                 Delete={"Objects": [{"Key": object_key}], "Quiet": True},
             )
             logger.info(
                 "Deleted file object from S3",
-                extra={"file_id": file_id, "key": object_key, "s3_response": response},
+                extra={
+                    "file_id": file_id,
+                    "key": object_key,
+                    "used_stored_filepath": bool(filepath),
+                    "s3_response": response,
+                },
             )
         else:
             # No matching DB row — nothing to address in S3. Idempotent success.

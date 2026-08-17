@@ -128,19 +128,18 @@ describe("EditModule", () => {
     expect(remove).not.toHaveClass("hover:bg-accent")
   })
 
-  it("shows a Download file icon that matches the trashcan styling with a 16px (mr-4) gap", () => {
+  it("shows a Download file icon that matches the trashcan styling", () => {
     render(<EditModule />)
     const download = screen.getByRole("button", { name: "Download notes.pdf" })
-    // Same states as the trashcan, plus mr-4 (16px) separating it from the trashcan.
+    // Same states as the trashcan icon.
     expect(download).toHaveClass(
       "text-primary",
       "hover:text-primary-dark",
       "active:text-neutral-900",
       "hover:bg-transparent",
-      "active:bg-transparent",
-      "mr-4"
+      "active:bg-transparent"
     )
-    expect(download).not.toHaveClass("hover:bg-accent")
+    expect(download).not.toHaveClass("hover:bg-accent", "mr-4")
   })
 
   it("downloads an existing file via its presigned URL", async () => {
