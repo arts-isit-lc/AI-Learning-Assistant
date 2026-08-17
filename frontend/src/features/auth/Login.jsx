@@ -149,16 +149,17 @@ export function Login() {
       setFieldErrors(errors)
       return
     }
-    setFieldErrors({})
-    if (password !== confirmPassword) {
-      setError("Passwords do not match.")
-      return
-    }
+    // Password-policy and mismatch failures render inline under their field
+    // (same as the required-field errors above), not as a form-level alert.
+    const pwErrors = {}
     const pwError = validatePassword(password)
-    if (pwError) {
-      setError(pwError)
+    if (pwError) pwErrors.password = pwError
+    if (password !== confirmPassword) pwErrors.confirmPassword = "Passwords do not match."
+    if (Object.keys(pwErrors).length) {
+      setFieldErrors(pwErrors)
       return
     }
+    setFieldErrors({})
     setBusy(true)
     try {
       const { isSignUpComplete, nextStep } = await signUp({

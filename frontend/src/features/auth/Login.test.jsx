@@ -127,7 +127,29 @@ describe("Login", () => {
     await userEvent.type(screen.getByLabelText("Password"), "Password1!")
     await userEvent.type(screen.getByLabelText("Confirm password"), "Password2!")
     await userEvent.click(screen.getByRole("button", { name: "Sign up" }))
-    expect(await screen.findByText("Passwords do not match.")).toBeInTheDocument()
+    const mismatchErr = await screen.findByText("Passwords do not match.")
+    // Rendered inline under the confirm-password field, not as a form-level alert.
+    expect(mismatchErr).toHaveClass("text-caption", "text-destructive")
+    expect(screen.getByLabelText("Confirm password")).toHaveAttribute("aria-describedby", mismatchErr.id)
+    expect(h.signUp).not.toHaveBeenCalled()
+  })
+
+  it("shows a password-policy failure inline under the password field", async () => {
+    render(<Login />)
+    await userEvent.click(screen.getByRole("button", { name: "Create an account" }))
+    await userEvent.type(screen.getByLabelText("First name"), "Ada")
+    await userEvent.type(screen.getByLabelText("Last name"), "Lovelace")
+    await userEvent.type(screen.getByLabelText("Email"), "ada@x.com")
+    // Too short to satisfy the Cognito policy (min 10 chars).
+    await userEvent.type(screen.getByLabelText("Password"), "short")
+    await userEvent.type(screen.getByLabelText("Confirm password"), "short")
+    await userEvent.click(screen.getByRole("button", { name: "Sign up" }))
+
+    const pwErr = await screen.findByText("Password must be at least 10 characters long.")
+    expect(pwErr).toHaveClass("text-caption", "text-destructive")
+    // Wired to the password control (rendered directly under the field).
+    expect(screen.getByLabelText("Password")).toHaveAttribute("aria-describedby", pwErr.id)
+    expect(screen.getByLabelText("Password")).toHaveAttribute("aria-invalid", "true")
     expect(h.signUp).not.toHaveBeenCalled()
   })
 
