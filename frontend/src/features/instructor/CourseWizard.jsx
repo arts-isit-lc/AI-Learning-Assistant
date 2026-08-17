@@ -570,13 +570,13 @@ export function CourseWizard() {
                                     </div>
                                   </div>
                                   <Button
-                                    className="gap-0 w-6 h-6"
+                                    className="gap-0 w-6 h-6 text-primary hover:bg-transparent hover:text-primary-dark active:bg-transparent active:text-neutral-900"
                                     size="icon"
                                     variant="ghost"
                                     aria-label={`Remove ${f.fileName}`}
                                     onClick={() => handleRemoveFile(f.fileId)}
                                   >
-                                    <Icon icon={MdDelete} size={24} className="text-primary" />
+                                    <Icon icon={MdDelete} size={24} />
                                   </Button>
                                 </div>
                                 {showDescription && (

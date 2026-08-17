@@ -54,7 +54,9 @@ vi.mock("react-router", async (importOriginal) => {
 import { EditModule } from "./EditModule"
 
 beforeEach(() => {
-  filesResult = { data: [{ fileName: "notes.pdf", file_id: "f1", fileType: "pdf" }] }
+  filesResult = {
+    data: [{ fileName: "notes.pdf", file_id: "f1", fileType: "pdf", url: "https://signed/notes.pdf" }],
+  }
   modulesResult = { data: [MODULE], isLoading: false }
   locationValue = { state: { module: MODULE } }
   editModule.mutate.mockClear()
@@ -109,6 +111,52 @@ describe("EditModule", () => {
       modulePrompt: "Explain vectors",
       removedFiles: [],
     })
+  })
+
+  it("styles the file-remove trashcan: #6829C2 → #2E0666 hover → #000 active, never a background", () => {
+    render(<EditModule />)
+    // Colour lives on the Button so the icon (currentColor) tracks rest → hover →
+    // active and the ghost hover background is suppressed in every state.
+    const remove = screen.getByRole("button", { name: "Remove notes.pdf" })
+    expect(remove).toHaveClass(
+      "text-primary",
+      "hover:text-primary-dark",
+      "active:text-neutral-900",
+      "hover:bg-transparent",
+      "active:bg-transparent"
+    )
+    expect(remove).not.toHaveClass("hover:bg-accent")
+  })
+
+  it("shows a Download file icon that matches the trashcan styling with a 16px (mr-4) gap", () => {
+    render(<EditModule />)
+    const download = screen.getByRole("button", { name: "Download notes.pdf" })
+    // Same states as the trashcan, plus mr-4 (16px) separating it from the trashcan.
+    expect(download).toHaveClass(
+      "text-primary",
+      "hover:text-primary-dark",
+      "active:text-neutral-900",
+      "hover:bg-transparent",
+      "active:bg-transparent",
+      "mr-4"
+    )
+    expect(download).not.toHaveClass("hover:bg-accent")
+  })
+
+  it("downloads an existing file via its presigned URL", async () => {
+    const click = vi.fn()
+    const anchor = { click, rel: "", href: "", download: "" }
+    const createElement = vi
+      .spyOn(document, "createElement")
+      .mockImplementation((tag) => (tag === "a" ? anchor : document.createElementNS("http://www.w3.org/1999/xhtml", tag)))
+
+    render(<EditModule />)
+    await userEvent.click(screen.getByRole("button", { name: "Download notes.pdf" }))
+
+    expect(anchor.href).toBe("https://signed/notes.pdf")
+    expect(anchor.download).toBe("notes.pdf")
+    expect(click).toHaveBeenCalledTimes(1)
+    createElement.mockRestore()
   })
 
   it("marks an existing file for removal", async () => {

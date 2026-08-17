@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useLocation, useNavigate, useParams } from "react-router"
 import { toUserMessage } from "@/services/apiError"
-import { MdDelete, MdInsertDriveFile } from "react-icons/md"
+import { MdDelete, MdFileDownload, MdInsertDriveFile } from "react-icons/md"
 import {
   useConcepts,
   useModules,
@@ -38,6 +38,17 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select"
+
+/** Trigger a browser download for an existing module file via its presigned
+ *  S3 URL (same anchor-click pattern as the analytics CSV export). */
+function downloadFile(file) {
+  if (!file?.url) return
+  const link = document.createElement("a")
+  link.href = file.url
+  link.download = file.fileName || ""
+  link.rel = "noopener"
+  link.click()
+}
 
 /**
  * Single-page module editor — Figma `Modal/EditModule` (859:7574). A centered
@@ -327,14 +338,26 @@ export function EditModule() {
                               {f.fileName}
                             </span>
                           </div>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            aria-label={`Remove ${f.fileName}`}
-                            onClick={() => setRemovedFiles((prev) => new Set(prev).add(f.fileName))}
-                          >
-                            <Icon icon={MdDelete} size={24} />
-                          </Button>
+                          <div className="flex shrink-0 items-center">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="mr-4 text-primary hover:bg-transparent hover:text-primary-dark active:bg-transparent active:text-neutral-900"
+                              aria-label={`Download ${f.fileName}`}
+                              onClick={() => downloadFile(f)}
+                            >
+                              <Icon icon={MdFileDownload} size={24} />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="text-primary hover:bg-transparent hover:text-primary-dark active:bg-transparent active:text-neutral-900"
+                              aria-label={`Remove ${f.fileName}`}
+                              onClick={() => setRemovedFiles((prev) => new Set(prev).add(f.fileName))}
+                            >
+                              <Icon icon={MdDelete} size={24} />
+                            </Button>
+                          </div>
                         </div>
                       </li>
                     ))}
@@ -350,6 +373,7 @@ export function EditModule() {
                           <Button
                             size="icon"
                             variant="ghost"
+                            className="text-primary hover:bg-transparent hover:text-primary-dark active:bg-transparent active:text-neutral-900"
                             aria-label={`Remove ${f.fileName}`}
                             onClick={() => removeFile(f.fileId)}
                           >

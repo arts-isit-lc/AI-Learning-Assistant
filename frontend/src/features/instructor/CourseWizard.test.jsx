@@ -243,14 +243,22 @@ describe("CourseWizard", () => {
     expect(label).not.toHaveClass("animate-blink")
   })
 
-  it("shows the file-remove trashcan icon in #6829C2 (primary)", async () => {
+  it("styles the file-remove trashcan: #6829C2 → #2E0666 hover → #000 active, never a background", async () => {
     const user = userEvent.setup()
     render(<CourseWizard />)
     await user.type(screen.getByLabelText("Module name"), "Vectors")
     await user.click(screen.getByRole("button", { name: "Next" })) // -> references (file list)
-    // The trashcan is coloured on the Icon (not the ghost Button) so it stays purple on hover.
+    // The colour lives on the Button (icon inherits via currentColor) so the icon
+    // tracks rest → hover → active and never paints the ghost hover background.
     const remove = screen.getByRole("button", { name: "Remove notes.pdf" })
-    expect(remove.querySelector("svg")).toHaveClass("text-primary")
+    expect(remove).toHaveClass(
+      "text-primary",
+      "hover:text-primary-dark",
+      "active:text-neutral-900",
+      "hover:bg-transparent",
+      "active:bg-transparent"
+    )
+    expect(remove).not.toHaveClass("hover:bg-accent")
   })
 
   it("captures a per-file description and sends it to finalize", async () => {

@@ -25,6 +25,7 @@ function flattenModuleFiles(data) {
       file_id: meta?.file_id ?? null,
       fileType: getFileType(fileName),
       description: meta?.description ?? "",
+      url: info?.url ?? null,
     }
   })
 }
