@@ -175,3 +175,64 @@ describe("instructorFunction — DELETE /instructor/delete_course", () => {
     expect(mockSql.calls).toHaveLength(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// (c) OCELIA per-instructor access flag (Enrolments.access_enabled) enforcement
+//
+// Regression coverage for the bug where the admin "Access" toggle wrote
+// Enrolments.access_enabled but the instructor-facing routes never read it, so
+// toggling access OFF left the instructor with full course access. The fix
+// centralizes the ownership check in instructorHasCourseAccess(), which filters
+// on `access_enabled IS NOT FALSE`. These tests assert (1) every access-
+// determining query actually reads the flag, and (2) a de-accessed instructor
+// is blocked before any state-changing query runs.
+// ---------------------------------------------------------------------------
+describe("instructorFunction — access_enabled is honored (OCELIA Access toggle)", () => {
+  beforeEach(() => {
+    mockSql.reset();
+    (global as any).sqlConnection = mockSql;
+  });
+
+  it("GET /instructor/courses filters the course list on access_enabled", async () => {
+    // 1st call: resolve user_id from email. 2nd call: the course list.
+    mockSql.queueResult([{ user_id: "u1" }]).queueResult([{ course_id: "c1" }]);
+    const res = await handler(
+      makeEvent("GET", "/instructor/courses", { email: "instructor@example.com" })
+    );
+    expect(res.statusCode).toBe(200);
+    // The list query must honor the admin Access toggle — a course whose
+    // enrolment has access_enabled=false must not be returned.
+    expect(mockSql.calls[1]).toContain("access_enabled");
+    expect(mockSql.calls[1]).toContain("enrolment_type");
+  });
+
+  it("POST /instructor/updateCourseAccess ownership guard reads access_enabled", async () => {
+    mockSql.queueResult(OWNS).queueResult([{ course_id: "c1", course_student_access: false }]);
+    await handler(
+      makeEvent("POST", "/instructor/updateCourseAccess", { course_id: "c1", access: "false" })
+    );
+    // 1st call is the ownership + access guard.
+    expect(mockSql.calls[0]).toContain("access_enabled");
+  });
+
+  it("403: instructor with access toggled OFF cannot delete the course (no DELETE runs)", async () => {
+    // The guard query returns no row because access_enabled=false excludes the
+    // enrolment — same shape as "not enrolled", which is the intended behavior.
+    mockSql.queueResult([]);
+    const res = await handler(
+      makeEvent("DELETE", "/instructor/delete_course", { course_id: "c1" })
+    );
+    expect(res.statusCode).toBe(403);
+    expect(mockSql.calls).toHaveLength(1); // only the guard; no destructive query
+  });
+
+  it("403: instructor with access toggled OFF cannot reserve a draft module", async () => {
+    mockSql.queueResult([]); // access check excludes the de-accessed enrolment
+    const res = await handler(
+      makeEvent("POST", "/instructor/reserve_module", { course_id: "c1" })
+    );
+    expect(res.statusCode).toBe(403);
+    expect(mockSql.calls).toHaveLength(1); // guard only; no INSERT of a draft module
+    expect(mockSql.calls[0]).toContain("access_enabled");
+  });
+});

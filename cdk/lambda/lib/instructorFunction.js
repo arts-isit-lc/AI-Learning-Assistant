@@ -47,6 +47,47 @@ let { SM_DB_CREDENTIALS, RDS_PROXY_ENDPOINT, REGION } = process.env;
 
 let sqlConnection = global.sqlConnection;
 
+// Course-scoped instructor routes and the query-string identifier each carries
+// for the target course. Every route listed here is gated by the centralized
+// authorization check below: the caller must hold an ACTIVE instructor
+// enrolment (Enrolments.access_enabled not toggled off by an admin — OCELIA
+// track B4) in the resolved course. `concept_id`/`module_id` routes resolve the
+// course via Course_Concepts/Course_Modules. Routes NOT listed are either not
+// course-scoped (student_course preview), already guarded inline
+// (updateCourseAccess, delete_course, course_messages_rows, reserve/finalize/
+// cleanup_module), or the list endpoint (courses) which filters access_enabled
+// directly. Keep this in sync when adding a course-scoped route.
+const INSTRUCTOR_COURSE_SCOPED_ROUTES = {
+  "GET /instructor/analytics": "course_id",
+  "POST /instructor/create_concept": "course_id",
+  "PUT /instructor/edit_concept": "concept_id",
+  "PUT /instructor/update_metadata": "module_id",
+  "POST /instructor/create_module": "course_id",
+  "PUT /instructor/reorder_module": "module_id",
+  "PUT /instructor/edit_module": "module_id",
+  "PUT /instructor/prompt": "course_id",
+  "GET /instructor/view_students": "course_id",
+  "DELETE /instructor/delete_student": "course_id",
+  "GET /instructor/view_modules": "course_id",
+  "GET /instructor/view_concepts": "course_id",
+  "DELETE /instructor/delete_concept": "concept_id",
+  "DELETE /instructor/delete_module": "module_id",
+  "GET /instructor/get_prompt": "course_id",
+  "GET /instructor/view_student_messages": "course_id",
+  "PUT /instructor/generate_access_code": "course_id",
+  "GET /instructor/get_access_code": "course_id",
+  "GET /instructor/previous_prompts": "course_id",
+  "GET /instructor/student_modules_messages": "course_id",
+  "GET /instructor/check_notifications_status": "course_id",
+  "DELETE /instructor/remove_completed_notification": "course_id",
+  "GET /instructor/course_files": "course_id",
+  "GET /instructor/module_file_references": "module_id",
+  "PUT /instructor/module_file_references": "module_id",
+  "POST /instructor/validate_prompt": "course_id",
+  "POST /instructor/generate_topics": "module_id",
+  "GET /instructor/file_processing_statuses": "module_id",
+};
+
 exports.handler = async (event) => {
   // OPT-1: Read email from authorizer context instead of calling Cognito AdminGetUser
   const userEmailAttribute = event.requestContext.authorizer.email;
@@ -105,9 +146,110 @@ exports.handler = async (event) => {
     return code.match(/.{1,4}/g).join("-");
   }
 
+  // Single source of truth for "does this instructor currently have access to
+  // this course?". True iff they hold an instructor enrolment AND that enrolment
+  // has not been switched off by an admin via the OCELIA Access toggle (backend
+  // track B4 — Enrolments.access_enabled). `IS NOT FALSE` treats a legacy NULL
+  // as access-granted (the column is NOT NULL DEFAULT true, so this is only
+  // belt-and-suspenders). Every per-course guard routes through this so the
+  // toggle is honored consistently and the checks can't drift apart.
+  const instructorHasCourseAccess = async (email, courseId) => {
+    const rows = await sqlConnection`
+        SELECT 1
+        FROM "Enrolments" e
+        JOIN "Users" u ON u.user_id = e.user_id
+        WHERE u.user_email = ${email}
+          AND e.course_id = ${courseId}
+          AND e.enrolment_type = 'instructor'
+          AND e.access_enabled IS NOT FALSE
+        LIMIT 1;
+      `;
+    return rows.length > 0;
+  };
+
+  // Concept-scoped variant: resolve the course from the concept
+  // (Course_Concepts.course_id) and apply the same active-access check.
+  const instructorHasConceptAccess = async (email, conceptId) => {
+    const rows = await sqlConnection`
+        SELECT 1
+        FROM "Course_Concepts" cc
+        JOIN "Enrolments" e ON e.course_id = cc.course_id
+        JOIN "Users" u ON u.user_id = e.user_id
+        WHERE cc.concept_id = ${conceptId}
+          AND u.user_email = ${email}
+          AND e.enrolment_type = 'instructor'
+          AND e.access_enabled IS NOT FALSE
+        LIMIT 1;
+      `;
+    return rows.length > 0;
+  };
+
+  // Module-scoped variant: resolve the course from the module
+  // (Course_Modules -> Course_Concepts) and apply the same active-access check.
+  //
+  // Draft modules are the wrinkle: reserve_module inserts a Course_Modules row
+  // with concept_id = NULL (no course linkage yet) so files can upload before
+  // the module is finalized. Those drafts were already gated at reserve time
+  // (instructorHasCourseAccess on course_id) and carry unguessable
+  // server-generated ids, so the in-flight creation calls (file_processing_
+  // statuses, generate_topics, and any pre-finalize metadata/reference writes)
+  // must still pass here. We therefore allow a draft (concept_id IS NULL); once
+  // finalized, the resolved-course access check applies. A non-existent module
+  // returns false (treated as forbidden — we don't distinguish 403 vs 404 here).
+  const instructorHasModuleAccess = async (email, moduleId) => {
+    const rows = await sqlConnection`
+        SELECT
+          (cm.concept_id IS NULL) AS is_draft,
+          EXISTS (
+            SELECT 1
+            FROM "Course_Concepts" cc
+            JOIN "Enrolments" e ON e.course_id = cc.course_id
+            JOIN "Users" u ON u.user_id = e.user_id
+            WHERE cc.concept_id = cm.concept_id
+              AND u.user_email = ${email}
+              AND e.enrolment_type = 'instructor'
+              AND e.access_enabled IS NOT FALSE
+          ) AS has_access
+        FROM "Course_Modules" cm
+        WHERE cm.module_id = ${moduleId}
+        LIMIT 1;
+      `;
+    if (rows.length === 0) return false;
+    return rows[0].is_draft === true || rows[0].has_access === true;
+  };
+
   let data;
   try {
     const pathData = event.httpMethod + " " + event.resource;
+
+    // ── Centralized per-course authorization ────────────────────────────────
+    // For every course-scoped route (see INSTRUCTOR_COURSE_SCOPED_ROUTES),
+    // verify the caller has an active instructor enrolment in the target course
+    // BEFORE dispatching. This closes the gap where routes trusted only the
+    // authorizer email and took course_id/module_id/concept_id from params —
+    // letting an instructor act on a course they don't teach, and (the original
+    // bug) ignoring the admin Access toggle (Enrolments.access_enabled). The
+    // check runs only when the identifier is present, so each route still owns
+    // its existing 400 for a missing identifier.
+    const scopeKey = INSTRUCTOR_COURSE_SCOPED_ROUTES[pathData];
+    if (scopeKey) {
+      const scopeId = event.queryStringParameters?.[scopeKey];
+      if (scopeId) {
+        const allowed =
+          scopeKey === "course_id"
+            ? await instructorHasCourseAccess(userEmailAttribute, scopeId)
+            : scopeKey === "concept_id"
+            ? await instructorHasConceptAccess(userEmailAttribute, scopeId)
+            : await instructorHasModuleAccess(userEmailAttribute, scopeId);
+        if (!allowed) {
+          response.statusCode = 403;
+          response.body = JSON.stringify({ error: "You do not teach this course" });
+          console.log(response);
+          return response;
+        }
+      }
+    }
+
     switch (pathData) {
       case "GET /instructor/student_course":
         if (
@@ -189,6 +331,7 @@ exports.handler = async (event) => {
                 JOIN "Courses" c ON e.course_id = c.course_id
                 WHERE e.user_id = ${userId}
                 AND e.enrolment_type = 'instructor'
+                AND e.access_enabled IS NOT FALSE
                 ORDER BY c.course_name, c.course_id;
               `;
 
@@ -218,16 +361,8 @@ exports.handler = async (event) => {
             const { course_id, access } = event.queryStringParameters;
             const accessBool = access.toLowerCase() === "true";
 
-            const owns = await sqlConnection`
-                SELECT 1
-                FROM "Enrolments" e
-                JOIN "Users" u ON u.user_id = e.user_id
-                WHERE u.user_email = ${userEmailAttribute}
-                  AND e.course_id = ${course_id}
-                  AND e.enrolment_type = 'instructor'
-                LIMIT 1;
-              `;
-            if (owns.length === 0) {
+            const owns = await instructorHasCourseAccess(userEmailAttribute, course_id);
+            if (!owns) {
               response.statusCode = 403;
               response.body = JSON.stringify({ error: "You do not teach this course" });
               break;
@@ -272,16 +407,8 @@ exports.handler = async (event) => {
           try {
             const { course_id } = event.queryStringParameters;
 
-            const owns = await sqlConnection`
-                SELECT 1
-                FROM "Enrolments" e
-                JOIN "Users" u ON u.user_id = e.user_id
-                WHERE u.user_email = ${userEmailAttribute}
-                  AND e.course_id = ${course_id}
-                  AND e.enrolment_type = 'instructor'
-                LIMIT 1;
-              `;
-            if (owns.length === 0) {
+            const owns = await instructorHasCourseAccess(userEmailAttribute, course_id);
+            if (!owns) {
               response.statusCode = 403;
               response.body = JSON.stringify({ error: "You do not teach this course" });
               break;
@@ -323,16 +450,8 @@ exports.handler = async (event) => {
             );
             const offset = Math.max(parseInt(event.queryStringParameters.offset ?? "0", 10) || 0, 0);
 
-            const owns = await sqlConnection`
-                SELECT 1
-                FROM "Enrolments" e
-                JOIN "Users" u ON u.user_id = e.user_id
-                WHERE u.user_email = ${userEmailAttribute}
-                  AND e.course_id = ${course_id}
-                  AND e.enrolment_type = 'instructor'
-                LIMIT 1;
-              `;
-            if (owns.length === 0) {
+            const owns = await instructorHasCourseAccess(userEmailAttribute, course_id);
+            if (!owns) {
               response.statusCode = 403;
               response.body = JSON.stringify({ error: "You do not teach this course" });
               break;
@@ -1675,16 +1794,9 @@ exports.handler = async (event) => {
 
           try {
             // Verify instructor is enrolled in the course with instructor role
-            const enrollment = await sqlConnection`
-              SELECT e.enrolment_id
-              FROM "Enrolments" e
-              JOIN "Users" u ON e.user_id = u.user_id
-              WHERE u.user_email = ${instructor_email}
-                AND e.course_id = ${course_id}
-                AND e.enrolment_type = 'instructor';
-            `;
+            const hasAccess = await instructorHasCourseAccess(instructor_email, course_id);
 
-            if (enrollment.length === 0) {
+            if (!hasAccess) {
               response.statusCode = 403;
               response.body = JSON.stringify({ error: "Forbidden: not enrolled as instructor in this course" });
               break;
@@ -1733,16 +1845,9 @@ exports.handler = async (event) => {
 
           try {
             // Verify instructor enrollment
-            const enrollment = await sqlConnection`
-              SELECT e.enrolment_id
-              FROM "Enrolments" e
-              JOIN "Users" u ON e.user_id = u.user_id
-              WHERE u.user_email = ${instructor_email}
-                AND e.course_id = ${course_id}
-                AND e.enrolment_type = 'instructor';
-            `;
+            const hasAccess = await instructorHasCourseAccess(instructor_email, course_id);
 
-            if (enrollment.length === 0) {
+            if (!hasAccess) {
               response.statusCode = 403;
               response.body = JSON.stringify({ error: "Forbidden: not enrolled as instructor in this course" });
               break;
@@ -1857,16 +1962,9 @@ exports.handler = async (event) => {
 
           try {
             // Verify instructor enrollment
-            const enrollment = await sqlConnection`
-              SELECT e.enrolment_id
-              FROM "Enrolments" e
-              JOIN "Users" u ON e.user_id = u.user_id
-              WHERE u.user_email = ${instructor_email}
-                AND e.course_id = ${course_id}
-                AND e.enrolment_type = 'instructor';
-            `;
+            const hasAccess = await instructorHasCourseAccess(instructor_email, course_id);
 
-            if (enrollment.length === 0) {
+            if (!hasAccess) {
               response.statusCode = 403;
               response.body = JSON.stringify({ error: "Forbidden: not enrolled as instructor in this course" });
               break;
