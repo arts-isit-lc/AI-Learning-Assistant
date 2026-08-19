@@ -14,14 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { ErrorState } from "@/components/composed/ErrorState"
 import { toUserMessage } from "@/services/apiError"
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
-import {
-  Dialog,
-  DialogTrigger,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogBody,
-} from "@/components/ui/dialog"
+import { Dialog, DialogTrigger, DialogContent, DialogTitle, DialogBody } from "@/components/ui/dialog"
 
 // Message previews longer than this collapse to "...Show more", which opens the
 // full text in a modal (Figma 376:2331).
@@ -99,9 +92,9 @@ function MessageCell({ message }) {
             </button>
           </DialogTrigger>
           <DialogContent aria-describedby={undefined}>
-            <DialogHeader>
-              <DialogTitle>Message</DialogTitle>
-            </DialogHeader>
+            {/* Title kept for accessibility (Radix requires one) but visually
+                hidden — the modal shows only the message body + close X. */}
+            <DialogTitle className="sr-only">Message</DialogTitle>
             <DialogBody>
               <p className="whitespace-pre-wrap break-words text-body text-foreground">
                 <span className="font-semibold text-muted-foreground">{prefix}</span>
@@ -259,7 +252,7 @@ export function ChatHistoryTab() {
           <TableHeader>
             {table.getHeaderGroups().map((group) => (
               <TableRow key={group.id} className="hover:bg-transparent">
-                {group.headers.map((header) => {
+                {group.headers.map((header, i, arr) => {
                   const sorted = header.column.getIsSorted() // "asc" | "desc" | false
                   const label = flexRender(header.column.columnDef.header, header.getContext())
                   return (
@@ -269,7 +262,11 @@ export function ChatHistoryTab() {
                       aria-sort={
                         sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : "none"
                       }
-                      className="relative bg-primary font-semibold text-primary-foreground"
+                      className={cn(
+                        "relative bg-primary font-semibold text-primary-foreground",
+                        // Column separator (translucent white to read on purple).
+                        i < arr.length - 1 && "border-r border-primary-foreground/20"
+                      )}
                     >
                       <button
                         type="button"
@@ -297,10 +294,15 @@ export function ChatHistoryTab() {
             ))}
           </TableHeader>
           <TableBody>
-            {table.getRowModel().rows.map((row) => (
-              <TableRow key={row.id}>
-                {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id} style={{ width: cell.column.getSize() }}>
+            {table.getRowModel().rows.map((row, rowIndex) => (
+              // Zebra striping: odd rows (1st, 3rd, …) get the #F5F5F5 muted fill.
+              <TableRow key={row.id} className={cn(rowIndex % 2 === 0 && "bg-muted")}>
+                {row.getVisibleCells().map((cell, i, arr) => (
+                  <TableCell
+                    key={cell.id}
+                    style={{ width: cell.column.getSize() }}
+                    className={cn("align-top text-left", i < arr.length - 1 && "border-r border-border")}
+                  >
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </TableCell>
                 ))}
