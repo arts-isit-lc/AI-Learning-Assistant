@@ -1,38 +1,118 @@
 import { useState } from "react"
 import { useParams } from "react-router"
-import { MdForum } from "react-icons/md"
+import { MdForum, MdArrowUpward, MdArrowDownward, MdUnfoldMore } from "react-icons/md"
+import { flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table"
 import { useCourseMessages, useChatlogs, useChatlogStatus } from "@/services/queries"
 import { http } from "@/services/http"
 import { titleCase } from "@/utils/formatters"
+import { cn } from "@/lib/utils"
 import { useJobNotification } from "./hooks/useJobNotification"
 import { EmptyState } from "@/components/composed/EmptyState"
+import { Pagination } from "@/components/composed/Pagination"
 import { Button } from "@/components/ui/button"
+import { Icon } from "@/components/ui/icon"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ErrorState } from "@/components/composed/ErrorState"
 import { toUserMessage } from "@/services/apiError"
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
 
-const PAGE_SIZE = 50
-// Figma 376:2331. The three "Label" columns + row-select checkboxes in the mockup
-// are omitted: there are no message labels/tags in the schema and no bulk action
-// to back a selection. (Flagged — they slot in if message classification lands.)
-const HEADERS = ["User", "Module name", "Concept", "Session ID", "Message"]
+// Figma 376:2331. 20 rows/page (the mockup's "Displaying 20 out of N results").
+const PAGE_SIZE = 20
+
+// Column ids MUST match the backend sort_by whitelist (course_messages_rows):
+// user_email · module_name · concept_name · session_id · message_content.
+// Name (the User column) ascending is the default sort. The three "Label"
+// columns + row-select checkboxes in the mockup are omitted: there are no
+// message labels/tags in the schema and no bulk action to back a selection.
+const columns = [
+  {
+    accessorKey: "user_email",
+    header: "User",
+    size: 160,
+    cell: ({ row }) => <span className="text-foreground">{row.original.user_email || "—"}</span>,
+  },
+  {
+    accessorKey: "module_name",
+    header: "Module name",
+    size: 150,
+    cell: ({ row }) => (row.original.module_name ? titleCase(row.original.module_name) : "—"),
+  },
+  {
+    accessorKey: "concept_name",
+    header: "Concept",
+    size: 130,
+    cell: ({ row }) => (row.original.concept_name ? titleCase(row.original.concept_name) : "—"),
+  },
+  {
+    accessorKey: "session_id",
+    header: "Session ID",
+    size: 150,
+    cell: ({ row }) => (
+      <span className="text-muted-foreground">
+        {row.original.session_name || row.original.session_id || "—"}
+      </span>
+    ),
+  },
+  {
+    accessorKey: "message_content",
+    header: "Message",
+    size: 240,
+    cell: ({ row }) => (
+      <span className="block truncate">
+        <span className="font-semibold text-muted-foreground">
+          {row.original.student_sent ? "Student: " : "OCELIA: "}
+        </span>
+        {row.original.message_content || ""}
+      </span>
+    ),
+  },
+]
+
+const SORT_ICON = { asc: MdArrowUpward, desc: MdArrowDownward }
 
 /**
  * Chat History tab — Figma 376:2331. An in-app, course-wide message table
- * (purple header) paginated over the B5 `course_messages_rows` endpoint, with an
- * "Export CSV" footer that runs the robust async full-course export (the browser
- * only ever holds one page; the complete log is generated server-side to S3).
+ * (purple header) paginated over the B5 `course_messages_rows` endpoint. Columns
+ * are sortable server-side (asc/desc; User is the default) and resizable via
+ * drag handles. The "Export CSV" toolbar (top-right) runs the robust async
+ * full-course export — the browser only ever holds one page; the complete log is
+ * generated server-side to S3.
  */
 export function ChatHistoryTab() {
   const { courseId } = useParams()
   const [page, setPage] = useState(0)
+  // Default: name (User column) ascending. Server sorts the full result set.
+  const [sorting, setSorting] = useState([{ id: "user_email", desc: false }])
   const offset = page * PAGE_SIZE
+  const sortBy = sorting[0]?.id ?? "user_email"
+  const sortDir = sorting[0]?.desc ? "desc" : "asc"
 
-  const { data, isLoading, isError, error, refetch } = useCourseMessages(courseId, { limit: PAGE_SIZE, offset })
+  const { data, isLoading, isError, error, refetch } = useCourseMessages(courseId, {
+    limit: PAGE_SIZE,
+    offset,
+    sortBy,
+    sortDir,
+  })
   const messages = data?.messages ?? []
   const total = data?.total ?? 0
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
+
+  const table = useReactTable({
+    data: messages,
+    columns,
+    state: { sorting },
+    // Sorting + pagination are server-side, so reset to the first page whenever
+    // the sort changes (the current offset is meaningless against a new order).
+    onSortingChange: (updater) => {
+      setSorting((old) => (typeof updater === "function" ? updater(old) : updater))
+      setPage(0)
+    },
+    manualSorting: true,
+    enableSortingRemoval: false, // toggle asc <-> desc only; always keep a sort
+    columnResizeMode: "onChange",
+    enableColumnResizing: true,
+    getCoreRowModel: getCoreRowModel(),
+  })
 
   // Export reuses the existing async CSV job: subscribe to the completion event
   // FIRST (so it can't be missed), submit the job, then download on notify.
@@ -94,7 +174,7 @@ export function ChatHistoryTab() {
     )
   }
 
-  if (messages.length === 0) {
+  if (total === 0) {
     return (
       <EmptyState
         icon={MdForum}
@@ -107,34 +187,66 @@ export function ChatHistoryTab() {
 
   return (
     <div className="flex flex-col gap-4">
+      <div className="flex justify-end">
+        <Button variant="outline" onClick={handleExport} loading={exporting} disabled={exportDisabled}>
+          Export CSV
+        </Button>
+      </div>
+
       <div className="overflow-hidden rounded-sm border border-border">
-        <Table>
+        <Table className="[table-layout:fixed]" style={{ width: table.getCenterTotalSize() }}>
           <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              {HEADERS.map((h) => (
-                <TableHead key={h} className="bg-primary font-semibold text-primary-foreground">
-                  {h}
-                </TableHead>
-              ))}
-            </TableRow>
+            {table.getHeaderGroups().map((group) => (
+              <TableRow key={group.id} className="hover:bg-transparent">
+                {group.headers.map((header) => {
+                  const sorted = header.column.getIsSorted() // "asc" | "desc" | false
+                  const label = flexRender(header.column.columnDef.header, header.getContext())
+                  return (
+                    <TableHead
+                      key={header.id}
+                      style={{ width: header.getSize() }}
+                      aria-sort={
+                        sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : "none"
+                      }
+                      className="relative bg-primary font-semibold text-primary-foreground"
+                    >
+                      <button
+                        type="button"
+                        onClick={header.column.getToggleSortingHandler()}
+                        className="flex w-full items-center justify-between gap-2 text-left"
+                      >
+                        <span className="truncate">{label}</span>
+                        <Icon
+                          icon={SORT_ICON[sorted] || MdUnfoldMore}
+                          size={16}
+                          className={cn("shrink-0", !sorted && "opacity-60")}
+                        />
+                      </button>
+                      {header.column.getCanResize() && (
+                        <div
+                          onMouseDown={header.getResizeHandler()}
+                          onTouchStart={header.getResizeHandler()}
+                          aria-hidden="true"
+                          className={cn(
+                            "absolute right-0 top-0 h-full w-1.5 cursor-col-resize touch-none select-none bg-primary-foreground/20 opacity-0 transition-opacity hover:opacity-100",
+                            header.column.getIsResizing() && "bg-primary-foreground/50 opacity-100"
+                          )}
+                        />
+                      )}
+                    </TableHead>
+                  )
+                })}
+              </TableRow>
+            ))}
           </TableHeader>
           <TableBody>
-            {messages.map((m, i) => (
-              <TableRow key={`${m.session_id ?? "s"}-${i}`}>
-                <TableCell className="text-foreground">{m.user_email || "—"}</TableCell>
-                <TableCell>{m.module_name ? titleCase(m.module_name) : "—"}</TableCell>
-                <TableCell>{m.concept_name ? titleCase(m.concept_name) : "—"}</TableCell>
-                <TableCell className="text-muted-foreground">
-                  {m.session_name || m.session_id || "—"}
-                </TableCell>
-                <TableCell className="max-w-md">
-                  <span className="block truncate">
-                    <span className="font-semibold text-muted-foreground">
-                      {m.student_sent ? "Student: " : "OCELIA: "}
-                    </span>
-                    {m.message_content || ""}
-                  </span>
-                </TableCell>
+            {table.getRowModel().rows.map((row) => (
+              <TableRow key={row.id}>
+                {row.getVisibleCells().map((cell) => (
+                  <TableCell key={cell.id} style={{ width: cell.column.getSize() }}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
+                ))}
               </TableRow>
             ))}
           </TableBody>
@@ -142,30 +254,10 @@ export function ChatHistoryTab() {
       </div>
 
       <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2 text-caption text-muted-foreground">
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={page === 0}
-            onClick={() => setPage((p) => Math.max(0, p - 1))}
-          >
-            Previous
-          </Button>
-          <span>
-            Page {page + 1} of {pageCount}
-          </span>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={page + 1 >= pageCount}
-            onClick={() => setPage((p) => p + 1)}
-          >
-            Next
-          </Button>
-        </div>
-        <Button variant="ghost" onClick={handleExport} loading={exporting} disabled={exportDisabled}>
-          Export CSV
-        </Button>
+        <p className="text-caption text-muted-foreground">
+          Displaying {messages.length} out of {total} results
+        </p>
+        <Pagination page={page} pageCount={pageCount} onPageChange={setPage} />
       </div>
     </div>
   )

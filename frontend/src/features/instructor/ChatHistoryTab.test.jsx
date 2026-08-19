@@ -69,22 +69,80 @@ describe("ChatHistoryTab", () => {
     expect(screen.getByText("OCELIA:")).toBeInTheDocument()
   })
 
-  it("paginates over offset (Previous disabled on page 1, Next advances)", async () => {
+  it("requests the first page (20 rows) sorted by the User column ascending by default", () => {
+    useCourseMessages.mockReturnValue({
+      data: { messages: [MSG()], total: 95 },
+      isLoading: false,
+      isError: false,
+    })
+    render(<ChatHistoryTab />)
+    expect(useCourseMessages).toHaveBeenLastCalledWith(
+      "c1",
+      { limit: 20, offset: 0, sortBy: "user_email", sortDir: "asc" }
+    )
+  })
+
+  it("shows a 'Displaying N out of TOTAL results' count and renders the Export CSV toolbar above the table", () => {
+    useCourseMessages.mockReturnValue({
+      data: { messages: Array.from({ length: 20 }, () => MSG()), total: 95 },
+      isLoading: false,
+      isError: false,
+    })
+    render(<ChatHistoryTab />)
+    expect(screen.getByText("Displaying 20 out of 95 results")).toBeInTheDocument()
+    // Export button sits before the table in DOM order (top toolbar, not footer).
+    const exportBtn = screen.getByRole("button", { name: "Export CSV" })
+    const table = screen.getByRole("table")
+    expect(exportBtn.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it("paginates over offset via the numbered pagination (Previous disabled on page 1, page click advances)", async () => {
     useCourseMessages.mockImplementation((_courseId, { offset }) =>
       offset === 0
-        ? { data: { messages: [MSG({ message_content: "page one msg" })], total: 120 }, isLoading: false, isError: false }
-        : { data: { messages: [MSG({ message_content: "page two msg" })], total: 120 }, isLoading: false, isError: false }
+        ? { data: { messages: [MSG({ message_content: "page one msg" })], total: 95 }, isLoading: false, isError: false }
+        : { data: { messages: [MSG({ message_content: "page two msg" })], total: 95 }, isLoading: false, isError: false }
     )
     render(<ChatHistoryTab />)
 
-    expect(screen.getByText("Page 1 of 3")).toBeInTheDocument() // ceil(120/50)
     expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Page 1" })).toHaveAttribute("aria-current", "page")
     expect(screen.getByText(/page one msg/)).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole("button", { name: "Next" }))
-    expect(screen.getByText("Page 2 of 3")).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Page 2" }))
     expect(screen.getByText(/page two msg/)).toBeInTheDocument()
-    expect(useCourseMessages).toHaveBeenLastCalledWith("c1", { limit: 50, offset: 50 })
+    expect(useCourseMessages).toHaveBeenLastCalledWith(
+      "c1",
+      { limit: 20, offset: 20, sortBy: "user_email", sortDir: "asc" }
+    )
+  })
+
+  it("toggles the active column's direction, sorts a new column ascending, and resets to page 1 on sort", async () => {
+    useCourseMessages.mockReturnValue({
+      data: { messages: [MSG()], total: 95 },
+      isLoading: false,
+      isError: false,
+    })
+    render(<ChatHistoryTab />)
+
+    // Clicking the already-ascending User column flips it to descending.
+    await userEvent.click(screen.getByRole("button", { name: "User" }))
+    expect(useCourseMessages).toHaveBeenLastCalledWith(
+      "c1",
+      { limit: 20, offset: 0, sortBy: "user_email", sortDir: "desc" }
+    )
+
+    // Move off page 1, then changing the sort column must snap back to offset 0
+    // (the old offset is meaningless against a freshly-ordered result set).
+    await userEvent.click(screen.getByRole("button", { name: "Page 3" }))
+    expect(useCourseMessages).toHaveBeenLastCalledWith(
+      "c1",
+      { limit: 20, offset: 40, sortBy: "user_email", sortDir: "desc" }
+    )
+    await userEvent.click(screen.getByRole("button", { name: "Concept" }))
+    expect(useCourseMessages).toHaveBeenLastCalledWith(
+      "c1",
+      { limit: 20, offset: 0, sortBy: "concept_name", sortDir: "asc" }
+    )
   })
 
   it("exports via the async job (subscribe before submit)", async () => {

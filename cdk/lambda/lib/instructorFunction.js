@@ -450,6 +450,29 @@ exports.handler = async (event) => {
             );
             const offset = Math.max(parseInt(event.queryStringParameters.offset ?? "0", 10) || 0, 0);
 
+            // Server-side sort. sort_by is resolved against a fixed whitelist of
+            // (alias-qualified) columns and sort_dir is coerced to ASC/DESC, so the
+            // ORDER BY fragment below is built entirely from server-controlled
+            // constants — never raw client input — before it reaches .unsafe().
+            // Default (no/unknown sort_by) is the User column ascending, matching
+            // the Chat History mockup (Figma 376:2331). A m.time_sent DESC
+            // tiebreaker keeps equal keys deterministically ordered across pages.
+            const SORT_COLUMNS = {
+              user_email: "u.user_email",
+              module_name: "cm.module_name",
+              concept_name: "cc.concept_name",
+              session_id: "s.session_id",
+              message_content: "m.message_content",
+              time_sent: "m.time_sent",
+            };
+            const sortColumn = SORT_COLUMNS[event.queryStringParameters.sort_by] ?? SORT_COLUMNS.user_email;
+            const sortDir =
+              String(event.queryStringParameters.sort_dir ?? "asc").toLowerCase() === "desc" ? "DESC" : "ASC";
+            const orderClause =
+              sortColumn === "m.time_sent"
+                ? `${sortColumn} ${sortDir}`
+                : `${sortColumn} ${sortDir}, m.time_sent DESC`;
+
             const owns = await instructorHasCourseAccess(userEmailAttribute, course_id);
             if (!owns) {
               response.statusCode = 403;
@@ -481,7 +504,7 @@ exports.handler = async (event) => {
                 JOIN "Enrolments" e ON sm.enrolment_id = e.enrolment_id
                 JOIN "Users" u ON e.user_id = u.user_id
                 WHERE e.course_id = ${course_id}
-                ORDER BY m.time_sent DESC
+                ORDER BY ${sqlConnection.unsafe(orderClause)}
                 LIMIT ${limit} OFFSET ${offset};
               `;
 

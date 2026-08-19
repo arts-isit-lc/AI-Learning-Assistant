@@ -5,15 +5,19 @@ import { ChatLogsSchema, ChatlogStatusSchema, CourseMessagesSchema } from "../sc
 
 /**
  * Course-wide chat messages for the in-app Chat History table (GET
- * instructor/course_messages_rows → B5). Paginated (limit/offset); returns
+ * instructor/course_messages_rows → B5). Paginated (limit/offset) and sorted
+ * server-side (sort_by against a backend column whitelist + sort_dir); returns
  * `{ messages, total, limit, offset }`. `keepPreviousData` holds the current
- * page visible while the next one loads, so paging doesn't flash empty.
+ * page visible while the next one loads, so paging/sorting doesn't flash empty.
  * @param {string} courseId
- * @param {{ limit?: number, offset?: number }} [opts]
+ * @param {{ limit?: number, offset?: number, sortBy?: string, sortDir?: "asc"|"desc" }} [opts]
  */
-export function useCourseMessages(courseId, { limit = 50, offset = 0 } = {}) {
+export function useCourseMessages(
+  courseId,
+  { limit = 50, offset = 0, sortBy = "user_email", sortDir = "asc" } = {}
+) {
   return useQuery({
-    queryKey: queryKeys.instructor.courseMessages(courseId, limit, offset),
+    queryKey: queryKeys.instructor.courseMessages(courseId, limit, offset, sortBy, sortDir),
     enabled: Boolean(courseId),
     placeholderData: keepPreviousData,
     queryFn: async () => {
@@ -23,6 +27,8 @@ export function useCourseMessages(courseId, { limit = 50, offset = 0 } = {}) {
         instructor_email: email,
         limit,
         offset,
+        sort_by: sortBy,
+        sort_dir: sortDir,
       })
       return parseWith(CourseMessagesSchema, data ?? {}, "course messages")
     },

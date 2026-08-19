@@ -47,11 +47,11 @@ export const queryKeys = {
       "messages",
     ],
     // Chat history (in-app message table + chat-log export job)
-    courseMessages: (courseId, limit, offset) => [
+    courseMessages: (courseId, limit, offset, sortBy, sortDir) => [
       "instructor",
       courseId,
       "courseMessages",
-      { limit, offset },
+      { limit, offset, sortBy, sortDir },
     ],
     chatlogs: (courseId) => ["instructor", courseId, "chatlogs"],
     chatlogStatus: (courseId) => ["instructor", courseId, "chatlogs", "status"],
