@@ -375,6 +375,30 @@ class TestCourseIdentityUniqueIndex:
         assert index_pos > section_pos
 
 
+class TestCourseAccessCodeUniqueIndex:
+    """course_access_code is the student enrolment join key (the student handler
+    resolves a course by code with LIMIT 1), so it must be unique across ALL
+    courses — a collision would silently route a student to whichever row came
+    back first. A plain (non-functional) unique index enforces this; the
+    create/duplicate/regenerate handlers regenerate on the 23505 it raises. Built
+    on the CREATE TABLE column, so no ADD COLUMN ordering constraint applies.
+    """
+
+    def test_unique_index_present_and_idempotent(self):
+        src = _source()
+        assert "CREATE UNIQUE INDEX IF NOT EXISTS ux_courses_access_code" in src
+        assert 'ON "Courses" (course_access_code)' in src
+
+    def test_index_is_plain_not_functional(self):
+        # A bare column index (NULLs stay DISTINCT so legacy code-less rows don't
+        # collide); it must NOT wrap the column in lower/btrim/coalesce.
+        src = _source()
+        idx = src.index("CREATE UNIQUE INDEX IF NOT EXISTS ux_courses_access_code")
+        stmt = src[idx : src.index(";", idx)]
+        assert "coalesce(course_access_code" not in stmt
+        assert "lower(btrim(course_access_code))" not in stmt
+
+
 class TestCredentialResolution:
     """The initializer must treat Secrets Manager as the source of truth for the
     app DB credentials: REUSE stored credentials on re-run and generate new ones

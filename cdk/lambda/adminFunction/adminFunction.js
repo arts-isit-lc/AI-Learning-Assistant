@@ -24,6 +24,8 @@ const {
 const { randomUUID } = require("crypto");
 const { S3Client, CopyObjectCommand } = require("@aws-sdk/client-s3");
 const {
+  isAccessCodeConflict,
+  insertWithUniqueAccessCode,
   buildFileKey,
   resolveSourceKey,
   copyWithRetry,
@@ -252,8 +254,12 @@ exports.handler = async (event) => {
               break;
             }
 
-            // Insert new course into Courses table
-            const newCourse = await sqlConnectionTableCreator`         
+            // Insert new course into Courses table. The access code carries a
+            // uniqueness guarantee (ux_courses_access_code): on the vanishingly
+            // rare collision with an existing course's code, regenerate a fresh
+            // code server-side and retry rather than failing the request.
+            const newCourse = await insertWithUniqueAccessCode(
+              (accessCode) => sqlConnectionTableCreator`
                   INSERT INTO "Courses" (
                       course_id,
                       course_name,
@@ -270,21 +276,25 @@ exports.handler = async (event) => {
                       ${course_name},
                       ${course_department},
                       ${course_number},
-                      ${course_access_code},
+                      ${accessCode},
                       ${course_student_access.toLowerCase() === "true"},
                       ${term},
                       ${section},
                       ${system_prompt}
                   )
                   RETURNING *;
-              `;
+              `,
+              course_access_code
+            );
 
             console.log(newCourse);
             response.body = JSON.stringify(newCourse[0]);
           } catch (err) {
-            // 23505 = unique_violation on ux_courses_identity (race backstop for
-            // the pre-check above).
-            if (err.code === "23505") {
+            // 23505 = unique_violation. The ux_courses_identity index (race
+            // backstop for the pre-check above) -> 409; an exhausted-retry
+            // access-code collision falls through to the 500 below (it should
+            // never happen given the keyspace).
+            if (err.code === "23505" && !isAccessCodeConflict(err)) {
               response.statusCode = 409;
               response.body = JSON.stringify({ error: COURSE_IDENTITY_CONFLICT_MSG });
             } else {
@@ -349,8 +359,13 @@ exports.handler = async (event) => {
 
             // 1. Create the new course. INSERT ... SELECT copies llm_model_id
             //    from the source without a round-trip and yields no row when the
-            //    source course_id doesn't exist (-> 404).
-            const newCourse = await sqlConnectionTableCreator`
+            //    source course_id doesn't exist (-> 404). The access code carries
+            //    a uniqueness guarantee (ux_courses_access_code): on the
+            //    vanishingly rare collision with an existing code, regenerate and
+            //    retry. An identity collision (ux_courses_identity) is NOT retried
+            //    here — it rethrows to the catch below as a 409.
+            const newCourse = await insertWithUniqueAccessCode(
+              (accessCode) => sqlConnectionTableCreator`
                 INSERT INTO "Courses" (
                     course_id,
                     course_name,
@@ -368,7 +383,7 @@ exports.handler = async (event) => {
                     ${course_name},
                     ${course_department},
                     ${course_number},
-                    ${course_access_code},
+                    ${accessCode},
                     ${course_student_access.toLowerCase() === "true"},
                     COALESCE(${term}, term),
                     COALESCE(${section}, section),
@@ -377,7 +392,9 @@ exports.handler = async (event) => {
                 FROM "Courses"
                 WHERE course_id = ${source_course_id}
                 RETURNING *;
-              `;
+              `,
+              course_access_code
+            );
 
             if (newCourse.length === 0) {
               response.statusCode = 404;
@@ -559,7 +576,10 @@ exports.handler = async (event) => {
             // 23505 = unique_violation on ux_courses_identity: the duplicate's
             // resolved identity (name+dept+number + COALESCEd term/section) already
             // exists. The failed INSERT...SELECT writes no row, so no partial clone.
-            if (err.code === "23505") {
+            // An access-code 23505 is retried inside insertWithUniqueAccessCode;
+            // only an exhausted-retry collision reaches here, and it falls through
+            // to the 500 below (should never happen given the keyspace).
+            if (err.code === "23505" && !isAccessCodeConflict(err)) {
               response.statusCode = 409;
               response.body = JSON.stringify({ error: COURSE_IDENTITY_CONFLICT_MSG });
             } else {

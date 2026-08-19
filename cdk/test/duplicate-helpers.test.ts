@@ -4,6 +4,10 @@
  */
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const {
+  ACCESS_CODE_UNIQUE_INDEX,
+  generateAccessCode,
+  isAccessCodeConflict,
+  insertWithUniqueAccessCode,
   buildFileKey,
   resolveSourceKey,
   copyWithRetry,
@@ -12,6 +16,79 @@ const {
 } = require("../lambda/adminFunction/duplicateHelpers.js");
 
 const noSleep = () => Promise.resolve();
+
+// A Postgres unique-violation as porsager/postgres surfaces it: SQLSTATE on
+// `code` and the violated index on `constraint_name`.
+const pgUniqueError = (constraint: string) =>
+  Object.assign(new Error("duplicate key value violates unique constraint"), {
+    code: "23505",
+    constraint_name: constraint,
+  });
+
+describe("generateAccessCode", () => {
+  it("produces a XXXX-XXXX-XXXX-XXXX code from the expected alphabet", () => {
+    expect(generateAccessCode()).toMatch(/^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
+  });
+});
+
+describe("isAccessCodeConflict", () => {
+  it("is true only for a 23505 on the access-code index", () => {
+    expect(isAccessCodeConflict(pgUniqueError(ACCESS_CODE_UNIQUE_INDEX))).toBe(true);
+  });
+
+  it("is false for a 23505 on the identity index (that maps to a 409, not a retry)", () => {
+    expect(isAccessCodeConflict(pgUniqueError("ux_courses_identity"))).toBe(false);
+  });
+
+  it("is false for a non-unique-violation error and for null", () => {
+    expect(isAccessCodeConflict(Object.assign(new Error("boom"), { code: "42P01" }))).toBe(false);
+    expect(isAccessCodeConflict(null)).toBe(false);
+  });
+});
+
+describe("insertWithUniqueAccessCode", () => {
+  it("returns the insert result and keeps the supplied code when there's no collision", async () => {
+    const runInsert = jest.fn().mockResolvedValue([{ course_id: "c1" }]);
+    const generate = jest.fn(() => "NEW-CODE");
+    const result = await insertWithUniqueAccessCode(runInsert, "GIVEN-CODE", { generate });
+    expect(result).toEqual([{ course_id: "c1" }]);
+    expect(runInsert).toHaveBeenCalledTimes(1);
+    expect(runInsert).toHaveBeenCalledWith("GIVEN-CODE");
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  it("regenerates the code and retries on an access-code collision, then succeeds", async () => {
+    const runInsert = jest
+      .fn()
+      .mockRejectedValueOnce(pgUniqueError(ACCESS_CODE_UNIQUE_INDEX))
+      .mockResolvedValue([{ course_id: "c2" }]);
+    const generate = jest.fn(() => "REGEN-1");
+    const result = await insertWithUniqueAccessCode(runInsert, "GIVEN-CODE", { generate });
+    expect(result).toEqual([{ course_id: "c2" }]);
+    expect(runInsert).toHaveBeenNthCalledWith(1, "GIVEN-CODE");
+    expect(runInsert).toHaveBeenNthCalledWith(2, "REGEN-1");
+  });
+
+  it("rethrows an identity collision immediately without regenerating", async () => {
+    const identityErr = pgUniqueError("ux_courses_identity");
+    const runInsert = jest.fn().mockRejectedValue(identityErr);
+    const generate = jest.fn();
+    await expect(
+      insertWithUniqueAccessCode(runInsert, "GIVEN-CODE", { generate })
+    ).rejects.toBe(identityErr);
+    expect(runInsert).toHaveBeenCalledTimes(1);
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  it("throws the last collision after exhausting all attempts", async () => {
+    const runInsert = jest.fn().mockRejectedValue(pgUniqueError(ACCESS_CODE_UNIQUE_INDEX));
+    const generate = jest.fn(() => "REGEN");
+    await expect(
+      insertWithUniqueAccessCode(runInsert, "GIVEN-CODE", { attempts: 3, generate })
+    ).rejects.toMatchObject({ code: "23505", constraint_name: ACCESS_CODE_UNIQUE_INDEX });
+    expect(runInsert).toHaveBeenCalledTimes(3);
+  });
+});
 
 describe("buildFileKey", () => {
   it("builds the canonical courses/{course}/{module}/{file}.{ext} key", () => {

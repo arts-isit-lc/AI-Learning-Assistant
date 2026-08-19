@@ -1353,15 +1353,31 @@ exports.handler = async (event) => {
           const courseId = event.queryStringParameters.course_id;
 
           try {
-            const newAccessCode = generateAccessCode();
-
-            // Update the access code in the Courses table
-            const updatedCourse = await sqlConnection`
-              UPDATE "Courses"
-              SET course_access_code = ${newAccessCode}
-              WHERE course_id = ${courseId}
-              RETURNING *;
-            `;
+            // course_access_code is unique across all courses
+            // (ux_courses_access_code). A freshly generated code should never
+            // collide, but if it does the UPDATE raises a 23505 naming that
+            // index — regenerate and retry rather than 500. Bounded attempts; an
+            // exhausted-retry collision falls through to the catch as a 500.
+            const MAX_ACCESS_CODE_ATTEMPTS = 5;
+            let newAccessCode;
+            for (let attempt = 1; attempt <= MAX_ACCESS_CODE_ATTEMPTS; attempt++) {
+              newAccessCode = generateAccessCode();
+              try {
+                await sqlConnection`
+                  UPDATE "Courses"
+                  SET course_access_code = ${newAccessCode}
+                  WHERE course_id = ${courseId}
+                  RETURNING *;
+                `;
+                break;
+              } catch (err) {
+                const isCodeCollision =
+                  err.code === "23505" &&
+                  err.constraint_name === "ux_courses_access_code";
+                if (isCodeCollision && attempt < MAX_ACCESS_CODE_ATTEMPTS) continue;
+                throw err;
+              }
+            }
 
             response.statusCode = 200;
             response.body = JSON.stringify({

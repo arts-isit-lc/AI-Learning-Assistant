@@ -6,6 +6,75 @@
  * injects the side-effecting bits (the S3 copy function, the sql connection).
  */
 
+// Name of the unique index guaranteeing course_access_code uniqueness (defined
+// in the DB initializer). A 23505 naming this index means the randomly generated
+// access code collided with an existing course's code — the caller regenerates
+// and retries rather than surfacing an error.
+const ACCESS_CODE_UNIQUE_INDEX = "ux_courses_access_code";
+
+/**
+ * Generate a 16-char course access code formatted XXXX-XXXX-XXXX-XXXX. Mirrors
+ * the frontend generator (CreateCourse.jsx) and the instructor Lambda's copy;
+ * used server-side to regenerate on a uniqueness collision.
+ */
+function generateAccessCode() {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let code = "";
+  for (let i = 0; i < 16; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code.match(/.{1,4}/g).join("-");
+}
+
+/**
+ * True when `err` is a Postgres unique-violation (23505) raised specifically by
+ * the ux_courses_access_code index — i.e. the access code collided, as opposed
+ * to the ux_courses_identity (name+code+term+section) collision, which callers
+ * surface as a 409. porsager/postgres exposes the violated index via
+ * `err.constraint_name`.
+ */
+function isAccessCodeConflict(err) {
+  return Boolean(
+    err && err.code === "23505" && err.constraint_name === ACCESS_CODE_UNIQUE_INDEX
+  );
+}
+
+/**
+ * Run an INSERT that carries a course access code, regenerating the code and
+ * retrying when it collides with the ux_courses_access_code unique index.
+ *
+ * `runInsert(code)` performs the insert with the given code and resolves to its
+ * result (returned as-is on success). Only an access-code collision is retried;
+ * any other error — including the ux_courses_identity 23505 — is rethrown
+ * immediately so the caller can map it (e.g. to a 409). If every attempt
+ * collides on the access code (astronomically unlikely), the last collision
+ * error is thrown so the caller falls through to a 500.
+ *
+ * `generate` is injected for tests; it defaults to generateAccessCode.
+ *
+ * @param {(code: string) => Promise<any>} runInsert
+ * @param {string} initialCode the client-supplied code to try first
+ * @param {{ attempts?: number, generate?: () => string }} [opts]
+ */
+async function insertWithUniqueAccessCode(
+  runInsert,
+  initialCode,
+  { attempts = 5, generate = generateAccessCode } = {}
+) {
+  let code = initialCode;
+  let lastErr;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await runInsert(code);
+    } catch (err) {
+      if (!isAccessCodeConflict(err)) throw err;
+      lastErr = err;
+      code = generate();
+    }
+  }
+  throw lastErr;
+}
+
 /**
  * Canonical raw-file S3 key (V2 layout):
  *   courses/{course_id}/{module_id}/{file_id}.{file_type}
@@ -105,6 +174,10 @@ function remapReferences(rows, moduleMap, fileMap) {
 }
 
 module.exports = {
+  ACCESS_CODE_UNIQUE_INDEX,
+  generateAccessCode,
+  isAccessCodeConflict,
+  insertWithUniqueAccessCode,
   buildFileKey,
   resolveSourceKey,
   copyWithRetry,
