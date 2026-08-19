@@ -142,8 +142,12 @@ def write_to_csv(data, course_id, instructor_email):
         # Ensure the directory exists (including nested directories)
         os.makedirs(file_dir, exist_ok=True)
 
-        # Write the data to the CSV file
-        with open(file_path, mode="w", newline="") as file:
+        # Write the data to the CSV file.
+        # encoding="utf-8-sig" forces UTF-8 (independent of the Lambda locale) and
+        # prepends a BOM so spreadsheet apps (notably Excel) auto-detect UTF-8 instead
+        # of falling back to a legacy ANSI/Windows-1252 code page. Without it, multibyte
+        # characters like "Pâtisserie" or "68°F" render as mojibake ("PÃ¢tisserie", "68Â°F").
+        with open(file_path, mode="w", newline="", encoding="utf-8-sig") as file:
             writer = csv.writer(file)
             writer.writerow([
                 "user_id", "module_name", "concept_name", "session_id", 
