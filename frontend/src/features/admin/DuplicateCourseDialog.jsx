@@ -1,7 +1,9 @@
 import { useState } from "react"
 import { useNavigate } from "react-router"
 import { useDuplicateCourse } from "@/services/queries"
-import { generateAccessCode, COURSE_EXISTS_MESSAGE } from "./CreateCourse"
+import { COURSE_TERMS } from "@/constants/courseTerms"
+import { generateAccessCode, parseCourseCode, COURSE_EXISTS_MESSAGE } from "./CreateCourse"
+import { CopyButton } from "@/components/composed/CopyButton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -16,46 +18,61 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select"
 
 /**
  * Duplicate-course action (admin course detail footer). Renders the "Duplicate"
- * trigger + a dialog pre-filled from the source course (name + " (copy)",
- * department, number) with a freshly generated access code. On submit it calls
- * duplicate_course (backend track B2 — clones the course + concept/module outline
- * + each module's uploaded files server-side; not embeddings or student data)
- * and opens the new course.
+ * trigger + a dialog pre-filled from the source course. Because the source is
+ * already known here (the detail pane's course), it skips the source dropdown
+ * that the Add-course-list Duplicate modal (DuplicateCourse.jsx) opens with, but
+ * otherwise mirrors that modal's field set: Course code, Course title (" (copy)"),
+ * Term, Section, and a freshly generated Access code — all filled out and ready
+ * to review. On submit it calls duplicate_course (backend track B2 — clones the
+ * course + concept/module outline + each module's uploaded files server-side;
+ * not embeddings or student data) and opens the new course.
+ *
+ * Term is optional on duplicate (the hook omits an empty term so the source
+ * course's term is kept server-side via COALESCE).
  */
 export function DuplicateCourseDialog({ course }) {
   const navigate = useNavigate()
   const duplicate = useDuplicateCourse()
   const [open, setOpen] = useState(false)
-  const [name, setName] = useState("")
-  const [department, setDepartment] = useState("")
-  const [number, setNumber] = useState("")
+  const [code, setCode] = useState("")
+  const [title, setTitle] = useState("")
+  const [term, setTerm] = useState("")
   const [section, setSection] = useState("")
+  const [accessCode, setAccessCode] = useState(() => generateAccessCode())
   // Set when the duplicate succeeded but some files couldn't be copied. Holds
   // the new course id + failed count so we surface an inline note and let the
   // admin proceed to the new course (rather than silently swallowing it).
   const [copyWarning, setCopyWarning] = useState(null)
 
+  const { department, number } = parseCourseCode(code)
+
   // Re-seed the form from the current source course each time the dialog opens.
   const handleOpenChange = (next) => {
     if (next && course) {
-      setName(course.course_name ? `${course.course_name} (copy)` : "")
-      setDepartment(course.course_department ?? "")
-      setNumber(course.course_number != null ? String(course.course_number) : "")
+      setCode([course.course_department, course.course_number].filter(Boolean).join(" "))
+      setTitle(course.course_name ? `${course.course_name} (copy)` : "")
+      setTerm(course.term ?? "")
       setSection(course.section ?? "")
+      setAccessCode(generateAccessCode())
       setCopyWarning(null)
     }
     setOpen(next)
   }
 
-  const handleNumberChange = (e) => {
-    if (/^\d*$/.test(e.target.value)) setNumber(e.target.value)
-  }
-
+  // A valid code (department + number) and a title are required; the access
+  // code is auto-generated and Term is optional (kept from the source when blank).
   const canSubmit =
-    Boolean(name.trim() && department.trim() && number.trim()) && !duplicate.isPending
+    Boolean(title.trim() && department && number) && !duplicate.isPending
 
   const submit = (e) => {
     e.preventDefault()
@@ -63,12 +80,14 @@ export function DuplicateCourseDialog({ course }) {
     duplicate.mutate(
       {
         sourceCourseId: course.course_id,
-        courseName: name.trim(),
-        department: department.trim(),
-        number: number.trim(),
+        courseName: title.trim(),
+        department,
+        number,
+        // Empty term is omitted by the hook so the source term is preserved.
+        term,
         // Optional; omitted by the hook when empty so the source section is kept.
         section: section.trim(),
-        accessCode: generateAccessCode(),
+        accessCode,
         active: course.course_student_access !== false,
         systemPrompt: course.system_prompt ?? "",
       },
@@ -115,49 +134,81 @@ export function DuplicateCourseDialog({ course }) {
                 Review and update the fields below. This copies the course, its concept/module
                 outline, and the uploaded module files. Student data is not copied.
               </DialogDescription>
+
               <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="dup-name">Course name</Label>
-                <Input
-                  id="dup-name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  maxLength={50}
-                  autoFocus
-                />
-              </div>
-              <div className="flex flex-col gap-4 sm:flex-row">
-                <div className="flex flex-1 flex-col gap-1.5">
-                  <Label htmlFor="dup-department">Department</Label>
+                <div className="flex flex-col">
+                  <Label htmlFor="dup-course-code">
+                    Course code <span className="text-destructive">*</span>
+                  </Label>
                   <Input
-                    id="dup-department"
-                    value={department}
-                    onChange={(e) => setDepartment(e.target.value)}
+                    id="dup-course-code"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                    placeholder="e.g. GEOG 210"
+                    maxLength={30}
+                    autoFocus
+                  />
+                </div>
+
+                <div className="flex flex-col">
+                  <Label htmlFor="dup-course-title">
+                    Course title <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="dup-course-title"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    maxLength={50}
+                  />
+                </div>
+
+                <div className="flex flex-col">
+                  <Label htmlFor="dup-course-term">Term</Label>
+                  <Select value={term} onValueChange={setTerm}>
+                    <SelectTrigger id="dup-course-term" aria-label="Term">
+                      <SelectValue placeholder="Select a term" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {COURSE_TERMS.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {t}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex flex-col">
+                  <Label htmlFor="dup-course-section">Section</Label>
+                  <Input
+                    id="dup-course-section"
+                    value={section}
+                    onChange={(e) => setSection(e.target.value)}
+                    placeholder="e.g. 001"
                     maxLength={20}
                   />
                 </div>
-                <div className="flex flex-1 flex-col gap-1.5">
-                  <Label htmlFor="dup-number">Course number</Label>
-                  <Input
-                    id="dup-number"
-                    value={number}
-                    onChange={handleNumberChange}
-                    inputMode="numeric"
-                    maxLength={10}
-                  />
+
+                <div className="flex flex-col mb-6">
+                  <Label>Access code</Label>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-2 text-caption">
+                      <span className="text-foreground">{accessCode}</span>
+                      <CopyButton value={accessCode} label="Copy access code" />
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7"
+                      onClick={() => setAccessCode(generateAccessCode())}
+                    >
+                      Generate new code
+                    </Button>
+                  </div>
                 </div>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="dup-section">Section</Label>
-                <Input
-                  id="dup-section"
-                  value={section}
-                  onChange={(e) => setSection(e.target.value)}
-                  placeholder="e.g. 001"
-                  maxLength={20}
-                />
-              </div>
-            </div>
+
               {duplicate.isError && (
                 <Alert variant="destructive">
                   <AlertDescription>

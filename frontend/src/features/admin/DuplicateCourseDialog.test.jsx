@@ -28,6 +28,7 @@ const COURSE = {
   course_number: "250",
   course_student_access: true,
   system_prompt: "You are a tutor.",
+  term: "2026 Winter Term 2",
   section: "001",
 }
 
@@ -61,8 +62,11 @@ describe("DuplicateCourseDialog", () => {
     await userEvent.click(screen.getByRole("button", { name: "Duplicate" }))
 
     const dialog = await screen.findByRole("dialog")
-    // Name is pre-filled as "<source> (copy)"; Section is seeded from the source.
-    expect(within(dialog).getByLabelText("Course name")).toHaveValue("Intro (copy)")
+    // Every field is pre-filled from the source: code is "<dept> <number>",
+    // the title gets " (copy)", and Term/Section are seeded from the source.
+    expect(within(dialog).getByLabelText(/Course code/)).toHaveValue("geog 250")
+    expect(within(dialog).getByLabelText(/Course title/)).toHaveValue("Intro (copy)")
+    expect(within(dialog).getByLabelText("Term")).toHaveTextContent("2026 Winter Term 2")
     expect(within(dialog).getByLabelText("Section")).toHaveValue("001")
 
     await userEvent.click(within(dialog).getByRole("button", { name: "Duplicate" }))
@@ -73,6 +77,7 @@ describe("DuplicateCourseDialog", () => {
         courseName: "Intro (copy)",
         department: "geog",
         number: "250",
+        term: "2026 Winter Term 2",
         section: "001",
         active: true,
         systemPrompt: "You are a tutor.",
