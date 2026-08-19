@@ -124,7 +124,7 @@ function MessageCell({ message }) {
  */
 function SortIndicator({ direction }) {
   return (
-    <svg viewBox="0 0 10 14" width="13" height="18" aria-hidden="true" className="shrink-0 fill-current">
+    <svg viewBox="0 0 10 14" width="13" height="20" aria-hidden="true" className="shrink-0 fill-current">
       <path d="M5 0 9 5H1z" className={cn(direction === "asc" ? "opacity-100" : "opacity-40")} />
       <path d="M5 14 1 9h8z" className={cn(direction === "desc" ? "opacity-100" : "opacity-40")} />
     </svg>
