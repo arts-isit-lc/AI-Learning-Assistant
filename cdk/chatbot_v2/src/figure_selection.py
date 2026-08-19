@@ -136,7 +136,8 @@ def select_figures(
       - specific reference ("figure 4.1")  -> the escalated (analysed) image, or
         a single best image at/above score_threshold when nothing escalated;
       - escalation ran (explicit visual intent / figure reference, gated by
-        STRICT_IMAGE_ESCALATION on the retrieval side) -> top images by rank;
+        STRICT_IMAGE_ESCALATION on the retrieval side) -> the vision-analysed
+        images (escalated_keys) when known, else top images by rank;
       - a bare visual keyword with no number and no escalation -> nothing. The
         RRF score is not a reliable gate, so never guess a figure.
 
@@ -225,7 +226,21 @@ def select_figures(
     # guess that risks surfacing an unrelated page. Show figures only when there
     # is a trustworthy signal; otherwise attach nothing.
     if retrieval_result.escalation_used:
-        for img in image_results:
+        # Prefer the exact images the vision model actually analysed for THIS
+        # query (escalated_keys) over an arbitrary top-ranked image_results entry.
+        # image_results is built unconditionally from every ranked image unit in
+        # the module, so "top by rank" can surface a high-RRF page unrelated to
+        # the question — the reported "a page of the PDF unrelated to the question"
+        # attachment. When escalation analysed specific images (the production
+        # case), those are the grounded ones; attach only them. Fall back to
+        # top-by-rank ONLY when there are no analyses to map (preserves the
+        # reference-and-rank contract when the vision layer returned nothing).
+        candidates = image_results
+        if escalated_keys:
+            analysed = [img for img in image_results if img.get("image_s3_key") in escalated_keys]
+            if analysed:
+                candidates = analysed
+        for img in candidates:
             if len(selected) >= max_figures:
                 break
             _take(img.get("retrieval_id"))

@@ -18,7 +18,6 @@ import { ChatThread } from "./chat/ChatThread"
 import { ChatInput } from "./chat/ChatInput"
 import { useChatStream } from "./chat/useChatStream"
 import { ReferenceDocPanel } from "./ReferenceDocPanel"
-import { ProgressPopover } from "@/components/composed/ProgressPopover"
 
 /**
  * Student module chat — Figma frames 162:3817 / 214:5316 / 209:5164. Full
@@ -183,7 +182,7 @@ export function StudentChat() {
             <h2 className="text-h4 font-semibold text-neutral-900">
               OCELIA ASSISTANT
             </h2>
-            <ProgressPopover sessionState={stream.sessionState} />
+            <div />
           </div>
           <ChatThread
             messages={messages}

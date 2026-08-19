@@ -178,6 +178,39 @@ class TestSelectFigures:
         # No specific number -> generic path may surface several figures.
         assert fs.select_figures(rr, "show me some diagrams") == ["i0", "i1", "i2"]
 
+    def test_generic_escalation_prefers_vision_analysed_image_over_top_rank(self):
+        # Regression: a question that tripped escalation (e.g. an escalation
+        # phrase) must NOT drag in the top-RRF image_results page when the vision
+        # model only analysed a different, lower-ranked image. image_results is
+        # built from EVERY ranked image unit in the module, so "top by rank" can
+        # be an unrelated PDF page. On the generic path we attach the analysed
+        # image(s) (escalated_keys), not the top-ranked one.
+        rr = _rr(
+            escalation_used=True,
+            image_analyses=[
+                {"image_s3_key": "s3://b/relevant.png", "analysis": "the thing asked about", "confidence": 0.9}
+            ],
+            image_results=[
+                {"retrieval_id": "toprank_unrelated", "score": 0.9, "image_s3_key": "s3://b/unrelated.png"},
+                {"retrieval_id": "analysed", "score": 0.1, "image_s3_key": "s3://b/relevant.png"},
+            ],
+        )
+        assert fs.select_figures(rr, "as shown below, can you explain this?") == ["analysed"]
+
+    def test_generic_escalation_falls_back_to_top_rank_when_no_analyses(self):
+        # Contract preserved: when escalation ran but produced no analyses to map
+        # (image_analyses empty), the generic path still attaches top-by-rank so
+        # a legitimate visual turn isn't left figureless.
+        rr = _rr(
+            escalation_used=True,
+            image_analyses=[],
+            image_results=[
+                {"retrieval_id": "i0", "score": 0.9, "image_s3_key": "s3://b/0.png"},
+                {"retrieval_id": "i1", "score": 0.8, "image_s3_key": "s3://b/1.png"},
+            ],
+        )
+        assert fs.select_figures(rr, "show me the diagram") == ["i0", "i1"]
+
 
 class TestHarmonizedAndConfigurable:
     """The harmonized contract (M1): once a block type is referenced in the
