@@ -193,7 +193,7 @@ export function ChatHistoryTab() {
         </Button>
       </div>
 
-      <div className="overflow-hidden rounded-sm border border-border">
+      <div className="overflow-hidden border border-border">
         <Table className="[table-layout:fixed]" style={{ width: table.getCenterTotalSize() }}>
           <TableHeader>
             {table.getHeaderGroups().map((group) => (
