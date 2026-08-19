@@ -1494,11 +1494,23 @@ exports.handler = async (event) => {
               break;
             }
 
-            // Query all files for this module
+            // List the module's own files UNION the files it references from
+            // other modules (cross-module-file-referencing). Referenced files
+            // live under a DIFFERENT module's Module_Files row, so we resolve
+            // them by joining Module_File_References.referenced_file_id back to
+            // Module_Files to recover filename/filetype/time_uploaded. Mirrors
+            // the allowed_file_ids union the chatbot_v2 retrieval path uses, so
+            // the "Module materials" list matches what answers are grounded in.
+            // UNION (not UNION ALL) dedupes if a file is both owned + referenced.
             const files = await sqlConnection`
               SELECT file_id, filename, filetype, time_uploaded
               FROM "Module_Files"
               WHERE module_id = ${moduleId}
+              UNION
+              SELECT mf.file_id, mf.filename, mf.filetype, mf.time_uploaded
+              FROM "Module_File_References" mfr
+              JOIN "Module_Files" mf ON mf.file_id = mfr.referenced_file_id
+              WHERE mfr.source_module_id = ${moduleId}
               ORDER BY time_uploaded DESC;
             `;
 
