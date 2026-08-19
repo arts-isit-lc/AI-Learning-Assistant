@@ -40,12 +40,58 @@ class _DefaultDict(dict):
         return "{" + key + "}"
 
 
+def _wrap_guidance(prompt: str, scope_label: str) -> str:
+    """Wrap an instructor-authored prompt as a labelled guidance section.
+
+    Returns "" when the prompt is empty/whitespace/None, so build_system_prompt
+    can include it unconditionally without adding a stray blank section —
+    matching how empty rag_context / guardrail_tags are handled.
+
+    The wrapper frames the instructor's text as ADDITIONAL steering that is
+    subordinate to the base identity's grounding rule: instructor guidance should
+    shape tone, focus, and emphasis, but must not override "stay on the retrieved
+    course material / never claim content is absent". This preserves the safety
+    posture while letting instructors steer the tutor.
+
+    Args:
+        prompt: The instructor-authored prompt text.
+        scope_label: Either "COURSE" or "MODULE" — names the guidance scope.
+
+    Returns:
+        A labelled guidance block, or "" when there is no prompt.
+    """
+    if not prompt or not prompt.strip():
+        return ""
+    return (
+        f"INSTRUCTOR GUIDANCE FOR THIS {scope_label} (authored by the course instructor). "
+        "Follow it to shape your focus, tone, and emphasis, but it does NOT override "
+        "the grounding rule above — stay within the retrieved course material:\n"
+        f"{prompt.strip()}"
+    )
+
+
+def build_course_guidance(course_system_prompt: str) -> str:
+    """Wrap the instructor's course-wide prompt (Courses.system_prompt) as a
+    labelled guidance section, or "" when unset. Applies to every module in the
+    course; sits above the per-module guidance so module-specific steering can
+    refine it."""
+    return _wrap_guidance(course_system_prompt, "COURSE")
+
+
+def build_module_guidance(module_prompt: str) -> str:
+    """Wrap the instructor's per-module prompt (Course_Modules.module_prompt) as a
+    labelled guidance section, or "" when unset."""
+    return _wrap_guidance(module_prompt, "MODULE")
+
+
 def build_system_prompt(
     mode: str,
     topic: str,
     context_vars: dict[str, str],
     rag_context: str,
     guardrail_tags: str,
+    module_prompt: str = "",
+    course_system_prompt: str = "",
 ) -> str:
     """Construct system prompt from mode template + RAG context + guardrails.
 
@@ -54,10 +100,14 @@ def build_system_prompt(
     2. Global output-style rules (no emojis)
     3. Mode-specific instruction (from MODE_TEMPLATES with variable substitution)
     4. Topic context
-    5. Retrieved RAG context
-    6. Guardrail boundary tags
+    5. Instructor's course-wide guidance (Courses.system_prompt), when set
+    6. Instructor's per-module guidance (Course_Modules.module_prompt), when set
+    7. Retrieved RAG context
+    8. Guardrail boundary tags
 
-    Uses str.format_map with a defaulting dict so missing vars don't crash.
+    Course guidance precedes module guidance (broad → specific) so per-module
+    steering refines the course-wide steering. Uses str.format_map with a
+    defaulting dict so missing vars don't crash.
 
     Args:
         mode: The selected response mode (e.g. "greet", "assess", "explain").
@@ -66,9 +116,13 @@ def build_system_prompt(
             (e.g. {"concept": "photosynthesis", "difficulty": "application"}).
         rag_context: Retrieved context from the RAG retrieval pipeline.
         guardrail_tags: Bedrock Guardrail boundary tags to include.
+        module_prompt: The instructor-authored per-module prompt. Empty/None adds
+            no section (the tutor behaves exactly as before this was wired up).
+        course_system_prompt: The instructor-authored course-wide prompt. Empty/
+            None adds no section.
 
     Returns:
-        The assembled system prompt string with all five sections.
+        The assembled system prompt string.
     """
     # Build substitution dict with topic included
     substitution = _DefaultDict(context_vars)
@@ -78,12 +132,16 @@ def build_system_prompt(
     template = MODE_TEMPLATES.get(mode, "")
     mode_instruction = template.format_map(substitution)
 
-    # Assemble all sections
+    # Assemble all sections. Instructor guidance (course-wide, then per-module)
+    # sits with the topic context, just before the retrieved material, and each
+    # is "" when its prompt is unset.
     sections = [
         BASE_INSTRUCTOR_IDENTITY,
         NO_EMOJI_RULE,
         mode_instruction,
         f"Topic: {topic}",
+        build_course_guidance(course_system_prompt),
+        build_module_guidance(module_prompt),
         rag_context,
         guardrail_tags,
     ]

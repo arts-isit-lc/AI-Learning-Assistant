@@ -20,26 +20,42 @@ class TestModuleMetadataCache:
         assert s.module_name == ""
         assert s.allowed_file_ids == []
 
+    def test_prompt_fields_default_empty(self):
+        s = create_default_state("sess-1")
+        assert s.module_prompt == ""
+        assert s.course_system_prompt == ""
+
     def test_roundtrip_preserves_cached_metadata(self):
         s = create_default_state("sess-1")
         s.module_name = "Intro to Algorithms"
+        s.module_prompt = "Emphasize Big-O analysis."
+        s.course_system_prompt = "Be formal; cite the textbook."
         s.allowed_file_ids = ["f1", "f2", "f3"]
         restored = deserialize_state(serialize_state(s))
         assert restored.module_name == "Intro to Algorithms"
+        assert restored.module_prompt == "Emphasize Big-O analysis."
+        assert restored.course_system_prompt == "Be formal; cite the textbook."
         assert restored.allowed_file_ids == ["f1", "f2", "f3"]
 
     def test_deserialize_legacy_item_without_fields_uses_defaults(self):
         # A session persisted before #10 has neither key — must not KeyError.
+        # The prompt fields were added later still, so they must default cleanly.
         legacy = {"session_id": "old", "stage": "comprehension"}
         restored = deserialize_state(legacy)
         assert restored.module_name == ""
+        assert restored.module_prompt == ""
+        assert restored.course_system_prompt == ""
         assert restored.allowed_file_ids == []
         assert restored.session_id == "old"
 
     def test_serialize_includes_new_fields(self):
         s = create_default_state("sess-1")
         s.module_name = "M"
+        s.module_prompt = "P"
+        s.course_system_prompt = "C"
         s.allowed_file_ids = ["x"]
         out = serialize_state(s)
         assert out["module_name"] == "M"
+        assert out["module_prompt"] == "P"
+        assert out["course_system_prompt"] == "C"
         assert out["allowed_file_ids"] == ["x"]

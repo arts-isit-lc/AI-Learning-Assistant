@@ -71,6 +71,8 @@ class SessionState:
     # (#10) to avoid re-querying Postgres every turn. Defaults preserve
     # back-compat with previously serialized sessions.
     module_name: str = ""
+    module_prompt: str = ""
+    course_system_prompt: str = ""
     allowed_file_ids: list[str] = field(default_factory=list)
 
 
@@ -134,6 +136,8 @@ def serialize_state(state: SessionState) -> dict:
         "last_mode": state.last_mode,
         "state_version": state.state_version,
         "module_name": state.module_name,
+        "module_prompt": state.module_prompt,
+        "course_system_prompt": state.course_system_prompt,
         "allowed_file_ids": state.allowed_file_ids,
     }
 
@@ -183,6 +187,8 @@ def deserialize_state(item: dict) -> SessionState:
         last_mode=item.get("last_mode", ""),
         state_version=int(item.get("state_version", 0)),
         module_name=item.get("module_name", ""),
+        module_prompt=item.get("module_prompt", ""),
+        course_system_prompt=item.get("course_system_prompt", ""),
         allowed_file_ids=item.get("allowed_file_ids", []),
     )
 

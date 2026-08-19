@@ -174,29 +174,44 @@ def _get_allowed_file_ids(module_id: str) -> list[str]:
         return []
 
 
-def _load_module_concepts(course_id: str, module_id: str) -> tuple[list[str], str]:
-    """Load module concepts and module name from Course_Modules.
-    
+def _load_module_concepts(course_id: str, module_id: str) -> tuple[list[str], str, str, str]:
+    """Load module concepts/name/prompt and the course-wide system prompt.
+
+    The module fields live on Course_Modules; the course system prompt lives on
+    Courses (reached via Course_Concepts). A LEFT JOIN keeps this a single query
+    AND preserves the module row even if the course link is missing (system
+    prompt is then just ""), so module_name/topics behavior is unchanged.
+
     Returns:
-        Tuple of (concepts list, module_name string).
+        Tuple of (concepts list, module_name, module_prompt, course_system_prompt).
+        module_prompt / course_system_prompt are "" when left blank (stored NULL).
     """
     conn = _get_db_connection()
     try:
         cur = conn.cursor()
-        cur.execute('SELECT generated_topics, module_name FROM "Course_Modules" WHERE module_id = %s', (module_id,))
+        cur.execute(
+            '''SELECT cm.generated_topics, cm.module_name, cm.module_prompt, c.system_prompt
+               FROM "Course_Modules" cm
+               LEFT JOIN "Course_Concepts" cc ON cc.concept_id = cm.concept_id
+               LEFT JOIN "Courses" c ON c.course_id = cc.course_id
+               WHERE cm.module_id = %s''',
+            (module_id,),
+        )
         row = cur.fetchone()
         cur.close()
         if row:
             topics_raw = row[0]
             module_name = row[1] or ""
+            module_prompt = row[2] or ""
+            course_system_prompt = row[3] or ""
             if topics_raw:
                 topics = topics_raw if isinstance(topics_raw, list) else json.loads(topics_raw)
                 # Handle double-encoded JSON (string containing a JSON string)
                 if isinstance(topics, str):
                     topics = json.loads(topics)
-                return (topics if isinstance(topics, list) else [], module_name)
-            return ([], module_name)
-        return ([], "")
+                return (topics if isinstance(topics, list) else [], module_name, module_prompt, course_system_prompt)
+            return ([], module_name, module_prompt, course_system_prompt)
+        return ([], "", "", "")
     except Exception:
         logger.exception("Failed to load module_concepts from DB")
         conn.rollback()
@@ -494,25 +509,33 @@ def handler(event, context):
         # Step 2: Load module_concepts on new session — DB failure → 503
         if is_new_session:
             try:
-                state.module_concepts, module_name = _load_module_concepts(course_id, module_id)
+                state.module_concepts, module_name, module_prompt, course_system_prompt = _load_module_concepts(course_id, module_id)
                 if CACHE_MODULE_METADATA:
                     state.module_name = module_name
-                logger.info("Loaded module_concepts", extra={"count": len(state.module_concepts), "module_name": module_name})
+                    state.module_prompt = module_prompt
+                    state.course_system_prompt = course_system_prompt
+                logger.info("Loaded module_concepts", extra={"count": len(state.module_concepts), "module_name": module_name, "has_module_prompt": bool(module_prompt), "has_course_prompt": bool(course_system_prompt)})
             except (psycopg2.OperationalError, psycopg2.InterfaceError, botocore.exceptions.ClientError):
                 logger.exception("DB connection failure during module context retrieval")
                 _stream_final(session_id, error=True)
                 return {"statusCode": 503, "headers": CORS_HEADERS, "body": json.dumps("Service temporarily unavailable")}
         else:
-            # For existing sessions, load module name for prompt context.
+            # For existing sessions, load module name + instructor prompts for prompt context.
             if CACHE_MODULE_METADATA and state.module_name:
                 module_name = state.module_name  # cached (#10) — skip the Postgres round-trip
+                module_prompt = state.module_prompt  # cached alongside module_name
+                course_system_prompt = state.course_system_prompt  # cached alongside module_name
             else:
                 try:
-                    _, module_name = _load_module_concepts(course_id, module_id)
+                    _, module_name, module_prompt, course_system_prompt = _load_module_concepts(course_id, module_id)
                 except Exception:
                     module_name = session_name
+                    module_prompt = ""
+                    course_system_prompt = ""
                 if CACHE_MODULE_METADATA:
                     state.module_name = module_name
+                    state.module_prompt = module_prompt
+                    state.course_system_prompt = course_system_prompt
 
         # Use module_name as the topic (session_name is often just "New chat")
         topic = module_name or session_name
@@ -876,7 +899,11 @@ def handler(event, context):
             if guardrail_tags:
                 system_prompt = f"{system_prompt}\n\n{guardrail_tags}"
         else:
-            system_prompt = build_system_prompt(mode, topic, context_vars, rag_context, guardrail_tags)
+            # Instructor's course-wide + per-module prompts steer the normal
+            # teaching turns. Deliberately NOT passed to build_completion_prompt
+            # (above) — the completion turn is kept minimal so nothing competes
+            # with the "acknowledge completion" instruction.
+            system_prompt = build_system_prompt(mode, topic, context_vars, rag_context, guardrail_tags, module_prompt, course_system_prompt)
             # Inject math compute results into system prompt (before guardrail tags, after RAG context)
             if math_compute_context:
                 system_prompt = f"{system_prompt}\n\n{math_compute_context}"

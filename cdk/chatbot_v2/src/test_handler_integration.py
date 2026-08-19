@@ -93,7 +93,7 @@ def wire(monkeypatch):
     monkeypatch.setattr(main, "_get_guardrail_config", lambda: ("gid", "DRAFT"))
     monkeypatch.setattr(main, "_get_appsync_url", lambda: "")
     monkeypatch.setattr(main, "_load_session_state", lambda sid: ctl.state)
-    monkeypatch.setattr(main, "_load_module_concepts", lambda c, m: (["Recursion", "Trees"], "Data Structures"))
+    monkeypatch.setattr(main, "_load_module_concepts", lambda c, m: (["Recursion", "Trees"], "Data Structures", "", ""))
     monkeypatch.setattr(main, "load_chat_history", lambda *a, **k: [])
     monkeypatch.setattr(main, "_get_allowed_file_ids", lambda m: ["f1"])
     monkeypatch.setattr(main, "evaluate_answer", ctl.evaluate)
