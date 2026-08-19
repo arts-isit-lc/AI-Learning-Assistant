@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useParams } from "react-router"
-import { MdForum, MdArrowUpward, MdArrowDownward, MdUnfoldMore } from "react-icons/md"
+import { MdForum } from "react-icons/md"
 import { flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table"
 import { useCourseMessages, useChatlogs, useChatlogStatus } from "@/services/queries"
 import { http } from "@/services/http"
@@ -10,7 +10,6 @@ import { useJobNotification } from "./hooks/useJobNotification"
 import { EmptyState } from "@/components/composed/EmptyState"
 import { Pagination } from "@/components/composed/Pagination"
 import { Button } from "@/components/ui/button"
-import { Icon } from "@/components/ui/icon"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ErrorState } from "@/components/composed/ErrorState"
 import { toUserMessage } from "@/services/apiError"
@@ -68,7 +67,21 @@ const columns = [
   },
 ]
 
-const SORT_ICON = { asc: MdArrowUpward, desc: MdArrowDownward }
+/**
+ * Stacked up/down sort triangles (Figma 376:2331). Both triangles are faded
+ * white at rest; the active direction goes solid white (`fill-current` inherits
+ * the header's `text-primary-foreground`). Decorative — the column header's
+ * `aria-sort` conveys the sort state to assistive tech.
+ * @param {{ direction: "asc" | "desc" | false }} props
+ */
+function SortIndicator({ direction }) {
+  return (
+    <svg viewBox="0 0 10 14" width="10" height="14" aria-hidden="true" className="shrink-0 fill-current">
+      <path d="M5 0 9 5H1z" className={cn(direction === "asc" ? "opacity-100" : "opacity-40")} />
+      <path d="M5 14 1 9h8z" className={cn(direction === "desc" ? "opacity-100" : "opacity-40")} />
+    </svg>
+  )
+}
 
 /**
  * Chat History tab — Figma 376:2331. An in-app, course-wide message table
@@ -216,11 +229,7 @@ export function ChatHistoryTab() {
                         className="flex w-full items-center justify-between gap-2 text-left"
                       >
                         <span className="truncate">{label}</span>
-                        <Icon
-                          icon={SORT_ICON[sorted] || MdUnfoldMore}
-                          size={16}
-                          className={cn("shrink-0", !sorted && "opacity-60")}
-                        />
+                        <SortIndicator direction={sorted} />
                       </button>
                       {header.column.getCanResize() && (
                         <div
