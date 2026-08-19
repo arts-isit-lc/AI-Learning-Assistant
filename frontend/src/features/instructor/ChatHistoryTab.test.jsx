@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
 const { useCourseMessages, subscribe, http } = vi.hoisted(() => ({
@@ -143,6 +143,40 @@ describe("ChatHistoryTab", () => {
       "c1",
       { limit: 20, offset: 0, sortBy: "concept_name", sortDir: "asc" }
     )
+  })
+
+  it("shows a short message in full with no '...Show more' link", () => {
+    useCourseMessages.mockReturnValue({
+      data: { messages: [MSG({ message_content: "short and sweet" })], total: 1 },
+      isLoading: false,
+      isError: false,
+    })
+    render(<ChatHistoryTab />)
+    expect(screen.getByText(/short and sweet/)).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /show more/i })).not.toBeInTheDocument()
+  })
+
+  it("previews a long message (250 chars) with '...Show more' that opens the full text in a footer-less modal", async () => {
+    // > 250 chars; the FINALMARKER tail lands past the preview cut-off.
+    const longBody = "Intro. " + "lorem ".repeat(60) + "FINALMARKER."
+    useCourseMessages.mockReturnValue({
+      data: { messages: [MSG({ message_content: longBody })], total: 1 },
+      isLoading: false,
+      isError: false,
+    })
+    render(<ChatHistoryTab />)
+
+    // The tail is hidden in the collapsed preview until expanded.
+    expect(screen.queryByText(/FINALMARKER/)).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole("button", { name: /show more/i }))
+
+    const dialog = await screen.findByRole("dialog")
+    expect(within(dialog).getByText(/FINALMARKER/)).toBeInTheDocument()
+    // No footer/action buttons — the modal's only control is the close X.
+    const buttons = within(dialog).getAllByRole("button")
+    expect(buttons).toHaveLength(1)
+    expect(buttons[0]).toHaveAccessibleName("Close")
   })
 
   it("exports via the async job (subscribe before submit)", async () => {

@@ -14,6 +14,18 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { ErrorState } from "@/components/composed/ErrorState"
 import { toUserMessage } from "@/services/apiError"
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
+import {
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogBody,
+} from "@/components/ui/dialog"
+
+// Message previews longer than this collapse to "...Show more", which opens the
+// full text in a modal (Figma 376:2331).
+const MESSAGE_PREVIEW_LIMIT = 250
 
 // Figma 376:2331. 20 rows/page (the mockup's "Displaying 20 out of N results").
 const PAGE_SIZE = 20
@@ -56,16 +68,52 @@ const columns = [
     accessorKey: "message_content",
     header: "Message",
     size: 240,
-    cell: ({ row }) => (
-      <span className="block truncate">
-        <span className="font-semibold text-muted-foreground">
-          {row.original.student_sent ? "Student: " : "OCELIA: "}
-        </span>
-        {row.original.message_content || ""}
-      </span>
-    ),
+    cell: ({ row }) => <MessageCell message={row.original} />,
   },
 ]
+
+/**
+ * Message cell — shows the sender prefix + up to MESSAGE_PREVIEW_LIMIT chars of
+ * the message. When the content is longer, the preview is followed by a
+ * "...Show more" link that opens the full message in a modal (title + scrollable
+ * body, the Dialog's built-in top-right close X, no footer/actions).
+ * @param {{ message: { student_sent?: boolean, message_content?: string } }} props
+ */
+function MessageCell({ message }) {
+  const prefix = message.student_sent ? "Student: " : "OCELIA: "
+  const content = message.message_content || ""
+  const isLong = content.length > MESSAGE_PREVIEW_LIMIT
+
+  return (
+    <div className="whitespace-normal break-words">
+      <span className="font-semibold text-muted-foreground">{prefix}</span>
+      {isLong ? content.slice(0, MESSAGE_PREVIEW_LIMIT).trimEnd() : content}
+      {isLong && (
+        <Dialog>
+          <DialogTrigger asChild>
+            <button
+              type="button"
+              className="ml-0.5 font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+            >
+              ...Show more
+            </button>
+          </DialogTrigger>
+          <DialogContent aria-describedby={undefined}>
+            <DialogHeader>
+              <DialogTitle>Message</DialogTitle>
+            </DialogHeader>
+            <DialogBody>
+              <p className="whitespace-pre-wrap break-words text-body text-foreground">
+                <span className="font-semibold text-muted-foreground">{prefix}</span>
+                {content}
+              </p>
+            </DialogBody>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
+  )
+}
 
 /**
  * Stacked up/down sort triangles (Figma 376:2331). Both triangles are faded
