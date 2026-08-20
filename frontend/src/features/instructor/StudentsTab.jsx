@@ -9,8 +9,8 @@ import { cn } from "@/lib/utils"
 import { Searchbar } from "@/components/composed/Searchbar"
 import { EmptyState } from "@/components/composed/EmptyState"
 import { SortableTable } from "@/components/composed/SortableTable"
+import { ConfirmDialog } from "@/components/composed/ConfirmDialog"
 import { UnsavedChangesPrompt } from "@/components/composed/UnsavedChangesPrompt"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/ui/icon"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -58,6 +58,7 @@ export function StudentsTab() {
   // changes" (revert with Undo). Mirrors the Configuration tab's staging model.
   const [deletedEmails, setDeletedEmails] = useState(() => new Set())
   const [saving, setSaving] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   const setStudentParam = useCallback(
     (email) =>
@@ -165,8 +166,10 @@ export function StudentsTab() {
         await deleteStudent.mutateAsync(s.user_email)
       }
       setDeletedEmails(new Set())
+      setConfirmOpen(false)
     } catch {
-      // Surfaced via deleteStudent.isError (inline Alert below); staged edits kept.
+      // Surfaced via the ConfirmDialog's error prop; the dialog stays open and
+      // staged removals are kept so the user can retry.
     } finally {
       setSaving(false)
     }
@@ -212,12 +215,6 @@ export function StudentsTab() {
       <UnsavedChangesPrompt when={isDirty} />
 
       <Searchbar value={query} onChange={setQuery} placeholder="Search students" />
-
-      {deleteStudent.isError && (
-        <Alert variant="destructive">
-          <AlertDescription>{"Couldn't remove the student. Please try again."}</AlertDescription>
-        </Alert>
-      )}
 
       {isLoading ? (
         <div role="status" aria-label="Loading roster" className="flex flex-col gap-3">
@@ -265,14 +262,39 @@ export function StudentsTab() {
               "h-7 rounded border hover:bg-primary-subtle hover:text-primary-dark active:bg-primary-active active:text-primary-dark disabled:opacity-100",
               isDirty ? "border-primary text-primary" : "border-transparent bg-background text-neutral-400"
             )}
-            onClick={saveChanges}
+            onClick={() => setConfirmOpen(true)}
             disabled={!isDirty || saving}
-            loading={saving}
           >
             Save changes
           </Button>
         </div>
       )}
+
+      {/* Confirmation gate on top of Save changes: publishing the staged
+          unenrolment(s) is destructive, so confirm before persisting. */}
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setConfirmOpen(false)
+            deleteStudent.reset?.()
+          }
+        }}
+        title="Remove students?"
+        description={
+          isDirty
+            ? `You are about to remove ${
+                stagedRemovals.length === 1
+                  ? rosterName(stagedRemovals[0])
+                  : `${stagedRemovals.length} students`
+              } from this course. If they need access again, you'll need to send a new invitation to join.`
+            : ""
+        }
+        confirmLabel="Remove"
+        loading={saving}
+        error={deleteStudent.isError ? toUserMessage(deleteStudent.error) : undefined}
+        onConfirm={saveChanges}
+      />
     </div>
   )
 }

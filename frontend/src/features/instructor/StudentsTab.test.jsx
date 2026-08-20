@@ -109,11 +109,31 @@ describe("StudentsTab", () => {
     expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled()
   })
 
-  it("publishes staged removals on Save changes (unenrol persisted)", async () => {
+  it("publishes staged removals only after confirming the Save changes dialog", async () => {
     render(<StudentsTab />)
     await userEvent.click(screen.getByRole("button", { name: "Remove Lovelace, Ada" }))
     await userEvent.click(screen.getByRole("button", { name: "Save changes" }))
+
+    // A confirmation dialog gates the publish — nothing persisted yet.
+    const dialog = await screen.findByRole("dialog")
+    expect(within(dialog).getByText("Remove students?")).toBeInTheDocument()
+    expect(deleteStudent.mutateAsync).not.toHaveBeenCalled()
+
+    await userEvent.click(within(dialog).getByRole("button", { name: "Remove" }))
     expect(deleteStudent.mutateAsync).toHaveBeenCalledWith("ada@x.com")
+  })
+
+  it("does not persist when the Save changes confirmation is cancelled (removal stays staged)", async () => {
+    render(<StudentsTab />)
+    await userEvent.click(screen.getByRole("button", { name: "Remove Lovelace, Ada" }))
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }))
+    const dialog = await screen.findByRole("dialog")
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }))
+
+    expect(deleteStudent.mutateAsync).not.toHaveBeenCalled()
+    // Still staged so the user can retry: row hidden, Save still enabled.
+    expect(screen.queryByRole("button", { name: "Lovelace, Ada" })).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled()
   })
 
   it("sorts by the Student column and toggles the direction (Contact sortable, Remove not)", async () => {
