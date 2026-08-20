@@ -164,6 +164,14 @@ export function ChatHistoryTab() {
     getCoreRowModel: getCoreRowModel(),
   })
 
+  // Column widths are applied as percentages of the current total (not raw px):
+  // under table-layout:fixed the table width is the GREATER of width:100% and
+  // the sum of column widths, so px widths would force the table past a narrow
+  // parent. Percentages always sum to 100%, so the table tracks the parent and
+  // columns just re-proportion (including after a resize drag).
+  const totalSize = table.getCenterTotalSize()
+  const pct = (size) => `${(size / totalSize) * 100}%`
+
   // Export reuses the existing async CSV job: subscribe to the completion event
   // FIRST (so it can't be missed), submit the job, then download on notify.
   const { data: status } = useChatlogStatus(courseId)
@@ -266,7 +274,7 @@ export function ChatHistoryTab() {
                   return (
                     <TableHead
                       key={header.id}
-                      style={{ width: header.getSize() }}
+                      style={{ width: pct(header.getSize()) }}
                       aria-sort={
                         sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : "none"
                       }
@@ -308,7 +316,7 @@ export function ChatHistoryTab() {
                 {row.getVisibleCells().map((cell, i, arr) => (
                   <TableCell
                     key={cell.id}
-                    style={{ width: cell.column.getSize() }}
+                    style={{ width: pct(cell.column.getSize()) }}
                     className={cn(
                       "align-top text-left text-neutral-900",
                       i < arr.length - 1 && "border-r border-border"
