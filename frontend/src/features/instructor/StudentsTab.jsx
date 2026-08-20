@@ -127,9 +127,9 @@ export function StudentsTab() {
             type="button"
             aria-label={`Remove ${rosterName(row.original)}`}
             onClick={() => stageRemoval(row.original.user_email)}
-            className="rounded p-1 text-primary transition-colors hover:text-primary-dark active:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="rounded text-primary transition-colors hover:text-primary-dark active:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <Icon icon={MdClose} size={24} />
+            <Icon icon={MdClose} size={18} />
           </button>
         ),
       },

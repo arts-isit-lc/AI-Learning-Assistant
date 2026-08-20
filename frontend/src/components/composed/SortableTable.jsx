@@ -48,7 +48,7 @@ export function SortableTable({ table, page, pageCount, onPageChange, total, emp
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="overflow-hidden rounded-sm border border-border">
+      <div className="overflow-hidden border border-border">
         {/* Always fit the parent (w-full from the primitive). With table-layout
             fixed the per-column sizes act as proportions (via pct), so columns
             shrink to the container width instead of forcing the table wider. */}
