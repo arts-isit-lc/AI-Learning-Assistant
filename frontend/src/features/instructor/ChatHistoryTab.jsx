@@ -242,7 +242,16 @@ export function ChatHistoryTab() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
-        <Button variant="outline" onClick={handleExport} loading={exporting} disabled={exportDisabled}>
+        {/* Matches the admin "Add course" action (outline, sm, h-7 rounded-sm
+            px-6) — Export CSV just omits the trailing icon. */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 rounded-sm px-6"
+          onClick={handleExport}
+          loading={exporting}
+          disabled={exportDisabled}
+        >
           Export CSV
         </Button>
       </div>
