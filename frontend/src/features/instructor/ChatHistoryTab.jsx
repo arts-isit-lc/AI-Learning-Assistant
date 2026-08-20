@@ -33,7 +33,7 @@ const columns = [
     accessorKey: "user_email",
     header: "User",
     size: 160,
-    cell: ({ row }) => <span className="text-foreground">{row.original.user_email || "—"}</span>,
+    cell: ({ row }) => row.original.user_email || "—",
   },
   {
     accessorKey: "module_name",
@@ -75,7 +75,7 @@ function MessageCell({ message }) {
 
   return (
     <div className="whitespace-normal break-words">
-      <span className="font-semibold text-muted-foreground">{prefix}</span>
+      <span className="font-semibold">{prefix}</span>
       {isLong ? content.slice(0, MESSAGE_PREVIEW_LIMIT).trimEnd() : content}
       {isLong && (
         <Dialog>
@@ -309,7 +309,10 @@ export function ChatHistoryTab() {
                   <TableCell
                     key={cell.id}
                     style={{ width: cell.column.getSize() }}
-                    className={cn("align-top text-left", i < arr.length - 1 && "border-r border-border")}
+                    className={cn(
+                      "align-top text-left text-neutral-900",
+                      i < arr.length - 1 && "border-r border-border"
+                    )}
                   >
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </TableCell>
