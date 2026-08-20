@@ -324,7 +324,7 @@ export function ChatHistoryTab() {
       </div>
 
       <div className="flex items-center justify-between gap-4">
-        <p className="text-caption text-muted-foreground">
+        <p className="text-caption">
           Displaying {messages.length} out of {total} results
         </p>
         <Pagination page={page} pageCount={pageCount} onPageChange={setPage} />
