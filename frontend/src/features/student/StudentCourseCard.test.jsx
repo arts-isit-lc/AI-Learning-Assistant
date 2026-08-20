@@ -11,6 +11,24 @@ const course = {
 }
 
 describe("StudentCourseCard", () => {
+  it("folds the section into the code and shows the term", () => {
+    render(
+      <StudentCourseCard
+        course={{ ...course, section: "101", term: "2026W1" }}
+        progress={null}
+        onOpen={() => {}}
+      />
+    )
+    expect(screen.getByText("GEOG 250 (101)")).toBeInTheDocument()
+    expect(screen.getByText("2026W1")).toBeInTheDocument()
+  })
+
+  it("omits the section parens and term when the course has neither", () => {
+    render(<StudentCourseCard course={course} progress={null} onOpen={() => {}} />)
+    expect(screen.getByText("GEOG 250")).toBeInTheDocument()
+    expect(screen.queryByText(/\(101\)/)).toBeNull()
+  })
+
   it("renders the code + title and the progress line from the summary", () => {
     render(
       <StudentCourseCard

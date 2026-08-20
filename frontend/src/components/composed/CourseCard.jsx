@@ -16,7 +16,8 @@ const STATUS_CLASS = {
 /**
  * Course tile — Figma `Card/Course` (859:6653). Presentational only; the parent
  * supplies progress/status. Matches the frame: 4px radius, #808080 border, FLAT
- * (no shadow), 16px padding. Layout = course code (semibold) + name, a hairline
+ * (no shadow), 16px padding. Layout = a top row with the course code (semibold)
+ * on the left and the `term` on the right, then the course name, a hairline
  * divider, then `NN% (x/y concepts completed)` on the left + a status label on
  * the right. States: Default / Hover (lightest-purple bg + purple border) /
  * Inactive (grey fill + white text).
@@ -24,6 +25,7 @@ const STATUS_CLASS = {
  * @param {{
  *   code: string,
  *   name?: string,
+ *   term?: string,
  *   progress?: { percent: number, completed: number, total: number } | null,
  *   status?: "completed"|"in_progress"|"access_requested",
  *   state?: "default"|"inactive",
@@ -35,6 +37,7 @@ const STATUS_CLASS = {
 export function CourseCard({
   code,
   name,
+  term,
   progress = null,
   status,
   state = "default",
@@ -71,7 +74,10 @@ export function CourseCard({
       )}
     >
       <div className="flex flex-col gap-1">
-        <span className="text-h4 font-semibold leading-7 mb-6">{code}</span>
+        <div className="mb-6 flex items-center justify-between gap-2">
+          <span className="text-h4 font-semibold leading-7">{code}</span>
+          {term && <span className="text-caption leading-7 whitespace-nowrap">{term}</span>}
+        </div>
         {name && <span className="text-caption leading-7 mb-4">{name}</span>}
       </div>
 

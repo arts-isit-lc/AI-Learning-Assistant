@@ -10,6 +10,16 @@ describe("CourseCard", () => {
     expect(screen.getByText("Cities")).toBeInTheDocument()
   })
 
+  it("renders the term beside the code when provided", () => {
+    render(<CourseCard code="GEOG 250" name="Cities" term="2026W1" />)
+    expect(screen.getByText("2026W1")).toBeInTheDocument()
+  })
+
+  it("omits the term line when no term is provided", () => {
+    render(<CourseCard code="GEOG 250" name="Cities" />)
+    expect(screen.queryByText("2026W1")).toBeNull()
+  })
+
   it("renders the progress line and an IN PROGRESS status", () => {
     render(
       <CourseCard
