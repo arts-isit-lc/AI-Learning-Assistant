@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useParams, useSearchParams } from "react-router"
+import { MdCheckCircle } from "react-icons/md"
 import {
   useModuleSessions,
   useSessionMessages,
   useCoursePage,
+  useModuleProgress,
   useModuleFiles,
   useCreateSession,
   useDeleteSession,
@@ -11,6 +13,7 @@ import {
 } from "@/services/queries"
 import { titleCase } from "@/utils/formatters"
 import { cn } from "@/lib/utils"
+import { Icon } from "@/components/ui/icon"
 import { toUserMessage } from "@/services/apiError"
 import { ErrorState } from "@/components/composed/ErrorState"
 import { SessionSidebar } from "./chat/SessionSidebar"
@@ -42,8 +45,17 @@ export function StudentChat() {
   const sessionsQuery = useModuleSessions(courseId, moduleId)
   const sessions = useMemo(() => sessionsQuery.data ?? [], [sessionsQuery.data])
   const coursePage = useCoursePage(courseId)
+  const moduleProgress = useModuleProgress(courseId, moduleId)
   const files = useModuleFiles(courseId, moduleId)
   const stream = useChatStream({ courseId, moduleId })
+
+  // Completion is durable from the persisted score (module_score === 100, the
+  // same rule computeConceptProgress uses) OR — for instant feedback before the
+  // post-turn refetch lands — the module_complete flag the stream just carried.
+  // Reading both means the badge shows whether the student just finished this
+  // turn or reopened an already-complete module.
+  const moduleComplete =
+    moduleProgress.data?.module_score === 100 || stream.sessionState?.module_complete === true
   const createSession = useCreateSession(courseId, moduleId)
   const deleteSession = useDeleteSession(courseId, moduleId)
   const deleteLastMessage = useDeleteLastMessage(activeSessionId)
@@ -184,6 +196,15 @@ export function StudentChat() {
             </h2>
             <div />
           </div>
+          {moduleComplete && (
+            <div
+              role="status"
+              className="mx-4 mb-4 flex items-center gap-2 rounded-sm bg-success px-3 py-2 text-success-foreground"
+            >
+              <Icon icon={MdCheckCircle} size={18} label="Complete" />
+              <span className="text-caption font-semibold">Module complete</span>
+            </div>
+          )}
           <ChatThread
             messages={messages}
             streamingText={streamingText}

@@ -99,6 +99,41 @@ describe("useChatStream", () => {
     expect(result.current.isTyping).toBe(false)
   })
 
+  it("invalidates module-progress + course-page after a turn so the completion badge refreshes", async () => {
+    const { client, Wrapper } = makeWrapper()
+    postRaw.mockResolvedValue({ ok: true }) // update_module_score settles
+    const invalidateSpy = vi.spyOn(client, "invalidateQueries")
+    const { result } = renderHook(() => useChatStream({ courseId: "c1", moduleId: "m1" }), {
+      wrapper: Wrapper,
+    })
+
+    await act(async () => {
+      await result.current.runTurn({ session, messageContent: "final answer" })
+    })
+    const ws = MockWebSocket.last
+    act(() => ws.open())
+    act(() =>
+      ws.emit(
+        done({
+          llm_output: "You did it!",
+          llm_verdict: true,
+          session_state: JSON.stringify({ module_complete: true }),
+        })
+      )
+    )
+
+    // sessionState from the terminal message is exposed for the UI.
+    await waitFor(() => expect(result.current.sessionState).toEqual({ module_complete: true }))
+
+    // Both progress queries are invalidated once the score write settles.
+    await waitFor(() => {
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: queryKeys.modules.progress("c1", "m1"),
+      })
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.courses.page("c1") })
+    })
+  })
+
   it("surfaces a retry error when the stream terminates with an error", async () => {
     const { Wrapper } = makeWrapper()
     const { result } = renderHook(() => useChatStream({ courseId: "c1", moduleId: "m1" }), {

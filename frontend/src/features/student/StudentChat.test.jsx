@@ -9,12 +9,14 @@ const stream = {
   isTyping: false,
   retryError: null,
   activeStreamSessionId: null,
+  sessionState: null,
   runTurn: vi.fn(),
   retry: vi.fn(),
 }
 
 let sessionsResult
 let coursePageResult
+let moduleProgressResult
 vi.mock("@/services/queries", () => ({
   useModuleSessions: () => sessionsResult,
   useSessionMessages: () => ({
@@ -22,6 +24,7 @@ vi.mock("@/services/queries", () => ({
     isLoading: false,
   }),
   useCoursePage: () => coursePageResult,
+  useModuleProgress: () => moduleProgressResult,
   useModuleFiles: () => ({ data: [], isLoading: false }),
   useCreateSession: () => ({ mutate: vi.fn(), isPending: false }),
   useDeleteSession: () => ({ mutate: vi.fn(), isPending: false }),
@@ -53,6 +56,8 @@ beforeEach(() => {
     data: [{ module_id: "mod1", module_name: "week 1 intro", concept_id: "c1", concept_name: "Maps" }],
     isLoading: false,
   }
+  moduleProgressResult = { data: { module_score: 40 }, isLoading: false }
+  stream.sessionState = null
 })
 
 describe("StudentChat page", () => {
@@ -71,6 +76,27 @@ describe("StudentChat page", () => {
     expect(screen.queryByRole("button", { name: /reduce/i })).not.toBeInTheDocument()
     expect(screen.queryByRole("button", { name: /expand/i })).not.toBeInTheDocument()
     expect(screen.queryByRole("button", { name: /learning journey/i })).not.toBeInTheDocument()
+  })
+
+  it("hides the completion indicator while the module is unfinished", () => {
+    renderChat()
+    expect(screen.queryByText("Module complete")).not.toBeInTheDocument()
+  })
+
+  it("shows the completion indicator when the persisted score is 100", () => {
+    moduleProgressResult = { data: { module_score: 100 }, isLoading: false }
+    renderChat()
+    const badge = screen.getByText("Module complete")
+    expect(badge).toBeInTheDocument()
+    expect(badge.closest("[role='status']")).toBeInTheDocument()
+  })
+
+  it("shows the completion indicator instantly from the live stream state before the score refetches", () => {
+    // Score still stale (< 100) but the stream just carried module_complete.
+    moduleProgressResult = { data: { module_score: 60 }, isLoading: false }
+    stream.sessionState = { module_complete: true }
+    renderChat()
+    expect(screen.getByText("Module complete")).toBeInTheDocument()
   })
 
   it("shows an accessible ErrorState with retry when the session list fails to load", async () => {

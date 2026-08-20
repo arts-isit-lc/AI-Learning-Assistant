@@ -142,6 +142,16 @@ export function useChatStream({ courseId, moduleId }) {
             llm_verdict: payload.llm_verdict,
           })
           .catch(() => null)
+          // The score is written by the request above, so the module-progress
+          // and course-page queries are now stale. Invalidate them AFTER it
+          // settles so the completion badge / progress reflect this turn
+          // deterministically — without this the UI only refreshed on an
+          // incidental refetch (navigation / window refocus), so whether the
+          // student saw "module complete" depended on timing.
+          .finally(() => {
+            queryClient.invalidateQueries({ queryKey: queryKeys.modules.progress(courseId, moduleId) })
+            queryClient.invalidateQueries({ queryKey: queryKeys.courses.page(courseId) })
+          })
       }
     },
     [queryClient, courseId, moduleId, appendMessage]
