@@ -59,7 +59,10 @@ export function SortableTable({ table, page, pageCount, onPageChange, total, emp
                 {group.headers.map((header, i, arr) => {
                   const canSort = header.column.getCanSort()
                   const sorted = header.column.getIsSorted() // "asc" | "desc" | false
-                  const alignRight = header.column.columnDef.meta?.align === "right"
+                  const meta = header.column.columnDef.meta
+                  // Header alignment can be set independently of the cell's
+                  // (`headerAlign`), falling back to the shared `align`.
+                  const alignRight = (meta?.headerAlign ?? meta?.align) === "right"
                   const label = flexRender(header.column.columnDef.header, header.getContext())
                   return (
                     <TableHead

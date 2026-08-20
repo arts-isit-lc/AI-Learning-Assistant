@@ -3,7 +3,13 @@ import { render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
 let studentsResult
-const deleteStudent = { mutate: vi.fn(), isPending: false }
+const deleteStudent = {
+  mutate: vi.fn(),
+  mutateAsync: vi.fn().mockResolvedValue(undefined),
+  isPending: false,
+  isError: false,
+  reset: vi.fn(),
+}
 
 vi.mock("@/services/queries", () => ({
   useStudents: () => studentsResult,
@@ -19,6 +25,9 @@ vi.mock("react-router", async (importOriginal) => {
     ...actual,
     useParams: () => ({ courseId: "c1" }),
     useSearchParams: () => [params, setSearchParams],
+    // StudentsTab renders <UnsavedChangesPrompt> (useBlocker needs a data router).
+    // Stub it as never-blocking; the guard is covered in its own test.
+    useBlocker: () => ({ state: "unblocked", proceed: vi.fn(), reset: vi.fn() }),
   }
 })
 
@@ -34,6 +43,8 @@ beforeEach(() => {
   params = new URLSearchParams()
   setSearchParams.mockClear()
   deleteStudent.mutate.mockClear()
+  deleteStudent.mutateAsync.mockClear().mockResolvedValue(undefined)
+  deleteStudent.isError = false
 })
 
 describe("StudentsTab", () => {
@@ -68,13 +79,41 @@ describe("StudentsTab", () => {
     expect(remove).not.toHaveClass("hover:bg-primary-subtle")
   })
 
-  it("removes (unenrolls) a student after confirmation", async () => {
+  it("keeps Undo + Save changes disabled until a removal is staged", () => {
+    render(<StudentsTab />)
+    expect(screen.getByRole("button", { name: "Undo" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled()
+  })
+
+  it("stages a removal — hiding the row and enabling Undo + Save — without persisting", async () => {
     render(<StudentsTab />)
     await userEvent.click(screen.getByRole("button", { name: "Remove Lovelace, Ada" }))
-    const dialog = await screen.findByRole("dialog")
-    expect(within(dialog).getByText("Delete student?")).toBeInTheDocument()
-    await userEvent.click(within(dialog).getByRole("button", { name: "Delete student" }))
-    expect(deleteStudent.mutate).toHaveBeenCalledWith("ada@x.com", expect.any(Object))
+
+    // The row drops out immediately; nothing is persisted; Undo + Save light up.
+    expect(screen.queryByRole("button", { name: "Lovelace, Ada" })).not.toBeInTheDocument()
+    expect(deleteStudent.mutateAsync).not.toHaveBeenCalled()
+    expect(screen.getByRole("button", { name: "Undo" })).toBeEnabled()
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeEnabled()
+  })
+
+  it("restores a staged removal on Undo (nothing persisted)", async () => {
+    render(<StudentsTab />)
+    await userEvent.click(screen.getByRole("button", { name: "Remove Lovelace, Ada" }))
+    expect(screen.queryByRole("button", { name: "Lovelace, Ada" })).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole("button", { name: "Undo" }))
+    // Row back; nothing persisted; Undo + Save disabled again.
+    expect(screen.getByRole("button", { name: "Lovelace, Ada" })).toBeInTheDocument()
+    expect(deleteStudent.mutateAsync).not.toHaveBeenCalled()
+    expect(screen.getByRole("button", { name: "Undo" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled()
+  })
+
+  it("publishes staged removals on Save changes (unenrol persisted)", async () => {
+    render(<StudentsTab />)
+    await userEvent.click(screen.getByRole("button", { name: "Remove Lovelace, Ada" }))
+    await userEvent.click(screen.getByRole("button", { name: "Save changes" }))
+    expect(deleteStudent.mutateAsync).toHaveBeenCalledWith("ada@x.com")
   })
 
   it("sorts by the Student column and toggles the direction (Contact sortable, Remove not)", async () => {

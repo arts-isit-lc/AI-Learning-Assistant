@@ -5,10 +5,13 @@ import { MdClose, MdPeople } from "react-icons/md"
 import { getCoreRowModel, getPaginationRowModel, getSortedRowModel, useReactTable } from "@tanstack/react-table"
 import { useStudents, useDeleteStudent } from "@/services/queries"
 import { titleCase } from "@/utils/formatters"
+import { cn } from "@/lib/utils"
 import { Searchbar } from "@/components/composed/Searchbar"
-import { ConfirmDialog } from "@/components/composed/ConfirmDialog"
 import { EmptyState } from "@/components/composed/EmptyState"
 import { SortableTable } from "@/components/composed/SortableTable"
+import { UnsavedChangesPrompt } from "@/components/composed/UnsavedChangesPrompt"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/ui/icon"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ErrorState } from "@/components/composed/ErrorState"
@@ -33,9 +36,11 @@ function rosterName(s) {
  * pagination footer. Sorting + pagination are client-side (the whole roster is
  * loaded). Clicking a student's name opens their read-only chat history inline
  * via the `?student=` query param (deep-linkable, avoids an email in the path).
- * The × removes (unenrolls) a student after a confirm — removal persists
- * immediately, so there's no Undo/Save footer (same save-only decision as
- * Configuration). The course access code lives in the course-detail header.
+ *
+ * Removals follow the Configuration tab's staged model: the × STAGES an
+ * unenrolment (the row drops out immediately, but nothing is persisted), and the
+ * footer Undo / Save changes revert or publish the staged removals together.
+ * Save is the final gate — there's no per-row confirm dialog.
  */
 export function StudentsTab() {
   const { courseId } = useParams()
@@ -46,10 +51,13 @@ export function StudentsTab() {
   const deleteStudent = useDeleteStudent(courseId)
 
   const [query, setQuery] = useState("")
-  const [removeTarget, setRemoveTarget] = useState(null)
   // Default sort: Student (name) ascending — mirrors Chat History defaulting to
   // its first column ascending.
   const [sorting, setSorting] = useState([{ id: "student", desc: false }])
+  // Staged unenrolments (by email) — held locally, NOT persisted until "Save
+  // changes" (revert with Undo). Mirrors the Configuration tab's staging model.
+  const [deletedEmails, setDeletedEmails] = useState(() => new Set())
+  const [saving, setSaving] = useState(false)
 
   const setStudentParam = useCallback(
     (email) =>
@@ -62,11 +70,25 @@ export function StudentsTab() {
     [setSearchParams]
   )
 
+  const stageRemoval = useCallback(
+    (email) => setDeletedEmails((prev) => new Set(prev).add(email)),
+    []
+  )
+
+  // Staged removals that still exist server-side (drives dirty state + the save
+  // loop); the displayed roster drops them out.
+  const stagedRemovals = useMemo(
+    () => students.filter((s) => deletedEmails.has(s.user_email)),
+    [students, deletedEmails]
+  )
+  const isDirty = stagedRemovals.length > 0
+
   const filtered = useMemo(() => {
+    const roster = students.filter((s) => !deletedEmails.has(s.user_email))
     const q = query.trim().toLowerCase()
-    if (!q) return students
-    return students.filter((s) => `${rosterName(s)} ${s.user_email}`.toLowerCase().includes(q))
-  }, [students, query])
+    if (!q) return roster
+    return roster.filter((s) => `${rosterName(s)} ${s.user_email}`.toLowerCase().includes(q))
+  }, [students, deletedEmails, query])
 
   const columns = useMemo(
     () => [
@@ -97,12 +119,13 @@ export function StudentsTab() {
         size: 90,
         enableSorting: false,
         enableResizing: false,
-        meta: { align: "right" },
+        // Header left-aligned like the others; the X button stays right-aligned.
+        meta: { align: "right", headerAlign: "left" },
         cell: ({ row }) => (
           <button
             type="button"
             aria-label={`Remove ${rosterName(row.original)}`}
-            onClick={() => setRemoveTarget(row.original)}
+            onClick={() => stageRemoval(row.original.user_email)}
             className="rounded p-1 text-primary transition-colors hover:text-primary-dark active:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Icon icon={MdClose} size={24} />
@@ -110,7 +133,7 @@ export function StudentsTab() {
         ),
       },
     ],
-    [setStudentParam]
+    [setStudentParam, stageRemoval]
   )
 
   const table = useReactTable({
@@ -123,11 +146,31 @@ export function StudentsTab() {
     enableColumnResizing: true,
     initialState: { pagination: { pageSize: PAGE_SIZE } },
     // autoResetPageIndex (default) snaps back to page 1 when the search filter
-    // changes, so we never sit on a now-empty page.
+    // or roster changes, so we never sit on a now-empty page.
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
   })
+
+  // Undo — drop every staged removal back to the last-saved (server) roster.
+  const discardChanges = () => setDeletedEmails(new Set())
+
+  // Save changes — publish the staged unenrolments. On failure each mutation
+  // rolls back its own cache and surfaces the inline error below; staged
+  // removals are kept so the user can retry.
+  const saveChanges = async () => {
+    setSaving(true)
+    try {
+      for (const s of stagedRemovals) {
+        await deleteStudent.mutateAsync(s.user_email)
+      }
+      setDeletedEmails(new Set())
+    } catch {
+      // Surfaced via deleteStudent.isError (inline Alert below); staged edits kept.
+    } finally {
+      setSaving(false)
+    }
+  }
 
   // Inline per-student chat history (a sub-state of the Students tab).
   if (selectedEmail) {
@@ -165,7 +208,16 @@ export function StudentsTab() {
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Guard staged removals against navigation (tab switch / back / refresh). */}
+      <UnsavedChangesPrompt when={isDirty} />
+
       <Searchbar value={query} onChange={setQuery} placeholder="Search students" />
+
+      {deleteStudent.isError && (
+        <Alert variant="destructive">
+          <AlertDescription>{"Couldn't remove the student. Please try again."}</AlertDescription>
+        </Alert>
+      )}
 
       {isLoading ? (
         <div role="status" aria-label="Loading roster" className="flex flex-col gap-3">
@@ -184,29 +236,43 @@ export function StudentsTab() {
         />
       )}
 
-      <ConfirmDialog
-        open={Boolean(removeTarget)}
-        onOpenChange={(open) => {
-          if (!open) {
-            setRemoveTarget(null)
-            deleteStudent.reset?.()
-          }
-        }}
-        title="Delete student?"
-        description={
-          removeTarget
-            ? `You are about to remove ${rosterName(removeTarget)} from this course. If they need access again, you'll need to send a new invitation to join.`
-            : ""
-        }
-        confirmLabel="Delete student"
-        loading={deleteStudent.isPending}
-        error={deleteStudent.isError ? toUserMessage(deleteStudent.error) : undefined}
-        onConfirm={() =>
-          deleteStudent.mutate(removeTarget.user_email, {
-            onSuccess: () => setRemoveTarget(null),
-          })
-        }
-      />
+      {/* Footer — Undo + Save changes gate the STAGED unenrolments (revert or
+          publish them together). Styling matched exactly to the Configuration
+          tab: 28px tall (h-7 + size-sm), 4px radius (rounded), lavender
+          (#F2E8FF / primary-subtle) hover, #BFBFBF (neutral-400) inactive text
+          on a white fill (disabled:opacity-100 defeats the base fade). Once
+          active (dirty) the text turns #6829C2 (primary) with the ghost-primary
+          interaction; Save also gains a #6829C2 border (transparent while
+          disabled → no layout shift), Undo stays borderless. */}
+      {!isLoading && (
+        <div className="flex items-center justify-end gap-4 border-t border-border pt-6">
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "h-7 rounded hover:bg-primary-subtle hover:text-primary-dark active:bg-primary-active active:text-primary-dark disabled:opacity-100",
+              isDirty ? "text-primary" : "bg-background text-neutral-400"
+            )}
+            onClick={discardChanges}
+            disabled={!isDirty || saving}
+          >
+            Undo
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "h-7 rounded border hover:bg-primary-subtle hover:text-primary-dark active:bg-primary-active active:text-primary-dark disabled:opacity-100",
+              isDirty ? "border-primary text-primary" : "border-transparent bg-background text-neutral-400"
+            )}
+            onClick={saveChanges}
+            disabled={!isDirty || saving}
+            loading={saving}
+          >
+            Save changes
+          </Button>
+        </div>
+      )}
     </div>
   )
 }
