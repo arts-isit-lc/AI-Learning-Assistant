@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react"
 import { createMemoryRouter, RouterProvider } from "react-router"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { routes } from "./AppRoutes"
+import { queryKeys } from "@/services/queryKeys"
 
 // Control role/auth without Amplify; stub the heavy lazy screens so the test
 // stays focused on routing (not the real Login / the token gallery).
@@ -45,8 +46,11 @@ beforeEach(() => {
 // QueryClient (the instructor course layout reads live Query hooks — course
 // meta + prompt conflict dot). A fresh client per render with retries off keeps
 // tests isolated and fast; unmocked queryFns settle to an (ignored) error state.
-function renderAt(path) {
+function renderAt(path, seed) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  // Optionally seed the cache so a hook reads it instead of hitting its (unmocked,
+  // rejecting) queryFn — used when a route's layout gates rendering on real data.
+  seed?.(client)
   const router = createMemoryRouter(routes, { initialEntries: [path] })
   return render(
     <QueryClientProvider client={client}>
@@ -78,7 +82,14 @@ describe("AppRoutes — role guards", () => {
 
   it("defaults the instructor course area to the Configuration tab, list pane persisting", async () => {
     authState = { ...authState, role: "instructor" }
-    renderAt("/instructor/courses/c1")
+    // Seed the instructor course list so the detail layout resolves c1 and mounts
+    // its tabs — the layout now shows "No courses found." for a course absent from
+    // the list (deactivated/non-existent), so routing tests must provide it.
+    renderAt("/instructor/courses/c1", (client) =>
+      client.setQueryData(queryKeys.instructor.courses, [
+        { course_id: "c1", course_department: "geog", course_number: "250", course_name: "Intro" },
+      ])
+    )
     expect(await screen.findByText("configuration tab")).toBeInTheDocument()
     // master-detail: the course list pane stays mounted alongside the detail
     expect(screen.getByText("instructor course list")).toBeInTheDocument()

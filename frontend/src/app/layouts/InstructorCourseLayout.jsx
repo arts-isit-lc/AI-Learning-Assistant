@@ -61,17 +61,37 @@ export default function InstructorCourseLayout() {
   const { courseId } = useParams()
   const navigate = useNavigate()
   const { data: courses = [], isLoading: coursesLoading } = useInstructorCourses()
-  const { data: prompt } = useCoursePrompt(courseId)
-  const { data: accessCode } = useAccessCode(courseId)
+
+  // A course the instructor lacks active access to — one that never existed OR
+  // had its access deactivated by an admin — is absent from GET
+  // instructor/courses either way, so the two cases must behave identically.
+  // Resolve the course from the list FIRST, then gate the course-scoped detail
+  // queries on it: passing `undefined` keeps them disabled so they never fire
+  // (and 403) for an inaccessible course. Deep-linking to such a course used to
+  // mount the tabs and surface that 403; now it falls through to the same
+  // "No courses found." empty state the list shows.
+  const course = courses.find((c) => c.course_id === courseId)
+  const scopedCourseId = course ? courseId : undefined
+  const { data: prompt } = useCoursePrompt(scopedCourseId)
+  const { data: accessCode } = useAccessCode(scopedCourseId)
   const updateAccess = useUpdateInstructorCourseAccess(courseId)
   const deleteCourse = useDeleteInstructorCourse(courseId)
   const [deleteOpen, setDeleteOpen] = useState(false)
 
-  const course = courses.find((c) => c.course_id === courseId)
   const dept = course ? String(course.course_department ?? "").toUpperCase() : ""
   const code = course ? `${dept} ${course.course_number ?? ""}`.trim() : "Course"
   const active = course ? course.course_student_access !== false : true
   const hasConflict = Boolean(prompt?.conflict_metadata?.has_conflicts)
+
+  // Once the list has resolved, an unknown/deactivated course renders the same
+  // empty state the list uses — no header, no section tabs, no Outlet. Not
+  // mounting the Outlet is what prevents the tab queries (view_students,
+  // view_modules, analytics, …) from firing and returning 403.
+  if (!coursesLoading && !course) {
+    return (
+      <p className="px-1 py-3 text-caption text-muted-foreground">No courses found.</p>
+    )
+  }
 
   const handleDelete = () => {
     deleteCourse.mutate(undefined, {

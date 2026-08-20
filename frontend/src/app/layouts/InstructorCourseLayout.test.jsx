@@ -98,10 +98,15 @@ describe("InstructorCourseLayout", () => {
     expect(screen.queryByRole("status", { name: "Unresolved prompt conflict" })).not.toBeInTheDocument()
   })
 
-  it("renders a neutral 'Course' header when the course isn't in the list (loaded, not found)", () => {
+  it("shows 'No courses found.' (not a 403/error surface) when the course isn't in the instructor's list once loaded — deactivated OR non-existent behave identically — and does NOT mount the header/tabs/Outlet", () => {
     coursesResult = { data: [], isLoading: false }
     renderLayout()
-    expect(screen.getByRole("heading", { name: "Course" })).toBeInTheDocument()
+    expect(screen.getByText("No courses found.")).toBeInTheDocument()
+    // No header placeholder, and the Outlet (active tab) must not render — that's
+    // what stops the course-scoped tab queries from firing and 403-ing on a
+    // deactivated course.
+    expect(screen.queryByRole("heading", { name: "Course" })).not.toBeInTheDocument()
+    expect(screen.queryByText("settings tab")).not.toBeInTheDocument()
   })
 
   it("skeletons the course code/name header while the list loads, keeping the tabs + active tab usable", () => {
