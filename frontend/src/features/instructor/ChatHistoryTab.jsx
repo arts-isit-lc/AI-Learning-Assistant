@@ -1,19 +1,17 @@
 import { useState } from "react"
 import { useParams } from "react-router"
 import { MdForum } from "react-icons/md"
-import { flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table"
+import { getCoreRowModel, useReactTable } from "@tanstack/react-table"
 import { useCourseMessages, useChatlogs, useChatlogStatus } from "@/services/queries"
 import { http } from "@/services/http"
 import { titleCase } from "@/utils/formatters"
-import { cn } from "@/lib/utils"
 import { useJobNotification } from "./hooks/useJobNotification"
 import { EmptyState } from "@/components/composed/EmptyState"
-import { Pagination } from "@/components/composed/Pagination"
+import { SortableTable } from "@/components/composed/SortableTable"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ErrorState } from "@/components/composed/ErrorState"
 import { toUserMessage } from "@/services/apiError"
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
 import { Dialog, DialogTrigger, DialogContent, DialogTitle, DialogBody } from "@/components/ui/dialog"
 
 // Message previews longer than this collapse to "...Show more", which opens the
@@ -64,8 +62,8 @@ const columns = [
 /**
  * Message cell — shows the sender prefix + up to MESSAGE_PREVIEW_LIMIT chars of
  * the message. When the content is longer, the preview is followed by a
- * "...Show more" link that opens the full message in a modal (title + scrollable
- * body, the Dialog's built-in top-right close X, no footer/actions).
+ * "...Show more" link that opens the full message in a modal (visually
+ * title-less, the Dialog's built-in top-right close X, no footer/actions).
  * @param {{ message: { student_sent?: boolean, message_content?: string } }} props
  */
 function MessageCell({ message }) {
@@ -105,28 +103,12 @@ function MessageCell({ message }) {
 }
 
 /**
- * Stacked up/down sort triangles (Figma 376:2331). Both triangles are faded
- * white at rest; the active direction goes solid white (`fill-current` inherits
- * the header's `text-primary-foreground`). Decorative — the column header's
- * `aria-sort` conveys the sort state to assistive tech.
- * @param {{ direction: "asc" | "desc" | false }} props
- */
-function SortIndicator({ direction }) {
-  return (
-    <svg viewBox="0 0 10 14" width="13" height="20" aria-hidden="true" className="shrink-0 fill-current">
-      <path d="M5 0 9 5H1z" className={cn(direction === "asc" ? "opacity-100" : "opacity-40")} />
-      <path d="M5 14 1 9h8z" className={cn(direction === "desc" ? "opacity-100" : "opacity-40")} />
-    </svg>
-  )
-}
-
-/**
  * Chat History tab — Figma 376:2331. An in-app, course-wide message table
  * (purple header) paginated over the B5 `course_messages_rows` endpoint. Columns
  * are sortable server-side (asc/desc; User is the default) and resizable via
- * drag handles. The "Export CSV" toolbar (top-right) runs the robust async
- * full-course export — the browser only ever holds one page; the complete log is
- * generated server-side to S3.
+ * drag handles (shared OCELIA look via `SortableTable`). The "Export CSV" toolbar
+ * (top-right) runs the robust async full-course export — the browser only ever
+ * holds one page; the complete log is generated server-side to S3.
  */
 export function ChatHistoryTab() {
   const { courseId } = useParams()
@@ -163,14 +145,6 @@ export function ChatHistoryTab() {
     enableColumnResizing: true,
     getCoreRowModel: getCoreRowModel(),
   })
-
-  // Column widths are applied as percentages of the current total (not raw px):
-  // under table-layout:fixed the table width is the GREATER of width:100% and
-  // the sum of column widths, so px widths would force the table past a narrow
-  // parent. Percentages always sum to 100%, so the table tracks the parent and
-  // columns just re-proportion (including after a resize drag).
-  const totalSize = table.getCenterTotalSize()
-  const pct = (size) => `${(size / totalSize) * 100}%`
 
   // Export reuses the existing async CSV job: subscribe to the completion event
   // FIRST (so it can't be missed), submit the job, then download on notify.
@@ -260,83 +234,7 @@ export function ChatHistoryTab() {
         </Button>
       </div>
 
-      <div className="overflow-hidden border border-border">
-        {/* Always fit the parent (w-full from the primitive). With table-layout
-            fixed the per-column sizes act as proportions, so columns shrink to
-            the container width instead of forcing the table past its parent. */}
-        <Table className="[table-layout:fixed]">
-          <TableHeader>
-            {table.getHeaderGroups().map((group) => (
-              <TableRow key={group.id} className="hover:bg-transparent">
-                {group.headers.map((header, i, arr) => {
-                  const sorted = header.column.getIsSorted() // "asc" | "desc" | false
-                  const label = flexRender(header.column.columnDef.header, header.getContext())
-                  return (
-                    <TableHead
-                      key={header.id}
-                      style={{ width: pct(header.getSize()) }}
-                      aria-sort={
-                        sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : "none"
-                      }
-                      className={cn(
-                        "relative bg-primary font-semibold text-primary-foreground",
-                        // Column separator (translucent white to read on purple).
-                        i < arr.length - 1 && "border-r border-primary-foreground/20"
-                      )}
-                    >
-                      <button
-                        type="button"
-                        onClick={header.column.getToggleSortingHandler()}
-                        className="flex w-full items-center justify-between gap-2 text-left"
-                      >
-                        <span className="truncate">{label}</span>
-                        <SortIndicator direction={sorted} />
-                      </button>
-                      {header.column.getCanResize() && (
-                        <div
-                          onMouseDown={header.getResizeHandler()}
-                          onTouchStart={header.getResizeHandler()}
-                          aria-hidden="true"
-                          className={cn(
-                            "absolute right-0 top-0 h-full w-1.5 cursor-col-resize touch-none select-none bg-primary-foreground/20 opacity-0 transition-opacity hover:opacity-100",
-                            header.column.getIsResizing() && "bg-primary-foreground/50 opacity-100"
-                          )}
-                        />
-                      )}
-                    </TableHead>
-                  )
-                })}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows.map((row, rowIndex) => (
-              // Zebra striping: odd rows (1st, 3rd, …) get the #F5F5F5 muted fill.
-              <TableRow key={row.id} className={cn(rowIndex % 2 === 0 && "bg-muted")}>
-                {row.getVisibleCells().map((cell, i, arr) => (
-                  <TableCell
-                    key={cell.id}
-                    style={{ width: pct(cell.column.getSize()) }}
-                    className={cn(
-                      "align-top text-left text-neutral-900",
-                      i < arr.length - 1 && "border-r border-border"
-                    )}
-                  >
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-
-      <div className="flex items-center justify-between gap-4">
-        <p className="text-caption">
-          Displaying {messages.length} out of {total} results
-        </p>
-        <Pagination page={page} pageCount={pageCount} onPageChange={setPage} />
-      </div>
+      <SortableTable table={table} page={page} pageCount={pageCount} onPageChange={setPage} total={total} />
     </div>
   )
 }

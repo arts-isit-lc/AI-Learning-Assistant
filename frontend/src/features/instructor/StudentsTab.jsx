@@ -1,17 +1,21 @@
-import { useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { useParams, useSearchParams } from "react-router"
 import { toUserMessage } from "@/services/apiError"
 import { MdClose, MdPeople } from "react-icons/md"
+import { getCoreRowModel, getPaginationRowModel, getSortedRowModel, useReactTable } from "@tanstack/react-table"
 import { useStudents, useDeleteStudent } from "@/services/queries"
 import { titleCase } from "@/utils/formatters"
 import { Searchbar } from "@/components/composed/Searchbar"
 import { ConfirmDialog } from "@/components/composed/ConfirmDialog"
 import { EmptyState } from "@/components/composed/EmptyState"
+import { SortableTable } from "@/components/composed/SortableTable"
 import { Icon } from "@/components/ui/icon"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ErrorState } from "@/components/composed/ErrorState"
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table"
 import { StudentDetail } from "./StudentDetail"
+
+// Roster rows per page — matches the Chat History table for a consistent feel.
+const PAGE_SIZE = 20
 
 /** "Lastname, Firstname" per the Figma roster; falls back to the email. */
 function rosterName(s) {
@@ -23,12 +27,15 @@ function rosterName(s) {
 
 /**
  * Students tab — Figma 376:2525. A purple-header roster (Student · Contact ·
- * Remove) with a search field above; clicking a student's name opens their
- * read-only chat history inline via the `?student=` query param (deep-linkable,
- * avoids an email in the path). The × removes (unenrolls) a student after a
- * confirm — removal persists immediately, so there's no Undo/Save footer (same
- * save-only decision as Configuration). The course access code lives in the
- * course-detail header, so it's not repeated here.
+ * Remove) with a search field above, rendered through the shared `SortableTable`
+ * so it matches the Chat History table: sortable Student/Contact columns (Remove
+ * is not sortable), drag-resizable columns, zebra striping, and a numbered
+ * pagination footer. Sorting + pagination are client-side (the whole roster is
+ * loaded). Clicking a student's name opens their read-only chat history inline
+ * via the `?student=` query param (deep-linkable, avoids an email in the path).
+ * The × removes (unenrolls) a student after a confirm — removal persists
+ * immediately, so there's no Undo/Save footer (same save-only decision as
+ * Configuration). The course access code lives in the course-detail header.
  */
 export function StudentsTab() {
   const { courseId } = useParams()
@@ -40,20 +47,87 @@ export function StudentsTab() {
 
   const [query, setQuery] = useState("")
   const [removeTarget, setRemoveTarget] = useState(null)
+  // Default sort: Student (name) ascending — mirrors Chat History defaulting to
+  // its first column ascending.
+  const [sorting, setSorting] = useState([{ id: "student", desc: false }])
 
-  const setStudentParam = (email) =>
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev)
-      if (email) next.set("student", email)
-      else next.delete("student")
-      return next
-    })
+  const setStudentParam = useCallback(
+    (email) =>
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev)
+        if (email) next.set("student", email)
+        else next.delete("student")
+        return next
+      }),
+    [setSearchParams]
+  )
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return students
     return students.filter((s) => `${rosterName(s)} ${s.user_email}`.toLowerCase().includes(q))
   }, [students, query])
+
+  const columns = useMemo(
+    () => [
+      {
+        id: "student",
+        accessorFn: (s) => rosterName(s),
+        header: "Student",
+        size: 200,
+        cell: ({ row }) => (
+          <button
+            type="button"
+            onClick={() => setStudentParam(row.original.user_email)}
+            className="text-left text-neutral-900 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {rosterName(row.original)}
+          </button>
+        ),
+      },
+      {
+        accessorKey: "user_email",
+        header: "Contact",
+        size: 200,
+        cell: ({ row }) => row.original.user_email,
+      },
+      {
+        id: "remove",
+        header: "Remove",
+        size: 90,
+        enableSorting: false,
+        enableResizing: false,
+        meta: { align: "right" },
+        cell: ({ row }) => (
+          <button
+            type="button"
+            aria-label={`Remove ${rosterName(row.original)}`}
+            onClick={() => setRemoveTarget(row.original)}
+            className="rounded p-1 text-primary transition-colors hover:text-primary-dark active:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Icon icon={MdClose} size={24} />
+          </button>
+        ),
+      },
+    ],
+    [setStudentParam]
+  )
+
+  const table = useReactTable({
+    data: filtered,
+    columns,
+    state: { sorting },
+    onSortingChange: setSorting,
+    enableSortingRemoval: false, // toggle asc <-> desc only; always keep a sort
+    columnResizeMode: "onChange",
+    enableColumnResizing: true,
+    initialState: { pagination: { pageSize: PAGE_SIZE } },
+    // autoResetPageIndex (default) snaps back to page 1 when the search filter
+    // changes, so we never sit on a now-empty page.
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+  })
 
   // Inline per-student chat history (a sub-state of the Students tab).
   if (selectedEmail) {
@@ -100,53 +174,14 @@ export function StudentsTab() {
           ))}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-sm border border-border">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="bg-primary font-semibold text-primary-foreground">Student</TableHead>
-                <TableHead className="bg-primary font-semibold text-primary-foreground">Contact</TableHead>
-                <TableHead className="bg-primary text-right font-semibold text-primary-foreground">
-                  Remove
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
-                    No students match your search.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filtered.map((s) => (
-                  <TableRow key={s.user_email}>
-                    <TableCell>
-                      <button
-                        type="button"
-                        onClick={() => setStudentParam(s.user_email)}
-                        className="text-left text-foreground hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      >
-                        {rosterName(s)}
-                      </button>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{s.user_email}</TableCell>
-                    <TableCell className="text-right">
-                      <button
-                        type="button"
-                        aria-label={`Remove ${rosterName(s)}`}
-                        onClick={() => setRemoveTarget(s)}
-                        className="rounded p-1 text-primary transition-colors hover:text-primary-dark active:text-neutral-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      >
-                        <Icon icon={MdClose} size={24} />
-                      </button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
+        <SortableTable
+          table={table}
+          page={table.getState().pagination.pageIndex}
+          pageCount={table.getPageCount()}
+          onPageChange={(p) => table.setPageIndex(p)}
+          total={filtered.length}
+          emptyMessage="No students match your search."
+        />
       )}
 
       <ConfirmDialog

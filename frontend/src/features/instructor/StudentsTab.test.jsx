@@ -77,6 +77,42 @@ describe("StudentsTab", () => {
     expect(deleteStudent.mutate).toHaveBeenCalledWith("ada@x.com", expect.any(Object))
   })
 
+  it("sorts by the Student column and toggles the direction (Contact sortable, Remove not)", async () => {
+    render(<StudentsTab />)
+    const lovelace = screen.getByRole("button", { name: "Lovelace, Ada" })
+    const turing = screen.getByRole("button", { name: "Turing, Alan" })
+    const following = Node.DOCUMENT_POSITION_FOLLOWING
+
+    // Default sort: name ascending → Lovelace precedes Turing.
+    expect(lovelace.compareDocumentPosition(turing) & following).toBeTruthy()
+
+    // Clicking the Student header flips to descending → Turing precedes Lovelace.
+    await userEvent.click(screen.getByRole("button", { name: "Student" }))
+    expect(turing.compareDocumentPosition(lovelace) & following).toBeTruthy()
+
+    // Student + Contact are sortable (header is a button); Remove is not.
+    expect(screen.getByRole("button", { name: "Contact" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Remove" })).not.toBeInTheDocument()
+    expect(screen.getByRole("columnheader", { name: "Remove" })).toBeInTheDocument()
+  })
+
+  it("paginates the roster at 20 rows/page with a result count", async () => {
+    studentsResult = {
+      data: Array.from({ length: 25 }, (_, i) => ({
+        first_name: `student${i}`,
+        last_name: String(i).padStart(2, "0"),
+        user_email: `s${i}@x.com`,
+      })),
+      isLoading: false,
+      isError: false,
+    }
+    render(<StudentsTab />)
+
+    expect(screen.getByText("Displaying 20 out of 25 results")).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Page 2" }))
+    expect(screen.getByText("Displaying 5 out of 25 results")).toBeInTheDocument()
+  })
+
   it("shows the empty state when no students are enrolled, styled like the Configuration placeholder (muted fill, no border)", () => {
     studentsResult = { data: [], isLoading: false, isError: false }
     render(<StudentsTab />)
