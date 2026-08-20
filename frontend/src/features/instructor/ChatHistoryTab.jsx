@@ -248,7 +248,10 @@ export function ChatHistoryTab() {
       </div>
 
       <div className="overflow-hidden border border-border">
-        <Table className="[table-layout:fixed]" style={{ width: table.getCenterTotalSize() }}>
+        {/* Fill the parent (w-full from the primitive); the column total is only
+            a min-width floor, so a narrow container scrolls the wrapper instead
+            of forcing the table past its parent. */}
+        <Table className="[table-layout:fixed]" style={{ minWidth: table.getCenterTotalSize() }}>
           <TableHeader>
             {table.getHeaderGroups().map((group) => (
               <TableRow key={group.id} className="hover:bg-transparent">
