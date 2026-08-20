@@ -31,7 +31,7 @@ def select_mode(
 
     Decision table (evaluated in priority order):
     1. state.completion_message_sent == True → "post_completion" (HIGHEST PRIORITY)
-    2. state.module_complete == True AND state.completion_message_sent == False → "complete"
+    2. state.completion_pending == True AND state.completion_message_sent == False → "complete"
     3. state.interactions == 0 → "greet"
     4. evaluation.correct AND advanced → "advance"
     5. evaluation.correct AND NOT advanced → "assess"
@@ -57,8 +57,13 @@ def select_mode(
     if state.completion_message_sent:
         return "post_completion"
 
-    # 2. Module just completed — fire congratulatory message exactly once
-    if state.module_complete and not state.completion_message_sent:
+    # 2. Completion acknowledgement is DEFERRED one turn: the handler latches
+    # completion_pending only AFTER select_mode on the turn that first met the
+    # gate (so that turn keeps its original instructional mode and the student's
+    # in-flight answer still gets a real reply). This turn — the next one —
+    # fires the congratulation exactly once. Keyed on completion_pending, not
+    # module_complete, so the trigger turn does NOT resolve to "complete".
+    if state.completion_pending and not state.completion_message_sent:
         return "complete"
 
     # 3. First interaction — greet the student

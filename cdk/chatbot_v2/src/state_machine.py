@@ -46,6 +46,14 @@ class SessionState:
     # and the student saw the generic redirect. Distinguishes the Option-C
     # outcomes for debugging without overloading the boolean.
     completion_message_source: str = ""
+    # One-turn deferral of the completion acknowledgement. When the metrics gate
+    # first trips, the turn that satisfied it keeps running its ORIGINAL
+    # instructional mode (so the student's in-flight answer gets a real reply)
+    # and this flag is latched; the NEXT turn selects "complete". Invariant:
+    # completion_pending == True implies module_complete and NOT
+    # completion_message_sent (pending and sent are mutually exclusive). Cleared
+    # when the completion message is successfully delivered.
+    completion_pending: bool = False
     interactions: int = 0
     engagement_score: float = 0.0
     concept_progress: dict[str, ConceptProgress] = field(default_factory=dict)
@@ -119,6 +127,7 @@ def serialize_state(state: SessionState) -> dict:
         "module_complete": state.module_complete,
         "completion_message_sent": state.completion_message_sent,
         "completion_message_source": state.completion_message_source,
+        "completion_pending": state.completion_pending,
         "interactions": state.interactions,
         "engagement_score": str(state.engagement_score),
         "concept_progress": serialized_progress,
@@ -170,6 +179,7 @@ def deserialize_state(item: dict) -> SessionState:
         module_complete=item.get("module_complete", False),
         completion_message_sent=item.get("completion_message_sent", False),
         completion_message_source=item.get("completion_message_source", ""),
+        completion_pending=item.get("completion_pending", False),
         interactions=int(item.get("interactions", 0)),
         engagement_score=float(item.get("engagement_score", 0.0)),
         concept_progress=concept_progress,

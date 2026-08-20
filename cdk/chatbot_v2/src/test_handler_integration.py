@@ -401,16 +401,41 @@ def test_tutor_guardrail_block_emits_one_terminal_stream_message(wire, monkeypat
 # ---------------------------------------------------------------------------
 
 
-def _make_completion_ready(ctl):
-    # interactions >= 5, engagement >= 0.5, and >= required concepts discussed
-    # (module has 2 concepts -> ceil(0.5 * 2) = 1 required) so
-    # check_module_completion returns True this turn; completion_message_sent is
-    # still False so select_mode picks "complete".
+def _make_completion_gate_trip(ctl):
+    # State where the completion METRICS gate first trips THIS turn: interactions
+    # >= 5, engagement >= 0.5, and >= required concepts discussed (module has 2
+    # concepts -> ceil(0.5 * 2) = 1 required). module_complete/pending/sent are
+    # all still False, so this is the TRIGGER turn — it runs its normal
+    # instructional mode and only latches completion_pending afterward.
     ctl.state.interactions = 5
     ctl.state.engagement_score = 1.0
     ctl.state.concepts_discussed = ["Recursion"]
     ctl.state.module_complete = False
+    ctl.state.completion_pending = False
     ctl.state.completion_message_sent = False
+
+
+def _make_completion_ready(ctl):
+    # State AT the deferred completion turn: the trigger turn already ran and
+    # persisted module_complete=True + completion_pending=True (sent still
+    # False), so select_mode picks "complete" on THIS turn. Used by the tests
+    # that exercise the completion turn itself (latch, guardrail retry/fallback,
+    # dedicated prompt, skip-retrieval).
+    _make_completion_gate_trip(ctl)
+    ctl.state.module_complete = True
+    ctl.state.completion_pending = True
+
+
+def _assert_completion_invariants(s):
+    # I1: completion_message_sent ⇒ module_complete
+    # I2: completion_pending ⇒ (module_complete ∧ ¬completion_message_sent)
+    # Together: pending and sent are mutually exclusive and both imply completion.
+    if s.completion_message_sent:
+        assert s.module_complete is True, "I1 violated: sent but not module_complete"
+        assert s.completion_pending is False, "I2 violated: sent AND pending"
+    if s.completion_pending:
+        assert s.module_complete is True, "I2 violated: pending but not module_complete"
+        assert s.completion_message_sent is False, "I2 violated: pending AND sent"
 
 
 def test_blocked_completion_turn_latches_completion_state(wire, monkeypatch):
@@ -471,7 +496,151 @@ def test_successful_completion_latches_state_and_next_turn_is_post_completion(wi
 
 
 # ---------------------------------------------------------------------------
+# The completion turn must ACKNOWLEDGE completion, not ask another course
+# question. In prod the complete turn kept teaching because the full teaching
+# history + the student's latest on-topic answer out-competed the brief
+# "congratulate only" system prompt. Fix: generate the complete turn from a
+# CLEAN context (empty history + a neutral trigger) so the dedicated completion
+# prompt is the sole driver. These tests pin that seam and its scope.
+# ---------------------------------------------------------------------------
+
+
+def test_completion_turn_generates_from_clean_context(wire, monkeypatch):
+    monkeypatch.setattr(main, "_load_other_module_names", lambda c, m: ["Graph Algorithms"])
+    _make_completion_ready(wire)
+    # A real teaching history that would normally be threaded into generation.
+    monkeypatch.setattr(main, "load_chat_history", lambda *a, **k: [
+        {"role": "user", "content": "What is a stack?"},
+        {"role": "assistant", "content": "A stack is LIFO. Here's a question for you..."},
+    ])
+    wire.stream.return_value = "Congratulations, you've completed this module!"
+
+    main.handler(_event(message_content="A queue is FIFO."), _Ctx())
+
+    # The generation call for the complete turn dropped the teaching history and
+    # replaced the student's on-topic message with the neutral trigger, so only
+    # the completion system prompt steers the model.
+    kwargs = wire.stream.call_args.kwargs
+    assert kwargs["prompt_history"] == []
+    assert kwargs["user_message"] == main.COMPLETION_TRIGGER_MESSAGE
+
+
+def test_non_completion_turn_keeps_teaching_history(wire, monkeypatch):
+    # Scope guard: the clean-context reset is for the completion turn ONLY. A
+    # normal assess turn must still receive the teaching history + the student's
+    # real message so the tutor stays contextual.
+    wire.state.interactions = 3
+    history = [
+        {"role": "user", "content": "What is a stack?"},
+        {"role": "assistant", "content": "A stack is LIFO."},
+    ]
+    monkeypatch.setattr(main, "load_chat_history", lambda *a, **k: list(history))
+
+    main.handler(_event(message_content="A queue is FIFO."), _Ctx())
+
+    kwargs = wire.stream.call_args.kwargs
+    assert kwargs["prompt_history"] == history
+    assert kwargs["user_message"] == "A queue is FIFO."
+
+
+# ---------------------------------------------------------------------------
+# Deferred completion (one-turn deferral). The turn that first meets the metrics
+# gate keeps its NORMAL instructional mode so the student's in-flight answer
+# gets a real reply; the congratulation fires on the NEXT turn from a clean
+# context. This is the architectural intent — tested via behavior, not internals.
+# ---------------------------------------------------------------------------
+
+
+def test_completion_is_deferred_one_turn_then_acknowledges(wire, monkeypatch):
+    monkeypatch.setattr(main, "_load_other_module_names", lambda c, m: ["Graph Algorithms"])
+
+    # --- Phase 1: the trigger turn (gate first trips on this message) ----------
+    _make_completion_gate_trip(wire)
+    history = [
+        {"role": "user", "content": "What is a stack?"},
+        {"role": "assistant", "content": "A stack is LIFO. Here's a question for you..."},
+    ]
+    monkeypatch.setattr(main, "load_chat_history", lambda *a, **k: list(history))
+    wire.stream.return_value = "Good — and note the amortized cost of a dynamic array."
+
+    main.handler(_event(message_content="A queue is FIFO."), _Ctx())
+
+    trigger_state = wire.persist_state.call_args.args[0]
+    # The student's answer got a REAL instructional reply, not a congratulation:
+    assert trigger_state.last_mode != "complete"
+    # ...generated WITH the teaching context (not the clean completion context).
+    trigger_kwargs = wire.stream.call_args.kwargs
+    assert trigger_kwargs["prompt_history"] == history
+    assert trigger_kwargs["user_message"] == "A queue is FIFO."
+    # Completion is now pending (latched AFTER mode selection), not yet sent.
+    assert trigger_state.module_complete is True
+    assert trigger_state.completion_pending is True
+    assert trigger_state.completion_message_sent is False
+    _assert_completion_invariants(trigger_state)
+
+    # --- Phase 2: the next turn delivers the congratulation --------------------
+    monkeypatch.setattr(main, "_load_session_state", lambda sid: trigger_state)
+    wire.stream.return_value = "Congratulations, you've completed this module!"
+
+    main.handler(_event(message_content="Thanks!"), _Ctx())
+
+    done_state = wire.persist_state.call_args.args[0]
+    assert done_state.last_mode == "complete"
+    # ...and this turn WAS generated from the clean completion context.
+    done_kwargs = wire.stream.call_args.kwargs
+    assert done_kwargs["prompt_history"] == []
+    assert done_kwargs["user_message"] == main.COMPLETION_TRIGGER_MESSAGE
+    assert done_state.completion_message_sent is True
+    assert done_state.completion_pending is False
+    _assert_completion_invariants(done_state)
+
+
+def test_completion_invariants_hold_across_full_lifecycle(wire, monkeypatch):
+    # Drive trigger -> deferred(complete) -> post_completion and assert I1/I2
+    # after EVERY persisted state, not just the individual behaviors.
+    monkeypatch.setattr(main, "_load_other_module_names", lambda c, m: [])
+    _make_completion_gate_trip(wire)
+    wire.stream.return_value = "A normal instructional reply."
+
+    main.handler(_event(), _Ctx())
+    s1 = wire.persist_state.call_args.args[0]
+    _assert_completion_invariants(s1)
+    assert s1.completion_pending is True and s1.last_mode != "complete"
+
+    monkeypatch.setattr(main, "_load_session_state", lambda sid: s1)
+    wire.stream.return_value = "Congratulations, you've completed this module!"
+    main.handler(_event(), _Ctx())
+    s2 = wire.persist_state.call_args.args[0]
+    _assert_completion_invariants(s2)
+    assert s2.last_mode == "complete"
+
+    monkeypatch.setattr(main, "_load_session_state", lambda sid: s2)
+    wire.stream.return_value = "Sure — happy to keep going."
+    main.handler(_event(), _Ctx())
+    s3 = wire.persist_state.call_args.args[0]
+    _assert_completion_invariants(s3)
+    assert s3.last_mode == "post_completion"
+
+
+def test_input_block_on_deferred_turn_keeps_pending_and_holds_invariants(wire, monkeypatch):
+    # An INPUT block on the deferred completion turn must NOT burn the one-shot:
+    # the student never saw a congratulation, so completion_pending stays True
+    # (re-attempt next clean turn) and I2 still holds.
+    monkeypatch.setattr(main, "_load_other_module_names", lambda c, m: [])
+    _make_completion_ready(wire)  # at the deferred turn (pending=True)
+    wire.stream.return_value = {"message": "[blocked]", "blocked": True, "type": "input"}
+
+    main.handler(_event(), _Ctx())
+
+    saved = wire.persist_state.call_args.args[0]
+    assert saved.completion_message_sent is False
+    assert saved.completion_pending is True
+    _assert_completion_invariants(saved)
+
+
+# ---------------------------------------------------------------------------
 # Option C: a completion message blocked by the OUTPUT guardrail is retried ONCE
+# with a constrained prompt (no recommendations / other modules, < 40 words)
 # with a constrained prompt (no recommendations / other modules, < 40 words)
 # instead of degrading to the generic "let me rephrase" redirect. The retry is
 # scoped to mode=="complete" + output block only.

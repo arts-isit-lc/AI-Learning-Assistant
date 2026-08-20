@@ -59,6 +59,13 @@ RDS_PROJECTION_QUEUE_URL = os.environ.get("RDS_PROJECTION_QUEUE_URL", "")
 # Runtime kill switch for cross-module file referencing. Defaults on; set to
 # "false" to revert to module_id-only retrieval scoping without a redeploy.
 ENABLE_CROSS_MODULE_REFERENCING = os.environ.get("ENABLE_CROSS_MODULE_REFERENCING", "true").lower() != "false"
+# Neutral student turn used to drive the "complete" acknowledgement. On the
+# completion turn the dedicated completion system prompt must be the ONLY thing
+# steering generation; feeding the real teaching history + the student's latest
+# (on-topic) answer biases the model back into asking another course question
+# (observed in prod — the complete turn never congratulated). So the complete
+# turn is generated from a clean context: empty history + this trigger.
+COMPLETION_TRIGGER_MESSAGE = "I've just finished working through this module."
 # Module-level singletons (initialized once per container)
 _lambda_client = boto3.client("lambda", region_name=REGION)
 _bedrock_client = boto3.client("bedrock-runtime", region_name=REGION)
@@ -740,7 +747,28 @@ def handler(event, context):
 
         # Step 8: Select mode
         mode = select_mode(state, evaluation, advanced)
-        logger.info("Mode selected", extra={"mode": mode, "stage": state.stage})
+
+        # Deferred-completion latch (trigger turn). If the metrics gate first
+        # tripped THIS turn, select_mode has already chosen the student's normal
+        # instructional mode above (module_complete does NOT force "complete") —
+        # so their in-flight answer still gets a real reply. Latch pending now so
+        # the NEXT turn delivers the congratulation from a clean context.
+        #
+        # Ordering is deliberate: setting completion_pending before select_mode
+        # would collapse the deferral (the trigger turn would resolve straight to
+        # "complete"). The `not completion_pending` guard makes this a no-op on
+        # the deferred turn itself (mode is already "complete" there).
+        #
+        # Tradeoff: if the student never sends another message they won't see the
+        # chat congratulation. module_complete is already latched (the card shows
+        # COMPLETED), and that is preferred over swallowing their final answer
+        # with a bare "Congratulations!".
+        if state.module_complete and not state.completion_message_sent and not state.completion_pending:
+            state.completion_pending = True
+            logger.info("Completion deferred one turn", extra={"selected_mode": mode, "stage": state.stage})
+
+        logger.info("Mode selected", extra={"mode": mode, "stage": state.stage,
+                                             "completion_pending": state.completion_pending})
         # Persist the selected mode so the course-progress debug view can surface
         # the (otherwise transient) Socratic hint escalation. Only set here on the
         # Socratic path — tutor turns return earlier and keep the prior value.
@@ -913,6 +941,15 @@ def handler(event, context):
         model_kwargs = {"max_tokens": RESPONSE_MAX_TOKENS, "guardrail_id": guardrail_id, "guardrail_version": guardrail_version}
         user_msg = message_content or f"Start the conversation about {topic}"
 
+        # Completion turn: generate from a CLEAN context so the dedicated
+        # completion prompt is the sole driver. The teaching history + the
+        # student's latest on-topic message otherwise pull the model back into
+        # asking another course question instead of acknowledging completion.
+        # This also flows into the output-guardrail retry below (same vars).
+        if mode == "complete":
+            prompt_history = []
+            user_msg = COMPLETION_TRIGGER_MESSAGE
+
         _timings["time_to_generation_ms"] = round((time.perf_counter() - _t0) * 1000, 2)
         _gen_t = time.perf_counter()
         llm_output = _stream_with_guardrail_retry(
@@ -968,6 +1005,10 @@ def handler(event, context):
             if mode == "complete" and block_stage == "output":
                 state.completion_message_sent = True
                 state.completion_message_source = "blocked_fallback"
+                # sent latched → clear the deferral (invariant: sent and pending
+                # are mutually exclusive). An INPUT block leaves both flags as-is
+                # so the congratulation re-attempts next clean turn.
+                state.completion_pending = False
             # Diagnostic: capture stage + action + assessment EXPLICITLY (don't
             # leave it to be inferred later) so a real intervention is diagnosable.
             logger.warning("Guardrail blocked turn", extra={
@@ -1033,6 +1074,9 @@ def handler(event, context):
         if mode == "complete":
             state.completion_message_sent = True
             state.completion_message_source = "guardrail_retry" if completion_retry_succeeded else "generated"
+            # Congratulation delivered — clear the deferral (invariant: sent and
+            # pending are mutually exclusive).
+            state.completion_pending = False
 
         # Discuss concepts that appear in the student's message
         if message_content and state.module_concepts:
