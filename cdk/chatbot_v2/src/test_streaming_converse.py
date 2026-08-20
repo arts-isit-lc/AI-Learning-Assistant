@@ -90,7 +90,13 @@ def test_converse_request_uses_async_guardrail(monkeypatch):
     assert gc["guardrailVersion"] == "2"
     assert capture["system"] == [{"text": "sys"}]
     assert capture["inferenceConfig"] == {"maxTokens": 100}
-    assert capture["messages"][-1] == {"role": "user", "content": [{"text": "hi"}]}
+    # Input-scoping fix: with a guardrail attached, the current student message is
+    # wrapped in a guardContent block so ONLY it (not the system prompt or the
+    # whole history) is assessed on input. See TestConverseGuardContentScoping in
+    # test_streaming_guardrail_request_shape.py.
+    assert capture["messages"][-1] == {
+        "role": "user", "content": [{"guardContent": {"text": {"text": "hi"}}}]
+    }
 
 
 def test_converse_output_block_returns_redirect_dict(monkeypatch):

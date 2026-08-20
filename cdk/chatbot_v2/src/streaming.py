@@ -197,7 +197,26 @@ def _iter_converse_events(bedrock_client, model_id, system_prompt, user_message,
         content = turn.get("content", "")
         if role in ("user", "assistant") and content:
             messages.append({"role": role, "content": [{"text": content}]})
-    messages.append({"role": "user", "content": [{"text": user_message}]})
+
+    # INPUT-SCOPING (guardrail false-positive fix): when a guardrail is attached,
+    # wrap ONLY the current student message in a `guardContent` block. Per the
+    # Converse API contract, once ANY message content is wrapped in guardContent
+    # the input guardrail evaluates ONLY those blocks — so the system prompt AND
+    # the whole conversation history are skipped on input. Without this, every
+    # turn re-scanned the entire accumulated history (observed: 3238 guarded
+    # chars) as one "input", which let benign multi-turn content trip an
+    # input-side filter (e.g. PROMPT_ATTACK at HIGH) and replaced an on-topic
+    # answer with the generic redirect. This matches AWS's conversational-app
+    # guidance: evaluate only the current user input (history/model output were
+    # already guarded on their own turns; the system prompt is developer-trusted).
+    # Output assessment is unaffected — it always evaluates the model response.
+    # When the guardrail is off (STREAM_GUARDRAIL_DISABLED or no id) keep plain
+    # text so the diagnostic path is byte-for-byte unchanged.
+    guardrail_on = _guardrail_attached(model_kwargs)
+    if guardrail_on:
+        messages.append({"role": "user", "content": [{"guardContent": {"text": {"text": user_message}}}]})
+    else:
+        messages.append({"role": "user", "content": [{"text": user_message}]})
 
     converse_kwargs = {
         "modelId": model_id,
@@ -206,7 +225,7 @@ def _iter_converse_events(bedrock_client, model_id, system_prompt, user_message,
     }
     if system_prompt:
         converse_kwargs["system"] = [{"text": system_prompt}]
-    if _guardrail_attached(model_kwargs):
+    if guardrail_on:
         converse_kwargs["guardrailConfig"] = {
             "guardrailIdentifier": model_kwargs["guardrail_id"],
             "guardrailVersion": model_kwargs.get("guardrail_version", "DRAFT"),
