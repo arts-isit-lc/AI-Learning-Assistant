@@ -473,6 +473,24 @@ exports.handler = async (event) => {
                 ? `${sortColumn} ${sortDir}`
                 : `${sortColumn} ${sortDir}, m.time_sent DESC`;
 
+            // Free-text search: case-insensitive substring match across the
+            // columns shown in the table. The pattern is parameterized by
+            // postgres.js (no injection risk); an empty/blank search produces an
+            // empty fragment (no filter). Reused in both the count + rows queries
+            // so the total tracks the filtered set. The count query carries the
+            // same joins as the rows query so it can reference these columns.
+            const search = String(event.queryStringParameters.search ?? "").trim();
+            const searchPattern = `%${search}%`;
+            const searchClause = search
+              ? sqlConnection`AND (
+                    u.user_email ILIKE ${searchPattern}
+                    OR cm.module_name ILIKE ${searchPattern}
+                    OR cc.concept_name ILIKE ${searchPattern}
+                    OR s.session_name ILIKE ${searchPattern}
+                    OR m.message_content ILIKE ${searchPattern}
+                  )`
+              : sqlConnection``;
+
             const owns = await instructorHasCourseAccess(userEmailAttribute, course_id);
             if (!owns) {
               response.statusCode = 403;
@@ -485,8 +503,11 @@ exports.handler = async (event) => {
                 FROM "Messages" m
                 JOIN "Sessions" s ON m.session_id = s.session_id
                 JOIN "Student_Modules" sm ON s.student_module_id = sm.student_module_id
+                JOIN "Course_Modules" cm ON sm.course_module_id = cm.module_id
+                JOIN "Course_Concepts" cc ON cm.concept_id = cc.concept_id
                 JOIN "Enrolments" e ON sm.enrolment_id = e.enrolment_id
-                WHERE e.course_id = ${course_id};
+                JOIN "Users" u ON e.user_id = u.user_id
+                WHERE e.course_id = ${course_id} ${searchClause};
               `;
             const total = countRows[0]?.total ?? 0;
 
@@ -503,7 +524,7 @@ exports.handler = async (event) => {
                 JOIN "Course_Concepts" cc ON cm.concept_id = cc.concept_id
                 JOIN "Enrolments" e ON sm.enrolment_id = e.enrolment_id
                 JOIN "Users" u ON e.user_id = u.user_id
-                WHERE e.course_id = ${course_id}
+                WHERE e.course_id = ${course_id} ${searchClause}
                 ORDER BY ${sqlConnection.unsafe(orderClause)}
                 LIMIT ${limit} OFFSET ${offset};
               `;

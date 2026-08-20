@@ -7,6 +7,7 @@ import { http } from "@/services/http"
 import { titleCase } from "@/utils/formatters"
 import { useJobNotification } from "./hooks/useJobNotification"
 import { EmptyState } from "@/components/composed/EmptyState"
+import { Searchbar } from "@/components/composed/Searchbar"
 import { SortableTable } from "@/components/composed/SortableTable"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -115,6 +116,10 @@ export function ChatHistoryTab() {
   const [page, setPage] = useState(0)
   // Default: name (User column) ascending. Server sorts the full result set.
   const [sorting, setSorting] = useState([{ id: "user_email", desc: false }])
+  // Free-text search (debounced by Searchbar). Filters the whole result set
+  // server-side — not just the current page.
+  const [search, setSearch] = useState("")
+  const hasSearch = search.trim().length > 0
   const offset = page * PAGE_SIZE
   const sortBy = sorting[0]?.id ?? "user_email"
   const sortDir = sorting[0]?.desc ? "desc" : "asc"
@@ -124,6 +129,7 @@ export function ChatHistoryTab() {
     offset,
     sortBy,
     sortDir,
+    search,
   })
   const messages = data?.messages ?? []
   const total = data?.total ?? 0
@@ -184,7 +190,11 @@ export function ChatHistoryTab() {
     }
   }
 
-  const exportDisabled = exporting || status?.isEnabled === false || total === 0
+  // Export runs over the whole course (not the current search/page), so it stays
+  // enabled whenever the course has messages. Reaching the render path already
+  // implies that (a truly empty course hits the empty state below), so search
+  // returning no matches doesn't disable it.
+  const exportDisabled = exporting || status?.isEnabled === false
 
   if (isError) {
     return (
@@ -206,7 +216,10 @@ export function ChatHistoryTab() {
     )
   }
 
-  if (total === 0) {
+  // A truly empty course (no messages, no active search) gets the full empty
+  // state. When a search is active we keep the search bar + table so a
+  // zero-result search can be cleared (SortableTable shows its no-match row).
+  if (total === 0 && !hasSearch) {
     return (
       <EmptyState
         icon={MdForum}
@@ -219,13 +232,23 @@ export function ChatHistoryTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex justify-end">
+      <div className="flex items-center gap-4">
+        <Searchbar
+          value={search}
+          // Searching re-filters the whole result set, so reset to the first page.
+          onChange={(v) => {
+            setSearch(v)
+            setPage(0)
+          }}
+          placeholder="Search chat history"
+          className="flex-1"
+        />
         {/* Matches the admin "Add course" action (outline, sm, h-7 rounded-sm
             px-6) — Export CSV just omits the trailing icon. */}
         <Button
           variant="outline"
           size="sm"
-          className="h-7 rounded-sm px-6"
+          className="h-7 shrink-0 rounded-sm px-6"
           onClick={handleExport}
           loading={exporting}
           disabled={exportDisabled}
@@ -234,7 +257,14 @@ export function ChatHistoryTab() {
         </Button>
       </div>
 
-      <SortableTable table={table} page={page} pageCount={pageCount} onPageChange={setPage} total={total} />
+      <SortableTable
+        table={table}
+        page={page}
+        pageCount={pageCount}
+        onPageChange={setPage}
+        total={total}
+        emptyMessage="No messages match your search."
+      />
     </div>
   )
 }

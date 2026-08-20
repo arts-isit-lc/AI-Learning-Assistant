@@ -78,7 +78,7 @@ describe("ChatHistoryTab", () => {
     render(<ChatHistoryTab />)
     expect(useCourseMessages).toHaveBeenLastCalledWith(
       "c1",
-      { limit: 20, offset: 0, sortBy: "user_email", sortDir: "asc" }
+      { limit: 20, offset: 0, sortBy: "user_email", sortDir: "asc", search: "" }
     )
   })
 
@@ -94,6 +94,38 @@ describe("ChatHistoryTab", () => {
     const exportBtn = screen.getByRole("button", { name: "Export CSV" })
     const table = screen.getByRole("table")
     expect(exportBtn.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it("filters server-side via the (debounced) search box and resets to the first page", async () => {
+    useCourseMessages.mockReturnValue({
+      data: { messages: [MSG()], total: 95 },
+      isLoading: false,
+      isError: false,
+    })
+    render(<ChatHistoryTab />)
+    await userEvent.type(screen.getByRole("searchbox", { name: "Search chat history" }), "vector")
+    // Debounced → assert the eventual query carries the term with offset reset.
+    await waitFor(() =>
+      expect(useCourseMessages).toHaveBeenLastCalledWith(
+        "c1",
+        expect.objectContaining({ search: "vector", offset: 0, limit: 20 })
+      )
+    )
+  })
+
+  it("keeps the search bar and shows a no-match message (not the empty state) when a search returns nothing", async () => {
+    useCourseMessages.mockImplementation((_courseId, { search }) =>
+      search
+        ? { data: { messages: [], total: 0 }, isLoading: false, isError: false }
+        : { data: { messages: [MSG()], total: 95 }, isLoading: false, isError: false }
+    )
+    render(<ChatHistoryTab />)
+    await userEvent.type(screen.getByRole("searchbox", { name: "Search chat history" }), "zzz")
+
+    expect(await screen.findByText("No messages match your search.")).toBeInTheDocument()
+    // The search field stays; the full "No chat history yet" empty state is not shown.
+    expect(screen.getByRole("searchbox", { name: "Search chat history" })).toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "No chat history yet" })).not.toBeInTheDocument()
   })
 
   it("paginates over offset via the numbered pagination (Previous disabled on page 1, page click advances)", async () => {
@@ -112,7 +144,7 @@ describe("ChatHistoryTab", () => {
     expect(screen.getByText(/page two msg/)).toBeInTheDocument()
     expect(useCourseMessages).toHaveBeenLastCalledWith(
       "c1",
-      { limit: 20, offset: 20, sortBy: "user_email", sortDir: "asc" }
+      { limit: 20, offset: 20, sortBy: "user_email", sortDir: "asc", search: "" }
     )
   })
 
@@ -128,7 +160,7 @@ describe("ChatHistoryTab", () => {
     await userEvent.click(screen.getByRole("button", { name: "User" }))
     expect(useCourseMessages).toHaveBeenLastCalledWith(
       "c1",
-      { limit: 20, offset: 0, sortBy: "user_email", sortDir: "desc" }
+      { limit: 20, offset: 0, sortBy: "user_email", sortDir: "desc", search: "" }
     )
 
     // Move off page 1, then changing the sort column must snap back to offset 0
@@ -136,12 +168,12 @@ describe("ChatHistoryTab", () => {
     await userEvent.click(screen.getByRole("button", { name: "Page 3" }))
     expect(useCourseMessages).toHaveBeenLastCalledWith(
       "c1",
-      { limit: 20, offset: 40, sortBy: "user_email", sortDir: "desc" }
+      { limit: 20, offset: 40, sortBy: "user_email", sortDir: "desc", search: "" }
     )
     await userEvent.click(screen.getByRole("button", { name: "Concept" }))
     expect(useCourseMessages).toHaveBeenLastCalledWith(
       "c1",
-      { limit: 20, offset: 0, sortBy: "concept_name", sortDir: "asc" }
+      { limit: 20, offset: 0, sortBy: "concept_name", sortDir: "asc", search: "" }
     )
   })
 
