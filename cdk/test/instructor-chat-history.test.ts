@@ -41,6 +41,7 @@ describe("OpenAPI contract: instructor course_messages_rows", () => {
 
 type FakeSql = {
   (strings: TemplateStringsArray, ...values: any[]): Promise<any[]>;
+  unsafe: (fragment: string) => any;
   queueResult: (rows: any[]) => FakeSql;
   calls: string[];
   reset: () => void;
@@ -49,10 +50,28 @@ type FakeSql = {
 function makeFakeSql(): FakeSql {
   const queue: any[][] = [];
   const calls: string[] = [];
+  // Faithfully models postgres.js: a tagged-template call builds a *lazy* query
+  // that only executes — recording a call and consuming a queued result — when
+  // it is awaited. Nested fragments (the free-text `searchClause`, or an empty
+  // sql``) are built but not awaited on their own; they're interpolated into an
+  // outer query and execute as part of that single awaited round-trip. So they
+  // must NOT count as a separate query nor consume a queued result. (The earlier
+  // eager fake counted every invocation, over-counting once the search/sort
+  // feature introduced fragments + sql.unsafe.)
   const fn = ((strings: TemplateStringsArray) => {
-    calls.push(strings.join("?"));
-    return Promise.resolve(queue.length ? (queue.shift() as any[]) : []);
-  }) as FakeSql;
+    const text = strings.join("?");
+    return {
+      then(resolve: (v: any[]) => void, reject: (e: any) => void) {
+        calls.push(text);
+        const rows = queue.length ? (queue.shift() as any[]) : [];
+        return Promise.resolve(rows).then(resolve, reject);
+      },
+    };
+  }) as unknown as FakeSql;
+  // sql.unsafe(fragment) — used for the server-controlled ORDER BY clause. In the
+  // fake it returns an inert marker; interpolated values are ignored (only the
+  // static string parts are recorded), so it just needs to exist and not throw.
+  fn.unsafe = (fragment: string) => ({ __unsafe: fragment });
   fn.queueResult = (rows: any[]) => {
     queue.push(rows);
     return fn;
@@ -121,6 +140,22 @@ describe("instructorFunction — GET /instructor/course_messages_rows", () => {
     expect(body.total).toBe(2);
     expect(body.messages).toHaveLength(2);
     expect(mockSql.calls).toHaveLength(3); // ownership + count + rows
+  });
+
+  it("200: free-text search adds a filter fragment, not an extra executed query", async () => {
+    // The search clause is a nested (lazy) sql fragment interpolated into the
+    // count + rows queries — it must not count as a separate round-trip, so the
+    // filtered page still runs exactly ownership + count + rows.
+    mockSql
+      .queueResult(OWNS)
+      .queueResult([{ total: 1 }])
+      .queueResult([{ user_email: "stu@x.com", module_name: "vectors", message_content: "join" }]);
+    const res = await handler(makeEvent({ course_id: "c1", search: "join" }));
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.total).toBe(1);
+    expect(body.messages).toHaveLength(1);
+    expect(mockSql.calls).toHaveLength(3); // ownership + count + rows (fragment not counted)
   });
 
   it("403: instructor does not teach the course (no count/rows query runs)", async () => {
