@@ -85,7 +85,7 @@ export function AIMessage({ content, blocks, isStreaming = false }) {
   return (
     <div className="mb-6 flex gap-3">
       <AssistantMark />
-      <div className="min-w-0 flex-1 overflow-x-auto break-words text-foreground">
+      <div className="min-w-0 max-w-2xl flex-1 overflow-x-auto break-words text-foreground mr-8">
         {renderBlocks.map((block, i) => {
           let node
           switch (block.type) {
