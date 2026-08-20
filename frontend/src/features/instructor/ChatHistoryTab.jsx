@@ -51,11 +51,7 @@ const columns = [
     accessorKey: "session_id",
     header: "Session ID",
     size: 150,
-    cell: ({ row }) => (
-      <span className="text-muted-foreground">
-        {row.original.session_name || row.original.session_id || "—"}
-      </span>
-    ),
+    cell: ({ row }) => row.original.session_name || row.original.session_id || "—",
   },
   {
     accessorKey: "message_content",
@@ -257,10 +253,10 @@ export function ChatHistoryTab() {
       </div>
 
       <div className="overflow-hidden border border-border">
-        {/* Fill the parent (w-full from the primitive); the column total is only
-            a min-width floor, so a narrow container scrolls the wrapper instead
-            of forcing the table past its parent. */}
-        <Table className="[table-layout:fixed]" style={{ minWidth: table.getCenterTotalSize() }}>
+        {/* Always fit the parent (w-full from the primitive). With table-layout
+            fixed the per-column sizes act as proportions, so columns shrink to
+            the container width instead of forcing the table past its parent. */}
+        <Table className="[table-layout:fixed]">
           <TableHeader>
             {table.getHeaderGroups().map((group) => (
               <TableRow key={group.id} className="hover:bg-transparent">
