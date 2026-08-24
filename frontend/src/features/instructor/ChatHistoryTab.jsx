@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { useParams } from "react-router"
 import { MdForum } from "react-icons/md"
 import { getCoreRowModel, useReactTable } from "@tanstack/react-table"
-import { useCourseMessages, useChatlogs, useChatlogStatus } from "@/services/queries"
+import { useCourseMessages, useChatlogs } from "@/services/queries"
 import { http } from "@/services/http"
 import { titleCase } from "@/utils/formatters"
 import { useJobNotification } from "./hooks/useJobNotification"
@@ -166,9 +166,8 @@ export function ChatHistoryTab() {
   })
 
   // Export reuses the existing async CSV job. The AppSync `onNotify` WebSocket is
-  // the fast path; a status poll (new log file appearing) is the reliable backstop
-  // and an overall timeout guarantees the button never spins forever.
-  const { data: status } = useChatlogStatus(courseId)
+  // the fast path; polling for a new log file is the reliable backstop and an
+  // overall timeout guarantees the button never spins forever.
   const { data: chatlogs, refetch: refetchLogs } = useChatlogs(courseId)
   const { subscribe, close } = useJobNotification()
   const [exporting, setExporting] = useState(false)
@@ -276,11 +275,14 @@ export function ChatHistoryTab() {
     }
   }
 
-  // Export runs over the whole course (not the current search/page), so it stays
-  // enabled whenever the course has messages. Reaching the render path already
-  // implies that (a truly empty course hits the empty state below), so search
-  // returning no matches doesn't disable it.
-  const exportDisabled = exporting || status?.isEnabled === false
+  // Only gate on an in-flight export in THIS session. We deliberately do NOT gate
+  // on the server's `check_notifications_status` (isEnabled): that flag is false
+  // whenever any chatlogs_notifications row exists, and an export that never runs
+  // its cleanup (a crash, a missed notification, a DLQ'd job) orphans a row and
+  // permanently disables the button. The backend tolerates concurrent jobs (each
+  // writes its own timestamped CSV), and a successful export's cleanup deletes any
+  // orphaned rows, so a session-scoped guard is both sufficient and self-healing.
+  const exportDisabled = exporting
 
   if (isError) {
     return (
