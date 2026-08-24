@@ -89,6 +89,20 @@ describe('S3 CORS configuration', () => {
       expect(origin).not.toContain('d35ufva5r2ltvd');
     }
   });
+
+  test('prod origins cover the custom domain + live Amplify app, and never "*"', () => {
+    // Prod must not fall back to "*" (audit #11) and must include both the
+    // origins the browser actually sends: the custom domain users hit and the
+    // Amplify default for the main branch (appId d21r345xhq29at).
+    expect(DEFAULT_ALLOWED_ORIGINS.prod).toEqual(
+      expect.arrayContaining([
+        'https://ocelia.arts.ubc.ca',
+        'https://main.d21r345xhq29at.amplifyapp.com',
+      ])
+    );
+    expect(DEFAULT_ALLOWED_ORIGINS.prod.length).toBeGreaterThan(0);
+    expect(DEFAULT_ALLOWED_ORIGINS.prod).not.toContain('*');
+  });
 });
 
 describe('resolveAllowedOrigins', () => {
@@ -117,11 +131,17 @@ describe('resolveAllowedOrigins', () => {
     expect(resolveAllowedOrigins(stack, 'prod')).toEqual(['https://a.example.com']);
   });
 
+  test('returns prod defaults for the prod environment when no context override is set', () => {
+    const app = new cdk.App({ context: { StackPrefix: 'Test', environment: 'prod' } });
+    const stack = new cdk.Stack(app, 'S4');
+    expect(resolveAllowedOrigins(stack, 'prod')).toEqual(DEFAULT_ALLOWED_ORIGINS.prod);
+  });
+
   test('falls back to "*" with a synth warning when an env has no configured origins', () => {
     const app = new cdk.App({ context: { StackPrefix: 'Test' } });
-    const stack = new cdk.Stack(app, 'S4');
-    // prod has no baked-in defaults and no context override here
-    expect(resolveAllowedOrigins(stack, 'prod')).toEqual(['*']);
+    const stack = new cdk.Stack(app, 'S5');
+    // 'staging' has no baked-in defaults and no context override here
+    expect(resolveAllowedOrigins(stack, 'staging')).toEqual(['*']);
     const warnings = stack.node.metadata.filter(
       (m) => m.type === 'aws:cdk:warning'
     );

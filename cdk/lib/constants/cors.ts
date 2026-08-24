@@ -29,11 +29,10 @@ export const DEFAULT_ALLOWED_ORIGINS: Record<string, string[]> = {
     "http://localhost:5173", // Vite dev server
     "http://localhost:4173", // Vite preview
   ],
-  // Set the production SPA origin(s) here or via `-c allowedOrigins=...`.
-  // Left empty intentionally: the prod Amplify domain is not known at author
-  // time. Until it is set, resolveAllowedOrigins falls back to "*" with a
-  // synth-time warning (see below) so prod uploads/downloads never silently break.
-  prod: [],
+  prod: [
+    "https://ocelia.arts.ubc.ca", // prod SPA custom domain (Amplify, main branch) — primary origin
+    "https://main.d21r345xhq29at.amplifyapp.com", // prod Amplify default domain (main branch) — fallback
+  ],
 };
 
 /**
