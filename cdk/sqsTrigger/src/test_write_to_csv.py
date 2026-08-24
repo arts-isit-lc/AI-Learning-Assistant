@@ -11,6 +11,7 @@ without a UTF-8 BOM, so Excel opened it with a legacy ANSI code page. The writer
 now uses encoding="utf-8-sig".
 """
 
+import json
 import os
 import sys
 from types import SimpleNamespace
@@ -93,3 +94,55 @@ def test_error_path_propagates(monkeypatch):
 
     with pytest.raises(OSError):
         main.write_to_csv([], "course-x", "prof@example.com")
+
+
+# --- handler error handling -------------------------------------------------
+
+_LAMBDA_CONTEXT = SimpleNamespace(
+    function_name="AILA-ApiGatewayStack-SQSTriggerDockerFunc",
+    memory_limit_in_mb=512,
+    invoked_function_arn=(
+        "arn:aws:lambda:ca-central-1:123456789012:function:"
+        "AILA-ApiGatewayStack-SQSTriggerDockerFunc"
+    ),
+    aws_request_id="req-1",
+)
+
+
+def _sqs_event(**body):
+    return {"Records": [{"body": json.dumps(body)}]}
+
+
+def test_handler_reraises_on_processing_failure(monkeypatch):
+    """A worker failure must PROPAGATE so SQS retries and ultimately DLQs it.
+
+    Regression: the handler used to `except ... continue` (and return 200), which
+    told SQS the message succeeded — deleting it with no retry, no DLQ, and no
+    completion signal to the instructor's Export button (endless spinner).
+    """
+    def boom(*a, **k):
+        raise RuntimeError("database unavailable")
+
+    monkeypatch.setattr(main, "query_chat_logs", boom)
+
+    event = _sqs_event(course_id="c1", instructor_email="prof@x.com", request_id="r1")
+    with pytest.raises(RuntimeError):
+        main.handler(event, _LAMBDA_CONTEXT)
+
+
+def test_handler_skips_malformed_message_without_processing(monkeypatch):
+    """A message missing required fields is dropped (retrying can't fix it)."""
+    called = {"queried": False}
+
+    def spy(*a, **k):
+        called["queried"] = True
+        return []
+
+    monkeypatch.setattr(main, "query_chat_logs", spy)
+
+    # request_id omitted -> validation drops the record before any processing.
+    event = _sqs_event(course_id="c1", instructor_email="prof@x.com")
+    result = main.handler(event, _LAMBDA_CONTEXT)
+
+    assert result["statusCode"] == 200
+    assert called["queried"] is False

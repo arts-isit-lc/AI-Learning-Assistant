@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen, waitFor, within } from "@testing-library/react"
+import { render, screen, waitFor, within, act, fireEvent } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
-const { useCourseMessages, subscribe, http } = vi.hoisted(() => ({
+const { useCourseMessages, subscribe, close, http } = vi.hoisted(() => ({
   useCourseMessages: vi.fn(),
   subscribe: vi.fn(),
+  close: vi.fn(),
   http: { getAuth: vi.fn(), post: vi.fn(), del: vi.fn() },
 }))
 
@@ -16,7 +17,7 @@ vi.mock("@/services/queries", () => ({
   useChatlogStatus: () => statusResult,
 }))
 vi.mock("@/services/http", () => ({ http }))
-vi.mock("./hooks/useJobNotification", () => ({ useJobNotification: () => ({ subscribe }) }))
+vi.mock("./hooks/useJobNotification", () => ({ useJobNotification: () => ({ subscribe, close }) }))
 vi.mock("react-router", async (importOriginal) => {
   const actual = await importOriginal()
   return { ...actual, useParams: () => ({ courseId: "c1" }) }
@@ -40,6 +41,7 @@ beforeEach(() => {
   logsResult = { data: [], refetch: vi.fn().mockResolvedValue({ data: [] }) }
   statusResult = { data: { isEnabled: true } }
   subscribe.mockReset().mockResolvedValue(undefined)
+  close.mockReset()
   http.getAuth.mockReset().mockResolvedValue({ email: "prof@x.com" })
   http.post.mockReset().mockResolvedValue({})
   http.del.mockReset().mockResolvedValue({})
@@ -227,6 +229,77 @@ describe("ChatHistoryTab", () => {
       {},
       expect.objectContaining({ course_id: "c1", instructor_email: "prof@x.com" })
     )
+  })
+
+  it("completes via the realtime notification (fast path): opens the new log and clears the notification", async () => {
+    useCourseMessages.mockReturnValue({ data: { messages: [MSG()], total: 1 }, isLoading: false, isError: false })
+    logsResult.refetch = vi.fn().mockResolvedValue({ data: [{ name: "new.csv", url: "https://x/new.csv" }] })
+    const openSpy = vi.spyOn(window, "open").mockImplementation(() => null)
+    // Capture the onNotify callback so the test can drive the completion frame.
+    let notify
+    subscribe.mockImplementation((_id, { onNotify }) => {
+      notify = onNotify
+      return Promise.resolve()
+    })
+
+    render(<ChatHistoryTab />)
+    await userEvent.click(screen.getByRole("button", { name: "Export CSV" }))
+    await waitFor(() => expect(http.post).toHaveBeenCalled())
+
+    await act(async () => {
+      await notify()
+    })
+
+    expect(openSpy).toHaveBeenCalledWith("https://x/new.csv", "_blank")
+    expect(http.del).toHaveBeenCalledWith(
+      "instructor/remove_completed_notification",
+      expect.objectContaining({ course_id: "c1", instructor_email: "prof@x.com" })
+    )
+    openSpy.mockRestore()
+  })
+
+  it("completes via the polling backstop when the realtime notification never arrives", async () => {
+    vi.useFakeTimers()
+    useCourseMessages.mockReturnValue({ data: { messages: [MSG()], total: 1 }, isLoading: false, isError: false })
+    // Baseline has no logs; the export produces a new file the poll discovers.
+    logsResult = {
+      data: [],
+      refetch: vi.fn().mockResolvedValue({ data: [{ name: "fresh.csv", url: "https://x/fresh.csv" }] }),
+    }
+    const openSpy = vi.spyOn(window, "open").mockImplementation(() => null)
+    // subscribe acks but never notifies.
+    subscribe.mockResolvedValue(undefined)
+
+    render(<ChatHistoryTab />)
+    fireEvent.click(screen.getByRole("button", { name: "Export CSV" }))
+
+    // Flush getAuth + POST, then let one poll tick discover the new log.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4000 + 50)
+    })
+
+    expect(openSpy).toHaveBeenCalledWith("https://x/fresh.csv", "_blank")
+    openSpy.mockRestore()
+    vi.useRealTimers()
+  })
+
+  it("surfaces an inline error (never an endless spinner) when nothing completes before the timeout", async () => {
+    vi.useFakeTimers()
+    useCourseMessages.mockReturnValue({ data: { messages: [MSG()], total: 1 }, isLoading: false, isError: false })
+    // No log ever appears; no realtime notification either.
+    logsResult = { data: [], refetch: vi.fn().mockResolvedValue({ data: [] }) }
+    subscribe.mockResolvedValue(undefined)
+
+    render(<ChatHistoryTab />)
+    fireEvent.click(screen.getByRole("button", { name: "Export CSV" }))
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(180000 + 100)
+    })
+
+    const alert = screen.getByRole("alert")
+    expect(alert).toHaveTextContent(/taking longer than expected/i)
+    vi.useRealTimers()
   })
 
   it("shows the empty state when there are no messages, styled like the Configuration placeholder (muted fill, no border)", () => {

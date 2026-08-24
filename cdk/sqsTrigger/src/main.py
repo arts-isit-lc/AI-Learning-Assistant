@@ -247,42 +247,42 @@ def invoke_event_notification(request_id, message="Chat logs successfully upload
 
 @logger.inject_lambda_context(clear_state=True)
 def handler(event, context):
-    try:
-        if "Records" not in event:
-            logger.error("Invalid event format: missing 'Records'.")
-            raise ValueError("Event does not contain 'Records'.")
+    if "Records" not in event:
+        logger.error("Invalid event format: missing 'Records'.")
+        raise ValueError("Event does not contain 'Records'.")
 
-        for record in event["Records"]:
-            try:
-                message_body = json.loads(record["body"])
-                course_id = message_body.get("course_id")
-                instructor_email = message_body.get("instructor_email")
-                request_id = message_body.get("request_id")
+    for record in event["Records"]:
+        message_body = json.loads(record["body"])
+        course_id = message_body.get("course_id")
+        instructor_email = message_body.get("instructor_email")
+        request_id = message_body.get("request_id")
 
-                if not course_id or not instructor_email or not request_id:
-                    logger.error("Missing required parameters: course_id or instructor_email or request_id.")
-                    continue
+        if not course_id or not instructor_email or not request_id:
+            # A malformed message can't be fixed by retrying — drop it (the
+            # queue's redrive policy would only DLQ an unprocessable body).
+            logger.error("Missing required parameters: course_id or instructor_email or request_id.")
+            continue
 
-                # Append request-scoped correlation keys
-                logger.append_keys(course_id=course_id, request_id=request_id)
+        # Append request-scoped correlation keys
+        logger.append_keys(course_id=course_id, request_id=request_id)
 
-                chat_logs = query_chat_logs(course_id)
-                logger.info("Retrieved chat logs")
-                csv_path, csv_name = write_to_csv(chat_logs, course_id, instructor_email)
-                logger.info("Generated CSV file")
-                s3_uri = upload_to_s3(csv_path, course_id, instructor_email, csv_name)
-                logger.info(f"Uploaded to S3: {s3_uri}")
-                update_completion_status(course_id, instructor_email, request_id)
-                logger.info("Updated completion status")
-                invoke_event_notification(request_id, message=f"Chat logs uploaded to {s3_uri}")
-                logger.info("Sent notification successfully")
+        try:
+            chat_logs = query_chat_logs(course_id)
+            logger.info("Retrieved chat logs")
+            csv_path, csv_name = write_to_csv(chat_logs, course_id, instructor_email)
+            logger.info("Generated CSV file")
+            s3_uri = upload_to_s3(csv_path, course_id, instructor_email, csv_name)
+            logger.info(f"Uploaded to S3: {s3_uri}")
+            update_completion_status(course_id, instructor_email, request_id)
+            logger.info("Updated completion status")
+            invoke_event_notification(request_id, message=f"Chat logs uploaded to {s3_uri}")
+            logger.info("Sent notification successfully")
+        except Exception:
+            # Re-raise (do NOT swallow) so the SQS message is retried and, after
+            # maxReceiveCount, lands in the DLQ. Previously a swallowed error here
+            # returned success, so the message was deleted and the instructor's
+            # Export button was left with no completion signal and no trace.
+            logger.exception("Failed to process chat-log export message")
+            raise
 
-            except Exception as e:
-                logger.error(f"Error processing SQS message: {e}")
-                continue
-
-        return {"statusCode": 200, "body": json.dumps({"message": "Processing completed successfully."})}
-
-    except Exception as e:
-        logger.error(f"Unhandled error in sqsTrigger handler: {e}")
-        return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
+    return {"statusCode": 200, "body": json.dumps({"message": "Processing completed successfully."})}

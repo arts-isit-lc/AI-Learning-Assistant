@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useParams } from "react-router"
 import { MdForum } from "react-icons/md"
 import { getCoreRowModel, useReactTable } from "@tanstack/react-table"
@@ -12,6 +12,7 @@ import { SortableTable } from "@/components/composed/SortableTable"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ErrorState } from "@/components/composed/ErrorState"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { toUserMessage } from "@/services/apiError"
 import { Dialog, DialogTrigger, DialogContent, DialogTitle, DialogBody } from "@/components/ui/dialog"
 
@@ -21,6 +22,18 @@ const MESSAGE_PREVIEW_LIMIT = 250
 
 // Figma 376:2331. 20 rows/page (the mockup's "Displaying 20 out of N results").
 const PAGE_SIZE = 20
+
+// Export is an async server job: the browser POSTs a job, then learns it's done
+// via an AppSync WebSocket `onNotify`. That single realtime frame is treated as a
+// best-effort FAST path only — the worker sets the DB completion flag and uploads
+// the CSV *before* it notifies, so a polling backstop (a new log file appearing)
+// reliably completes the export even if the WebSocket frame is missed/dropped.
+// Without this the button spun forever whenever the notification didn't arrive.
+const EXPORT_POLL_INTERVAL_MS = 4000
+// Overall ceiling: past this we stop waiting and surface an actionable error
+// instead of an endless spinner. Above the worker Lambda's 300s timeout is
+// unnecessary — a healthy full-course export finishes in seconds.
+const EXPORT_TIMEOUT_MS = 180000
 
 // Column ids MUST match the backend sort_by whitelist (course_messages_rows):
 // user_email · module_name · concept_name · session_id · message_content.
@@ -152,41 +165,114 @@ export function ChatHistoryTab() {
     getCoreRowModel: getCoreRowModel(),
   })
 
-  // Export reuses the existing async CSV job: subscribe to the completion event
-  // FIRST (so it can't be missed), submit the job, then download on notify.
+  // Export reuses the existing async CSV job. The AppSync `onNotify` WebSocket is
+  // the fast path; a status poll (new log file appearing) is the reliable backstop
+  // and an overall timeout guarantees the button never spins forever.
   const { data: status } = useChatlogStatus(courseId)
-  const { refetch: refetchLogs } = useChatlogs(courseId)
-  const { subscribe } = useJobNotification()
+  const { data: chatlogs, refetch: refetchLogs } = useChatlogs(courseId)
+  const { subscribe, close } = useJobNotification()
   const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState(null)
+
+  // Timers live in refs so a re-render can't strand them and unmount can clean up.
+  const pollRef = useRef(null)
+  const timeoutRef = useRef(null)
+  const clearTimers = () => {
+    if (pollRef.current) clearInterval(pollRef.current)
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    pollRef.current = null
+    timeoutRef.current = null
+  }
+  useEffect(() => clearTimers, [])
 
   const handleExport = async () => {
+    setExportError(null)
     setExporting(true)
+    clearTimers()
     const requestId = crypto.randomUUID()
-    try {
-      const { email } = await http.getAuth()
-      await subscribe(requestId, {
-        onNotify: async () => {
+    // Baseline: the newest existing log. A file newer than this = our export.
+    const baselineLog = Array.isArray(chatlogs) && chatlogs.length ? chatlogs[0].name : null
+
+    // Idempotent terminal step — whichever of {onNotify, poll, timeout} fires
+    // first wins; the rest become no-ops. `finally` guarantees the spinner clears.
+    let settled = false
+    const finish = async ({ error, email } = {}) => {
+      if (settled) return
+      settled = true
+      clearTimers()
+      close?.()
+      try {
+        if (error) {
+          setExportError(error)
+          return
+        }
+        const { data: logs } = await refetchLogs()
+        const newest = Array.isArray(logs) && logs.length ? logs[0] : null
+        if (newest?.url) window.open(newest.url, "_blank")
+        // Best-effort cleanup of the completed-notification row.
+        if (email) {
           try {
             await http.del("instructor/remove_completed_notification", {
               course_id: courseId,
               instructor_email: email,
             })
           } catch {
-            // best-effort cleanup
+            // best-effort
           }
-          const { data: logs } = await refetchLogs()
-          const newest = Array.isArray(logs) && logs.length ? logs[0] : null
-          if (newest?.url) window.open(newest.url, "_blank")
-          setExporting(false)
+        }
+      } finally {
+        setExporting(false)
+      }
+    }
+
+    try {
+      const { email } = await http.getAuth()
+
+      // Fast path (best-effort): the realtime completion notification. If the
+      // socket errors or never acks, the poll below still completes the export.
+      subscribe(requestId, {
+        onNotify: () => finish({ email }),
+        onError: () => {
+          /* swallow — the polling backstop drives completion */
         },
+      }).catch(() => {
+        /* subscribe rejected (e.g. realtime unavailable) — polling covers it */
       })
+
       await http.post(
         "instructor/course_messages",
         {},
         { course_id: courseId, instructor_email: email, request_id: requestId }
       )
-    } catch {
+
+      // Backstop: poll for a newly-generated log file (the worker uploads the CSV
+      // and flips the DB completion flag before it notifies, so this is reliable).
+      pollRef.current = setInterval(async () => {
+        try {
+          const { data: logs } = await refetchLogs()
+          const newest = Array.isArray(logs) && logs.length ? logs[0] : null
+          if (newest && newest.name !== baselineLog) finish({ email })
+        } catch {
+          // transient read error — keep polling
+        }
+      }, EXPORT_POLL_INTERVAL_MS)
+
+      // Ceiling: stop waiting and tell the user instead of spinning forever.
+      timeoutRef.current = setTimeout(
+        () =>
+          finish({
+            error:
+              "The export is taking longer than expected. Your file may still finish — check the chat logs shortly, or try again.",
+          }),
+        EXPORT_TIMEOUT_MS
+      )
+    } catch (err) {
+      // getAuth or the job submission itself failed — nothing was started.
+      settled = true
+      clearTimers()
+      close?.()
       setExporting(false)
+      setExportError(toUserMessage(err))
     }
   }
 
@@ -256,6 +342,12 @@ export function ChatHistoryTab() {
           Export CSV
         </Button>
       </div>
+
+      {exportError && (
+        <Alert variant="destructive" role="alert">
+          <AlertDescription>{exportError}</AlertDescription>
+        </Alert>
+      )}
 
       <SortableTable
         table={table}
