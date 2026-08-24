@@ -27,6 +27,13 @@ import ubcLogo from "@/assets/ubc-logo.svg"
 const PASSWORD_POLICY_MESSAGE =
   "Password must be at least 10 characters and include a lowercase letter, an uppercase letter, a number, and a special character."
 
+/**
+ * How long the "Resend code" button stays locked after a successful resend
+ * (Figma 1804:7301 — the button greys out and a green confirmation shows below
+ * the row for the duration, then both clear and the button reactivates).
+ */
+const RESEND_COOLDOWN_SECONDS = 30
+
 function validatePassword(pw) {
   const meetsPolicy =
     pw.length >= 10 &&
@@ -91,6 +98,11 @@ export function Login() {
   const [error, setError] = useState("")
   const [message, setMessage] = useState("")
   const [busy, setBusy] = useState(false)
+  // "Resend code" cooldown: `resendLocked` greys the button out and the green
+  // `resendNotice` shows beneath the row. Both are set on a successful resend and
+  // cleared together when the cooldown elapses (see the effect below).
+  const [resendLocked, setResendLocked] = useState(false)
+  const [resendNotice, setResendNotice] = useState("")
   // Per-field "missing"/validation messages rendered inline under each control
   // (module-wizard style, see CourseWizard's name field). Keyed by logical field
   // name; only one auth mode shows at a time, so email/password keys are safely
@@ -102,11 +114,26 @@ export function Login() {
     if (!isLoading && isAuthed) navigate("/", { replace: true })
   }, [isLoading, isAuthed, navigate])
 
+  // Hold the resend lock (and its green confirmation) for the full cooldown, then
+  // clear both so the button reactivates. A single timer keeps this deterministic;
+  // there's no per-second countdown to surface.
+  useEffect(() => {
+    if (!resendLocked) return
+    const id = setTimeout(() => {
+      setResendLocked(false)
+      setResendNotice("")
+    }, RESEND_COOLDOWN_SECONDS * 1000)
+    return () => clearTimeout(id)
+  }, [resendLocked])
+
   const switchMode = (next) => {
     setMode(next)
     setError("")
     setMessage("")
     setFieldErrors({})
+    // Leaving/re-entering the confirm view starts with a clean, active resend.
+    setResendLocked(false)
+    setResendNotice("")
   }
 
   // Clear a single field's inline error as soon as the user edits it.
@@ -227,9 +254,15 @@ export function Login() {
   }
 
   const handleResendCode = async () => {
+    // Ignore clicks while the button is locked (defense in depth — it's disabled).
+    if (resendLocked) return
     setError("")
     try {
       await resendSignUpCode({ username: email })
+      // Lock the button and show the green confirmation; both clear when the
+      // cooldown ends (see the cooldown effect).
+      setResendNotice(`Code has been sent to ${email || "your email"}.`)
+      setResendLocked(true)
     } catch (err) {
       setError(err?.message || "Couldn't resend the code.")
     }
@@ -435,13 +468,29 @@ export function Login() {
                 <LoginInput id="code" value={code} onChange={(e) => setCode(e.target.value)} maxLength={15} required autoFocus />
               </div>
               <Button type="submit" loading={busy} className="w-full">Confirm</Button>
-              <div className="flex items-center justify-between border-t border-border pt-4">
-                <Button type="button" variant="link" className="px-4" onClick={handleResendCode}>
-                  Resend code
-                </Button>
-                <Button type="button" variant="link" className="px-4" onClick={() => switchMode("signIn")}>
-                  Back to sign in
-                </Button>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between border-t border-border pt-4">
+                  <Button
+                    type="button"
+                    variant="link"
+                    // Locked during the cooldown. Force the mockup's true neutral-400
+                    // grey (the link variant's base disabled state only fades opacity)
+                    // and drop the hover underline so a disabled control looks inert.
+                    className="px-4 disabled:text-neutral-400 disabled:opacity-100 disabled:no-underline"
+                    onClick={handleResendCode}
+                    disabled={resendLocked}
+                  >
+                    Resend code
+                  </Button>
+                  <Button type="button" variant="link" className="px-4" onClick={() => switchMode("signIn")}>
+                    Back to sign in
+                  </Button>
+                </div>
+                {resendNotice && (
+                  // Green confirmation (success = #11A26F) directly under the row; 16px
+                  // in Figma, rendered at the 14px caption token to sit with the row.
+                  <p className="text-caption font-semibold text-success">{resendNotice}</p>
+                )}
               </div>
             </form>
           )}

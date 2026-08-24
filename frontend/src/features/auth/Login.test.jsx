@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen, waitFor } from "@testing-library/react"
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
+import { render, screen, waitFor, act, fireEvent } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
 const h = vi.hoisted(() => ({
@@ -44,6 +44,12 @@ beforeEach(() => {
   h.apiClient.post.mockResolvedValue({})
   h.isAuthed = false
   h.isLoading = false
+})
+
+// Some tests swap in fake timers for the resend cooldown; always restore real
+// timers afterward so a timed-out test can't leak fakes into the next one.
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 describe("Login", () => {
@@ -167,6 +173,74 @@ describe("Login", () => {
     await userEvent.click(screen.getByRole("button", { name: "Sign up" }))
     expect(await screen.findByRole("heading", { name: "Confirm your account" })).toBeInTheDocument()
     expect(h.signUp).toHaveBeenCalled()
+  })
+
+  describe("resend code cooldown", () => {
+    // Drive the signup flow to the "Confirm your account" view, then hand back the
+    // typed email so assertions can build the expected green confirmation text.
+    async function reachConfirmStep(user) {
+      h.signUp.mockResolvedValue({ isSignUpComplete: false, nextStep: { signUpStep: "CONFIRM_SIGN_UP" } })
+      render(<Login />)
+      await user.click(screen.getByRole("button", { name: "Create an account" }))
+      await user.type(screen.getByLabelText("First name"), "Ada")
+      await user.type(screen.getByLabelText("Last name"), "Lovelace")
+      await user.type(screen.getByLabelText("Email"), "ada@x.com")
+      await user.type(screen.getByLabelText("Password"), "Password1!")
+      await user.type(screen.getByLabelText("Confirm password"), "Password1!")
+      await user.click(screen.getByRole("button", { name: "Sign up" }))
+      await screen.findByRole("heading", { name: "Confirm your account" })
+    }
+
+    it("locks the button for 30s with a green confirmation, then reactivates it", async () => {
+      // Reach the confirm view under REAL timers (findBy* polling needs them).
+      const user = userEvent.setup()
+      h.resendSignUpCode.mockResolvedValue(undefined)
+      await reachConfirmStep(user)
+
+      const resend = screen.getByRole("button", { name: "Resend code" })
+      expect(resend).toBeEnabled()
+
+      // Swap to fake timers so the 30s lock can be fast-forwarded deterministically.
+      // fireEvent (not userEvent, which is bound to real-timer delays) + an act flush
+      // runs the resolved resend and lets the cooldown effect schedule its tick.
+      vi.useFakeTimers()
+      fireEvent.click(resend)
+      await act(async () => {})
+      expect(h.resendSignUpCode).toHaveBeenCalledWith({ username: "ada@x.com" })
+
+      // Button locks and the green (#11A26F success token) confirmation appears.
+      expect(screen.getByRole("button", { name: "Resend code" })).toBeDisabled()
+      expect(resend).toHaveClass("disabled:text-neutral-400", "disabled:opacity-100")
+      const notice = screen.getByText("Code has been sent to ada@x.com.")
+      expect(notice).toHaveClass("text-success", "font-semibold")
+
+      // Still locked just before the 30s window elapses.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(29_000)
+      })
+      expect(screen.getByRole("button", { name: "Resend code" })).toBeDisabled()
+      expect(screen.getByText("Code has been sent to ada@x.com.")).toBeInTheDocument()
+
+      // After 30s the notice clears and the button is active again.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000)
+      })
+      expect(screen.getByRole("button", { name: "Resend code" })).toBeEnabled()
+      expect(screen.queryByText("Code has been sent to ada@x.com.")).not.toBeInTheDocument()
+    })
+
+    it("does not lock the button when the resend fails", async () => {
+      const user = userEvent.setup()
+      h.resendSignUpCode.mockRejectedValue(new Error("Attempt limit exceeded, please try after some time."))
+      await reachConfirmStep(user)
+
+      await user.click(screen.getByRole("button", { name: "Resend code" }))
+
+      expect(await screen.findByText("Attempt limit exceeded, please try after some time.")).toBeInTheDocument()
+      // No cooldown on failure — the user can retry immediately, and no green notice.
+      expect(screen.getByRole("button", { name: "Resend code" })).toBeEnabled()
+      expect(screen.queryByText(/Code has been sent to/)).not.toBeInTheDocument()
+    })
   })
 
   it("requests a reset code from the forgot-password flow", async () => {
