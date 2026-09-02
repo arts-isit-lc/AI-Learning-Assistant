@@ -1,5 +1,6 @@
 import { Annotations } from "aws-cdk-lib";
 import { Construct } from "constructs";
+import { AMPLIFY_DEFAULT_ORIGIN, CANONICAL_APP_ORIGIN } from "./domains";
 
 /**
  * S3 CORS allowed-origins configuration for the presigned-URL buckets that the
@@ -23,15 +24,15 @@ import { Construct } from "constructs";
  */
 export const DEFAULT_ALLOWED_ORIGINS: Record<string, string[]> = {
   dev: [
-    "https://ocelia-dev.arts.ubc.ca", // dev SPA custom domain (Amplify) — primary origin
-    "https://dev.dbqfar7gbtstn.amplifyapp.com", // dev Amplify default domain (dev branch) — fallback
-    "https://main.dbqfar7gbtstn.amplifyapp.com", // dev Amplify default domain (main branch) — fallback
+    CANONICAL_APP_ORIGIN.dev, // dev SPA custom domain (Amplify) — primary/canonical origin
+    "https://dev.dbqfar7gbtstn.amplifyapp.com", // dev Amplify default domain (dev branch) — defensive fallback
+    AMPLIFY_DEFAULT_ORIGIN.dev, // dev Amplify default domain (main branch) — defensive fallback
     "http://localhost:5173", // Vite dev server
     "http://localhost:4173", // Vite preview
   ],
   prod: [
-    "https://ocelia.arts.ubc.ca", // prod SPA custom domain (Amplify, main branch) — primary origin
-    "https://main.d21r345xhq29at.amplifyapp.com", // prod Amplify default domain (main branch) — fallback
+    CANONICAL_APP_ORIGIN.prod, // prod SPA custom domain (Amplify, main branch) — primary/canonical origin
+    AMPLIFY_DEFAULT_ORIGIN.prod, // prod Amplify default domain (main branch) — defensive fallback
   ],
 };
 

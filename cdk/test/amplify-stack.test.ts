@@ -18,12 +18,20 @@ function fakeApiStack(): ApiGatewayStack {
   } as unknown as ApiGatewayStack;
 }
 
-function amplifyTemplate(): Template {
-  const app = new App({ context: { StackPrefix: "Test", environment: "dev" } });
+function amplifyTemplate(environment = "dev"): Template {
+  const app = new App({ context: { StackPrefix: "Test", environment } });
   const stack = new AmplifyStack(app, "Test-AmplifyStack", fakeApiStack(), {
     env: { account: "123456789012", region: "ca-central-1" },
+    environment,
   });
   return Template.fromStack(stack);
+}
+
+/** Pull the single Amplify App's CustomRules array out of a synthesized template. */
+function customRules(template: Template): Array<{ Status?: string; Target?: string }> {
+  const apps = template.findResources("AWS::Amplify::App");
+  const app = Object.values(apps)[0] as { Properties?: { CustomRules?: unknown } };
+  return (app.Properties?.CustomRules ?? []) as Array<{ Status?: string; Target?: string }>;
 }
 
 describe("AmplifyStack caching headers", () => {
@@ -54,5 +62,42 @@ describe("AmplifyStack caching headers", () => {
     amplifyTemplate().hasResourceProperties("AWS::Amplify::App", {
       CustomRules: Match.arrayWith([Match.objectLike({ Target: "/", Status: "404-200" })]),
     });
+  });
+});
+
+describe("AmplifyStack canonical-domain redirect", () => {
+  it("301-redirects the default domain to the dev custom domain", () => {
+    amplifyTemplate("dev").hasResourceProperties("AWS::Amplify::App", {
+      CustomRules: Match.arrayWith([
+        Match.objectLike({ Status: "301", Target: "https://ocelia-dev.arts.ubc.ca" }),
+      ]),
+    });
+  });
+
+  it("301-redirects the default domain to the prod custom domain", () => {
+    amplifyTemplate("prod").hasResourceProperties("AWS::Amplify::App", {
+      CustomRules: Match.arrayWith([
+        Match.objectLike({ Status: "301", Target: "https://ocelia.arts.ubc.ca" }),
+      ]),
+    });
+  });
+
+  it("evaluates the 301 redirect before the SPA rewrite (order matters)", () => {
+    // Amplify applies rules top-down. The host redirect must come first so
+    // default-domain traffic is bounced before the catch-all SPA rewrite runs.
+    const rules = customRules(amplifyTemplate("dev"));
+    const redirectIdx = rules.findIndex((r) => r.Status === "301");
+    const spaIdx = rules.findIndex((r) => r.Status === "404-200");
+    expect(redirectIdx).toBeGreaterThanOrEqual(0);
+    expect(spaIdx).toBeGreaterThanOrEqual(0);
+    expect(redirectIdx).toBeLessThan(spaIdx);
+  });
+
+  it("omits the redirect for an environment with no configured canonical origin", () => {
+    // Ad-hoc envs (e.g. 'staging') have no canonical domain — we skip the
+    // redirect rather than inventing a target, but keep the SPA rewrite.
+    const rules = customRules(amplifyTemplate("staging"));
+    expect(rules.some((r) => r.Status === "301")).toBe(false);
+    expect(rules.some((r) => r.Status === "404-200")).toBe(true);
   });
 });

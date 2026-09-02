@@ -43,5 +43,5 @@ const observabilityStack = new ObservabilityStack(app, `${StackPrefix}-Observabi
 });
 observabilityStack.addStackDependency(apiStack);
 const dbFlowStack = new DBFlowStack(app, `${StackPrefix}-DBFlowStack`, vpcStack, dbStack, apiStack, { env });
-const amplifyStack = new AmplifyStack(app, `${StackPrefix}-AmplifyStack`, apiStack, { env });
+const amplifyStack = new AmplifyStack(app, `${StackPrefix}-AmplifyStack`, apiStack, { env, environment });
 Tags.of(app).add("app", "AI-Learning-Assistant");

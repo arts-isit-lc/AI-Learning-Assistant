@@ -9,15 +9,21 @@ import { BuildSpec } from "aws-cdk-lib/aws-codebuild";
 import { Construct } from "constructs";
 import * as yaml from "yaml";
 import { ApiGatewayStack } from "./api-gateway-stack";
+import {
+  resolveAmplifyDefaultOrigin,
+  resolveCanonicalOrigin,
+} from "./constants/domains";
 
 export class AmplifyStack extends cdk.Stack {
   constructor(
     scope: Construct,
     id: string,
     apiStack: ApiGatewayStack,
-    props?: cdk.StackProps
+    props?: cdk.StackProps & { environment?: string }
   ) {
     super(scope, id, props);
+
+    const environment = props?.environment || "dev";
 
     // Define the GitHub repository name as a parameter
     const githubRepoName = new cdk.CfnParameter(this, "githubRepoName", {
@@ -96,6 +102,34 @@ export class AmplifyStack extends cdk.Stack {
         },
       ],
     });
+
+    // Canonical URL per environment: 301-redirect the auto-generated Amplify
+    // default domain (`https://main.<appId>.amplifyapp.com`) to the custom
+    // domain so each environment is reachable at exactly one origin. This
+    // shrinks the auth/CORS surface (a single origin to allow-list) and avoids
+    // split cookie jars across two live hostnames.
+    //
+    // Amplify constraints that shape this rule:
+    //   - Domain-source redirects must NOT include a path; Amplify appends the
+    //     request path and forwards query strings automatically, so `/login`
+    //     is preserved without an explicit wildcard.
+    //   - Rules are evaluated top-down, so this must precede the SPA rewrite
+    //     below. The source matches only the default host, so custom-domain
+    //     traffic falls through to the SPA rule — no redirect loop.
+    //   - The source is a literal (see AMPLIFY_DEFAULT_ORIGIN): referencing
+    //     `amplifyApp.defaultDomain` here would be a self-reference on this same
+    //     App resource and fail synth with a circular dependency.
+    // Skipped when the environment has no configured origins (e.g. an ad-hoc
+    // `staging` deploy) rather than inventing a target.
+    const canonicalOrigin = resolveCanonicalOrigin(environment);
+    const amplifyDefaultOrigin = resolveAmplifyDefaultOrigin(environment);
+    if (canonicalOrigin && amplifyDefaultOrigin) {
+      amplifyApp.addCustomRule({
+        source: amplifyDefaultOrigin,
+        target: canonicalOrigin,
+        status: RedirectStatus.PERMANENT_REDIRECT,
+      });
+    }
 
     amplifyApp.addCustomRule({
       source: "</^[^.]+$|.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json|webp)$)([^.]+$)/>",
