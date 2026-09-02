@@ -568,6 +568,25 @@ def _module_is_deleting_or_missing(module_id: str) -> bool:
                 pass
 
 
+def _strip_nul(value: Any) -> Any:
+    """Recursively remove NUL (0x00) characters from strings.
+
+    PostgreSQL cannot store NUL bytes: psycopg2 raises "A string literal cannot
+    contain NUL (0x00) characters" client-side for text/varchar params, and
+    jsonb rejects the \\u0000 escape server-side. Document extraction (notably
+    PDFs) can emit stray NULs into element text, so scrub them at the storage
+    boundary — this is the last line before the DB write, so it catches NULs
+    from any upstream source. Non-string scalars pass through unchanged.
+    """
+    if isinstance(value, str):
+        return value.replace("\x00", "")
+    if isinstance(value, dict):
+        return {k: _strip_nul(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_strip_nul(v) for v in value]
+    return value
+
+
 def _store_in_pgvector(
     retrieval_units: list[RetrievalUnit],
     course_id: str,
@@ -669,6 +688,13 @@ def _store_in_pgvector(
             stored_metadata["course_id"] = course_id
             stored_metadata["module_id"] = module_id
 
+            # Scrub NUL (0x00) bytes that PDF/doc extraction can leak into text:
+            # Postgres rejects them in text/varchar (psycopg2, client-side) and
+            # in jsonb (\u0000, server-side), which otherwise fails the whole
+            # write and blocks the file at 'enriching' forever.
+            clean_embedding_text = _strip_nul(unit.embedding_text)
+            stored_metadata = _strip_nul(stored_metadata)
+
             embedding_str = f"[{','.join(str(v) for v in embedding)}]"
 
             cur.execute(
@@ -689,13 +715,13 @@ def _store_in_pgvector(
                 (
                     unit.retrieval_id,
                     unit.parent_element_id,
-                    unit.embedding_text,
+                    clean_embedding_text,
                     unit.element_type.value if hasattr(unit.element_type, 'value') else str(unit.element_type),
                     embedding_str,
                     unit.embedding_version,
                     json_mod.dumps(stored_metadata),
                     json_mod.dumps(unit.sibling_ids),
-                    unit.embedding_text,
+                    clean_embedding_text,
                     file_id,
                     module_id,
                 ),

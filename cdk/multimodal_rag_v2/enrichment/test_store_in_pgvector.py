@@ -139,6 +139,63 @@ def test_delete_targets_first_class_file_id_column(captured_sql) -> None:
     assert params == ("uuid-del",)
 
 
+def _unit_with_nul_bytes() -> RetrievalUnit:
+    # PDF extraction can leak NUL (0x00) bytes into text; they appear in both
+    # embedding_text and enriched metadata values.
+    return RetrievalUnit(
+        retrieval_id="ret-nul",
+        parent_element_id="el-1",
+        embedding_text="Mergesort\x00 runs in O(n log n)\x00",
+        element_type=ElementType.TEXT,
+        provenance=Provenance(page_num=1, position_index=0),
+        metadata={
+            "embedding": [0.1, 0.2, 0.3],
+            "content_type": "text",
+            "description": "A chart\x00 of scores",
+            "labels": ["clean", "dir\x00ty"],
+        },
+        sibling_ids=[],
+        embedding_version="titan-v2-1024",
+    )
+
+
+def test_nul_bytes_stripped_from_text_and_metadata_before_insert(captured_sql) -> None:
+    # Regression: a raw NUL (0x00) in extracted text made psycopg2 raise
+    # "A string literal cannot contain NUL (0x00) characters", failing the whole
+    # pgvector write and leaving the file stuck at 'enriching'. NULs must be
+    # scrubbed from every text param (embedding_text, the to_tsvector text, and
+    # the jsonb metadata) so the write succeeds.
+    import json
+
+    handler_module._store_in_pgvector(
+        [_unit_with_nul_bytes()],
+        course_id="course-1",
+        module_id="module-9",
+        file_id="uuid-nul",
+    )
+
+    sql, params = next(
+        (s, p) for s, p in captured_sql if "INSERT INTO retrieval_units" in s
+    )
+
+    # No bound string param may contain a raw NUL.
+    for p in params:
+        if isinstance(p, str):
+            assert "\x00" not in p, f"NUL leaked into param: {p!r}"
+
+    # embedding_text is passed twice (column value + to_tsvector); both cleaned.
+    text_params = [p for p in params if isinstance(p, str) and "Mergesort" in p]
+    assert len(text_params) == 2
+    assert all(t == "Mergesort runs in O(n log n)" for t in text_params)
+
+    # jsonb metadata (including nested list values) is scrubbed too.
+    metadata_json = next(p for p in params if isinstance(p, str) and p.startswith("{"))
+    assert "\\u0000" not in metadata_json and "\x00" not in metadata_json
+    meta = json.loads(metadata_json)
+    assert meta["description"] == "A chart of scores"
+    assert meta["labels"] == ["clean", "dirty"]
+
+
 def _unit_without_embedding() -> RetrievalUnit:
     return RetrievalUnit(
         retrieval_id="ret-no-embed",

@@ -11,8 +11,11 @@
     "cdk": "cdk",
     "predeploy": "npm test",
     "deploy": "cdk deploy --all -c environment=dev --parameters AILA-AmplifyStack:githubRepoName=AI-Learning-Assistant",
+    "postdeploy": "cdk gc --unstable=gc --type=ecr --confirm=false --rollback-buffer-days=14 --created-buffer-days=1 -c environment=dev",
     "predeploy:prod": "npm test",
-    "deploy:prod": "cdk deploy --all -c environment=prod --parameters AILA-AmplifyStack:githubRepoName=AI-Learning-Assistant"
+    "deploy:prod": "cdk deploy --all -c environment=prod --parameters AILA-AmplifyStack:githubRepoName=AI-Learning-Assistant",
+    "postdeploy:prod": "cdk gc --unstable=gc --type=ecr --confirm=false --rollback-buffer-days=14 --created-buffer-days=1 -c environment=prod",
+    "gc:ecr": "cdk gc --unstable=gc --type=ecr --action=print -c environment=dev"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
