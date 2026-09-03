@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from "react"
 import { useParams } from "react-router"
 import { useCoursePrompt, usePreviousPrompts, useValidatePrompt, useSavePrompt } from "@/services/queries"
-import { LLM_MODELS, DEFAULT_LLM_MODEL_ID } from "@/constants/llmModels"
+import { DEFAULT_LLM_MODEL_ID, getModelNameById } from "@/constants/llmModels"
 import { SYSTEM_LEVEL_PROMPT } from "@/constants/systemPrompt"
 import { cn } from "@/lib/utils"
-import { LanguageModelDropdown } from "@/components/composed/LanguageModelDropdown"
 import { PromptHistory } from "@/components/composed/PromptHistory"
 import { ConfirmDialog } from "@/components/composed/ConfirmDialog"
 import { ConflictList } from "@/components/composed/ConflictList"
@@ -24,11 +23,11 @@ import {
 } from "@/components/ui/accordion"
 
 const PROMPT_CHAR_LIMIT = 1000
-const MODELS = Object.values(LLM_MODELS)
 
 /**
- * Settings tab — Figma 376:2480 / 771:5650. Flat sections (not cards): Language
- * model, the read-only System prompt, then the editable course ("Your") prompt,
+ * Settings tab — Figma 376:2480 / 771:5650. Flat sections (not cards): the
+ * read-only Language model, the read-only System prompt, then the editable
+ * course ("Your") prompt,
  * a **View previous prompts** disclosure, and a footer **Save changes**.
  *
  * Conflict flow: **Save changes** runs the prompt conflict check first. No
@@ -147,21 +146,19 @@ export function SettingsTab() {
   return (
     <div className="flex max-w-3xl flex-col gap-6">
       <UnsavedChangesPrompt when={dirty} />
-      {/* Language model */}
+      {/* Language model (read-only) */}
       <section>
         <h3 className="text-caption font-semibold leading-7 text-neutral-900">Language model</h3>
         <p className="text-caption leading-7 text-muted-foreground">
-          Choose which language model you&rsquo;d like to use for chatting with students and analyzing
-          reference materials.
+          This is the language model used for chatting with students and analyzing reference materials.
+          It cannot be changed.
         </p>
-        <LanguageModelDropdown
-          value={modelId}
-          onChange={setModelId}
-          models={MODELS}
+        <p
           aria-label="Language model"
-          className="w-full"
-          disabled={busy}
-        />
+          className="border border-border bg-background p-4 text-caption text-muted-foreground"
+        >
+          {getModelNameById(modelId)}
+        </p>
       </section>
 
       {/* System prompt (read-only) */}

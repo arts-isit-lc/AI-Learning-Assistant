@@ -18,8 +18,10 @@ export const LLM_MODELS = {
   }
 };
 
-// Default model ID for new courses and the Settings dropdown. Llama 3 70B stays
-// selectable pending a future replacement decision.
+// Default model ID for new courses. This is the only model exposed in the UI —
+// the Settings tab shows it as a read-only field, so Llama 3 70B is not
+// selectable right now (the entry is retained for name lookups / the backend
+// catalog).
 export const DEFAULT_LLM_MODEL_ID = LLM_MODELS.CLAUDE_SONNET_4_5.id;
 
 // Helper function to get model options for dropdowns

@@ -46,7 +46,11 @@ const CONFLICT = {
 
 beforeEach(() => {
   promptResult = {
-    data: { system_prompt: "Teach kindly", llm_model_id: "meta.llama3-70b-instruct-v1:0", conflict_metadata: null },
+    data: {
+      system_prompt: "Teach kindly",
+      llm_model_id: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      conflict_metadata: null,
+    },
     isLoading: false,
   }
   previousPromptsResult = { data: [], isLoading: false }
@@ -121,18 +125,29 @@ describe("SettingsTab", () => {
     expect(screen.getByRole("button", { name: "Save changes" })).toHaveClass("text-primary", "border-primary")
   })
 
-  it("disables the prompt and model fields while the conflict check is running", () => {
+  it("shows the language model as a read-only field (no selectable dropdown)", () => {
+    render(<SettingsTab />)
+    // The model is fixed to the Claude default every course uses — displayed as
+    // a static field like the system prompt, never a combobox.
+    expect(screen.getByLabelText("Language model")).toHaveTextContent("Claude Sonnet 4.5")
+    expect(screen.queryByRole("combobox", { name: "Language model" })).not.toBeInTheDocument()
+  })
+
+  it("never offers the Llama model as an option", () => {
+    render(<SettingsTab />)
+    expect(screen.queryByText(/Llama/i)).not.toBeInTheDocument()
+  })
+
+  it("disables the prompt field while the conflict check is running", () => {
     validate.isPending = true
     render(<SettingsTab />)
     expect(screen.getByRole("textbox", { name: "Your prompt" })).toBeDisabled()
-    expect(screen.getByRole("combobox", { name: "Language model" })).toBeDisabled()
   })
 
-  it("keeps the prompt and model fields disabled while the save is in flight", () => {
+  it("keeps the prompt field disabled while the save is in flight", () => {
     save.isPending = true
     render(<SettingsTab />)
     expect(screen.getByRole("textbox", { name: "Your prompt" })).toBeDisabled()
-    expect(screen.getByRole("combobox", { name: "Language model" })).toBeDisabled()
   })
 
   it("surfaces conflicts inline on Save for review, without opening the override dialog yet", async () => {
@@ -223,7 +238,11 @@ describe("SettingsTab", () => {
     expect(screen.getByRole("heading", { name: "Couldn't load settings" })).toBeInTheDocument()
     await userEvent.click(screen.getByRole("button", { name: "Try again" }))
     promptResult = {
-      data: { system_prompt: "Teach kindly", llm_model_id: "meta.llama3-70b-instruct-v1:0", conflict_metadata: null },
+      data: {
+        system_prompt: "Teach kindly",
+        llm_model_id: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        conflict_metadata: null,
+      },
       isLoading: false,
       isError: false,
     }
