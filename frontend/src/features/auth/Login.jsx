@@ -200,7 +200,19 @@ export function Login() {
       const { isSignUpComplete, nextStep } = await signUp({
         username: email,
         password,
-        attributes: { email },
+        // Amplify v6 shape: standard attributes go under options.userAttributes.
+        // given_name/family_name are carried into Cognito so the server-side
+        // PostConfirmation/PostAuthentication triggers can populate the "Users"
+        // row with the user's name regardless of which client path runs (the
+        // create_user call below is now best-effort enrichment, not the source
+        // of truth for row creation).
+        options: {
+          userAttributes: {
+            email,
+            given_name: firstName,
+            family_name: lastName,
+          },
+        },
       })
       if (!isSignUpComplete && nextStep?.signUpStep === "CONFIRM_SIGN_UP") {
         switchMode("confirmSignUp")

@@ -1,5 +1,5 @@
 import { createTestStacks } from './helpers/stack-setup';
-import { Template } from 'aws-cdk-lib/assertions';
+import { Template, Match } from 'aws-cdk-lib/assertions';
 
 /**
  * Cognito Security Tests
@@ -77,6 +77,23 @@ describe('Cognito Security', () => {
         IdToken: 'minutes',
         RefreshToken: 'minutes',
       },
+    });
+  });
+
+  /**
+   * User provisioning triggers must stay wired: PreSignUp gates the email domain,
+   * PostConfirmation authoritatively creates the "Users" row, and
+   * PostAuthentication provides the self-heal net that recreates a missing row on
+   * next sign-in. If any of these is dropped, the orphaned-user bug (Confirmed in
+   * Cognito, absent from the DB) can return.
+   */
+  test('Cognito user pool wires PreSignUp, PostConfirmation, and PostAuthentication triggers', () => {
+    apiTemplate.hasResourceProperties('AWS::Cognito::UserPool', {
+      LambdaConfig: Match.objectLike({
+        PreSignUp: Match.anyValue(),
+        PostConfirmation: Match.anyValue(),
+        PostAuthentication: Match.anyValue(),
+      }),
     });
   });
 });

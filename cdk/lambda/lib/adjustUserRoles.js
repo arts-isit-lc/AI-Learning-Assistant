@@ -14,6 +14,9 @@ exports.handler = async (event) => {
 
   const { userName, userPoolId } = event;
   const email = event.request.userAttributes.email;
+  // Carried from signup via Cognito standard attributes; may be absent.
+  const givenName = event.request.userAttributes.given_name || null;
+  const familyName = event.request.userAttributes.family_name || null;
 
   try {
     // Get user groups from Cognito
@@ -29,7 +32,36 @@ exports.handler = async (event) => {
       SELECT roles FROM "Users"
       WHERE user_email = ${email};
     `;
-    
+
+    // Self-heal net: a confirmed, authenticated user with no "Users" row. This
+    // happens when the client-side create never ran (e.g. the account was
+    // confirmed in a later session, so the confirm->auto-sign-in path in
+    // Login.jsx didn't fire), or if the PostConfirmation DB write failed
+    // transiently. This trigger fires ONLY after Cognito has fully
+    // authenticated the user, so creating the row here grants nothing beyond
+    // what Cognito already authenticated — it is post-auth bookkeeping, not an
+    // auth gate. The seed role mirrors Cognito's server-side group truth (never
+    // client input) and defaults to "student"; ON CONFLICT keeps it idempotent
+    // under concurrent logins. We return early so the reconciliation below
+    // doesn't operate on a row we just created to match Cognito.
+    if (dbUser.length === 0) {
+      let seedRole = "student";
+      if (cognitoRoles.includes("admin")) {
+        seedRole = "admin";
+      } else {
+        const nonAdmin = cognitoRoles.find(r => ["instructor", "student"].includes(r));
+        if (nonAdmin) seedRole = nonAdmin;
+      }
+
+      await sqlConnection`
+        INSERT INTO "Users" (user_email, username, first_name, last_name, preferred_name, time_account_created, roles, last_sign_in)
+        VALUES (${email}, ${email}, ${givenName}, ${familyName}, ${givenName}, CURRENT_TIMESTAMP, ARRAY[${seedRole}], CURRENT_TIMESTAMP)
+        ON CONFLICT (user_email) DO NOTHING;
+      `;
+      console.log(`adjustUserRoles: self-healed missing Users row for ${email} (role ${seedRole})`);
+      return event;
+    }
+
     const dbRoles = dbUser[0]?.roles || [];
 
     // Handle role synchronization between Cognito and DB

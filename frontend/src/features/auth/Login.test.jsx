@@ -175,6 +175,34 @@ describe("Login", () => {
     expect(h.signUp).toHaveBeenCalled()
   })
 
+  it("carries given_name/family_name into Cognito at sign-up (Amplify v6 attribute shape)", async () => {
+    // Names must reach Cognito so the server-side PostConfirmation /
+    // PostAuthentication triggers can populate the "Users" row on any path — not
+    // just the fragile confirm->auto-sign-in client call.
+    h.signUp.mockResolvedValue({ isSignUpComplete: false, nextStep: { signUpStep: "CONFIRM_SIGN_UP" } })
+    render(<Login />)
+    await userEvent.click(screen.getByRole("button", { name: "Create an account" }))
+    await userEvent.type(screen.getByLabelText("First name"), "Ada")
+    await userEvent.type(screen.getByLabelText("Last name"), "Lovelace")
+    await userEvent.type(screen.getByLabelText("Email"), "ada@x.com")
+    await userEvent.type(screen.getByLabelText("Password"), "Password1!")
+    await userEvent.type(screen.getByLabelText("Confirm password"), "Password1!")
+    await userEvent.click(screen.getByRole("button", { name: "Sign up" }))
+
+    await waitFor(() => expect(h.signUp).toHaveBeenCalled())
+    expect(h.signUp).toHaveBeenCalledWith({
+      username: "ada@x.com",
+      password: "Password1!",
+      options: {
+        userAttributes: {
+          email: "ada@x.com",
+          given_name: "Ada",
+          family_name: "Lovelace",
+        },
+      },
+    })
+  })
+
   describe("resend code cooldown", () => {
     // Drive the signup flow to the "Confirm your account" view, then hand back the
     // typed email so assertions can build the expected green confirmation text.
