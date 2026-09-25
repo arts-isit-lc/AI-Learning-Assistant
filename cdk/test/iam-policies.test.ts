@@ -557,6 +557,39 @@ describe('IAM Policy Guardrails', () => {
   });
 
   /**
+   * Validates: IAM Security Policy (least privilege, SSM scoping).
+   * preSignupRole reads BOTH the AllowedEmailDomains and AllowedEmailAddresses
+   * parameters in a single GetParameters (plural) call, so it must grant
+   * ssm:GetParameters scoped to exactly those two parameter ARNs — no wildcard.
+   */
+  test('preSignupRole grants ssm:GetParameters scoped to the AllowedEmailDomains + AllowedEmailAddresses parameters', () => {
+    const statements = collectPolicyStatements(apiTemplate);
+    const presignupSsm = statements.filter(({ logicalId, statement }) => {
+      if (!logicalId.toLowerCase().includes('presignuprole')) return false;
+      return statementHasAction(statement, 'ssm:GetParameters');
+    });
+
+    expect(presignupSsm.length).toBeGreaterThanOrEqual(1);
+
+    // The scoped statement must reference both parameter ARNs and no wildcard.
+    const allResources = presignupSsm.flatMap(({ statement }) => {
+      const resource = statement.Resource;
+      return Array.isArray(resource) ? resource : [resource];
+    });
+
+    const asStrings = allResources.filter((r): r is string => typeof r === 'string');
+    expect(
+      asStrings.some((r) => r.includes('parameter/AILA/AllowedEmailDomains'))
+    ).toBe(true);
+    expect(
+      asStrings.some((r) => r.includes('parameter/AILA/AllowedEmailAddresses'))
+    ).toBe(true);
+    for (const r of asStrings) {
+      expect(r).not.toBe('*');
+    }
+  });
+
+  /**
    * Validates: Prompt Conflict Checker validation model + cross-Region inference IAM.
    * The instructor role (dbLambdaRole) can invoke the validation model (Haiku
    * 4.5) and the runtime-switchable Sonnet 4.5 via Geo-US cross-Region

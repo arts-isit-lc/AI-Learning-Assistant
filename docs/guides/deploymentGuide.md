@@ -254,6 +254,18 @@ aws ssm put-parameter \
     --profile <YOUR-PROFILE-NAME>
 ```
 
+Optionally, you can also allow specific individual email addresses whose domain is **not** in the allowlist above (e.g. an external collaborator). The PreSignup Lambda permits a signup when the email's domain is allowed **or** the full address appears in this list. Upload a comma-separated list of full email addresses to the `/AILA/AllowedEmailAddresses` parameter. This parameter is optional — if it does not exist, only the domain allowlist applies.
+
+```
+aws ssm put-parameter \
+    --name "/AILA/AllowedEmailAddresses" \
+    --value "external.collab@gmail.com,jane.doe@example.org" \
+    --type SecureString \
+    --profile <YOUR-PROFILE-NAME>
+```
+
+To add or remove someone later, re-run the same command with the updated list and `--overwrite`. The Lambda reads the parameter on each signup attempt, so changes take effect immediately (no redeploy required).
+
 #### Step 3a: CDK Deployment with an Existing VPC
 
 The following set of instructions are only if you want to deploy this application with an **existing VPC**. If you do not want to do this you can skip this section.

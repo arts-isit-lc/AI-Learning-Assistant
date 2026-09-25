@@ -847,12 +847,17 @@ export class ApiGatewayStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
     });
 
-    // Grant SSM access scoped to the AllowedEmailDomains parameter
+    // Grant SSM access scoped to the AllowedEmailDomains + AllowedEmailAddresses
+    // parameters. The Lambda reads both in one GetParameters (plural) call, so the
+    // ssm:GetParameters action is required (distinct from ssm:GetParameter).
     preSignupRole.addToPolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
-        actions: ["ssm:GetParameter"],
-        resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter/AILA/AllowedEmailDomains`],
+        actions: ["ssm:GetParameters"],
+        resources: [
+          `arn:aws:ssm:${this.region}:${this.account}:parameter/AILA/AllowedEmailDomains`,
+          `arn:aws:ssm:${this.region}:${this.account}:parameter/AILA/AllowedEmailAddresses`,
+        ],
       })
     );
 
@@ -893,6 +898,7 @@ export class ApiGatewayStack extends cdk.Stack {
       logGroup: makeLogGroup(`${id}-preSignupLambda`),
       environment: {
         ALLOWED_EMAIL_DOMAINS: "/AILA/AllowedEmailDomains",
+        ALLOWED_EMAIL_ADDRESSES: "/AILA/AllowedEmailAddresses",
       },
       functionName: `${id}-preSignupLambda`,
       memorySize: 128,
