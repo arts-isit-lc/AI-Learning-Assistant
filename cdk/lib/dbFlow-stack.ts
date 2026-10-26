@@ -20,7 +20,17 @@ export class DBFlowStack extends Stack {
          * Create an database initializer using lambda
          */
 
-        const psycopgLambdaLayer = apiStack.getLayers()['psycopg2'];   
+        // Own copy of the psycopg2 layer (same zip as ApiGatewayStack's) rather than
+        // apiStack.getLayers(): a cross-stack layer reference becomes a CloudFormation
+        // export, and an export can't change while imported, so every layer rebuild
+        // (e.g. a Python runtime bump) would block ApiGatewayStack's update.
+        const psycopgLambdaLayer = new lambda.LayerVersion(this, `${id}-psycopgLayer`, {
+          code: lambda.Code.fromAsset("./layers/psycopg2-py312.zip"),
+          compatibleRuntimes: [lambda.Runtime.PYTHON_3_12],
+          description: "psycopg2 for the DB initializer (Python 3.12)",
+        });
+        // Keep the documented order (deploy after ApiGatewayStack) without any exports.
+        this.addDependency(apiStack);
         const lambdaRole = new iam.Role(this, `${id}-lambda-vpc-role`, {
           assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
           description: "Role for all Lambda function inside VPC",
