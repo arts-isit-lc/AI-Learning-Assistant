@@ -359,9 +359,9 @@ Response: {
 
 | Function | Runtime | Memory | Timeout | Trigger |
 |----------|---------|--------|---------|---------|
-| `ragIngestionFunction` | Python 3.11 (Docker) | 1024 MB | 300s | S3 event (courses/ prefix) |
-| `ragEnrichmentFunction` | Python 3.11 (Docker) | 2048 MB | 900s | SQS (enrichment queue) |
-| `ragRetrievalFunction` | Python 3.11 (Docker) | 1024 MB | 60s | Lambda invoke (sync) |
+| `ragIngestionFunction` | Python 3.12 (Docker) | 1024 MB | 300s | S3 event (courses/ prefix) |
+| `ragEnrichmentFunction` | Python 3.12 (Docker) | 2048 MB | 900s | SQS (enrichment queue) |
+| `ragRetrievalFunction` | Python 3.12 (Docker) | 1024 MB | 60s | Lambda invoke (sync) |
 
 ### Supporting Resources
 

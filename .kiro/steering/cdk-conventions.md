@@ -7,7 +7,7 @@ fileMatchPattern: "cdk/**/*.ts"
 
 ## Versions
 TypeScript `~6.0.3` · `aws-cdk-lib ^2.263.0` · `constructs ^10.4.2` · `aws-cdk` CLI `2.1135.0`
-Runtimes: `NODEJS_22_X` (zip) · `PYTHON_3_11` (Docker)
+Runtimes: `NODEJS_24_X` (zip) · `PYTHON_3_12` (zip + Docker `lambda/python:3.12`, Amazon Linux 2023)
 Keep the `aws-cdk` CLI and `aws-cdk-lib` in step (a lib bump can raise the cloud-assembly schema past an older CLI). Deploy via `npm run deploy` (uses the git-pinned local CLI).
 
 ## Naming

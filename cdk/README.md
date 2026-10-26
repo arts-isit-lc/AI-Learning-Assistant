@@ -35,14 +35,14 @@ npx cdk synth          # Full synthesis (requires Docker)
 
 | Directory | Lambda Functions | Runtime |
 |-----------|-----------------|---------|
-| `multimodal_rag_v2/` | ragIngestion, ragEnrichment, ragRetrieval | Python 3.11 |
-| `chatbot_v2/` | chatbotV2Function | Python 3.11 |
-| `math_compute/` | mathComputeFunction | Python 3.11 |
-| `sqsTrigger/` | SQSTriggerDockerFunc | Python 3.11 |
+| `multimodal_rag_v2/` | ragIngestion, ragEnrichment, ragRetrieval | Python 3.12 |
+| `chatbot_v2/` | chatbotV2Function | Python 3.12 |
+| `math_compute/` | mathComputeFunction | Python 3.12 |
+| `sqsTrigger/` | SQSTriggerDockerFunc | Python 3.12 |
 
 ## Zip Lambdas
 
-Located in `lambda/`. Runtime: Node.js 22. Includes student, instructor, admin functions, authorizers, Cognito triggers, file operations, and notifications.
+Located in `lambda/`. Runtime: Node.js 24 (Python 3.12 for the Python handlers). Includes student, instructor, admin functions, authorizers, Cognito triggers, file operations, and notifications.
 
 ## Testing
 

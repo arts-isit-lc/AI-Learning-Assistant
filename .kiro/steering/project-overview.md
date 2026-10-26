@@ -12,7 +12,7 @@ frontend/              # React 19 SPA (Vite + Tailwind + shadcn/ui — OCELIA; M
 cdk/
 ├── bin/cdk.ts         # CDK app entrypoint
 ├── lib/               # 7 CDK stacks
-├── lambda/            # zip Lambda handler sources (Node.js 22 + Python 3.11)
+├── lambda/            # zip Lambda handler sources (Node.js 24 + Python 3.12)
 ├── multimodal_rag_v2/ # Docker Lambda (Python, RAG pipeline)
 ├── chatbot_v2/        # Docker Lambda (Python, structured learning)
 ├── math_compute/      # Docker Lambda (Python, SymPy)

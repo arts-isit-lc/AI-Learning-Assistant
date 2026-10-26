@@ -79,3 +79,18 @@ Closes the gap noted in the TextGen removal entry. `ApiGatewayStack.lambdaFuncti
 - **Tier 2 (error rate only):** ingestion, enrichment, mathCompute, rdsProjectionConsumer.
 - **Email:** only chatbotV2's critical error rate pages directly. RAG critical alarms go to the Warning topic, but they count toward the `SystemHealthCritical` composite (2 of 3 subsystems), whose rule resolves to about 5.4k of the 10,240-character limit.
 - **DLQs:** `enrichmentDlq` and `rdsProjectionDlq` get critical, emailing depth alarms (`extraDlqNames` prop), matching the existing messages DLQ.
+
+## 2026-10-26 — Decision: migrate all Python Lambdas to Python 3.12 (Amazon Linux 2023)
+
+**Decision:** 9 zip Lambdas (`Runtime.PYTHON_3_12`) and the four container images (`public.ecr.aws/lambda/python:3.12`) move off Python 3.11 / AL2. AL2 reached EOL on 2026-06-30 and Lambda deprecates `python3.11` on 2027-06-30; `python3.12` is supported until 2028-10-31.
+
+**Why 3.12 and not 3.13:** the `AWSLambdaPowertoolsPythonV2:78` layer used by the zip Lambdas supports runtimes only up to `python3.12`. 3.13 would also require migrating to Powertools V3. The numpy 1.26.4 pin (matched with math_compute) also has no cp313 wheels.
+
+**What changed with it:**
+- The `psycopg2` layer must match the runtime. It contains a CPython-specific extension (`_psycopg.cpython-3XX-…so`) under `python/lib/python3.X/site-packages`, so a 3.11 layer fails `import psycopg2` on 3.12. It was rebuilt as `layers/psycopg2-py312.zip` (psycopg2-binary 2.9.11, pinned in `build_layer_x86.sh`). Rebuild it whenever the Python runtime changes.
+- The container images no longer install `gcc`/`*-devel` packages. On glibc 2.34 every dependency installs from a manylinux wheel, so the Pillow source build and its headers are gone. Images shrank from about 550–610 MB to about 200–260 MB.
+- The numpy 1.26.4 pin no longer has an AL2 reason. It stays, matched with math_compute, until both are raised together.
+
+**Note:** `cdk/lambda/getPresignedURL/` is not deployed by any stack; `generatePreSignedURL` is the live one. CDK's own `BucketNotificationsHandler` runs on a runtime CDK chooses (`python3.13` in 2.273).
+
+**Verification:** every zip handler imports in the real `lambda/python:3.12` image with the new layer at `/opt`; all four images build and pass `pip-audit` (0 vulnerabilities); all 7 container handlers were invoked via the RIE; the Python suites pass on 3.12.

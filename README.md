@@ -54,7 +54,7 @@ See the [Troubleshooting Guide](docs/guides/troubleshootingGuide.md) for common 
 ├── cdk/
 │   ├── bin/                # CDK app entrypoint
 │   ├── lib/                # 7 CDK stack definitions
-│   ├── lambda/             # 13 zip Lambda functions (Node.js 22 + Python 3.11)
+│   ├── lambda/             # 13 zip Lambda functions (Node.js 24 + Python 3.12)
 │   ├── multimodal_rag_v2/  # Docker Lambda — 4-layer RAG pipeline (V2)
 │   ├── chatbot_v2/         # Docker Lambda — structured learning engine (V2)
 │   ├── math_compute/       # Docker Lambda — verified math computation (SymPy)

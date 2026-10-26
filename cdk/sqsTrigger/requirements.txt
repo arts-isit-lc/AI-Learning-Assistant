@@ -1,5 +1,5 @@
 # sqsTrigger Dependencies
-# Python 3.11 - AWS Lambda (Docker container)
+# Python 3.12 - AWS Lambda (Docker container, AL2023)
 #
 # Version floors pin the supply chain for reproducibility while keeping the
 # ">=" style used across the repo (see multimodal_rag_v2) so Amazon Linux 2

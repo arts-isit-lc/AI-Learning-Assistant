@@ -1,16 +1,11 @@
-FROM --platform=linux/amd64 public.ecr.aws/lambda/python:3.11
+FROM --platform=linux/amd64 public.ecr.aws/lambda/python:3.12
 
-# Install system dependencies, then remove build tools after pip install to reduce image size
-RUN yum -y install postgresql-devel gcc gcc-c++ libpq make
 
 # Copy requirements.txt
 COPY requirements.txt ${LAMBDA_TASK_ROOT}
 
-# Install Python packages then remove build tools
-RUN pip install --no-cache-dir -r requirements.txt && \
-    yum remove -y gcc gcc-c++ make postgresql-devel && \
-    yum clean all && \
-    rm -rf /var/cache/yum
+# Every dependency ships a manylinux wheel for AL2023 (glibc 2.34): no build toolchain.
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the source code
 COPY src/ ${LAMBDA_TASK_ROOT}

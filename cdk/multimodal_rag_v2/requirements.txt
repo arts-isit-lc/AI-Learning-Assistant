@@ -1,5 +1,5 @@
 # Multimodal RAG V2 Dependencies
-# Python 3.11 - AWS Lambda (Docker containers)
+# Python 3.12 - AWS Lambda (Docker containers, AL2023)
 
 # Document parsing
 PyMuPDF==1.25.5
@@ -8,10 +8,9 @@ python-docx>=1.1.0
 beautifulsoup4>=4.12.0
 pylatexenc>=2.10
 
-# Numerical — numpy pinned to 1.26.4 for Amazon Linux 2 wheel compatibility
-# (numpy >= 2.3 ships only manylinux_2_28 wheels that fail to build on the AL2
-# Lambda base image; matches math_compute). Not imported
-# directly; kept as a version guard.
+# Numerical — numpy held at 1.26.4 to match math_compute. Originally an AL2
+# wheel-compatibility pin; AL2023 (glibc 2.34) can take numpy 2.x, so this can be
+# raised together with math_compute. Not imported directly; kept as a version guard.
 numpy==1.26.4
 
 # AWS
@@ -24,9 +23,8 @@ psycopg2-binary>=2.9.9
 
 # Security floors for transitive dependencies (2026-10-26 audit, see
 # docs/security-dependency-audit.md). Without them Docker's cached pip layer
-# keeps old versions indefinitely. Pillow >= 12.3 ships only manylinux_2_28
-# wheels, which AL2 (glibc 2.26) can't use, so the Dockerfile installs the
-# zlib/libjpeg headers needed to build it from source.
+# keeps old versions indefinitely. Pillow is reachable from instructor PPTX
+# uploads (python-pptx -> PIL.Image.open).
 pillow>=13.0.0
 urllib3>=2.8.0
 soupsieve>=2.9.0
