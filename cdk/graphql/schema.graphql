@@ -15,7 +15,7 @@ type ChatChunk {
   chunk: String!
   done: Boolean!
   # Final-turn payload (populated only on the terminal done=true message, so the
-  # stream is the authoritative delivery channel — the POST is a fire-and-forget
+  # stream is the authoritative delivery channel - the POST is a fire-and-forget
   # trigger that may time out on slow turns). Nullable on incremental chunks.
   llm_output: String
   blocks: AWSJSON
