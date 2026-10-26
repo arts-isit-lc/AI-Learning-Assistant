@@ -1,0 +1,5 @@
+{
+  "ConversationTable": {
+    "TableName": "DynamoDB-Conversation-Table"
+  }
+}

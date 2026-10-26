@@ -27,6 +27,7 @@ import * as appsync from "aws-cdk-lib/aws-appsync";
 import * as ses from "aws-cdk-lib/aws-ses";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as bedrock from "aws-cdk-lib/aws-bedrock";
+import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import {
   SONNET_45,
   HAIKU_45,
@@ -1217,6 +1218,22 @@ export class ApiGatewayStack extends cdk.Stack {
 
     // ─── Bedrock Guardrail for Text Generation ─────────────────────────
     const filterStrength = isProd ? 'HIGH' : 'MEDIUM';
+
+    // ─── Chat history table (chatbotV2 + DeleteLastMessage) ────────────
+    // Originally created at runtime by the removed V1 text_generation Lambda, so
+    // existing environments already have it: it is brought under CloudFormation
+    // with `cdk import` (docs/guides/conversation-table-import.md), never created
+    // over. Properties must match the live table exactly (SessionId string key,
+    // on-demand billing, AWS-owned encryption, no PITR/streams/TTL). RETAIN so a
+    // stack change can never delete chat history. The table name, SSM parameter
+    // and IAM ARNs stay literal so the import changes nothing but this resource.
+    const conversationTable = new dynamodb.Table(this, `${id}-ConversationTable`, {
+      tableName: "DynamoDB-Conversation-Table",
+      partitionKey: { name: "SessionId", type: dynamodb.AttributeType.STRING },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+    });
+    (conversationTable.node.defaultChild as dynamodb.CfnTable).overrideLogicalId("ConversationTable");
 
     // SSM Parameter for DynamoDB conversation table name (used by DeleteLastMessage + chatbotV2)
     const tableNameParameter = new ssm.StringParameter(

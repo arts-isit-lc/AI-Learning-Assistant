@@ -94,3 +94,12 @@ Closes the gap noted in the TextGen removal entry. `ApiGatewayStack.lambdaFuncti
 **Note:** `cdk/lambda/getPresignedURL/` is not deployed by any stack; `generatePreSignedURL` is the live one. CDK's own `BucketNotificationsHandler` runs on a runtime CDK chooses (`python3.13` in 2.273).
 
 **Verification:** every zip handler imports in the real `lambda/python:3.12` image with the new layer at `/opt`; all four images build and pass `pip-audit` (0 vulnerabilities); all 7 container handlers were invoked via the RIE; the Python suites pass on 3.12.
+
+## 2026-10-26 — Decision: bring DynamoDB-Conversation-Table under CloudFormation via import
+
+Resolves the gap from the TextGen removal. `ApiGatewayStack` defines the table (logical ID `ConversationTable`, `RemovalPolicy.RETAIN`) with properties matching the live table exactly (SessionId string key, PAY_PER_REQUEST, AWS-owned encryption, no PITR/streams/TTL). Existing environments run `cdk import` per `docs/guides/conversation-table-import.md`; new environments create it.
+
+**Constraints that shaped it:**
+- `cdk import` only runs when the import is the stack's *only* change. The change therefore lives on its own branch (`feat/conversation-table-import`) until every existing environment is imported. Deploying it unimported makes CloudFormation try to *create* the table and fail ("already exists"). The table name, SSM parameter and IAM ARNs stay literal so the import diff is just the table.
+- An import doesn't apply tags, and the app-wide `app` tag would otherwise show as permanent drift. The runbook tags the live table before importing.
+- **Possible follow-ups:** enable PITR on the chat history table (a template change once imported); `CHAT_HISTORY_TABLE` in `multimodal-rag-stack.ts` still hard-codes the name.
