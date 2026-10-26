@@ -21,6 +21,8 @@ export interface ObservabilityStackProps extends cdk.StackProps {
   messagesQueueArn: string;
   dlqName: string;
   dlqArn: string;
+  /** Additional dead-letter queues (e.g. the RAG pipeline's) that get a depth alarm. */
+  extraDlqNames?: string[];
   appSyncApiId: string;
   containerLambdaNames: string[];
 }
@@ -93,6 +95,7 @@ export class ObservabilityStack extends cdk.Stack {
     // Tier 3 (low priority): No direct alarms — covered by API Gateway 5xx and composite alarms
     const tier1Suffixes = [
       'chatbotV2Function',
+      'ragRetrievalFunction',
       'DataIngestLambdaDockerFunc',
       'SQSTriggerDockerFunc',
       'studentFunction',
@@ -619,6 +622,33 @@ export class ObservabilityStack extends cdk.Stack {
     // Critical: DLQ messages mean permanent processing failure — always emails.
     this.dlqAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.criticalTopic));
 
+    // --- Extra DLQ depth alarms (RAG pipeline): same semantics as the DLQ alarm above ---
+    const extraDlqAlarms = (props.extraDlqNames ?? []).map((queueName) => {
+      const alarm = new cloudwatch.Metric({
+        namespace: "AWS/SQS",
+        metricName: "ApproximateNumberOfMessagesVisible",
+        dimensionsMap: { QueueName: queueName },
+        statistic: "Sum",
+        period: cdk.Duration.minutes(1),
+      }).createAlarm(this, `DlqDepthAlarm-${queueName.replace(/[^a-zA-Z0-9]/g, "")}`, {
+        alarmName: `AILA-${this.appEnvironment}-DLQ-Depth-${queueName}`,
+        alarmDescription: [
+          `Dead Letter Queue ${queueName} has messages (> 0): repeated processing failures.`,
+          `Investigation steps:`,
+          `  - Inspect DLQ messages for error patterns.`,
+          `  - Check the consumer Lambda's logs.`,
+          `  - Replay messages after the fix.`,
+        ].join("\n"),
+        threshold: 0,
+        evaluationPeriods: 1,
+        datapointsToAlarm: 1,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      });
+      alarm.addAlarmAction(new cloudwatchActions.SnsAction(this.criticalTopic));
+      return alarm;
+    });
+
     // --- SQS Queue Depth Alarm (Req 8.4) ---
     const sqsQueueDepthMetric = new cloudwatch.Metric({
       namespace: "AWS/SQS",
@@ -953,6 +983,7 @@ export class ObservabilityStack extends cdk.Stack {
       rdsConnectionsAlarm,
       rdsLatencyAlarm,
       this.dlqAlarm,
+      ...extraDlqAlarms,
       this.sqsQueueDepthAlarm,
       this.sqsQueueAgeAlarm,
       appSync5xxAlarm,

@@ -22,6 +22,7 @@ export function createTestStacks() {
     dbTemplate: Template.fromStack(dbStack),
     dbFlowTemplate: Template.fromStack(dbFlowStack),
     ragTemplate: Template.fromStack(ragStack),
+    lambdaFunctionInfos: apiStack.lambdaFunctionInfos,
   };
 }
 
@@ -62,6 +63,8 @@ export function createObservabilityTemplate(): Template {
       { functionName: 'Test-ApiGatewayStack-SQSTriggerDockerFunc', timeoutSeconds: 300, isContainer: true },
       { functionName: 'Test-ApiGatewayStack-GetChatLogsFunction', timeoutSeconds: 60, isContainer: false },
       { functionName: 'Test-MultimodalRagStack-chatbotV2Function', timeoutSeconds: 120, isContainer: true },
+      { functionName: 'Test-MultimodalRagStack-ragIngestionFunction', timeoutSeconds: 300, isContainer: true },
+      { functionName: 'Test-MultimodalRagStack-ragRetrievalFunction', timeoutSeconds: 60, isContainer: true },
     ],
     rdsInstanceId: 'test-rds-instance',
     rdsAllocatedStorage: 100,
@@ -70,10 +73,13 @@ export function createObservabilityTemplate(): Template {
     messagesQueueArn: 'arn:aws:sqs:ca-central-1:123456789012:test-messages-queue.fifo',
     dlqName: 'test-messages-dlq.fifo',
     dlqArn: 'arn:aws:sqs:ca-central-1:123456789012:test-messages-dlq.fifo',
+    extraDlqNames: ['Test-MultimodalRagStack-enrichmentDlq', 'Test-MultimodalRagStack-rdsProjectionDlq'],
     appSyncApiId: 'test-appsync-api-id',
     containerLambdaNames: [
       'Test-ApiGatewayStack-SQSTriggerDockerFunc',
       'Test-MultimodalRagStack-chatbotV2Function',
+      'Test-MultimodalRagStack-ragIngestionFunction',
+      'Test-MultimodalRagStack-ragRetrievalFunction',
     ],
   });
 

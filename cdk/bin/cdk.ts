@@ -36,6 +36,10 @@ const observabilityStack = new ObservabilityStack(app, `${StackPrefix}-Observabi
   messagesQueueArn: apiStack.messagesQueue.queueArn,
   dlqName: apiStack.messagesQueueDlq.queueName,
   dlqArn: apiStack.messagesQueueDlq.queueArn,
+  extraDlqNames: [
+    `${multimodalRagStack.node.id}-enrichmentDlq`,
+    `${multimodalRagStack.node.id}-rdsProjectionDlq`,
+  ],
   appSyncApiId: apiStack.appSyncApiId,
   containerLambdaNames: apiStack.lambdaFunctionInfos
     .filter((fn) => fn.isContainer)

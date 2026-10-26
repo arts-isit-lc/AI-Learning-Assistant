@@ -2380,6 +2380,13 @@ export class ApiGatewayStack extends cdk.Stack {
       // The live chatbot lives in MultimodalRagStack; monitored here so its
       // critical error rate pages and the guardrail-failure filter reads its logs.
       { functionName: `${ragStack.node.id}-chatbotV2Function`, timeoutSeconds: 120, isContainer: true },
+      // RAG pipeline (MultimodalRagStack). Retrieval is Tier 1: the chatbot swallows
+      // its failures and answers without course material, so errors are otherwise silent.
+      { functionName: `${ragStack.node.id}-ragIngestionFunction`, timeoutSeconds: 300, isContainer: true },
+      { functionName: `${ragStack.node.id}-ragEnrichmentFunction`, timeoutSeconds: 900, isContainer: true },
+      { functionName: `${ragStack.node.id}-ragRetrievalFunction`, timeoutSeconds: 60, isContainer: true },
+      { functionName: `${ragStack.node.id}-mathComputeFunction`, timeoutSeconds: 30, isContainer: true },
+      { functionName: `${ragStack.node.id}-rdsProjectionConsumerFunction`, timeoutSeconds: 60, isContainer: true },
     ];
 
   }

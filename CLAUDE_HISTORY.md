@@ -71,3 +71,11 @@ Durable architectural decisions and technical findings. Append new entries; when
 **Known gap (follow-up):** `DynamoDB-Conversation-Table` (chat history for chatbotV2 and DeleteLastMessage) was created at runtime by TextGen's code (`create_table`) and is not managed by CloudFormation. Existing environments already have it, but a brand-new environment would not. Bringing it under CDK needs a CloudFormation resource import in each existing environment.
 
 **Also noted:** the other `MultimodalRagStack` functions (ingestion, enrichment, retrieval, math, rdsProjection) are still not covered by ObservabilityStack.
+
+## 2026-10-26 — Decision: monitor the RAG pipeline in ObservabilityStack
+
+Closes the gap noted in the TextGen removal entry. `ApiGatewayStack.lambdaFunctionInfos` now lists every `MultimodalRagStack` container function by its deterministic name (`<rag stack id>-<fn>`), which avoids cross-stack exports. A test (`rag-observability.test.ts`) fails if a new RAG image function is not listed.
+- **Tier 1 (error rate, duration, throttle):** `ragRetrievalFunction`. The chatbot swallows retrieval failures (`retrieval_client.py` returns `None`) and answers without course material, so its errors are otherwise invisible.
+- **Tier 2 (error rate only):** ingestion, enrichment, mathCompute, rdsProjectionConsumer.
+- **Email:** only chatbotV2's critical error rate pages directly. RAG critical alarms go to the Warning topic, but they count toward the `SystemHealthCritical` composite (2 of 3 subsystems), whose rule resolves to about 5.4k of the 10,240-character limit.
+- **DLQs:** `enrichmentDlq` and `rdsProjectionDlq` get critical, emailing depth alarms (`extraDlqNames` prop), matching the existing messages DLQ.
