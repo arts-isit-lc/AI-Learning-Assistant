@@ -299,3 +299,41 @@ Tackled the deferred optional majors in risk-ordered batches (each gated by buil
 
 ### Net dependency posture
 Everything is on its latest **compatible** major. The only versions not on latest-major are the four deferred above, each blocked by a concrete peer/ecosystem constraint or a cost/benefit call — not by neglect.
+
+---
+
+## Audit + remediation — 2026-10-26
+
+Triggered by the Node.js October 2026 security release. Scope: npm (`frontend/`, `cdk/`, root), Python packages **as installed in the deployed container images** (not only `requirements.txt`), Lambda layers, base images and runtimes, and current advisories (PHP, Node.js, GitLab, Go, certifi, LiteLLM).
+
+### Key finding: the deployed images had stale dependencies
+A `pip-audit` of the `requirements.txt` files was clean, but auditing `pip freeze` from the **deployed** images found 57 (RAG), 6 (chatbotV2), 6 (sqsTrigger), 5 (mathCompute) and 25 (TextGen) known vulnerabilities. There were two causes:
+
+1. **Docker layer caching.** The `pip install` layer is reused while `requirements.txt` is unchanged, and the base image (`lambda/python:3.11`) is only re-pulled on request. The local base was from 2026-04-17, so a deploy on 2026-10-26 still shipped July's transitive dependencies (e.g. `certifi` 2026.7.22, `urllib3` 2.6.3).
+2. **The AL2 wheel ceiling.** Pillow ≥ 12.3 ships only `manylinux_2_28` wheels, and AL2 has glibc 2.26, so even a clean build resolves Pillow 12.2.0 (50 CVEs). Pillow is reachable from instructor uploads: `pptx_adapter.py` → `shape.image.content_type` → python-pptx → `PIL.Image.open()`.
+
+### What was fixed
+
+| Area | Action | Result |
+|---|---|---|
+| RAG image | Floors `pillow>=13.0.0`, `urllib3>=2.8.0`, `soupsieve>=2.9.0`; Dockerfile installs `zlib-devel libjpeg-turbo-devel` so Pillow builds from source (and removes them afterwards) | 57 → **0** |
+| chatbotV2 / rdsProjection, sqsTrigger | Floors `certifi>=2026.10.19` (drops the compromised emSign/eMudhra chain), `urllib3>=2.8.0` | 6 → **0** each |
+| mathCompute | Fresh base image (its `urllib3` comes from the base image's preinstalled AWS SDK) | 5 → **0** |
+| Frontend | `npm audit fix` (lockfile only): `zod` 4.6.7, `katex` 0.18.10, `vite` 8.3.5, `vitest` 4.1.12, `undici` 7.30.1, … | 14 → **4 low** |
+| CDK | `npm audit fix` (lockfile only): `handlebars` 4.7.10, `js-yaml` 3.15.2, `brace-expansion` (jest/ts-jest copies) | 3 → **1** |
+
+### Verification
+- **Images:** all four rebuilt for `linux/amd64` on the 2026-10-22 base. `pip-audit` of each image's `pip freeze` → **0 known vulnerabilities**. All 7 handlers were invoked in their image via the Lambda runtime interface emulator with `{"warmup": true}`; all imported cleanly and returned.
+- **Python suites (3.11):** RAG 1104, chatbot 294, math 214, sqsTrigger 7 — all pass on Pillow 13.0.0 / urllib3 2.8.0 / certifi 2026.10.23. A real python-pptx + Pillow 13 smoke test through `PptxAdapter` (PNG/JPEG/GIF) passes; the unit tests mock `pptx`, so they don't exercise Pillow.
+- **CDK:** `npm test` — **400/400**. **Frontend:** lint 0 errors, **660/660** tests, build passes.
+- Layers: `aws-jwt-verify` 5.1.1, `postgres` 3.4.9 and `psycopg2-binary` 2.9.11 — 0 known vulnerabilities.
+
+### Deploy note
+**Run `docker pull public.ecr.aws/lambda/python:3.11` before `npm run deploy`.** Without it, a stale local base image goes back into the build.
+
+### Still open
+- **TextGenLambdaDockerFunc** (25 vulns: langchain ×4, aiohttp ×11, anyio, multidict, …). It has no API route and has never been invoked. Remove it rather than patch it, after confirming it is unused.
+- **Frontend: 4 low.** A nested `katex` 0.16.47 via `rehype-katex` / `remark-math`; no non-breaking fix, and only exploitable alongside an existing prototype pollution. Accepted.
+- **CDK: 1 high.** `brace-expansion` is bundled inside `aws-cdk-lib` 2.268.0 and runs at synth time only. Clears with an `aws-cdk-lib` upgrade (2.274.0 available); keep the `aws-cdk` CLI in step.
+- **Python 3.11 / Amazon Linux 2.** AL2 reached EOL on 2026-06-30 (critical/selected patches only), and Lambda deprecates `python3.11` on 2027-06-30. Plan a migration to `python3.12`+ (AL2023, glibc 2.34): 10 zip Lambdas and 5 Dockerfiles (`yum` → `dnf`; drop the AL2-specific numpy pin and Pillow source build).
+- **Not applicable:** PHP2Shell (no PHP), GitLab CVE-2026-110264 (GitHub is used), Go x509 (no Go), LiteLLM (not a dependency).

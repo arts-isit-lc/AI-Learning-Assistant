@@ -11,3 +11,10 @@ psycopg2-binary>=2.9.9
 httpx>=0.27.0
 aws-xray-sdk>=2.14.0
 aws-lambda-powertools>=2.40.0
+
+# Security floors for transitive dependencies (2026-10-26 audit, see
+# docs/security-dependency-audit.md). Without them Docker's cached pip layer
+# keeps old versions indefinitely. certifi < 2026.10.18 trusts the compromised
+# emSign/eMudhra CA chain.
+certifi>=2026.10.19
+urllib3>=2.8.0

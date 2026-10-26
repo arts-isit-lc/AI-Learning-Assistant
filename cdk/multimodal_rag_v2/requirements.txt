@@ -21,3 +21,12 @@ aws-xray-sdk
 
 # Database
 psycopg2-binary>=2.9.9
+
+# Security floors for transitive dependencies (2026-10-26 audit, see
+# docs/security-dependency-audit.md). Without them Docker's cached pip layer
+# keeps old versions indefinitely. Pillow >= 12.3 ships only manylinux_2_28
+# wheels, which AL2 (glibc 2.26) can't use, so the Dockerfile installs the
+# zlib/libjpeg headers needed to build it from source.
+pillow>=13.0.0
+urllib3>=2.8.0
+soupsieve>=2.9.0
