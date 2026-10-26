@@ -1,6 +1,5 @@
 *.js
-!lambda/*.js
-!lambda/*/*.js
+!lambda/**/*.js
 !jest.config.js
 *.d.ts
 node_modules
@@ -9,12 +8,6 @@ node_modules
 .cdk.staging
 cdk.out
 cdk.context.json
-
-# Ignore everything in textGenLambdaFolder
-lambda/textGenLambdaFolder/*
-
-# Ignore everything in textGenLambda ZIP since over 100 MB
-lambda/textGenLambda.zip
 
 # Ignore torch.zip since over 100 MB
 layers/torch.zip
