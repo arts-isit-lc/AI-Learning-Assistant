@@ -3,7 +3,6 @@
  * chatbot behavior. Displayed read-only in the Prompt Settings UI.
  *
  * MAINTENANCE CONSTRAINT: This text MUST stay in sync with:
- *   cdk/text_generation/src/constants/system_prompt.py
  *   cdk/lambda/lib/constants/systemPrompt.js
  *
  * Any change to those files requires updating this copy.

@@ -92,7 +92,7 @@ export class ObservabilityStack extends cdk.Stack {
     // Tier 2 (supporting): Error rate alarms only (warning + critical)
     // Tier 3 (low priority): No direct alarms — covered by API Gateway 5xx and composite alarms
     const tier1Suffixes = [
-      'TextGenLambdaDockerFunc',
+      'chatbotV2Function',
       'DataIngestLambdaDockerFunc',
       'SQSTriggerDockerFunc',
       'studentFunction',
@@ -199,11 +199,11 @@ export class ObservabilityStack extends cdk.Stack {
         comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
       });
 
-      // Only the TextGen (chatbot) critical error rate is page-worthy email. Every
+      // Only the chatbot (chatbotV2) critical error rate is page-worthy email. Every
       // other Lambda's critical failures surface via the API Gateway 5xx Critical
       // and composite alarms, so they route to the silent Warning topic (dashboard
       // and console only — no email).
-      const isCriticalPathFn = fn.functionName.endsWith("TextGenLambdaDockerFunc");
+      const isCriticalPathFn = fn.functionName.endsWith("chatbotV2Function");
       criticalAlarm.addAlarmAction(
         new cloudwatchActions.SnsAction(isCriticalPathFn ? this.criticalTopic : this.warningTopic)
       );
@@ -1035,15 +1035,19 @@ export class ObservabilityStack extends cdk.Stack {
     });
 
     // --- Bedrock Guardrail Failure Alarm (Req 10.6, 10.7) ---
-    // Detect guardrail service errors and SSM parameter retrieval failures in the text generation Lambda
-    const textGenFunctionName = props.containerLambdaNames.find(
-      (name) => name.includes("TextGen") || name.includes("textGen")
-    ) || props.containerLambdaNames[0];
+    // Detect guardrail service errors and SSM parameter retrieval failures in the
+    // chatbot Lambda. Fail synth rather than silently watching another log group.
+    const chatbotFunctionName = props.containerLambdaNames.find((name) =>
+      name.endsWith("chatbotV2Function")
+    );
+    if (!chatbotFunctionName) {
+      throw new Error("ObservabilityStack: chatbotV2Function missing from containerLambdaNames");
+    }
 
     const guardrailLogGroup = logs.LogGroup.fromLogGroupName(
       this,
-      "TextGenGuardrailLogGroup",
-      `/aws/lambda/${textGenFunctionName}`
+      "ChatbotGuardrailLogGroup",
+      `/aws/lambda/${chatbotFunctionName}`
     );
 
     const guardrailMetricFilter = new logs.MetricFilter(
@@ -1053,12 +1057,12 @@ export class ObservabilityStack extends cdk.Stack {
         logGroup: guardrailLogGroup,
         filterPattern: logs.FilterPattern.any(
           logs.FilterPattern.all(
-            logs.FilterPattern.stringValue("$.level", "=", "ERROR"),
-            logs.FilterPattern.stringValue("$.message", "=", "*Bedrock Guardrails service error*")
+            logs.FilterPattern.stringValue("$.level", "=", "WARNING"),
+            logs.FilterPattern.stringValue("$.message", "=", "Guardrail service error*")
           ),
           logs.FilterPattern.all(
-            logs.FilterPattern.stringValue("$.level", "=", "WARNING"),
-            logs.FilterPattern.stringValue("$.message", "=", "*Failed to retrieve guardrail SSM parameters*")
+            logs.FilterPattern.stringValue("$.level", "=", "ERROR"),
+            logs.FilterPattern.stringValue("$.message", "=", "Failed to load guardrail config from SSM")
           )
         ),
         metricNamespace: "AILA/Guardrails",
@@ -1071,12 +1075,12 @@ export class ObservabilityStack extends cdk.Stack {
     const guardrailAlarm = new cloudwatch.Alarm(this, "GuardrailFailureAlarm", {
       alarmName: `AILA-${this.appEnvironment}-Guardrail-Failure`,
       alarmDescription: [
-        `Bedrock Guardrails failure detected in ${textGenFunctionName}.`,
-        `The text generation Lambda is operating without guardrail enforcement.`,
+        `Bedrock Guardrails failure detected in ${chatbotFunctionName}.`,
+        `The chatbot may be operating without guardrail enforcement.`,
         `Investigation steps:`,
-        `  - Check CloudWatch Logs group /aws/lambda/${textGenFunctionName}.`,
-        `  - Look for ERROR logs with "Bedrock Guardrails service error".`,
-        `  - Look for WARNING logs with "Failed to retrieve guardrail SSM parameters".`,
+        `  - Check CloudWatch Logs group /aws/lambda/${chatbotFunctionName}.`,
+        `  - Look for WARNING logs with "Guardrail service error (not intervention)".`,
+        `  - Look for ERROR logs with "Failed to load guardrail config from SSM".`,
         `  - Verify SSM parameters exist and are accessible.`,
         `  - Check Bedrock service health in the region.`,
       ].join("\n"),

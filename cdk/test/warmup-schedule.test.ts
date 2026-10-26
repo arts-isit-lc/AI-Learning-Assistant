@@ -87,10 +87,7 @@ describe('Container Lambda warm-up schedules', () => {
       const uncovered = Object.values(images)
         .map((r) => r.Properties.FunctionName as string)
         .filter((name) => !covered.includes(name));
-      // TextGenLambdaDockerFunc has no API route and no invocations; left out deliberately.
-      expect(uncovered).toEqual(
-        template === apiTemplate ? ['Test-ApiGatewayStack-TextGenLambdaDockerFunc'] : []
-      );
+      expect(uncovered).toEqual([]);
     }
   });
 });

@@ -10,7 +10,7 @@ pylatexenc>=2.10
 
 # Numerical — numpy pinned to 1.26.4 for Amazon Linux 2 wheel compatibility
 # (numpy >= 2.3 ships only manylinux_2_28 wheels that fail to build on the AL2
-# Lambda base image; matches text_generation/math_compute). Not imported
+# Lambda base image; matches math_compute). Not imported
 # directly; kept as a version guard.
 numpy==1.26.4
 

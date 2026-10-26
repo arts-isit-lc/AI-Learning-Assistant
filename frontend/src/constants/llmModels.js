@@ -9,8 +9,8 @@ export const LLM_MODELS = {
     description: 'Large language model optimized for instruction following and educational conversations'
   },
   CLAUDE_SONNET_4_5: {
-    // Geo-US cross-Region inference profile id (kept in sync with the backend
-    // catalog in text_generation/src/constants/llm_models.py).
+    // Geo-US cross-Region inference profile id (kept in sync with SONNET_45 in
+    // cdk/lib/constants/bedrock.ts).
     id: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
     name: 'Claude Sonnet 4.5',
     provider: 'Anthropic',

@@ -9,7 +9,7 @@ AWS CDK (TypeScript) infrastructure for the AI Learning Assistant. Deploys 7 sta
 | VpcStack | VPC, subnets, security groups |
 | DatabaseStack | RDS PostgreSQL (pgvector), 3 RDS Proxies, DynamoDB, Secrets Manager |
 | MultimodalRagStack | RAG pipeline (ingestion/enrichment/retrieval), chatbot V2, math compute |
-| ApiGatewayStack | REST API (WAF), AppSync, zip Lambdas, text_generation, SQS, S3, Cognito |
+| ApiGatewayStack | REST API (WAF), AppSync, zip Lambdas, SQS, S3, Cognito |
 | ObservabilityStack | 30+ CloudWatch Alarms, SNS, Dashboard, X-Ray sampling |
 | DBFlowStack | Schema initializer Lambda |
 | AmplifyStack | Frontend hosting |
@@ -35,7 +35,6 @@ npx cdk synth          # Full synthesis (requires Docker)
 
 | Directory | Lambda Functions | Runtime |
 |-----------|-----------------|---------|
-| `text_generation/` | TextGenLambdaDockerFunc | Python 3.11 |
 | `multimodal_rag_v2/` | ragIngestion, ragEnrichment, ragRetrieval | Python 3.11 |
 | `chatbot_v2/` | chatbotV2Function | Python 3.11 |
 | `math_compute/` | mathComputeFunction | Python 3.11 |

@@ -55,7 +55,7 @@ Jest 29 + ts-jest · `Template.fromStack()` assertions · Docker required · `cr
 2. Define the model in `cdk/lib/constants/bedrock.ts` (single source of truth for model IDs + IAM ARNs). Anthropic Claude 4.x is NOT available in-Region in ca-central-1 — use a Geo-US cross-Region inference profile (`us.` prefix) as the `modelId`, and grant IAM via `crisInvokeResources()` (inference-profile ARN **+** foundation-model ARN in every destination Region). Amazon/Meta in-Region models use `inRegionModelResource()`.
 3. Wire the resources into the role's Bedrock policy in `api-gateway-stack.ts` / `multimodal-rag-stack.ts` via those helpers — never hand-write ARNs or use `'*'`.
 4. Add Marketplace permissions if third-party model (Anthropic, Cohere, AI21): `aws-marketplace:Subscribe/Unsubscribe/ViewSubscriptions` resources `'*'`
-5. Add to Python constants (`text_generation/src/constants/llm_models.py`) + frontend (`frontend/src/constants/llmModels.js`); update `multimodal_rag_v2/pricing.py` rates (keyed on the bare foundation-model id — the geo prefix is normalized before lookup)
+5. Add to the frontend catalog (`frontend/src/constants/llmModels.js`); update `multimodal_rag_v2/pricing.py` rates (keyed on the bare foundation-model id — the geo prefix is normalized before lookup)
 6. Add/adjust ARN assertions in `iam-policies.test.ts` (inference-profile + destination-Region FM ARNs) and pricing tests
 
 Amazon/Meta models skip step 4 (not Marketplace-sold) and use in-Region invocation (no inference profile).

@@ -18,8 +18,8 @@ def load_chat_history(table_name: str, session_id: str, dynamodb_resource=None) 
         item = response.get("Item")
         if not item:
             return []
-        # The existing text_generation uses DynamoDBChatMessageHistory which stores
-        # messages in a "History" attribute as a list of message dicts
+        # LangChain's DynamoDBChatMessageHistory format (from the removed V1
+        # text_generation Lambda): messages in a "History" list attribute.
         history = item.get("History", [])
         if isinstance(history, list):
             return history

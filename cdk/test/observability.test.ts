@@ -12,11 +12,15 @@ const template = createObservabilityTemplate();
 describe('Guardrail Failure Observability', () => {
   /**
    * Validates: Requirements 10.6
-   * Metric filter exists on text generation Lambda log group for guardrail failures.
+   * Metric filter exists on the chatbot (chatbotV2) log group for guardrail
+   * failures, matching the messages chatbot_v2/src/guardrails.py logs.
    */
   test('metric filter exists for guardrail failure detection', () => {
     template.hasResourceProperties('AWS::Logs::MetricFilter', {
-      FilterPattern: Match.anyValue(),
+      LogGroupName: '/aws/lambda/Test-MultimodalRagStack-chatbotV2Function',
+      FilterPattern: Match.stringLikeRegexp(
+        'Guardrail service error\\*.*Failed to load guardrail config from SSM'
+      ),
       MetricTransformations: Match.arrayWith([
         Match.objectLike({
           MetricNamespace: 'AILA/Guardrails',

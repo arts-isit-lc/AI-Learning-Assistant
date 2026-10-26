@@ -30,8 +30,6 @@ import * as bedrock from "aws-cdk-lib/aws-bedrock";
 import {
   SONNET_45,
   HAIKU_45,
-  LLAMA3_70B,
-  TITAN_EMBED_V2,
   crisInvokeResources,
   inRegionModelResource,
 } from "./constants/bedrock";
@@ -1317,7 +1315,7 @@ export class ApiGatewayStack extends cdk.Stack {
     // SSM Parameters for guardrail runtime config.
     // Deterministic path (/AILA/${environment}/...) so the chatbotV2Function in
     // MultimodalRagStack can reference these by literal name without a circular
-    // cross-stack dependency. textGenLambdaDockerFunc reads them via the Ref below.
+    // cross-stack dependency.
     const guardrailIdParam = new ssm.StringParameter(this, `${id}-GuardrailIdParam`, {
       parameterName: `/AILA/${environment}/GuardrailId`,
       description: "Bedrock Guardrail ID for text generation",
@@ -1329,136 +1327,6 @@ export class ApiGatewayStack extends cdk.Stack {
       description: "Bedrock Guardrail version for text generation",
       stringValue: guardrailVersion.attrVersion,
     });
-
-    // ─── Docker Lambda: Text Generation (Chatbot) ───────────────────────
-    const textGenLambdaDockerFunc = new lambda.DockerImageFunction(this, `${id}-TextGenLambdaDockerFunc`, {
-      code: lambda.DockerImageCode.fromImageAsset("./text_generation"),
-      memorySize: 1024,
-      timeout: cdk.Duration.seconds(300),
-      tracing: lambda.Tracing.ACTIVE,
-      logGroup: makeLogGroup(`${id}-TextGenLambdaDockerFunc`),
-      vpc: vpcStack.vpc,
-      functionName: `${id}-TextGenLambdaDockerFunc`,
-      environment: {
-        SM_DB_CREDENTIALS: db.secretPathTableCreator.secretName,
-        RDS_PROXY_ENDPOINT: db.rdsProxyEndpointTableCreator,
-        REGION: this.region,
-        BEDROCK_LLM_PARAM: bedrockLLMParameter.parameterName,
-        EMBEDDING_MODEL_PARAM: embeddingModelParameter.parameterName,
-        TABLE_NAME_PARAM: tableNameParameter.parameterName,
-        GUARDRAIL_ID_PARAM: guardrailIdParam.parameterName,
-        GUARDRAIL_VERSION_PARAM: guardrailVersionParam.parameterName,
-        IR_BUCKET_NAME: ragStack.irBucket.bucketName,
-      },
-    });
-
-    // Override the Logical ID to preserve CloudFormation resource identity
-    const cfnTextGenDockerFunc = textGenLambdaDockerFunc.node
-      .defaultChild as lambda.CfnFunction;
-    cfnTextGenDockerFunc.overrideLogicalId("TextGenLambdaDockerFunc");
-
-    // Allow API Gateway to invoke this function
-    textGenLambdaDockerFunc.addPermission("AllowApiGatewayInvoke", {
-      principal: new iam.ServicePrincipal("apigateway.amazonaws.com"),
-      action: "lambda:InvokeFunction",
-      sourceArn: `arn:aws:execute-api:${this.region}:${this.account}:${this.api.restApiId}/*/*/student*`,
-    });
-
-    // Bedrock InvokeModel — LLM + embedding + vision (Haiku for image escalation)
-    textGenLambdaDockerFunc.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
-      resources: [
-        inRegionModelResource(LLAMA3_70B, this.region),
-        ...crisInvokeResources(SONNET_45, this.region, this.account),
-        ...crisInvokeResources(HAIKU_45, this.region, this.account),
-        inRegionModelResource(TITAN_EMBED_V2, this.region),
-      ],
-    }));
-
-    // Bedrock ApplyGuardrail — scoped to the specific guardrail created in this stack
-    textGenLambdaDockerFunc.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ["bedrock:ApplyGuardrail"],
-      resources: [
-        `arn:aws:bedrock:${this.region}:${this.account}:guardrail/${guardrail.attrGuardrailId}`,
-      ],
-    }));
-
-    // AWS Marketplace permissions for Bedrock model subscription (first-time auto-subscription)
-    textGenLambdaDockerFunc.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ["aws-marketplace:Subscribe", "aws-marketplace:Unsubscribe", "aws-marketplace:ViewSubscriptions"],
-      resources: ["*"],  // Marketplace actions do not support resource-level permissions
-    }));
-
-    // Secrets Manager — scoped to specific secret ARN
-    textGenLambdaDockerFunc.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ["secretsmanager:GetSecretValue"],
-      resources: [db.secretPathTableCreator.secretArn],
-    }));
-
-    // DynamoDB management (ListTables, CreateTable, DescribeTable)
-    textGenLambdaDockerFunc.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ["dynamodb:ListTables", "dynamodb:CreateTable", "dynamodb:DescribeTable"],
-      resources: [`arn:aws:dynamodb:${this.region}:${this.account}:table/*`],
-    }));
-
-    // DynamoDB data actions — scoped to conversation table
-    textGenLambdaDockerFunc.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ["dynamodb:PutItem", "dynamodb:GetItem", "dynamodb:UpdateItem"],
-      resources: [`arn:aws:dynamodb:${this.region}:${this.account}:table/DynamoDB-Conversation-Table`],
-    }));
-
-    // SSM GetParameter — scoped to AILA parameters
-    textGenLambdaDockerFunc.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ["ssm:GetParameter"],
-      resources: [
-        bedrockLLMParameter.parameterArn,
-        embeddingModelParameter.parameterArn,
-        tableNameParameter.parameterArn,
-        guardrailIdParam.parameterArn,
-        guardrailVersionParam.parameterArn,
-      ],
-    }));
-
-    // EC2 VPC networking — resource '*' required by AWS for ENI operations
-    textGenLambdaDockerFunc.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        "ec2:CreateNetworkInterface",
-        "ec2:DescribeNetworkInterfaces",
-        "ec2:DeleteNetworkInterface",
-        "ec2:AssignPrivateIpAddresses",
-        "ec2:UnassignPrivateIpAddresses",
-      ],
-      resources: ["*"],
-    }));
-
-    // S3 GetObject on IR bucket — for image escalation (fetching images for vision analysis)
-    textGenLambdaDockerFunc.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ["s3:GetObject"],
-      resources: [`${ragStack.irBucket.bucketArn}/*`],
-    }));
-
-    // CloudWatch Logs — scoped to specific log group
-    textGenLambdaDockerFunc.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
-      resources: [`arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${id}-TextGenLambdaDockerFunc:*`],
-    }));
-
-    // X-Ray — resource '*' acceptable (service does not support resource-level scoping)
-    textGenLambdaDockerFunc.addToRolePolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: ["xray:PutTraceSegments", "xray:PutTelemetryRecords"],
-      resources: ["*"],
-    }));
 
     // Create S3 Bucket to handle documents for each course
     const dataIngestionBucket = new s3.Bucket(this, `${id}-DataIngestionBucket`, {
@@ -1992,9 +1860,6 @@ export class ApiGatewayStack extends cdk.Stack {
 
     this.appSyncApiId = this.eventApi.apiId;
 
-    // Add APPSYNC_API_URL to text generation Lambda (must be after eventApi is created)
-    textGenLambdaDockerFunc.addEnvironment("APPSYNC_API_URL", this.eventApi.graphqlUrl);
-
     // Publish the AppSync GraphQL URL to a deterministic SSM parameter so the
     // chatbotV2Function (in MultimodalRagStack, which this stack depends on) can
     // resolve it at runtime — passing it directly would create a circular
@@ -2512,7 +2377,9 @@ export class ApiGatewayStack extends cdk.Stack {
       { functionName: `${id}-SQSTriggerDockerFunc`, timeoutSeconds: 300, isContainer: true },
       { functionName: `${id}-GetChatLogsFunction`, timeoutSeconds: 60, isContainer: false },
       { functionName: `${id}-orphanCleanupFunc`, timeoutSeconds: 300, isContainer: false },
-      { functionName: `${id}-TextGenLambdaDockerFunc`, timeoutSeconds: 300, isContainer: true },
+      // The live chatbot lives in MultimodalRagStack; monitored here so its
+      // critical error rate pages and the guardrail-failure filter reads its logs.
+      { functionName: `${ragStack.node.id}-chatbotV2Function`, timeoutSeconds: 120, isContainer: true },
     ];
 
   }

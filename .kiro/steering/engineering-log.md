@@ -156,7 +156,7 @@ Full audit (2026-07-01): `.kiro/specs/multimodal-chatbot-audit/findings.md` (ran
 - AILA — StackPrefix / project shorthand (AI Learning Assistant).
 - Roles — Admin, Instructor, Student.
 - `multimodal_rag_v2` — 4-layer RAG pipeline (ingestion -> enrichment -> retrieval -> reasoning).
-- `chatbot_v2` — structured-learning chatbot. `math_compute` — SymPy compute Lambda. `text_generation` — LangChain generation Lambda.
+- `chatbot_v2` — structured-learning chatbot. `math_compute` — SymPy compute Lambda.
 - DBFlow — DBFlowStack; deploys after ApiGatewayStack, before AmplifyStack; runs the DB initializer.
 
 ## Archive

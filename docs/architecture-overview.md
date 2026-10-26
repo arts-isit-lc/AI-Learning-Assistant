@@ -48,7 +48,7 @@ The system processes uploaded course materials (PDF, PPTX, DOCX, LaTeX, CSV, HTM
 │ • Instructor Lambda │   │ • ragEnrichmentFunction    │   │   (pgvector)         │
 │ • Admin Lambda      │   │ • ragRetrievalFunction     │   │ • 3 RDS Proxies      │
 │ • Authorizers (x3)  │   │ • chatbotV2Function        │   │ • DynamoDB tables    │
-│ • text_generation   │   │ • Session_State_Table      │   │ • Secrets Manager    │
+│                     │   │ • Session_State_Table      │   │ • Secrets Manager    │
 │                     │   │ • IR Bucket (S3)           │   │                      │
 │ • SQS + triggers    │   │ • EmbeddingCache (DDB)     │   │                      │
 │ • Cognito           │   │ • EnrichmentCache (DDB)    │   │                      │
@@ -64,7 +64,7 @@ The system processes uploaded course materials (PDF, PPTX, DOCX, LaTeX, CSV, HTM
 |-------|---------|---------------|
 | **VpcStack** | Network foundation | VPC, subnets, security groups |
 | **DatabaseStack** | Data persistence | RDS PostgreSQL (pgvector), 3 RDS Proxies, DynamoDB Chat_History_Table, Secrets Manager |
-| **ApiGatewayStack** | API layer + original Lambdas | REST API (WAF), AppSync, student/instructor/admin Lambdas, text_generation, SQS trigger, S3 upload bucket, Cognito |
+| **ApiGatewayStack** | API layer + original Lambdas | REST API (WAF), AppSync, student/instructor/admin Lambdas, SQS trigger, S3 upload bucket, Cognito |
 | **MultimodalRagStack** | V2 RAG + Chatbot V2 | Ingestion/Enrichment/Retrieval Lambdas, chatbotV2Function, IR Bucket, DynamoDB caches, Session_State_Table, SQS enrichment queue |
 | **ObservabilityStack** | Monitoring | 30+ CloudWatch Alarms, SNS topics, Dashboard, X-Ray sampling |
 | **DBFlowStack** | Schema migration | Initializer Lambda (DDL) |
@@ -76,7 +76,7 @@ The system processes uploaded course materials (PDF, PPTX, DOCX, LaTeX, CSV, HTM
 
 The active student chatbot is **Chatbot V2**, served at `POST /student/chatbot-v2`. The frontend talks only to this path.
 
-An earlier V1 "text generation" chatbot Lambda (`TextGenLambdaDockerFunc`) is still deployed in `ApiGatewayStack`, but it is **no longer wired to any API Gateway route or Function URL** — it is a dormant legacy artifact, not an active path. (It is not referenced in the OpenAPI definition and the frontend never calls it.)
+An earlier V1 "text generation" chatbot Lambda (`TextGenLambdaDockerFunc`, source `cdk/text_generation/`) was **removed on 2026-10-26**. It had no API Gateway route or Function URL and had never been invoked in dev or prod. The Bedrock guardrail it introduced (`TextGenGuardrail`) is still in `ApiGatewayStack` and is used by Chatbot V2.
 
 ### V2: Chatbot V2 (`POST /student/chatbot-v2`)
 
@@ -118,9 +118,8 @@ The active V2 path uses:
 
 | Model | Usage | Context |
 |-------|-------|---------|
-| **Claude 3 Sonnet** (`anthropic.claude-3-sonnet-20240229-v1:0`) | Response generation | V1 text_generation, V2 chatbotV2Function (Response_Generator) |
+| **Claude 3 Sonnet** (`anthropic.claude-3-sonnet-20240229-v1:0`) | Response generation | V2 chatbotV2Function (Response_Generator) |
 | **Claude 3 Haiku** (`anthropic.claude-3-haiku-20240307-v1:0`) | Evaluation, query analysis, topic extraction, vision | V2 chatbotV2Function (Evaluation_Engine), ragRetrievalFunction (QueryAnalyzer), ragEnrichmentFunction (image descriptions, topic extraction) |
-| **Llama 3 70B** (`meta.llama3-70b-instruct-v1:0`) | Alternative response generation | V1 text_generation (instructor-selectable) |
 | **Titan Embed v2** (`amazon.titan-embed-text-v2:0`) | Text embeddings (1024 dimensions) | ragEnrichmentFunction, ragRetrievalFunction |
 
 ---

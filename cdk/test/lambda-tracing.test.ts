@@ -38,6 +38,7 @@ beforeAll(() => {
     lambdaFunctions: [
       { functionName: 'Test-ApiGatewayStack-studentFunction', timeoutSeconds: 60, isContainer: false },
       { functionName: 'Test-ApiGatewayStack-SQSTriggerDockerFunc', timeoutSeconds: 300, isContainer: true },
+      { functionName: 'Test-MultimodalRagStack-chatbotV2Function', timeoutSeconds: 120, isContainer: true },
     ],
     rdsInstanceId: 'test-rds-instance',
     rdsAllocatedStorage: 100,
@@ -47,7 +48,10 @@ beforeAll(() => {
     dlqName: 'test-messages-dlq.fifo',
     dlqArn: 'arn:aws:sqs:ca-central-1:123456789012:test-messages-dlq.fifo',
     appSyncApiId: 'test-appsync-api-id',
-    containerLambdaNames: ['Test-ApiGatewayStack-SQSTriggerDockerFunc'],
+    containerLambdaNames: [
+      'Test-ApiGatewayStack-SQSTriggerDockerFunc',
+      'Test-MultimodalRagStack-chatbotV2Function',
+    ],
   });
 
   prodObservabilityTemplate = Template.fromStack(prodStack);

@@ -55,7 +55,6 @@ See the [Troubleshooting Guide](docs/guides/troubleshootingGuide.md) for common 
 │   ├── bin/                # CDK app entrypoint
 │   ├── lib/                # 7 CDK stack definitions
 │   ├── lambda/             # 13 zip Lambda functions (Node.js 22 + Python 3.11)
-│   ├── text_generation/    # Docker Lambda — LangChain text generation (V1 path)
 │   ├── multimodal_rag_v2/  # Docker Lambda — 4-layer RAG pipeline (V2)
 │   ├── chatbot_v2/         # Docker Lambda — structured learning engine (V2)
 │   ├── math_compute/       # Docker Lambda — verified math computation (SymPy)

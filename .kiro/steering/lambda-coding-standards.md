@@ -5,7 +5,7 @@ fileMatchPattern: "cdk/**/*.py"
 
 # Lambda Coding Standards (Python)
 
-Applies to all container Lambdas (`text_generation`, `multimodal_rag_v2`, `chatbot_v2`, `math_compute`, `sqsTrigger`) and zip Lambdas. Mandatory — refactor affected sections when touching existing code.
+Applies to all container Lambdas (`multimodal_rag_v2`, `chatbot_v2`, `math_compute`, `sqsTrigger`) and zip Lambdas. Mandatory — refactor affected sections when touching existing code.
 
 ## Logging — Powertools Only
 ```python

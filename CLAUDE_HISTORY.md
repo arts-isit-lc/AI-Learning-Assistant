@@ -57,3 +57,17 @@ Durable architectural decisions and technical findings. Append new entries; when
 **How to audit an image:** `docker run --entrypoint pip <image> freeze > f.txt` then `pip-audit -r f.txt --no-deps --disable-pip`.
 
 **Long-term:** migrating to `python3.12`+ (AL2023, glibc 2.34) removes the wheel ceiling and AL2's end-of-life patch limits. Lambda deprecates `python3.11` on 2027-06-30. See `docs/security-dependency-audit.md` (2026-10-26).
+
+## 2026-10-26 — Decision: remove TextGenLambdaDockerFunc (V1 chatbot)
+
+**Decision:** Delete `TextGenLambdaDockerFunc` and `cdk/text_generation/`. It had no API route, and CloudWatch showed no invocations in dev or prod. Its image carried 25 known vulnerabilities (langchain, aiohttp, …). Removing it was preferred over patching dead code.
+
+**Kept on purpose:**
+- `TextGenGuardrail` / `TextGenGuardrailVersion` and the `/AILA/<env>/Guardrail*` SSM parameters. Chatbot V2 uses them. Renaming the guardrail would replace the resource, so the legacy name stays.
+- The SSM parameters `TableName`, `BedrockLLM` and `EmbeddingModel`. Other Lambdas read them by name at runtime.
+
+**Observability moved to the live chatbot.** TextGen held the only email-paging Lambda alarm and the guardrail-failure metric filter, so the real chatbot had neither. Both now target `chatbotV2Function`, and its filter matches the messages `chatbot_v2/src/guardrails.py` actually logs. `ObservabilityStack` now throws at synth time if chatbotV2 is missing, instead of falling back to `containerLambdaNames[0]`. The tests had been passing through that fallback, against SQSTrigger's log group.
+
+**Known gap (follow-up):** `DynamoDB-Conversation-Table` (chat history for chatbotV2 and DeleteLastMessage) was created at runtime by TextGen's code (`create_table`) and is not managed by CloudFormation. Existing environments already have it, but a brand-new environment would not. Bringing it under CDK needs a CloudFormation resource import in each existing environment.
+
+**Also noted:** the other `MultimodalRagStack` functions (ingestion, enrichment, retrieval, math, rdsProjection) are still not covered by ObservabilityStack.

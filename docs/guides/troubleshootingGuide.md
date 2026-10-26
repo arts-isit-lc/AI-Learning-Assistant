@@ -226,7 +226,6 @@ Docker is used in this project to build container images for the following Lambd
 
 | Container | Source Directory | Purpose |
 |-----------|-----------------|---------|
-| Text Generation | `./text_generation` | LangChain-based LLM generation (V1 chatbot path) |
 | Multimodal RAG Ingestion | `./multimodal_rag_v2` | Parse files into Document IR (CMD: `ingestion.handler.handler`) |
 | Multimodal RAG Enrichment | `./multimodal_rag_v2` | Vision AI + embeddings (CMD: `enrichment.handler.handler`) |
 | Multimodal RAG Retrieval | `./multimodal_rag_v2` | Hybrid search + reasoning (CMD: `retrieval.handler.handler`) |

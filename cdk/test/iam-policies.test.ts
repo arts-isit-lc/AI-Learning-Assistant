@@ -404,16 +404,15 @@ describe('IAM Policy Guardrails', () => {
 
   /**
    * Validates: Requirements 6.1, 6.2, 6.3, 6.4
-   * bedrock:ApplyGuardrail permission exists with guardrail-scoped resource ARN, no wildcards.
+   * Any bedrock:ApplyGuardrail grant in ApiGatewayStack is guardrail-scoped, never '*'.
+   * The live grant is chatbotV2's (MultimodalRagStack), asserted in the next test;
+   * ApiGatewayStack's only grant went with the V1 TextGen Lambda (removed 2026-10-26).
    */
-  test('bedrock:ApplyGuardrail policy exists with guardrail-scoped resource ARN', () => {
+  test('bedrock:ApplyGuardrail grants in ApiGatewayStack are guardrail-scoped', () => {
     const statements = collectPolicyStatements(apiTemplate);
     const guardrailStatements = statements.filter(
       ({ statement }) => statementHasAction(statement, 'bedrock:ApplyGuardrail')
     );
-
-    // Must have at least one statement with bedrock:ApplyGuardrail
-    expect(guardrailStatements.length).toBeGreaterThanOrEqual(1);
 
     // Verify no wildcard resources
     for (const { statement } of guardrailStatements) {

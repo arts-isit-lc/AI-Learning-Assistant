@@ -332,7 +332,7 @@ A `pip-audit` of the `requirements.txt` files was clean, but auditing `pip freez
 **Run `docker pull public.ecr.aws/lambda/python:3.11` before `npm run deploy`.** Without it, a stale local base image goes back into the build.
 
 ### Still open
-- **TextGenLambdaDockerFunc** (25 vulns: langchain ×4, aiohttp ×11, anyio, multidict, …). It has no API route and has never been invoked. Remove it rather than patch it, after confirming it is unused.
+- ~~**TextGenLambdaDockerFunc** (25 vulns)~~ — **removed 2026-10-26** after confirming no invocations in dev or prod (see `CLAUDE_HISTORY.md`).
 - **Frontend: 4 low.** A nested `katex` 0.16.47 via `rehype-katex` / `remark-math`; no non-breaking fix, and only exploitable alongside an existing prototype pollution. Accepted.
 - **CDK: 1 high.** `brace-expansion` is bundled inside `aws-cdk-lib` 2.268.0 and runs at synth time only. Clears with an `aws-cdk-lib` upgrade (2.274.0 available); keep the `aws-cdk` CLI in step.
 - **Python 3.11 / Amazon Linux 2.** AL2 reached EOL on 2026-06-30 (critical/selected patches only), and Lambda deprecates `python3.11` on 2027-06-30. Plan a migration to `python3.12`+ (AL2023, glibc 2.34): 10 zip Lambdas and 5 Dockerfiles (`yum` → `dnf`; drop the AL2-specific numpy pin and Pillow source build).

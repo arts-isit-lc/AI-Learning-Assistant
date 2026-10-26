@@ -376,7 +376,6 @@ messagesQueue.addToResourcePolicy(
 | `preSignupLambda`                   |  Private        | Cognito **Pre-Sign-Up** trigger           | **Cognito internal trigger** only          |
 | `addStudentOnSignUp`                |  Private        | Cognito **Post-Confirmation** trigger     | **Cognito internal trigger** only          |
 | `adjustUserRoles`                   |  Private        | Cognito **Post-Authentication** trigger   | **Cognito internal trigger** only          |
-| `TextGenLambdaDockerFunc`           |  Private        | student | **student** group users                    |
 | `GeneratePreSignedURLFunc`          |  Private        | instructor | **instructor** group users                 |
 | `GetFilesFunction`                  |  Private        | instructor | **instructor** group users                 |
 | `DeleteFileFunc`                    |  Private        | instructor | **instructor** group users                 |

@@ -52,7 +52,7 @@ beforeAll(() => {
       { functionName: 'Test-ApiGatewayStack-sqsFunction', timeoutSeconds: 60, isContainer: false },
       { functionName: 'Test-ApiGatewayStack-SQSTriggerDockerFunc', timeoutSeconds: 300, isContainer: true },
       { functionName: 'Test-ApiGatewayStack-GetChatLogsFunction', timeoutSeconds: 60, isContainer: false },
-      { functionName: 'Test-ApiGatewayStack-TextGenLambdaDockerFunc', timeoutSeconds: 300, isContainer: true },
+      { functionName: 'Test-MultimodalRagStack-chatbotV2Function', timeoutSeconds: 120, isContainer: true },
     ],
     rdsInstanceId: 'test-rds-instance',
     rdsAllocatedStorage: 100,
@@ -64,6 +64,7 @@ beforeAll(() => {
     appSyncApiId: 'test-appsync-api-id',
     containerLambdaNames: [
       'Test-ApiGatewayStack-SQSTriggerDockerFunc',
+      'Test-MultimodalRagStack-chatbotV2Function',
     ],
   });
 
@@ -155,14 +156,14 @@ describe('Critical-only email routing', () => {
     expect(alarmActions(devTemplate, alarmName)).toContainEqual({ Ref: criticalId });
   });
 
-  test('TextGen critical error rate routes to the Critical topic', () => {
+  test('chatbot (chatbotV2) critical error rate routes to the Critical topic', () => {
     const criticalId = topicId(devTemplate, 'AILA-dev-Critical');
     expect(
-      alarmActions(devTemplate, 'AILA-dev-Test-ApiGatewayStack-TextGenLambdaDockerFunc-ErrorRate-Critical')
+      alarmActions(devTemplate, 'AILA-dev-Test-MultimodalRagStack-chatbotV2Function-ErrorRate-Critical')
     ).toContainEqual({ Ref: criticalId });
   });
 
-  test('non-TextGen Lambda critical (studentFunction) does NOT email — routes to Warning', () => {
+  test('non-chatbot Lambda critical (studentFunction) does NOT email — routes to Warning', () => {
     const criticalId = topicId(devTemplate, 'AILA-dev-Critical');
     const warningId = topicId(devTemplate, 'AILA-dev-Warning');
     const actions = alarmActions(devTemplate, 'AILA-dev-Test-ApiGatewayStack-studentFunction-ErrorRate-Critical');

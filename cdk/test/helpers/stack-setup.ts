@@ -61,7 +61,7 @@ export function createObservabilityTemplate(): Template {
       { functionName: 'Test-ApiGatewayStack-sqsFunction', timeoutSeconds: 60, isContainer: false },
       { functionName: 'Test-ApiGatewayStack-SQSTriggerDockerFunc', timeoutSeconds: 300, isContainer: true },
       { functionName: 'Test-ApiGatewayStack-GetChatLogsFunction', timeoutSeconds: 60, isContainer: false },
-      { functionName: 'Test-ApiGatewayStack-TextGenLambdaDockerFunc', timeoutSeconds: 300, isContainer: true },
+      { functionName: 'Test-MultimodalRagStack-chatbotV2Function', timeoutSeconds: 120, isContainer: true },
     ],
     rdsInstanceId: 'test-rds-instance',
     rdsAllocatedStorage: 100,
@@ -73,6 +73,7 @@ export function createObservabilityTemplate(): Template {
     appSyncApiId: 'test-appsync-api-id',
     containerLambdaNames: [
       'Test-ApiGatewayStack-SQSTriggerDockerFunc',
+      'Test-MultimodalRagStack-chatbotV2Function',
     ],
   });
 
