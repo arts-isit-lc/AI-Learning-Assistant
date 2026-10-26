@@ -83,6 +83,12 @@ def handler(event, context):
     Per-record errors are logged and swallowed (the underlying rds_projection
     helpers are already best-effort), so one bad record never fails the batch.
     """
+    # Daily EventBridge keep-warm ping (cdk/lib/warmup.ts): return before any
+    # I/O so the function is never idle long enough to go Inactive.
+    if event.get("warmup"):
+        logger.info("Warm-up ping")
+        return {"warmup": True}
+
     records = event.get("Records", [])
     logger.info("RDS projection batch received", extra={"record_count": len(records)})
     for record in records:

@@ -44,6 +44,12 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         "trace": { ... }
     }
     """
+    # Daily EventBridge keep-warm ping (cdk/lib/warmup.ts): return before any
+    # I/O so the function is never idle long enough to go Inactive.
+    if event.get("warmup"):
+        logger.info("Warm-up ping")
+        return {"warmup": True}
+
     trace_id = str(uuid.uuid4())
     start_time = time.time()
     stages: list[dict] = []

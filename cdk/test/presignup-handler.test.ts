@@ -32,6 +32,11 @@ const ADDRESSES_PARAM = '/AILA/AllowedEmailAddresses';
 
 const GENERIC_ERROR = 'Error validating email domain during pre-signup.';
 
+// Module scope: without an import/export this file is a global script whose
+// makeEvent collides with student-course.test.ts when ts-jest compiles both
+// in one worker.
+export {};
+
 const makeEvent = (email: string) => ({
   request: { userAttributes: { email } },
 });

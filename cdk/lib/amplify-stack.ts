@@ -41,10 +41,10 @@ export class AmplifyStack extends cdk.Stack {
                 commands:
                   - pwd
                   # Vite 8 + React Router 8 require Node >= 22.22. Pin the build
-                  # image to Node 22 (the Amplify image ships nvm) so the cloud
+                  # image to Node 24 (the Amplify image ships nvm) so the cloud
                   # build matches local and npm engine checks pass.
-                  - nvm install 22
-                  - nvm use 22
+                  - nvm install 24
+                  - nvm use 24
                   - node --version
                   - npm ci
               build:

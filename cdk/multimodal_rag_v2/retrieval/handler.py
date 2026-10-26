@@ -498,6 +498,12 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     Returns:
         Response dict with statusCode and body.
     """
+    # Daily EventBridge keep-warm ping (cdk/lib/warmup.ts): return before any
+    # I/O so the function is never idle long enough to go Inactive.
+    if event.get("warmup"):
+        logger.info("Warm-up ping")
+        return {"warmup": True}
+
     query_id = str(uuid.uuid4())
     start_time = time.time()
 

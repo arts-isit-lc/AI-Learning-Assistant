@@ -179,6 +179,12 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     Returns:
         Response dict with statusCode and body.
     """
+    # Daily EventBridge keep-warm ping (cdk/lib/warmup.ts): return before any
+    # I/O so the function is never idle long enough to go Inactive.
+    if event.get("warmup"):
+        logger.info("Warm-up ping")
+        return {"warmup": True}
+
     records = event.get("Records", [])
     if not records:
         logger.warning("No records in event")

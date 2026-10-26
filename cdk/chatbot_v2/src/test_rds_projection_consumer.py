@@ -121,3 +121,15 @@ class TestProjectTimestamps:
         # No timestamps in payload -> time_sent forwarded as None (CURRENT_TIMESTAMP).
         for c in persist.call_args_list:
             assert c.kwargs.get("time_sent") is None
+
+
+class TestWarmup:
+    """Daily keep-warm ping (cdk/lib/warmup.ts) returns before touching RDS."""
+
+    def test_warmup_ping_skips_db(self, monkeypatch):
+        def _fail():
+            raise AssertionError("warm-up ping must not open a DB connection")
+
+        monkeypatch.setattr(consumer, "_get_db_connection", _fail)
+
+        assert consumer.handler({"warmup": True}, _Ctx()) == {"warmup": True}

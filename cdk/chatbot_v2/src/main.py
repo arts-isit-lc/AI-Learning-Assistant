@@ -455,6 +455,12 @@ def _session_state_view(state) -> dict:
 @logger.inject_lambda_context(clear_state=True)
 def handler(event, context):
     """Chatbot V2 Lambda handler — full learning pipeline orchestration."""
+    # Daily EventBridge keep-warm ping (cdk/lib/warmup.ts): return before any
+    # I/O so the function is never idle long enough to go Inactive.
+    if event.get("warmup"):
+        logger.info("Warm-up ping")
+        return {"warmup": True}
+
     # Bound before the try so the outer except handlers can stream a terminal
     # error (the stream is authoritative; the client renders/aborts from it).
     session_id = ""

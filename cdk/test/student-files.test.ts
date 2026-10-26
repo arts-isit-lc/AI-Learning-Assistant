@@ -104,7 +104,7 @@ jest.mock("../lambda/lib/accessControl.js", () => ({
   verifyStudentOwnsSession: jest.fn(),
 }));
 
-// The Node 22 Lambda runtime provides the AWS SDK; not installed under
+// The Node 24 Lambda runtime provides the AWS SDK; not installed under
 // cdk/node_modules, so mock virtually to let the handler module load.
 jest.mock(
   "@aws-sdk/client-s3",

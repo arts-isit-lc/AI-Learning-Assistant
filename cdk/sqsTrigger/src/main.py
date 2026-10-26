@@ -247,6 +247,12 @@ def invoke_event_notification(request_id, message="Chat logs successfully upload
 
 @logger.inject_lambda_context(clear_state=True)
 def handler(event, context):
+    # Daily EventBridge keep-warm ping (cdk/lib/warmup.ts): return before any
+    # I/O so the function is never idle long enough to go Inactive.
+    if event.get("warmup"):
+        logger.info("Warm-up ping")
+        return {"warmup": True}
+
     if "Records" not in event:
         logger.error("Invalid event format: missing 'Records'.")
         raise ValueError("Event does not contain 'Records'.")

@@ -16,6 +16,7 @@ import { VpcStack } from "./vpc-stack";
 import { DatabaseStack } from "./database-stack";
 import { MultimodalRagStack } from "./multimodal-rag-stack";
 import { resolveAllowedOrigins } from "./constants/cors";
+import { addDailyWarmup } from "./warmup";
 import { Fn } from "aws-cdk-lib";
 import { Asset } from "aws-cdk-lib/aws-s3-assets";
 import * as s3 from "aws-cdk-lib/aws-s3";
@@ -135,7 +136,7 @@ export class ApiGatewayStack extends cdk.Stack {
      */
     const jwt = new lambda.LayerVersion(this, "aws-jwt-verify", {
       code: lambda.Code.fromAsset("./layers/aws-jwt-verify.zip"),
-      compatibleRuntimes: [lambda.Runtime.NODEJS_22_X],
+      compatibleRuntimes: [lambda.Runtime.NODEJS_24_X],
       description: "Contains the aws-jwt-verify library for JS",
     });
 
@@ -145,7 +146,7 @@ export class ApiGatewayStack extends cdk.Stack {
      */
     const postgres = new lambda.LayerVersion(this, "postgres", {
       code: lambda.Code.fromAsset("./layers/postgres.zip"),
-      compatibleRuntimes: [lambda.Runtime.NODEJS_22_X],
+      compatibleRuntimes: [lambda.Runtime.NODEJS_24_X],
       description: "Contains the postgres library for JS",
     });
 
@@ -655,7 +656,7 @@ export class ApiGatewayStack extends cdk.Stack {
     );
 
     const lambdaStudentFunction = new lambda.Function(this, `${id}-studentFunction`, {
-      runtime: lambda.Runtime.NODEJS_22_X,
+      runtime: lambda.Runtime.NODEJS_24_X,
       code: lambda.Code.fromAsset("lambda/lib"),
       handler: "studentFunction.handler",
       timeout: Duration.seconds(60),
@@ -689,7 +690,7 @@ export class ApiGatewayStack extends cdk.Stack {
       this,
       `${id}-instructorFunction`,
       {
-        runtime: lambda.Runtime.NODEJS_22_X,
+        runtime: lambda.Runtime.NODEJS_24_X,
         code: lambda.Code.fromAsset("lambda/lib"),
         handler: "instructorFunction.handler",
         timeout: Duration.seconds(60),
@@ -807,7 +808,7 @@ export class ApiGatewayStack extends cdk.Stack {
     );
 
     const lambdaAdminFunction = new lambda.Function(this, `${id}-adminFunction`, {
-      runtime: lambda.Runtime.NODEJS_22_X,
+      runtime: lambda.Runtime.NODEJS_24_X,
       code: lambda.Code.fromAsset("lambda/adminFunction"),
       handler: "adminFunction.handler",
       // 300s (not the default 60s): duplicate_course fans out synchronous
@@ -890,7 +891,7 @@ export class ApiGatewayStack extends cdk.Stack {
 
     // P-8: preSignupLambda moved out of VPC — only accesses SSM (public service)
     const preSignupLambda = new lambda.Function(this, `${id}-preSignupLambda`, {
-      runtime: lambda.Runtime.NODEJS_22_X,
+      runtime: lambda.Runtime.NODEJS_24_X,
       code: lambda.Code.fromAsset("lambda/lib"),
       handler: "preSignup.handler",
       timeout: Duration.seconds(30),
@@ -988,7 +989,7 @@ export class ApiGatewayStack extends cdk.Stack {
     );
 
     const AutoSignupLambda = new lambda.Function(this, `${id}-addStudentOnSignUp`, {
-      runtime: lambda.Runtime.NODEJS_22_X,
+      runtime: lambda.Runtime.NODEJS_24_X,
       code: lambda.Code.fromAsset("lambda/lib"),
       handler: "addStudentOnSignUp.handler",
       timeout: Duration.seconds(30),
@@ -1006,7 +1007,7 @@ export class ApiGatewayStack extends cdk.Stack {
     });
 
     const adjustUserRoles = new lambda.Function(this, `${id}-adjustUserRoles`, {
-      runtime: lambda.Runtime.NODEJS_22_X,
+      runtime: lambda.Runtime.NODEJS_24_X,
       code: lambda.Code.fromAsset("lambda/lib"),
       handler: "adjustUserRoles.handler",
       timeout: Duration.seconds(60),
@@ -1097,7 +1098,7 @@ export class ApiGatewayStack extends cdk.Stack {
       this,
       `${id}-admin-authorization-api-gateway`,
       {
-        runtime: lambda.Runtime.NODEJS_22_X,
+        runtime: lambda.Runtime.NODEJS_24_X,
         code: lambda.Code.fromAsset("lambda/adminAuthorizerFunction"),
         handler: "adminAuthorizerFunction.handler",
         timeout: Duration.seconds(30),
@@ -1131,7 +1132,7 @@ export class ApiGatewayStack extends cdk.Stack {
       this,
       `${id}-student-authorization-api-gateway`,
       {
-        runtime: lambda.Runtime.NODEJS_22_X,
+        runtime: lambda.Runtime.NODEJS_24_X,
         code: lambda.Code.fromAsset("lambda/studentAuthorizerFunction"),
         handler: "studentAuthorizerFunction.handler",
         timeout: Duration.seconds(30),
@@ -1167,7 +1168,7 @@ export class ApiGatewayStack extends cdk.Stack {
       this,
       `${id}-instructor-authorization-api-gateway`,
       {
-        runtime: lambda.Runtime.NODEJS_22_X,
+        runtime: lambda.Runtime.NODEJS_24_X,
         code: lambda.Code.fromAsset("lambda/instructorAuthorizerFunction"),
         handler: "instructorAuthorizerFunction.handler",
         timeout: Duration.seconds(30),
@@ -1953,7 +1954,7 @@ export class ApiGatewayStack extends cdk.Stack {
     //////////////////////////////
 
     const authHandler = new lambda.Function(this, `${id}-AuthHandler`, {
-      runtime: lambda.Runtime.NODEJS_22_X,
+      runtime: lambda.Runtime.NODEJS_24_X,
       code: lambda.Code.fromAsset("lambda/lib"),
       handler: "appsync.handler",
       tracing: lambda.Tracing.ACTIVE,
@@ -2210,7 +2211,7 @@ export class ApiGatewayStack extends cdk.Stack {
      * Create a Lambda function that populates SQS with parameters to start new job
      */
     const sqsFunction = new lambda.Function(this, `${id}-sqsFunction`, {
-      runtime: lambda.Runtime.NODEJS_22_X,
+      runtime: lambda.Runtime.NODEJS_24_X,
       code: lambda.Code.fromAsset("lambda/lib"),
       handler: "sqsFunction.handler",
       timeout: Duration.seconds(60),
@@ -2306,6 +2307,9 @@ export class ApiGatewayStack extends cdk.Stack {
         batchSize: 1, // Process messages one at a time
       })
     );
+
+    // Daily keep-warm ping (see lib/warmup.ts)
+    addDailyWarmup(this, "sqsTrigger", sqsTrigger);
 
     // Override the Logical ID of the Lambda Function to get ARN in OpenAPI
     const cfnSqsTrigger = sqsTrigger.node

@@ -12,6 +12,7 @@ import { Duration } from "aws-cdk-lib";
 import { DatabaseStack } from "./database-stack";
 import { VpcStack } from "./vpc-stack";
 import { resolveAllowedOrigins } from "./constants/cors";
+import { addDailyWarmup } from "./warmup";
 import {
   SONNET_45,
   HAIKU_45,
@@ -948,6 +949,14 @@ export class MultimodalRagStack extends cdk.Stack {
     rdsProjectionConsumerFunction.addEventSource(
       new lambdaEventSources.SqsEventSource(rdsProjectionQueue, { batchSize: 10 })
     );
+
+    // ─── Daily keep-warm pings (see lib/warmup.ts) ───────────────────────────
+    addDailyWarmup(this, "ragIngestion", this.ragIngestionFunction);
+    addDailyWarmup(this, "ragEnrichment", this.ragEnrichmentFunction);
+    addDailyWarmup(this, "ragRetrieval", this.ragRetrievalFunction);
+    addDailyWarmup(this, "chatbotV2", this.chatbotV2Function);
+    addDailyWarmup(this, "mathCompute", mathComputeFunction);
+    addDailyWarmup(this, "rdsProjectionConsumer", rdsProjectionConsumerFunction);
 
     // Export the Lambda ARN for cross-stack reference (used by ApiGatewayStack OpenAPI spec)
     new cdk.CfnOutput(this, "ChatbotV2FunctionArn", {

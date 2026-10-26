@@ -778,3 +778,20 @@ def test_state_load_failure_emits_error_terminal_message(wire, monkeypatch):
     assert resp["statusCode"] == 503
     sf.assert_called_once()
     assert sf.call_args.kwargs.get("error") is True
+
+
+# ---------------------------------------------------------------------------
+# Warm-up ping (cdk/lib/warmup.ts): the daily keep-warm invoke returns before
+# any IO so it never touches Bedrock, retrieval, DynamoDB, RDS or AppSync.
+# ---------------------------------------------------------------------------
+
+
+def test_warmup_ping_returns_before_any_io(monkeypatch):
+    def _fail(*a, **k):
+        raise AssertionError("warm-up ping must not reach request handling")
+
+    for name in ("_get_guardrail_config", "_get_appsync_url", "_load_session_state",
+                 "invoke_retrieval", "_get_db_connection"):
+        monkeypatch.setattr(main, name, _fail)
+
+    assert main.handler({"warmup": True}, _Ctx()) == {"warmup": True}

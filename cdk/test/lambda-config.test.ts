@@ -5,7 +5,7 @@ import { Template } from 'aws-cdk-lib/assertions';
  * Lambda Configuration Tests
  *
  * These tests verify that all Lambda functions use the correct runtimes:
- * Node.js functions must use nodejs22.x and Python functions must use python3.11.
+ * Node.js functions must use nodejs24.x and Python functions must use python3.11.
  * Docker image functions (PackageType: 'Image') are excluded since they don't
  * have a Runtime property.
  *
@@ -62,9 +62,9 @@ const allTemplates = () => [
 describe('Lambda Configuration', () => {
   /**
    * Validates: Requirement 24.1
-   * All Node.js Lambda functions must use the nodejs22.x runtime.
+   * All Node.js Lambda functions must use the nodejs24.x runtime.
    */
-  test('all Node.js Lambda functions use nodejs22.x runtime', () => {
+  test('all Node.js Lambda functions use nodejs24.x runtime', () => {
     let nodeJsFunctionCount = 0;
 
     for (const { name, template } of allTemplates()) {
@@ -82,7 +82,7 @@ describe('Lambda Configuration', () => {
           runtime,
         }).toEqual(
           expect.objectContaining({
-            runtime: 'nodejs22.x',
+            runtime: 'nodejs24.x',
           })
         );
       }
