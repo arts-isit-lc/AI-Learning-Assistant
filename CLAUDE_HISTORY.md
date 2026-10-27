@@ -109,3 +109,16 @@ Resolves the gap from the TextGen removal. `ApiGatewayStack` defines the table (
 Changes how the previous entry imports the table. The table definition is already on `dev` alongside other changes, so `cdk import` (which requires the import to be the stack's only change) would have needed a temporary branch with the table reverted, a deploy of that, then the import. Instead, existing environments tag the table and run a normal deploy with `--import-existing-resources` (supported by the pinned CLI, 2.1145.0). CloudFormation adopts the existing named table in the same change set as the other updates. See `docs/guides/conversation-table-import.md`.
 
 **Caveats:** not yet exercised on this stack (dev was imported with `cdk import`). The flag applies to every stack in `--all`, so any other unmanaged resource with a matching fixed name is adopted as well. A failure rolls back; the table is `Retain` and an import never touches its data. `cdk import` remains documented as the alternative.
+
+## 2026-10-27 — Finding: prod rollout of the 2026-10-26 release, including the conversation table import
+
+The `--import-existing-resources` approach from the previous entry worked in prod. `ConversationTable` went `IMPORT_COMPLETE`, then CloudFormation applied the stack tags. Drift is `IN_SYNC`, the item count is unchanged (748), and a follow-up `cdk diff` shows 0 differences across all 7 stacks.
+
+**Order that worked:** back up the table → verify its properties and tag it → `cdk deploy AILA-DBFlowStack --exclusively` (drops DBFlow's import of ApiGatewayStack's psycopg2 layer export) → `npm run deploy:prod -- --import-existing-resources` → rebuild the Amplify `main` branch so it builds on the Node 24 build spec.
+
+**Findings for future prod deploys:**
+- `cdk diff <stack> --import-existing-resources` builds the same import change set as the deploy, without executing it. It shows `[←] … import`, so an import can be checked against prod before deploying. A plain `cdk diff` fails CloudFormation early validation with `NAME_CONFLICT` ("already exists") for the same template.
+- The pinned CDK CLI (2.1145.0) doesn't resolve the account from `AWS_PROFILE` with the SSO profile ("Unable to resolve AWS account"). Use `eval "$(aws configure export-credentials --profile <p> --format env)"` and unset `AWS_PROFILE`.
+- `cdk diff` no longer accepts `--all` (it warns and diffs every stack anyway); `cdk deploy --all` still works.
+- In prod, `AILA-DatabaseStack` had been in `UPDATE_ROLLBACK_COMPLETE` since 2026-09-02 (blocked export in use by ObservabilityStack). This release's DatabaseStack change (proxy target group tags) deployed cleanly.
+- Test files without an `import`/`export` are global scripts, and ts-jest fails with duplicate identifiers when two of them run in the same worker. This is intermittent, depending on how Jest assigns files to workers. Fixed by adding `export {};` to `access-control`, `student-course` and `user-provisioning-triggers`; `cdk/test` has other script-style files without shared names.
