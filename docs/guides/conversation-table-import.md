@@ -6,17 +6,16 @@ One-time procedure for each **existing** environment (dev, prod). New environmen
 
 `DynamoDB-Conversation-Table` holds chat history for `chatbotV2Function` and `DeleteLastMessage`. The V1 `text_generation` Lambda (removed 2026-10-26) created it at runtime, so no stack managed it. `ApiGatewayStack` now defines it (logical ID `ConversationTable`, `DeletionPolicy: Retain`). In an environment where the table already exists, it has to be **imported** into the stack, not created.
 
-> ⚠️ Never run `cdk deploy` with the table in the template against an environment that hasn't been imported. CloudFormation tries to *create* the table, fails with "already exists", and rolls back `ApiGatewayStack`. No data is lost, but the deploy fails.
+> ⚠️ Never run a plain `cdk deploy` with the table in the template against an environment that hasn't been imported. CloudFormation tries to *create* the table, fails with "already exists", and rolls back `ApiGatewayStack`. No data is lost, but the deploy fails. Deploy with `--import-existing-resources` instead (step 3).
 
 ## Before you start
 
-- The environment is already deployed from code **without** the table (the `dev` branch before `feat/conversation-table-import` was merged). Step 3 checks this.
 - AWS credentials for the target account. The CDK CLI may not read SSO profiles directly; export them:
   ```bash
   eval "$(aws configure export-credentials --profile <profile> --format env)"
   export AWS_REGION=ca-central-1 CDK_DEFAULT_REGION=ca-central-1
   ```
-- Run everything from `cdk/` on the branch that contains the table definition.
+- Run everything from `cdk/` on a branch that contains the table definition (`dev`).
 
 ## Steps
 
@@ -42,30 +41,38 @@ ARN=$(aws dynamodb describe-table --table-name DynamoDB-Conversation-Table --que
 aws dynamodb tag-resource --resource-arn "$ARN" --tags Key=app,Value=AI-Learning-Assistant
 ```
 
-### 3. Confirm the table is the only pending change
+### 3. Deploy with the import
+
+```bash
+docker pull public.ecr.aws/lambda/python:3.12
+npm run deploy:prod -- --import-existing-resources   # dev: npm run deploy -- --import-existing-resources
+```
+
+`--import-existing-resources` tells CloudFormation to adopt existing resources that have a fixed name in the template (the table's `tableName`) instead of creating them. Unlike `cdk import`, it works in the same deploy as the stack's other pending changes, so nothing has to be deployed first.
+
+- The flag applies to every stack in `--all`. Any other unmanaged resource whose fixed name matches one in the template is adopted too.
+- A failed import rolls the stack back. The table is `Retain` and an import never changes its data.
+
+<details>
+<summary>Alternative: <code>cdk import</code> (only when the table is the stack's only pending change)</summary>
+
+`cdk import` refuses to run alongside other changes. Use it only when this shows exactly one change, `[+] AWS::DynamoDB::Table ConversationTable`:
 
 ```bash
 npx cdk diff AILA-ApiGatewayStack -c environment=<dev|prod>
-```
-
-The output must show exactly one change: `[+] AWS::DynamoDB::Table ConversationTable`. If anything else appears, deploy the `dev` branch to this environment first. `cdk import` refuses to run alongside other changes.
-
-### 4. Import
-
-```bash
 npx cdk import AILA-ApiGatewayStack -c environment=<dev|prod> \
   --resource-mapping import/conversation-table-mapping.json
 ```
 
-The import only records ownership; it doesn't modify the table, and a failed import rolls back without touching it.
+</details>
 
-### 5. Verify
+### 4. Verify
 
 ```bash
 aws cloudformation describe-stack-resource --stack-name AILA-ApiGatewayStack \
   --logical-resource-id ConversationTable \
   --query 'StackResourceDetail.[PhysicalResourceId,ResourceStatus]'
-# -> DynamoDB-Conversation-Table  IMPORT_COMPLETE
+# -> DynamoDB-Conversation-Table  *_COMPLETE
 
 DID=$(aws cloudformation detect-stack-resource-drift --stack-name AILA-ApiGatewayStack \
   --logical-resource-id ConversationTable --query 'StackResourceDrift.StackResourceDriftStatus' --output text)
@@ -78,7 +85,7 @@ Also confirm the item count matches step 1, and that a chat message still loads 
 
 ## After every existing environment is imported
 
-Merge `feat/conversation-table-import` into `dev`. From then on, normal deploys manage the table, and new environments create it.
+Normal deploys manage the table and `--import-existing-resources` is no longer needed. New environments create the table.
 
 ## Undoing an import
 

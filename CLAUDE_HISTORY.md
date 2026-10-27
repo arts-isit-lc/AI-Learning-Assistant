@@ -103,3 +103,9 @@ Resolves the gap from the TextGen removal. `ApiGatewayStack` defines the table (
 - `cdk import` only runs when the import is the stack's *only* change. The change therefore lives on its own branch (`feat/conversation-table-import`) until every existing environment is imported. Deploying it unimported makes CloudFormation try to *create* the table and fail ("already exists"). The table name, SSM parameter and IAM ARNs stay literal so the import diff is just the table.
 - An import doesn't apply tags, and the app-wide `app` tag would otherwise show as permanent drift. The runbook tags the live table before importing.
 - **Possible follow-ups:** enable PITR on the chat history table (a template change once imported); `CHAT_HISTORY_TABLE` in `multimodal-rag-stack.ts` still hard-codes the name.
+
+## 2026-10-26 — Decision: import the conversation table with `cdk deploy --import-existing-resources`
+
+Changes how the previous entry imports the table. The table definition is already on `dev` alongside other changes, so `cdk import` (which requires the import to be the stack's only change) would have needed a temporary branch with the table reverted, a deploy of that, then the import. Instead, existing environments tag the table and run a normal deploy with `--import-existing-resources` (supported by the pinned CLI, 2.1145.0). CloudFormation adopts the existing named table in the same change set as the other updates. See `docs/guides/conversation-table-import.md`.
+
+**Caveats:** not yet exercised on this stack (dev was imported with `cdk import`). The flag applies to every stack in `--all`, so any other unmanaged resource with a matching fixed name is adopted as well. A failure rolls back; the table is `Retain` and an import never touches its data. `cdk import` remains documented as the alternative.
