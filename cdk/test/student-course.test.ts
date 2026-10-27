@@ -12,6 +12,11 @@
  * /student/course never calls them.
  */
 
+// Module scope: without an import/export this file is a global script whose
+// FakeSql/mockSql collide with user-provisioning-triggers.test.ts when ts-jest
+// compiles both in one worker.
+export {};
+
 type FakeSql = {
   (strings: TemplateStringsArray, ...values: any[]): Promise<any[]>;
   queueResult: (rows: any[]) => FakeSql;

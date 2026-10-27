@@ -12,6 +12,11 @@
  * deterministic: no DB, no AWS, no network.
  */
 
+// Module scope: without an import/export this file is a global script whose
+// FakeSql/mockSql collide with student-course.test.ts when ts-jest compiles
+// both in one worker.
+export {};
+
 // ---------------------------------------------------------------------------
 // Fake `sql` tagged template (same shape as student-session-start.test.ts)
 // ---------------------------------------------------------------------------

@@ -6,6 +6,11 @@
  * postgres runtime deps and needs no Docker.
  */
 
+// Module scope: without an import/export this file is a global script whose
+// mockSql collides with student-course.test.ts when ts-jest compiles both in
+// one worker.
+export {};
+
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const {
   verifyStudentAccess,
