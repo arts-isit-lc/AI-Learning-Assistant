@@ -18,7 +18,7 @@ All costs are in US dollars per month, before tax, unless stated otherwise. AWS 
 |---|---|---|---|
 | Today | $484 | ~$5,800 | – |
 | After the recommended first steps | ~$223 | ~$2,680 | 3–5 days, then 2–3 weeks for the AI switch |
-| Cheapest option (OpenStack) | ~$53 | ~$640 | 5–10 weeks, plus ongoing upkeep |
+| Cheapest option (OpenStack) | ~$51 | ~$610 | 5–10 weeks, plus ongoing upkeep |
 
 ---
 
@@ -79,7 +79,7 @@ All prices assume the UBC AI Gateway.
 
 | Option | What it means | Monthly | Yearly | Setup work | Ongoing upkeep |
 |---|---|---|---|---|---|
-| **1. UBC OpenStack server** | Move everything onto one UBC-run server | ~$53 | ~$640 | 5–10 weeks | 2–4 hours a week |
+| **1. UBC OpenStack server** | Move everything onto one UBC-run server (UBC EduCloud) | ~$51 | ~$610 | 5–10 weeks | 2–4 hours a week |
 | **2. Trimmed AWS** *(recommended now)* | Keep the app as it is, but shrink what's oversized | ~$223 | ~$2,680 | 3–5 days | Low |
 | **3. AWS, pay-as-you-go database** | Replace the database with one that charges only while in use | ~$195–220 | ~$2,350–2,650 | 2–4 weeks | Lowest |
 | **4. AWS, rebuilt without a database server** | Redesign how data is stored so nothing runs while the app is idle | ~$150–160 | ~$1,800–1,900 | 6–10 weeks | Lowest |
@@ -89,7 +89,7 @@ xychart-beta
     title "Monthly cost: today vs each option (USD)"
     x-axis ["Today", "1. OpenStack", "2. Trimmed AWS", "3. Pay-as-you-go DB", "4. No DB server"]
     y-axis "USD per month" 0 --> 500
-    bar [484, 53, 223, 208, 155]
+    bar [484, 51, 223, 208, 155]
 ```
 
 *Ranges are shown at their midpoint.*
@@ -98,8 +98,35 @@ xychart-beta
 - ✅ By far the cheapest, about 89% less than today. A flat, predictable bill
 - ✅ Student data stays at UBC. Uses UBC sign-in (CWL) and UBC services throughout
 - ❌ The most work to move, and our team takes over maintenance, backups and security that AWS and UBC handle today
-- ❌ A single server, so any fault or maintenance means downtime
+- ❌ A single server, so any fault or maintenance means downtime. A standby server for about CAD $185 a year would allow recovery within minutes
 - ❌ Students would sign in with CWL instead of their current OCELIA accounts
+
+#### The OpenStack server (UBC EduCloud)
+
+UBC IT's EduCloud Server Service charges a yearly fee in Canadian dollars for each server, plus amounts for its processors (vCPU), memory (RAM) and storage (disk). The sizes below are based on how much memory and processing OCELIA actually used over the last 30 days. Memory is the main cost, and OCELIA's busiest moments, when documents are uploaded, need about 6–7 GB.
+
+**Sizing at FY26/27 rates (CAD per year)**
+
+| | vCPU | RAM | Disk | CAD/yr | USD/mo* | Fits |
+|---|---|---|---|---|---|---|
+| Lean | 2 | 8 GB | 80 GB | $224 | ~$13 | Today's load, but tight while documents are processed |
+| **Recommended** | **4** | **12 GB** | **100 GB** | **$297** | **~$18** | Today's load, with room to grow about 10× |
+| Growth | 4 | 16 GB | 150 GB | $353 | ~$21 | 10× usage, with more memory for speed |
+| Optional standby VM | 2 | 4 GB | 100 GB | +$185 | +~$11 | Keeps a live copy of the data and backups, for recovery in minutes |
+
+*At USD 0.72 per CAD. Update with the current exchange rate.
+
+**EduCloud rates rise about 15% a year.** The recommended server goes from CAD $297 (FY26/27) to $347 (FY27/28), then $399 (FY28/29), then $454 (FY29/30). That is still about USD $27 a month by FY29/30.
+
+**Option 1's monthly cost with the recommended server:**
+
+| | USD/month |
+|---|---|
+| Server | ~$18 |
+| Off-server backups | ~$2 |
+| UBC AI Gateway | ~$31 |
+| **Total** | **~$51** |
+| With the optional standby VM | ~$60 |
 
 ### Option 2: Trimmed AWS (recommended first step)
 - ✅ Halves the bill in under a week, with no change for students or instructors
@@ -123,9 +150,9 @@ xychart-beta
 
 | | UBC OpenStack | AWS |
 |---|---|---|
-| **Cost** | Lowest (~$53 a month) | Higher (~$150–223 a month) |
+| **Cost** | Lowest (~$51 a month). Hosting alone is about 7–10× cheaper | Higher (~$150–223 a month) |
 | **Staff time** | 2–4 hours a week, more as usage grows | Low. Amazon runs the infrastructure |
-| **Reliability** | One server, with downtime during faults or maintenance | Built-in backup systems and automatic recovery |
+| **Reliability** | One server, with downtime during faults or maintenance. A standby server (~CAD $185 a year) allows recovery in minutes | Built-in backup systems and automatic recovery |
 | **Growth** | Needs more servers and a redesign | Grows automatically |
 | **Security** | Our team is responsible | UBC's security monitoring is included |
 | **Where data lives** | At UBC | In Amazon's Canadian data centre (and the US for AI calls, unless we use the UBC gateway) |
@@ -144,7 +171,7 @@ Monthly cost, using the UBC AI Gateway:
 
 | Option | Today (145 users) | 10× (~1,450 users) | 100× (~14,500 users) |
 |---|---|---|---|
-| 1. OpenStack | ~$53 | ~$335–375 | ~$3,200 |
+| 1. OpenStack | ~$51 | ~$335–375 | ~$3,250 |
 | 2. Trimmed AWS | ~$223 | ~$610–635 | ~$4,150–4,650 |
 | 3. Pay-as-you-go database | ~$195–220 | ~$595–620 | ~$4,100–4,550 |
 | 4. No database server | ~$150–160 | ~$490–515 | ~$3,800–4,150 |
@@ -153,7 +180,7 @@ Monthly cost, using the UBC AI Gateway:
 
 - **The AI service becomes most of the bill.** At 100× usage it is roughly $3,100–3,500 of every option's total. By then the hosting choice matters much less than the choice of AI service and AI model.
 - **The AI bill can be cut a lot.** Reusing repeated parts of each AI request ("prompt caching") could save about $900 a month at 100×. UBC's own AI models could cost under $100 a month, if they give good enough answers.
-- **OpenStack stops being one simple server.** At 100× it needs 4–5 servers and someone on call during term, so the staff time may cost more than the money saved.
+- **OpenStack stops being one simple server.** At 100× it needs about 6 servers (around CAD $2,100 a year) and someone on call during term, so the staff time may cost more than the money saved.
 - **Option 4 grows with the least effort.** Options 2 and 3 need some resizing.
 - **Budget:** at 100× usage the AI service alone costs about $3,000 or more a month, whichever option is chosen. Funding needs planning early.
 - **Capacity limits:** we'd need to raise some limits on the AWS side in advance, and confirm with LTIC that the UBC AI Gateway can handle the volume.
@@ -174,7 +201,9 @@ Monthly cost, using the UBC AI Gateway:
 |---|---|
 | Is OCELIA eligible for the UBC AI Gateway, and how long does approval take? | LTIC |
 | Who pays for AI usage, and can the gateway handle growth? | LTIC |
-| What exactly does the OpenStack server include (size, backups, support, uptime)? | UBC IT |
+| Can an EduCloud server be reached by students from off campus (public address, firewall, web certificate)? | UBC IT |
+| Does EduCloud's UBC backup service cost extra, and what uptime and support hours does it offer? | UBC IT |
+| Does EduCloud's privacy (FIPPA) support cover OCELIA's student data? | UBC IT and UBC Privacy |
 | How much downtime is acceptable during term? | Project leads |
 | How much staff time can go to migration and upkeep? | Project leads |
 | How should the shared AWS account's baseline cost be split with Arts IT? | UBC Hybrid Cloud and Arts IT |
@@ -187,5 +216,5 @@ Monthly cost, using the UBC AI Gateway:
 - Usage and costs come from the production AWS account's billing and monitoring data for September and October 2026.
 - UBC AI Gateway costs use LTIC's published prices with October's usage.
 - Growth figures assume chats grow in line with users. The 100× figures are estimates that would need testing.
-- The OpenStack server is $220–250 a year. We still need to confirm whether that is CAD or USD and what it includes.
+- OpenStack server prices are UBC EduCloud's published yearly rates for FY26/27, in CAD (it.ubc.ca, EduCloud Server Service). They're converted at USD 0.72 per CAD. Server sizes come from 30 days of production memory and processor use.
 - The two months measured were the start of term. Summer usage is likely lower.
