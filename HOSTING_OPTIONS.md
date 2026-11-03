@@ -159,6 +159,42 @@ UBC IT's EduCloud Server Service charges a yearly fee in Canadian dollars for ea
 | **Flexibility later** | Standard tools that can move anywhere | Harder to move away from |
 | **Effort to switch** | 5–10 weeks | Option 2 takes days |
 
+### Growing with demand
+
+**On AWS, most of the app grows by itself.**
+
+- The parts that answer students start extra copies automatically, within seconds, for each chat that arrives. Going from 3 chats at once to 300 needs no change from the team.
+- The bill follows actual use. A quiet summer costs less than exam week.
+- Where something does need to grow, such as the database in Option 2, it's a setting change that takes minutes, with a short restart. Options 3 and 4 grow even the data storage automatically.
+- Everything runs across several Amazon data centres in the region, so extra capacity is always available.
+
+**On OpenStack, growth is planned and done by hand.**
+
+- The server has a fixed size, and we pay for that size whether it's used or not.
+- To grow, we submit a request to UBC IT for more processors, memory or storage, then restart the server.
+- A sudden spike, such as exam week, can slow the app if the server is already full, so capacity has to be added ahead of time.
+- One server has a ceiling. Beyond it, roughly past 10× today's usage, the app has to be split across several servers with a load balancer in front. That redesign takes weeks.
+
+At today's usage, the recommended server has plenty of spare room, so this matters mostly if OCELIA grows.
+
+### Who looks after what
+
+EduCloud is a self-managed service. UBC IT provides the hardware and network, and our team is responsible for everything running on the server. On AWS, Amazon takes care of most of the layers underneath the app.
+
+| Task | OpenStack (EduCloud) | AWS |
+|---|---|---|
+| Physical hardware, power, data centre | UBC IT | Amazon |
+| Replacing failed hardware | UBC IT, after which our team restores and restarts the app | Amazon, automatically. The app keeps running in another data centre |
+| Operating system security patches | **Our team**: regular updates and restarts | **Amazon.** The app's computing has no operating system for us to manage. Option 2 keeps one small network server that we patch |
+| Database updates and security fixes | **Our team**: installing, upgrading and tuning | **Amazon** applies them in a scheduled maintenance window |
+| Database backups | **Our team** sets them up, stores them off the server and tests restoring them | **Amazon**: automatic daily backups, with restore to any point in the last 7 days |
+| Web security certificates | **Our team** sets up automatic renewal and watches it | **Amazon** renews them automatically |
+| Protection from attacks and abuse | **Our team**: firewall rules and rate limiting | **Amazon** includes basic attack protection, and a web firewall is already in place |
+| Security monitoring and compliance checks | **Our team** sets up logging and alerts | **Included** through UBC's AWS account baseline |
+| Keeping the app's own code and libraries up to date | Our team | Our team |
+
+The last row is the same on both platforms. The rows above it are the work that moves to our team on OpenStack. That's the main source of the 2–4 hours a week of upkeep, and of the on-call duty if OCELIA grows.
+
 **Choose OpenStack if** staff time is available or already budgeted, running on UBC services is a goal in itself, and short outages during maintenance are acceptable.
 
 **Choose AWS if** staff time is scarce, reliability during term matters, or growth is expected or uncertain.
