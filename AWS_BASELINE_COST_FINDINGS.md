@@ -59,15 +59,47 @@ The OCELIA team can't change any of these, which is why they're called the basel
 
 ### 3.1 Transit Gateway: $44.64, none of it OCELIA's
 
-| Finding | Detail |
-|---|---|
-| What's attached | VPC `arts-isit-prod-services-vpc` (10.57.83.192/27) in **ca-west-1** |
-| Who created it | CloudFormation stack `arts-isit-prod-services`, described as *"Deploy a UBC Standard TGW attached VPC in region ca-west-1"*, created 15 January 2025, one day after the account |
-| What's in it | Nothing but the Transit Gateway's own two network interfaces. The stack contains only a VPC, subnets, route tables, an internet gateway, DHCP options and the attachment |
-| Traffic | **0 bytes** in September and in October |
-| OCELIA's network | OCELIA's VPC (`AILA-VpcStack/aila-Vpc`) is in ca-central-1, where the account has **no** Transit Gateway attachments |
+**What a Transit Gateway is.** It's a network hub run by UBC IT. Many UBC AWS accounts connect their private networks (VPCs) to it, and through it to each other and to the UBC campus network. UBC owns the hub. Each account pays for its own connection: $0.06 an hour (about $44.64 a month), plus $0.02 per GB of traffic.
 
-The charge is for keeping an unused connection to UBC's network open. Removing it would save $44.64 a month (about $536 a year), if UBC Hybrid Cloud allows it.
+**How this account's connection is set up**
+
+| Item | What the account shows |
+|---|---|
+| The hub | **"UBCIT TGW CA WEST"** in ca-west-1 (Calgary), owned by UBC IT's network account and shared into this account through the "UBCIT-TGW" resource share |
+| The connected network | `arts-isit-prod-services-vpc` in **ca-west-1**, with addresses 10.57.83.128/25 from UBC's campus address plan |
+| Who created it | CloudFormation stack `arts-isit-prod-services`, described as *"Deploy a UBC Standard TGW attached VPC in region ca-west-1"*. It was created 15 January 2025, the day after the account, with parameters department `arts-isit`, component `services`, environment `prod`. It has never been updated |
+| Routing | Private subnets send **all** traffic through UBC's network. Public subnets send UBC's private addresses (10.0.0.0/8) through the hub and everything else to the internet |
+| Name lookups | DNS forwarding for `ead.ubc.ca` (UBC's Enterprise Active Directory) to UBC's domain controllers is attached to this network |
+
+**What it's for.** It's a ready-made landing spot for Arts ISIT servers that need private access to campus resources: Active Directory sign-in, on-campus databases and file servers, or services reachable only from campus.
+
+**What it actually does**
+
+| Check | Result |
+|---|---|
+| What's in the network | **Nothing.** There are no servers, databases or functions, only the hub's own two network connections. There are no other resources in ca-west-1 apart from a Control Tower notification function |
+| Traffic (billing) | **0 bytes** in September and in October |
+| Traffic (flow logs) | Flow logs are switched on for both connections. In the last 60 days they contain **only "NODATA" records**, with not a single packet accepted or rejected |
+| Cost | $43.20 in September and $44.64 in October, about $536 a year. Since January 2025 that's roughly $940 (an estimate from the monthly rate) |
+
+**Why OCELIA doesn't use it**
+
+- OCELIA runs in **ca-central-1** in its own network (`AILA-VpcStack/aila-Vpc`), which has no route to any Transit Gateway. The account has no Transit Gateway attachments in ca-central-1.
+- OCELIA needs nothing on campus. Students reach it over the internet, and it reaches Bedrock, AppSync, Cognito and S3 through AWS's public endpoints.
+- OCELIA's network uses 10.0.0.0/16, which sits inside UBC's 10.0.0.0/8 campus range. Connecting it to UBC's network would mean re-addressing it first.
+
+**Other UBC networking visible in the account.** None of this costs the account anything, because sharing is free and only attachments are billed.
+
+| Item | Region | Notes |
+|---|---|---|
+| A second hub: "TGW for EAD Team only with public UBC routes" | ca-west-1 | Shared but not attached |
+| "UBCIT TGW", "For AWS DX Connected TGW", "IAM-TGW", "hcs-prd-tgw-share" | ca-central-1 | Shared but not attached. "DX" is Direct Connect, UBC's private line between AWS and campus |
+| "migration-prd-vpc-share": 3 subnets of a VPC owned by another UBC account, routed to the Direct Connect hub | ca-central-1 | Shared into this account on 16 March 2026. Empty. Its owner pays for its attachment |
+| EAD DNS forwarding rules and UBC VPN address lists | Both | Not attached to OCELIA's network |
+
+The migration VPC was shared in mid-March 2026, within weeks of the 52 Arts servers being registered (12 February to 12 March 2026, one activation named "MIGRATE??????"). This **suggests**, but doesn't confirm, that Arts ISIT is preparing to move those servers into AWS through ca-central-1 rather than the Calgary network.
+
+**What to do.** The charge is for keeping an unused connection to UBC's network open. Deleting the `arts-isit-prod-services` stack in ca-west-1 would remove the network and its connection, saving about $536 a year. UBC's standard template can recreate it in minutes if it's ever needed. It belongs to Arts ISIT's setup, not to OCELIA's CDK stacks, so Arts ISIT and UBC Hybrid Cloud should decide. Nothing has been changed.
 
 ### 3.2 AWS Config: $32.86, mostly from Arts servers
 
@@ -196,7 +228,9 @@ If OCELIA moved to OpenStack, most of the baseline would stay in this account, b
 |---|---|
 | How is the bill for `ubc-arts-isit-prod` charged, and to whom? | Decides whether OCELIA is paying ~$90 a month of other teams' costs |
 | Can the baseline be split between OCELIA and the Arts servers? | OCELIA causes only about $10–17 of the $104 |
-| Can the idle ca-west-1 Transit Gateway attachment be removed? | $44.64 a month, with zero traffic |
+| Can the idle ca-west-1 Transit Gateway attachment be removed? | $44.64 a month, with zero traffic and an empty network |
+| Why was the standard network built in ca-west-1, when everything else runs in ca-central-1? Is the shared "migration-prd" VPC its replacement? | Decides whether the Calgary network is still needed |
+| Is the UBC AI Gateway reachable from the internet, or only from the campus network? *(for LTIC)* | If it's campus-only, OCELIA would need a private route to UBC, and OCELIA's 10.0.0.0/16 network overlaps UBC's address range |
 | Should the 52 Arts servers be managed from this account? | They cause about three-quarters of the Config charge |
 | Would OCELIA be better off in its own account? | A cleaner bill, at about $25–35 a month of baseline (an estimate) |
 
@@ -233,6 +267,11 @@ aws ec2 describe-transit-gateway-attachments --region ca-west-1
 aws ec2 describe-network-interfaces --region ca-west-1 \
   --filters Name=vpc-id,Values=<vpc-id from the attachment>
 aws cloudformation describe-stacks --region ca-west-1 --stack-name arts-isit-prod-services
+aws ec2 describe-transit-gateways --region ca-west-1
+aws ec2 describe-route-tables --region ca-west-1 --filters Name=vpc-id,Values=<vpc-id>
+aws ram get-resource-shares --region ca-west-1 --resource-owner OTHER-ACCOUNTS
+aws logs filter-log-events --region ca-west-1 --log-group-name ARTS-ISIT-Prod-VPC-FlowLog \
+  --start-time <epoch-ms 60 days ago> --filter-pattern '"OK"'   # returns nothing: no traffic
 
 # Config recorder and items recorded by resource type
 aws configservice describe-configuration-recorders --region ca-central-1
