@@ -11,6 +11,14 @@ Connect to the AILA RDS database via an SSM tunnel through a temporary bastion E
 > export, SSM onto the box and run `sudo shutdown -c` to cancel the timer (or
 > `sudo shutdown -h +360` to push it out to 6 hours).
 
+> **Don't add security groups or rules for an export.** The bastion uses the
+> existing security group in the tables below, and the tunnel goes through SSM, so
+> nothing needs opening. An older procedure created a `temp-pg-dump-sg` (SSH from
+> one IP) and a 5432 rule for it on the CloudFormation-managed database security
+> group. That rule showed as drift and outlived its use; it was removed from dev
+> on 2026-11-19. If you ever do add one, revoke the rule and delete the group in
+> the **Cleanup** step.
+
 ---
 
 ## Prerequisites (Install Once)

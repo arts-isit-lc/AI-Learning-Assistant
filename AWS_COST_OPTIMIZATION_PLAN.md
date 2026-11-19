@@ -47,6 +47,8 @@ USD per month, before tax (AWS adds about 11%). Companion documents: [HOSTING_OP
 | **Dev first, then prod; tested manually** | Every Phase 1 and Phase 2 change runs in dev first. Prod follows only after dev passes the validation gate (section 12). Testing is manual, using the checklist in section 15 (tester UI flows plus engineer CLI checks) |
 | **The idle Transit Gateway attachments stay** (prod and dev, $44.64/mo each) | Confirmed 19 November 2026 that they can't be removed. Track B items B1 and B3 are closed, and the totals no longer count them |
 | **Include fixes F1–F3** (Amplify branches in CDK, alarm email subscriptions, API Gateway execution logging) | Related fixes in section 5, rolled out dev first with Stage A step 1 and Stage B step 1 |
+| **Drop P1.4 (budgets and anomaly alerts)** | Moved to section 11, to keep the rollout simple. Cost regressions are caught by the monthly usage-type rerun (Phase 0 step 1) and the Stage A gate's daily Cost Explorer check |
+| **Skip the step 0 baseline checklist run** | Stage A starts at step 1. With no "before" run, every checklist failure in Stage A has to be fixed or explained; none can be waved through as pre-existing |
 | **Hibernate switch later** | Phase 4 (section 8) is revisited after both environments are stable. P2.1 keeps the option cheap (fixed instance identifier, standalone admin secret) |
 
 ---
@@ -105,7 +107,6 @@ From Cost Explorer, grouped by usage type (pulled 19 November 2026). Dev is in s
 | P1.1 | Replace the 3 RDS Proxies with **one standalone proxy** | **~$48** | None | 1 day | Low (two-step deploy) |
 | P1.2 | Prod Multi-AZ → single-AZ *(decided)* | **~$72** | None (availability accepted) | 1 h, online | Low |
 | P1.3 | Drop all warning-tier alarms *(decided)*; trim the dashboard to ≤50 metrics (both accounts) | **~$7.30** | None | ½ day | Problems surface only at the critical threshold (accepted) |
-| P1.4 | AWS Budgets + Cost Anomaly Detection | $0 (guardrail) | None | 1 h | None |
 | **Related fixes (section 5; no cost impact)** | | | | | |
 | F1 | Bring the Amplify branch setup into CDK (dev builds `dev`, prod builds `main`) | – | None | ½ day | Low (import first; fallback documented) |
 | F2 | Restore alarm email subscriptions (dev done and confirmed; prod in Stage B) | – | None | 15 min | None |
@@ -160,7 +161,7 @@ Known pre-existing dev drift, which is the reference for the gate:
 - **Leftover S3 buckets (follow-up, not part of this plan):** dev keeps **24 orphaned `aila-apigatewaystack-*` buckets** (8 sets of chat-log, ingestion and embedding buckets) and **6 from an older `aila2` prefix**. They're left over from earlier deployments under the buckets' RETAIN policy. The cost is negligible (all of dev's S3 is $0.07/mo), but **they may hold old chat logs and course documents**, so review them for data retention, and check prod for the same.
 
 **Still to do, before the first change:**
-- the baseline checklist run (step 0). The tester (Vincent) and the test course (dev's existing one) are settled
+- ~~the baseline checklist run (step 0)~~ skipped by decision (section 0)
 - *(optional)* a manual dev database snapshot. The permission check blocked me from creating it, so it needs running by hand or a permission rule
 
 **Still to do, before Phase 2:**
@@ -210,7 +211,7 @@ SELECT round(100.0 * sum(blks_hit) / nullif(sum(blks_hit + blks_read), 0), 2) AS
 
 ## 5. Phase 1: No performance impact (~2 weeks)
 
-*IDs P1.5 and P1.6 were dropped (section 11).*
+*IDs P1.4, P1.5 and P1.6 were dropped (section 11).*
 
 ### P1.1 One standalone RDS Proxy instead of three (~$48/mo)
 
@@ -275,9 +276,7 @@ CloudWatch is mostly alarms ($8.57 for 86, plus $1.00 for 2 composites) and one 
   - First check that the composite rule references only critical alarms. Its rule is about 5.4k of the 10,240-character limit and counts the RAG critical alarms. If it references any warning alarm, the synth fails or the rule breaks.
 - **Dashboard:** `AILA-prod-Dashboard` (7 widgets) is the only one. It's billed because the free tier covers 3 dashboards of **up to 50 metrics each**, and it exceeds 50. Trim it to 50 metrics or fewer ($3). Dev's copy gets the same treatment.
 
-### P1.4 Budgets and anomaly alerts (free)
-
-In both accounts, set an AWS Budget at the target total with 80% and 100% alerts, plus Cost Anomaly Detection per service. Regressions such as a runaway ingestion loop or a quota-sized Bedrock spike then show up immediately, not on the next bill.
+### Secrets inventory
 
 **Secrets inventory (prod, Phase 0 step 3): nothing to delete.** Of the 9 billed secrets:
 - 5 are OCELIA's CDK secrets.
@@ -299,7 +298,10 @@ These came out of the Stage A prep. They follow the same dev-first rollout (sect
 
 **Change:**
 1. **Pick the branch per environment:** `dev` for dev, `main` for prod. Prod's template stays identical (check with `cdk diff`).
-2. **Bring dev's hand-made `dev` branch under CDK** with `--import-existing-resources`, as was done for the conversation table. First confirm with a read-only `cdk diff --import-existing-resources` that it shows `[←] import` for the branch. **If Amplify branches can't be imported,** leave that branch unmanaged and do only steps 3–4. Don't delete and recreate it: the custom domain is mapped to it.
+2. **Bring dev's hand-made `dev` branch under CDK.** Don't delete and recreate it: the custom domain is mapped to it.
+   - *Done 19 Nov 2026, differently from planned:* `--import-existing-resources` can't match Amplify branches (their identifier is the ARN, not a name), so the change set showed **Add**, which would have failed. Instead the branch was tagged, then imported with a CloudFormation **IMPORT** change set built from the deployed template plus the branch, with `ResourceIdentifier: {Arn: …/branches/dev}`. Then a normal deploy ran.
+   - Every branch is now `RemovalPolicy.RETAIN` (prod gains only the `DeletionPolicy`/`UpdateReplacePolicy` attributes). Removing a branch from code then orphans it rather than deleting it.
+   - The `dev` branch's `VITE_UI_V2=true` variable stays as it was, outside the template. The frontend no longer reads it.
 3. **Remove the unused `main` branch from dev's app.** It serves nothing, because the domain points at `dev`.
 4. **Point dev's redirect source** (`AMPLIFY_DEFAULT_ORIGIN.dev`) at `https://dev.dbqfar7gbtstn.amplifyapp.com`. In [cors.ts](cdk/lib/constants/cors.ts), drop the now-duplicate `dev.` literal and the `main.` origin. Update [s3-cors.test.ts](cdk/test/s3-cors.test.ts) lines 84–85 to match.
 5. **Out of scope:** the custom-domain associations stay outside CDK (follow-up). Bringing them in risks the live domains for no gain.
@@ -615,7 +617,7 @@ That's roughly $45–58 a month less, and dev's total falls to ~$75–90 includi
 
 **Risks:**
 - **Turn-on time is an estimate:** restore (~10–15 min) plus proxy creation (~5–10 min). Measure it on the first run.
-- **Someone has to remember to switch it off.** Switching off needs a CDK deploy, so it can't run on a timer without a CI runner. The dev budget alert (P1.4) catches "left on".
+- **Someone has to remember to switch it off.** Switching off needs a CDK deploy, so it can't run on a timer without a CI runner. Nothing alerts on "left on" now that P1.4 is dropped; the monthly usage-type rerun shows it.
 - **Old snapshots age.** A snapshot that outlives its minor version may be upgraded on restore.
 - **It's another code path to keep working.** Exercise it regularly.
 
@@ -752,6 +754,7 @@ OCELIA's own lever on the baseline is the proxy's secret polling (P3.2). Turning
 | Caching DB secrets in the Python Lambdas | Team decision, 19 Nov 2026. $0 saving: Lambdas make only 9% of the Secrets Manager calls. The 10–50 ms it would save on some retrieval and enrichment calls ([retrieval/handler.py](cdk/multimodal_rag_v2/retrieval/handler.py) lines 954, 1058, 1171; [enrichment/handler.py](cdk/multimodal_rag_v2/enrichment/handler.py)) can be revisited as latency work |
 | Pruning only some warning alarms | Team chose critical-only (P1.3) |
 | PostgreSQL 18, or staying on 16, for the rebuild | Team chose 17 (P2.1) |
+| P1.4: our own AWS Budgets and Cost Anomaly Detection | Team decision, 19 Nov 2026, to simplify the rollout. Both accounts already have a $200/mo budget set up by others (prod's is "Arts ISIT Systems…", permanently in alarm at today's spend), and prod has a per-service anomaly monitor with a weekly subscription, also not OCELIA's. The `app` tag isn't an active cost allocation tag, so a monitor scoped to OCELIA's resources wasn't possible anyway |
 
 ---
 
@@ -773,15 +776,39 @@ Testing is **manual**, using the checklist in section 15. A tester runs the UI f
 | # | Change | Verify |
 |---|---|---|
 | 0 | **Before any change:** a full checklist run in dev, plus the prod guardrail baselines (read-only) | Records what already passes or fails in dev, so pre-existing problems aren't blamed on the plan |
-| 1 | P1.4 budgets in both accounts; **D1** (dev's counterpart of P1.2); **D3**; **F1** and **F3** in dev; confirm **F2**'s dev subscription | Dev `MultiAZ: false`; `cdk diff` shows only intended changes (`dev` has no undeployed CDK changes since the 27 Oct prod release); `cdk diff` against **prod** shows no Amplify change; checks E10–E12; quick checklist run |
+| 1 ✅ 19 Nov | **D1** (dev's counterpart of P1.2); **D3**; **F1** and **F3** in dev; confirm **F2**'s dev subscription | Dev `MultiAZ: false`; `cdk diff` shows only intended changes (`dev` has no undeployed CDK changes since the 27 Oct prod release); `cdk diff` against **prod** shows no Amplify change; checks E10–E12; quick checklist run |
 | 2 | P1.1 standalone proxy (two deploys) | Full checklist run. It covers all three database users: app user (student, instructor, chat, RAG), table creator (sign-up, sign-in, admin), and master (instructor upload; orphan cleanup, engineer-checked). No auth errors in the logs |
 | 3 | P1.3 critical-only alarms; dashboard ≤50 metrics | Synth and deploy pass; the composite references only critical alarms (engineer); quick checklist run |
 | 4 | Sizing profile; **P2.1 rebuild rehearsal** (PostgreSQL 17 at `t4g.small`, pgbench, then `t4g.micro`) | The P2.1 checks (engineer): proxy registers the PostgreSQL 17 target; roles copied; row counts match; `vector` and HNSW index present; initializer rerun clean; pgbench passes; freeze-to-cutover time recorded. Then a **full checklist run**: data from before the rebuild (courses, chats, files) must still be there |
 | 5 | P2.2 NAT instance (`t4g.nano`) | Full checklist run (chat streaming and ingestion depend on NAT); NAT reboot test and one SSM Patch Manager run (engineer) |
 | 6 | P2.3 remove the endpoints, after step 5 has run cleanly for a few days | Quick checklist run (chat uses Bedrock through NAT) |
 
+**Step 1 results (19 November 2026):**
+- **D1:** dev is single-AZ (ca-central-1b), online, with no downtime.
+- **D3:** the 5432 rule was revoked and `temp-pg-dump-sg` deleted. Prod has no such group.
+- **F1:** imported as described in section 5; the unused `main` branch was deleted (`main.<appId>` now returns 404).
+  - **E10:** `dev.<appId>` 301-redirects to `ocelia-dev.arts.ubc.ca` with the path kept, and the custom domain serves the app.
+  - Not yet checked: a push to `dev` builds dev and a push to `main` doesn't.
+  - The IR bucket's CORS preflight from the custom domain returns 200.
+- **F3, E11:** the stage has one `*/*` setting (ERROR logging, throttling 100/200, `metricsEnabled: false`), and the log group exists with 30-day retention. Security Hub APIGateway.1 still needs re-checking after it re-evaluates.
+- **F2, E12:** the dev subscription is confirmed.
+- **Diffs and tests:**
+  - `npm test`: 43 suites, 419 tests pass.
+  - `cdk diff` against prod shows only the F3 changes plus the `Retain` attributes on `main`. The `RestApi` `Body` is listed as changed in both accounts, but the template's `AWS::Include` location is byte-identical, so the API definition is re-put with the same content.
+- **Drift after the deploy:** ApiGatewayStack is clean. AmplifyStack shows only the known repository-case and header-format false positives. DatabaseStack shows only `AvailabilityZone` and `EnableIAMDatabaseAuthentication`, which P2.1 clears.
+- **Quick checklist run (19 Nov 2026, dev, after the 23:02 UTC deploy, tester Vincent):**
+  - Row 2: instructor and student sign-in pass; admin not run.
+  - Row 3: passes. The course list loaded (`studentFunction` was invoked 22 times).
+  - Row 4: passes. Chat answered from the module's material.
+  - Row 10: passes. A new module was created and a file uploaded at 23:11 UTC; ingestion plus enrichment took ~19 s server-side, but the time to "ready" in the UI wasn't recorded.
+  - Row 15 (admin): not run. Step 1 doesn't touch admin paths, so it's covered by step 2's full run, which exercises the table-creator user anyway.
+- **Engineer checks for the same window (E2, E3):**
+  - 0 errors across the 12 invoked Lambdas, all DLQs empty, no alarms in ALARM.
+  - API Gateway: 137 requests with 0 4xx and 0 5xx; the execution log is empty, as expected with no failures.
+  - No proxy or secret auth errors. The only retrieval warning is the known EmbeddingCache `put` (section 4).
+
 **Dev validation gate.** All of these must hold before Stage B:
-- **The full checklist (section 15) passes after the last dev change**, with every failure either fixed or matched to the same failure in the step 0 run.
+- **The full checklist (section 15) passes after the last dev change**, with every failure fixed or explained (step 0 was skipped, so there's no earlier run to match a failure against).
 - **A 5-working-day soak with no critical alarms, DLQ messages or Lambda errors.** Run the full checklist at the start and the end of the soak. Between runs, only scheduled jobs exercise dev (orphan cleanup every 6 h, daily warm-ups, NAT patching), so the engineer checks their logs too.
 - **`cdk diff` and drift detection show nothing unexpected.**
 - **Dev's daily Cost Explorer shows the expected drops:**
@@ -838,7 +865,7 @@ Record each change in `CLAUDE_HISTORY.md` when it ships.
 | NAT instance replaced by an AMI change on deploy | Pin the AMI through a context lookup |
 | Single-AZ outage during term | **Accepted** (section 0); Multi-AZ can be re-enabled online before exams |
 | New Security Hub findings (RDS.5, EC2.9) | Record as accepted with UBC security |
-| A problem goes unnoticed until it's critical (warning alarms removed) | Accepted. Critical alarms, email pages and the composite are unchanged; budgets (P1.4) catch cost anomalies |
+| A problem goes unnoticed until it's critical (warning alarms removed) | Accepted. Critical alarms, email pages and the composite are unchanged |
 | Live resources drift from CDK, as dev's did | Drift detection on `AILA-VpcStack` before Phase 2. Proxy target groups always report `DETECTION_FAILED` (a CloudFormation limitation with the `TargetGroupName` override), so check them by hand |
 | Target-state prices are estimates | Pricing Calculator before Phase 2 (today's costs are billed figures) |
 | Dev passes but prod behaves differently (real load, prod's data volume) | The dev gate is functional only; guardrails are watched in Stage B with in-place fallbacks for each change |
@@ -860,7 +887,7 @@ Engineering decisions are settled (section 0). Remaining:
 
 ## 15. Manual test checklist
 
-**Setup (dev, before step 0):**
+**Setup (dev, before the first run):**
 - **Tester: Vincent** (decided 19 Nov 2026).
 - **Reuse dev's existing test accounts** (5 students, 5 instructors, 2 admins) **and the existing test course.** Dev holds 94 PDFs and 5 PPTX files (newest uploaded 26 Oct 2026), with ~600 extracted images, so pick a module whose material has a figure, and ideally a table and a formula. If it lacks one, mark rows 5–6 "N/A" for that item in every run, so runs stay comparable.
 - Bring any small PDF for the upload test (row 10).
@@ -898,7 +925,7 @@ For each run, record the date, environment, plan step, tester, pass/fail per row
 | # | Check | Expected |
 |---|---|---|
 | E1 | `orphanCleanupFunc` scheduled runs (every 6 h), or `aws lambda invoke` | Succeeds. This is the **master user**'s second path |
-| E2 | Lambda `Errors` for all functions, DLQ depths and alarm states over the test window | Zero, or the same as the step 0 run |
+| E2 | Lambda `Errors` for all functions, DLQ depths and alarm states over the test window | Zero, or explained |
 | E3 | Logs for `no credentials for the role` or `password authentication failed` | None (proxy and secret wiring) |
 | E4 | RDS Proxy `DatabaseConnectionsBorrowLatency` | No sustained rise |
 | E5 | `cdk diff` and drift detection | Nothing unexpected |

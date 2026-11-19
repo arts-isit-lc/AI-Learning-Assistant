@@ -4,7 +4,7 @@
  *
  * This is the source of truth shared by:
  *   - AmplifyStack, which 301-redirects the auto-generated
- *     `https://main.<appId>.amplifyapp.com` default domain to this origin so
+ *     `https://<branch>.<appId>.amplifyapp.com` default domain to this origin so
  *     each environment has exactly one canonical URL.
  *   - constants/cors.ts, which uses it as the primary allowed origin for the
  *     browser-facing presigned-URL S3 buckets.
@@ -21,8 +21,9 @@ export const CANONICAL_APP_ORIGIN: Record<string, string> = {
 };
 
 /**
- * The auto-generated Amplify default origin (the `main` branch) per environment
- * — the redirect *source* that gets bounced to {@link CANONICAL_APP_ORIGIN}.
+ * The auto-generated Amplify default origin (the environment's deployed branch,
+ * see {@link AMPLIFY_BRANCH}) per environment — the redirect *source* that gets
+ * bounced to {@link CANONICAL_APP_ORIGIN}.
  *
  * Why hardcoded (not `amplifyApp.defaultDomain`): the default domain is an
  * attribute of the Amplify App resource, so referencing it inside that same
@@ -33,9 +34,25 @@ export const CANONICAL_APP_ORIGIN: Record<string, string> = {
  * allow-list.
  */
 export const AMPLIFY_DEFAULT_ORIGIN: Record<string, string> = {
-  dev: "https://main.dbqfar7gbtstn.amplifyapp.com",
+  dev: "https://dev.dbqfar7gbtstn.amplifyapp.com",
   prod: "https://main.d21r345xhq29at.amplifyapp.com",
 };
+
+/**
+ * The git branch each environment's Amplify app builds and serves. The custom
+ * domain association (managed outside CDK) points at this branch, so it must
+ * match: dev builds `dev`, prod builds `main`. Environments not listed (e.g. an
+ * ad-hoc `staging` deploy) build `main`.
+ */
+export const AMPLIFY_BRANCH: Record<string, string> = {
+  dev: "dev",
+  prod: "main",
+};
+
+/** Resolve the Amplify branch for an environment (defaults to `main`). */
+export function resolveAmplifyBranch(environment: string): string {
+  return AMPLIFY_BRANCH[environment] ?? "main";
+}
 
 /**
  * Resolve the canonical origin for an environment, or `undefined` when the

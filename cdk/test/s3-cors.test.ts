@@ -82,9 +82,11 @@ describe('S3 CORS configuration', () => {
         // browser actually sends, so it MUST be in the allow-list.
         'https://ocelia-dev.arts.ubc.ca',
         'https://dev.dbqfar7gbtstn.amplifyapp.com',
-        'https://main.dbqfar7gbtstn.amplifyapp.com',
       ])
     );
+    // Dev's app serves only the `dev` branch; the unused `main` branch was
+    // removed (fix F1), so its default domain must not linger in the list.
+    expect(DEFAULT_ALLOWED_ORIGINS.dev).not.toContain('https://main.dbqfar7gbtstn.amplifyapp.com');
     for (const origin of DEFAULT_ALLOWED_ORIGINS.dev) {
       expect(origin).not.toContain('d35ufva5r2ltvd');
     }

@@ -10,6 +10,7 @@ import { Construct } from "constructs";
 import * as yaml from "yaml";
 import { ApiGatewayStack } from "./api-gateway-stack";
 import {
+  resolveAmplifyBranch,
   resolveAmplifyDefaultOrigin,
   resolveCanonicalOrigin,
 } from "./constants/domains";
@@ -104,7 +105,7 @@ export class AmplifyStack extends cdk.Stack {
     });
 
     // Canonical URL per environment: 301-redirect the auto-generated Amplify
-    // default domain (`https://main.<appId>.amplifyapp.com`) to the custom
+    // default domain (`https://<branch>.<appId>.amplifyapp.com`) to the custom
     // domain so each environment is reachable at exactly one origin. This
     // shrinks the auth/CORS surface (a single origin to allow-list) and avoids
     // split cookie jars across two live hostnames.
@@ -137,6 +138,19 @@ export class AmplifyStack extends cdk.Stack {
       status: RedirectStatus.NOT_FOUND_REWRITE,
     });
 
-    amplifyApp.addBranch("main");
+    // One branch per environment (see AMPLIFY_BRANCH): dev builds `dev`, prod
+    // builds `main`. The custom domain association (outside CDK) points at this
+    // branch. Dev's `dev` branch was created by hand and was adopted
+    // with a CloudFormation IMPORT change set (`--import-existing-resources`
+    // can't match Amplify branches: their identifier is the ARN). Never delete
+    // and recreate a branch, or the domain mapping is lost; RETAIN means
+    // removing it from code orphans it instead of deleting it. Dev's pull-request
+    // previews are off, as they were when it was made by hand; prod keeps the
+    // CDK default.
+    const branchName = resolveAmplifyBranch(environment);
+    const branch = amplifyApp.addBranch(branchName, {
+      ...(branchName === "dev" ? { pullRequestPreview: false } : {}),
+    });
+    branch.applyRemovalPolicy(cdk.RemovalPolicy.RETAIN);
   }
 }

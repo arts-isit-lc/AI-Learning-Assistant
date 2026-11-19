@@ -337,20 +337,35 @@ export class ApiGatewayStack extends cdk.Stack {
       restApiName: `${id}-API`,
       deploy: true,
       cloudWatchRole: true,
+      // All `*/*` method options live at the top level so CDK emits ONE
+      // MethodSetting. Previously throttling sat in `methodOptions["/*/*"]`,
+      // which produced a second `*/*` entry; API Gateway kept only that one, so
+      // execution logging was silently off (Security Hub APIGateway.1 FAILED).
+      // `metricsEnabled: false` is deliberate: detailed per-method metrics were
+      // never actually on, would add paid custom metrics, and the alarms use the
+      // free API-level metrics.
       deployOptions: {
-        metricsEnabled: true,
+        metricsEnabled: false,
         loggingLevel: apigateway.MethodLoggingLevel.ERROR,
         dataTraceEnabled: false,
         tracingEnabled: true,
         stageName: "prod",
-        methodOptions: {
-          "/*/*": {
-            throttlingRateLimit: 100,
-            throttlingBurstLimit: 200,
-          },
-        },
+        throttlingRateLimit: 100,
+        throttlingBurstLimit: 200,
       },
     });
+
+    // Execution-log group, created here so it has a retention policy. Otherwise
+    // API Gateway creates it on first write with no expiry. Only failed requests
+    // are logged (loggingLevel ERROR), so the volume is tiny. The stage name is a
+    // literal (matching `stageName` above): referencing the Stage resource here
+    // would cycle with the stage's dependency on this log group.
+    const apiExecutionLogGroup = new logs.LogGroup(this, "ApiExecutionLogGroup", {
+      logGroupName: `API-Gateway-Execution-Logs_${this.api.restApiId}/prod`,
+      retention: logRetention,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+    this.api.deploymentStage.node.addDependency(apiExecutionLogGroup);
 
     this.stageARN_APIGW = this.api.deploymentStage.stageArn;
     this.apiGW_basedURL = this.api.urlForPath();

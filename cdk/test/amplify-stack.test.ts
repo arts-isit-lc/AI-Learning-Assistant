@@ -101,3 +101,45 @@ describe("AmplifyStack canonical-domain redirect", () => {
     expect(rules.some((r) => r.Status === "404-200")).toBe(true);
   });
 });
+
+/** Branch names (and their PR-preview setting) from a synthesized template. */
+function branches(template: Template): Array<{ BranchName?: string; EnablePullRequestPreview?: boolean }> {
+  return Object.values(template.findResources("AWS::Amplify::Branch")).map(
+    (r) => (r as { Properties: { BranchName?: string; EnablePullRequestPreview?: boolean } }).Properties
+  );
+}
+
+describe("AmplifyStack branch per environment (fix F1)", () => {
+  it("dev builds only the dev branch, with PR previews off", () => {
+    expect(branches(amplifyTemplate("dev"))).toEqual([
+      expect.objectContaining({ BranchName: "dev", EnablePullRequestPreview: false }),
+    ]);
+  });
+
+  it("prod builds only the main branch, with the CDK default PR previews", () => {
+    expect(branches(amplifyTemplate("prod"))).toEqual([
+      expect.objectContaining({ BranchName: "main", EnablePullRequestPreview: true }),
+    ]);
+  });
+
+  it("ad-hoc environments fall back to main", () => {
+    expect(branches(amplifyTemplate("staging")).map((b) => b.BranchName)).toEqual(["main"]);
+  });
+
+  it("dev redirects its dev-branch default domain, not the removed main branch", () => {
+    amplifyTemplate("dev").hasResourceProperties("AWS::Amplify::App", {
+      CustomRules: Match.arrayWith([
+        Match.objectLike({ Source: "https://dev.dbqfar7gbtstn.amplifyapp.com", Status: "301" }),
+      ]),
+    });
+  });
+});
+
+describe("AmplifyStack branch retention", () => {
+  it.each(["dev", "prod"])("retains the %s branch so the domain mapping can't be deleted", (env) => {
+    amplifyTemplate(env).hasResource("AWS::Amplify::Branch", {
+      DeletionPolicy: "Retain",
+      UpdateReplacePolicy: "Retain",
+    });
+  });
+});

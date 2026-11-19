@@ -25,8 +25,7 @@ import { AMPLIFY_DEFAULT_ORIGIN, CANONICAL_APP_ORIGIN } from "./domains";
 export const DEFAULT_ALLOWED_ORIGINS: Record<string, string[]> = {
   dev: [
     CANONICAL_APP_ORIGIN.dev, // dev SPA custom domain (Amplify) — primary/canonical origin
-    "https://dev.dbqfar7gbtstn.amplifyapp.com", // dev Amplify default domain (dev branch) — defensive fallback
-    AMPLIFY_DEFAULT_ORIGIN.dev, // dev Amplify default domain (main branch) — defensive fallback
+    AMPLIFY_DEFAULT_ORIGIN.dev, // dev Amplify default domain (dev branch) — defensive fallback
     "http://localhost:5173", // Vite dev server
     "http://localhost:4173", // Vite preview
   ],

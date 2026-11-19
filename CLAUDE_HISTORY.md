@@ -206,3 +206,21 @@ Dev holds 24 orphaned `aila-apigatewaystack-*` buckets (8 sets each of chat logs
 ## 2026-11-19 — Finding: retrieval tries to write to a cache it can only read
 
 `ragRetrievalFunction` logs `EmbeddingCache put failed, continuing without cache store` (`AccessDeniedException` on `dynamodb:PutItem`) on every query, in prod (1,934 times in 30 days) and dev. The IAM is intentionally read-only for retrieval (`multimodal-rag-stack.ts`, "GetItem on EmbeddingCache table (read-only for retrieval)"), but `cache/embedding_cache.py` still calls `put`. It's harmless, because retrieval continues without caching, but it's noise in every log review. The fix is in the code (skip `put` in retrieval), not the IAM: query embeddings rarely repeat, so caching them would only grow the table. Not part of the cost plan.
+
+## 2026-11-19 — Decision: drop P1.4 (budgets) and skip the step 0 baseline run
+
+To simplify the rollout, the cost plan no longer creates its own AWS Budgets or Cost Anomaly Detection. Both accounts already have a $200/mo budget set up by others (prod's, "Arts ISIT Systems…", is permanently in alarm), and prod has someone else's per-service anomaly monitor. The `app` tag isn't an active cost allocation tag (linked accounts can't activate it), so a monitor limited to OCELIA's resources wasn't possible anyway. The step 0 full checklist run was also skipped, so the dev gate can no longer excuse a failure as "the same as before": every failure has to be fixed or explained.
+
+## 2026-11-19 — Finding: Amplify branches can't be adopted with `--import-existing-resources`
+
+`AWS::Amplify::Branch` supports CloudFormation import, but its only identifier is the read-only `Arn`. `--import-existing-resources` matches resources by name, so the change set shows the branch as **Add**, and deploying would fail because the branch already exists. What worked for dev's hand-made `dev` branch (Stage A step 1, F1):
+1. Tag the live branch with the stack tags (`aws amplify tag-resource`), because an import doesn't apply tags.
+2. Build an import template from the **deployed** template (`get-template --template-stage Original`) plus the synthesized branch resource, with `DeletionPolicy: Retain`.
+3. `create-change-set --change-set-type IMPORT --resources-to-import` with `ResourceIdentifier: {Arn: ...}`, passing every stack parameter as `UsePreviousValue=true`. Check that it contains only the Import, then execute it.
+4. Run the normal deploy for the remaining changes (here, deleting the unused `main` branch and changing the redirect source).
+
+**Also found:**
+- `cdk diff` (CLI 2.1145.0) rejects `--parameters`, so it can't build a change set for `AILA-AmplifyStack`, whose `githubRepoName` parameter has no default. It falls back to a template diff without saying why. Use `create-change-set` with `UsePreviousValue=true` to see the real change set, then delete it.
+- **Branches are now `RemovalPolicy.RETAIN`.** The custom domains (outside CDK) are mapped to them, so taking a branch out of code must not delete it.
+- **An API Gateway execution log group must use a literal stage name.** Referencing `deploymentStage.stageName` creates a cycle with the stage's dependency on the log group.
+- **Change sets list a `SpecRestApi` with an `AWS::Include` body as modified** whenever the stack has other changes, even when the include location is unchanged.
