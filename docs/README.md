@@ -52,6 +52,7 @@ docs/
 | `guides/full-data-wipe.md` | Complete data reset runbook |
 | `guides/ExistingVPCDeployment.md` | Deploying into a pre-existing VPC |
 | `guides/optionalModifications.md` | Optional configuration tweaks |
+| `guides/scaling-chat-capacity.md` | Raising and load-testing concurrent chat capacity |
 
 ## Architecture
 

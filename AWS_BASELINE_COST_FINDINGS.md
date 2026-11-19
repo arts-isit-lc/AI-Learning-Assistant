@@ -2,6 +2,8 @@
 
 *Prepared 3 November 2026 from the production AWS account (ca-central-1), using Cost Explorer, CloudWatch, CloudTrail, AWS Config, Security Hub, Systems Manager and EC2 data.*
 
+*Updated 19 November 2026: the idle Transit Gateway attachment can't be removed (see section 3.1).*
+
 All amounts are USD before tax.
 
 ---
@@ -14,7 +16,7 @@ All amounts are USD before tax.
   - UBC's standard account setup
   - 52 Arts on-premises servers managed from this account
   - an idle network connection
-- **The $44.64 a month Transit Gateway charge pays for an empty VPC** in ca-west-1. No traffic went through it in September or October, and OCELIA doesn't use it.
+- **The $44.64 a month Transit Gateway charge pays for an empty VPC** in ca-west-1. No traffic went through it in September or October, and OCELIA doesn't use it. *(Update, 19 November 2026: it can't be removed, so this charge stays.)*
 - If OCELIA's budget pays the whole account bill, it is covering about **$87–94 a month (about $1,050–1,130 a year)** of costs that aren't OCELIA's.
 
 ---
@@ -100,6 +102,11 @@ The OCELIA team can't change any of these, which is why they're called the basel
 The migration VPC was shared in mid-March 2026, within weeks of the 52 Arts servers being registered (12 February to 12 March 2026, one activation named "MIGRATE??????"). This **suggests**, but doesn't confirm, that Arts ISIT is preparing to move those servers into AWS through ca-central-1 rather than the Calgary network.
 
 **What to do.** The charge is for keeping an unused connection to UBC's network open. Deleting the `arts-isit-prod-services` stack in ca-west-1 would remove the network and its connection, saving about $536 a year. UBC's standard template can recreate it in minutes if it's ever needed. It belongs to Arts ISIT's setup, not to OCELIA's CDK stacks, so Arts ISIT and UBC Hybrid Cloud should decide. Nothing has been changed.
+
+**Update (19 November 2026).**
+- **The attachment can't be removed (confirmed)**, so the $44.64 a month stays in the baseline.
+- **Dev has one too.** The dev account has the same kind of idle ca-west-1 attachment ($44.64 in October 2026), and it also stays.
+- **The remaining question is how the baseline is split** (section 7). [AWS_COST_OPTIMIZATION_PLAN.md](AWS_COST_OPTIMIZATION_PLAN.md) no longer counts the removal in its totals.
 
 ### 3.2 AWS Config: $32.86, mostly from Arts servers
 
@@ -228,7 +235,7 @@ If OCELIA moved to OpenStack, most of the baseline would stay in this account, b
 |---|---|
 | How is the bill for `ubc-arts-isit-prod` charged, and to whom? | Decides whether OCELIA is paying ~$90 a month of other teams' costs |
 | Can the baseline be split between OCELIA and the Arts servers? | OCELIA causes only about $10–17 of the $104 |
-| Can the idle ca-west-1 Transit Gateway attachment be removed? | $44.64 a month, with zero traffic and an empty network |
+| Can the idle ca-west-1 Transit Gateway attachment be removed? | $44.64 a month, with zero traffic and an empty network. **Answered 19 November 2026: no** |
 | Why was the standard network built in ca-west-1, when everything else runs in ca-central-1? Is the shared "migration-prd" VPC its replacement? | Decides whether the Calgary network is still needed |
 | Is the UBC AI Gateway reachable from the internet, or only from the campus network? *(for LTIC)* | If it's campus-only, OCELIA would need a private route to UBC, and OCELIA's 10.0.0.0/16 network overlaps UBC's address range |
 | Should the 52 Arts servers be managed from this account? | They cause about three-quarters of the Config charge |
