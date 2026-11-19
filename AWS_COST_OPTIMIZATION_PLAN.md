@@ -108,7 +108,7 @@ From Cost Explorer, grouped by usage type (pulled 19 November 2026). Dev is in s
 | P1.4 | AWS Budgets + Cost Anomaly Detection | $0 (guardrail) | None | 1 h | None |
 | **Related fixes (section 5; no cost impact)** | | | | | |
 | F1 | Bring the Amplify branch setup into CDK (dev builds `dev`, prod builds `main`) | – | None | ½ day | Low (import first; fallback documented) |
-| F2 | Restore alarm email subscriptions (dev done, pending confirmation; prod in Stage B) | – | None | 15 min | None |
+| F2 | Restore alarm email subscriptions (dev done and confirmed; prod in Stage B) | – | None | 15 min | None |
 | F3 | API Gateway execution-error logging: one `/*/*` setting, log group with retention | Pennies | None | ½ day | Low; fixes Security Hub APIGateway.1 |
 | **Phase 2: right-size the database and network** | | | | | |
 | P2.1 | **Rebuild the database:** `db.t4g.small`, 20 GB gp3, PostgreSQL 17, Extended Support disabled (dev first, as a rehearsal) | **~$43** (~$16 if `t4g.medium`) | Neutral, if the memory gate passes | 3–4 days incl. rehearsal | Medium |
@@ -153,14 +153,13 @@ These numbers decide P2.1 and P1.3, and they become the "before" figures for the
 
 Known pre-existing dev drift, which is the reference for the gate:
 - **API Gateway stage:** a template quirk, the same in prod. Two `*/*` method settings are merged, so throttling is active, but `loggingLevel: ERROR` and `metricsEnabled` aren't applied.
-- **Observability:** no email subscription on the critical alarm topic, in **both** accounts. The subscription in the template was never confirmed and has expired. Dev was re-subscribed on 19 Nov 2026 (pending confirmation); prod is still unsubscribed. Dev's dashboard tags are also missing.
+- **Observability:** no email subscription on the critical alarm topic, in **both** accounts. The subscription in the template was never confirmed and has expired. Dev was re-subscribed and confirmed on 19 Nov 2026; prod is still unsubscribed. Dev's dashboard tags are also missing.
 - **Amplify:** dev already builds from a `dev` branch, and `ocelia-dev.arts.ubc.ca` points at it, but both were set up by hand outside CDK. The CDK-defined `main` branch in dev has auto-build off. The repository URL differs only in letter case; the custom headers are a formatting false positive.
 - **Database:** see section 9.
+- **Leftover S3 buckets (follow-up, not part of this plan):** dev keeps **24 orphaned `aila-apigatewaystack-*` buckets** (8 sets of chat-log, ingestion and embedding buckets) and **6 from an older `aila2` prefix**. They're left over from earlier deployments under the buckets' RETAIN policy. The cost is negligible (all of dev's S3 is $0.07/mo), but **they may hold old chat logs and course documents**, so review them for data retention, and check prod for the same.
 
 **Still to do, before the first change:**
-- assign the tester
-- set up the dev test course and PDFs
-- the baseline checklist run (step 0)
+- the baseline checklist run (step 0). The tester (Vincent) and the test course (dev's existing one) are settled
 - *(optional)* a manual dev database snapshot. The permission check blocked me from creating it, so it needs running by hand or a permission rule
 
 **Still to do, before Phase 2:**
@@ -310,7 +309,7 @@ These came out of the Stage A prep. They follow the same dev-first rollout (sect
 
 **Change:**
 1. **Re-subscribe with `aws sns subscribe`** and **click the confirmation email.**
-   - Dev: done on 19 Nov 2026, pending confirmation.
+   - Dev: done and **confirmed** on 19 Nov 2026.
    - Prod: Stage B step 1.
 2. **Re-check after any change that replaces the topic.** CloudFormation doesn't notice when a subscription disappears.
 
@@ -852,7 +851,7 @@ Engineering decisions are settled (section 0). Remaining:
 | Decision | Who | Affects |
 |---|---|---|
 | Prod freeze window for the rebuild (date and announcement) | Project leads | P2.1 |
-| Who runs the manual checklist in each stage; prod test accounts and test course | Engineering / project leads | Stages A and B |
+| Prod test accounts and test course for the checklist (dev is settled: Vincent tests, reusing dev's course) | Engineering / project leads | Stage B |
 | Stay on AWS for at least 12 months | Project leads (hosting brief) | P3.1, P3.3 |
 | How the account baseline is split (the Transit Gateway attachments stay) | Arts ISIT, UBC Hybrid Cloud | Which share of ~$104 (prod) and ~$68 (dev) OCELIA's budget pays |
 
@@ -861,9 +860,9 @@ Engineering decisions are settled (section 0). Remaining:
 ## 15. Manual test checklist
 
 **Setup (dev, before step 0):**
-- Test accounts for each role.
-- A test course with one module containing a short PDF that has text, a figure, a table and a formula.
-- A second small PDF for the upload test.
+- **Tester: Vincent** (decided 19 Nov 2026).
+- **Reuse dev's existing test accounts** (5 students, 5 instructors, 2 admins) **and the existing test course.** Dev holds 94 PDFs and 5 PPTX files (newest uploaded 26 Oct 2026), with ~600 extracted images, so pick a module whose material has a figure, and ideally a table and a formula. If it lacks one, mark rows 5–6 "N/A" for that item in every run, so runs stay comparable.
+- Bring any small PDF for the upload test (row 10).
 
 The prod equivalent is set up before Stage B.
 
