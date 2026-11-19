@@ -46,6 +46,7 @@ USD per month, before tax (AWS adds about 11%). Companion documents: [HOSTING_OP
 | **Drop P1.5 (secret caching) and P1.6 (API Gateway X-Ray)** | Both moved to section 11 |
 | **Dev first, then prod; tested manually** | Every Phase 1 and Phase 2 change runs in dev first. Prod follows only after dev passes the validation gate (section 12). Testing is manual, using the checklist in section 15 (tester UI flows plus engineer CLI checks) |
 | **The idle Transit Gateway attachments stay** (prod and dev, $44.64/mo each) | Confirmed 19 November 2026 that they can't be removed. Track B items B1 and B3 are closed, and the totals no longer count them |
+| **Include fixes F1–F3** (Amplify branches in CDK, alarm email subscriptions, API Gateway execution logging) | Related fixes in section 5, rolled out dev first with Stage A step 1 and Stage B step 1 |
 | **Hibernate switch later** | Phase 4 (section 8) is revisited after both environments are stable. P2.1 keeps the option cheap (fixed instance identifier, standalone admin secret) |
 
 ---
@@ -54,13 +55,14 @@ USD per month, before tax (AWS adds about 11%). Companion documents: [HOSTING_OP
 
 **Goal:** the lowest bill that keeps today's user-facing performance and room for growth ([scaling-chat-capacity.md](docs/guides/scaling-chat-capacity.md)). Record these in Phase 0 and check them again after every change:
 
-| Measure | Baseline (prod, 30 days to 2026-11-10) | Regression threshold |
+| Measure | Baseline (prod, 30 days to 2026-11-19) | Regression threshold |
 |---|---|---|
-| `chatbotV2Function` duration | p50 ~9 s, p90 ~13.6 s | p90 more than 10% higher |
-| `ragRetrievalFunction` duration and errors | measure in Phase 0 | p90 more than 10% higher, or any errors |
-| API Gateway `Latency` and `5XXError` | measure in Phase 0 | any sustained increase |
-| RDS `CPUUtilization` and `ReadLatency` | CPU peak 5.8% | CPU above 40% at today's load |
-| Document ingestion time (upload → ready) | measure in Phase 0 | more than 10% higher |
+| `chatbotV2Function` duration | p50 8.6 s · p90 12.7 s · p99 17.7 s (1,938 calls, 0 errors) | p90 more than 10% higher |
+| `ragRetrievalFunction` duration and errors | p50 0.77 s · p90 2.05 s · p99 6.65 s (1,937 calls, 0 errors) | p90 more than 10% higher, or any errors |
+| `studentFunction` duration | p50 21 ms · p90 663 ms · p99 898 ms (13,066 calls, 0 errors) | p90 more than 10% higher |
+| API Gateway `Latency` and `5XXError` | p50 31 ms · p90 1.24 s · p99 12.0 s; 11 server errors (5xx) in 31,507 requests | any sustained increase |
+| RDS `CPUUtilization`, `ReadLatency`, `WriteLatency` | CPU ~6% average; ReadLatency 0 (all reads from cache); WriteLatency p99 0.05 s | CPU above 40% at today's load; ReadLatency rising above ~0 (the working set no longer fits) |
+| Document ingestion (Lambda) | Ingestion p50 3.5 s · p90 14.0 s; enrichment p50 16.9 s · p90 75.7 s (55 uploads, 0 errors) | more than 10% higher; plus the timed upload in checklist row 10 |
 | Answer quality | `track-a` set (`.kiro/specs/chatbot-latency-optimization/`) | only for prompt changes (P3.1) |
 
 **Availability is separate from performance.** Single-AZ (accepted) and the NAT instance (P2.2) don't change latency, but they lengthen recovery from rare failures.
@@ -104,6 +106,10 @@ From Cost Explorer, grouped by usage type (pulled 19 November 2026). Dev is in s
 | P1.2 | Prod Multi-AZ → single-AZ *(decided)* | **~$72** | None (availability accepted) | 1 h, online | Low |
 | P1.3 | Drop all warning-tier alarms *(decided)*; trim the dashboard to ≤50 metrics (both accounts) | **~$7.30** | None | ½ day | Problems surface only at the critical threshold (accepted) |
 | P1.4 | AWS Budgets + Cost Anomaly Detection | $0 (guardrail) | None | 1 h | None |
+| **Related fixes (section 5; no cost impact)** | | | | | |
+| F1 | Bring the Amplify branch setup into CDK (dev builds `dev`, prod builds `main`) | – | None | ½ day | Low (import first; fallback documented) |
+| F2 | Restore alarm email subscriptions (dev done, pending confirmation; prod in Stage B) | – | None | 15 min | None |
+| F3 | API Gateway execution-error logging: one `/*/*` setting, log group with retention | Pennies | None | ½ day | Low; fixes Security Hub APIGateway.1 |
 | **Phase 2: right-size the database and network** | | | | | |
 | P2.1 | **Rebuild the database:** `db.t4g.small`, 20 GB gp3, PostgreSQL 17, Extended Support disabled (dev first, as a rehearsal) | **~$43** (~$16 if `t4g.medium`) | Neutral, if the memory gate passes | 3–4 days incl. rehearsal | Medium |
 | P2.2 | NAT Gateway → NAT instance | **~$30** | Negligible | 1–2 days | Medium |
@@ -138,8 +144,24 @@ These numbers decide P2.1 and P1.3, and they become the "before" figures for the
 - the database size part of step 5 (from `FreeStorageSpace`)
 - the existing proxy settings: all three have `RequireTLS: true`, a 1,800 s idle client timeout, and debug logging off. Copy these to the new proxy
 
+**Stage A prep, done 19 November 2026:**
+- the prod guardrail baselines (section 1)
+- `npm test` (42 suites, 409 tests pass)
+- `cdk diff` against dev (0 differences across 7 stacks)
+- drift detection on every dev stack
+- dev test accounts confirmed (5 students, 5 instructors, 2 admins)
+
+Known pre-existing dev drift, which is the reference for the gate:
+- **API Gateway stage:** a template quirk, the same in prod. Two `*/*` method settings are merged, so throttling is active, but `loggingLevel: ERROR` and `metricsEnabled` aren't applied.
+- **Observability:** no email subscription on the critical alarm topic, in **both** accounts. The subscription in the template was never confirmed and has expired. Dev was re-subscribed on 19 Nov 2026 (pending confirmation); prod is still unsubscribed. Dev's dashboard tags are also missing.
+- **Amplify:** dev already builds from a `dev` branch, and `ocelia-dev.arts.ubc.ca` points at it, but both were set up by hand outside CDK. The CDK-defined `main` branch in dev has auto-build off. The repository URL differs only in letter case; the custom headers are a formatting false positive.
+- **Database:** see section 9.
+
 **Still to do, before the first change:**
-- **the guardrail baselines from section 1** (Logs Insights on `stream_latency`, as in the scaling guide; Lambda `Duration` p50/p90; API Gateway latency; ingestion time). Without them, "no regression" can't be judged
+- assign the tester
+- set up the dev test course and PDFs
+- the baseline checklist run (step 0)
+- *(optional)* a manual dev database snapshot. The permission check blocked me from creating it, so it needs running by hand or a permission rule
 
 **Still to do, before Phase 2:**
 - drift detection on `AILA-VpcStack`
@@ -262,6 +284,68 @@ In both accounts, set an AWS Budget at the target total with 80% and 100% alerts
 - `github-personal-access-token` is OCELIA's too: [amplify-stack.ts](cdk/lib/amplify-stack.ts) uses it for Amplify builds.
 - `/CrowdStrike/…` is UBC security tooling.
 - `wok/wok-api/*` (2) belong to another workload, last accessed in August 2025. Mention them to Arts ISIT; they aren't OCELIA's to delete.
+
+### Related fixes found during prep (no cost impact)
+
+These came out of the Stage A prep. They follow the same dev-first rollout (section 12) and are included by decision (section 0).
+
+#### F1 Bring the Amplify branch setup into CDK
+
+**Today:** the live setup already matches the intended git flow, but **it was configured by hand**:
+- dev's Amplify app builds the `dev` git branch (auto-build on), and `ocelia-dev.arts.ubc.ca` points at it
+- prod builds `main`, and `ocelia.arts.ubc.ca` points at `main`
+
+[amplify-stack.ts](cdk/lib/amplify-stack.ts) defines only `addBranch("main")` in both environments. In dev that branch's auto-build was turned off by hand (it shows as drift), and [domains.ts](cdk/lib/constants/domains.ts) still names `main.<appId>` as dev's redirect source. A fresh environment, or an Amplify stack change, wouldn't reproduce the real setup.
+
+**Change:**
+1. **Pick the branch per environment:** `dev` for dev, `main` for prod. Prod's template stays identical (check with `cdk diff`).
+2. **Bring dev's hand-made `dev` branch under CDK** with `--import-existing-resources`, as was done for the conversation table. First confirm with a read-only `cdk diff --import-existing-resources` that it shows `[←] import` for the branch. **If Amplify branches can't be imported,** leave that branch unmanaged and do only steps 3–4. Don't delete and recreate it: the custom domain is mapped to it.
+3. **Remove the unused `main` branch from dev's app.** It serves nothing, because the domain points at `dev`.
+4. **Point dev's redirect source** (`AMPLIFY_DEFAULT_ORIGIN.dev`) at `https://dev.dbqfar7gbtstn.amplifyapp.com`. In [cors.ts](cdk/lib/constants/cors.ts), drop the now-duplicate `dev.` literal and the `main.` origin. Update [s3-cors.test.ts](cdk/test/s3-cors.test.ts) lines 84–85 to match.
+5. **Out of scope:** the custom-domain associations stay outside CDK (follow-up). Bringing them in risks the live domains for no gain.
+
+#### F2 Restore alarm email subscriptions
+
+**Today:** neither account's critical SNS topic has a subscription, so **no critical alarm has emailed anyone, in prod or dev.** [observability-stack.ts:71](cdk/lib/observability-stack.ts#L71) subscribes `vincent.lam@ubc.ca`, but the confirmation was never clicked and SNS deleted the pending subscription. CloudFormation still believes it exists.
+
+**Change:**
+1. **Re-subscribe with `aws sns subscribe`** and **click the confirmation email.**
+   - Dev: done on 19 Nov 2026, pending confirmation.
+   - Prod: Stage B step 1.
+2. **Re-check after any change that replaces the topic.** CloudFormation doesn't notice when a subscription disappears.
+
+This matters more after P1.3, when the critical tier is the only alarm level left.
+
+#### F3 Turn on API Gateway execution-error logging
+
+**Today:** [api-gateway-stack.ts:340-351](cdk/lib/api-gateway-stack.ts#L340-L351) sets the stage options (`loggingLevel: ERROR`, `metricsEnabled: true`) and a separate `/*/*` throttling entry. CDK emits **two method settings for the same `*/*` path**, and API Gateway keeps one: the throttling entry, which has no logging.
+
+Live, in both accounts:
+- throttling works (100/s, burst 200)
+- **execution logging is off**
+- detailed metrics are off
+- **no execution log group has ever been created**
+- **Security Hub APIGateway.1 is FAILED** on the stage
+
+Prerequisites are in place: the account-level API Gateway CloudWatch role exists in both accounts.
+
+**What's missing without it:** a record of failures *inside* API Gateway, which Lambda logs can't show:
+- authorizer errors
+- 502s from Lambda crashes or malformed responses
+- 504s at the 29-second integration limit
+- throttling and mapping errors
+
+Prod's 11 5xx errors in the last 30 days have no recorded cause. The 26 October incident (chat errors from an idle, Inactive Lambda) had to be reconstructed from CloudTrail.
+
+**Change:**
+1. **Merge into a single `/*/*` method setting:** throttling plus `loggingLevel: ERROR`, with **`metricsEnabled: false` explicitly**. Detailed per-method metrics have been off all along, they'd add paid custom metrics, and the alarms use the free API-level metrics.
+2. **Create the log group `API-Gateway-Execution-Logs_<apiId>/prod` in CDK**, with the same retention as the Lambda logs: 3 months in prod, 1 month in dev. Otherwise API Gateway creates it on first write with no expiry.
+3. **Expected results:**
+   - **Cost:** pennies, because only failed requests are logged.
+   - **Security Hub:** APIGateway.1 should pass.
+   - **Drift:** the API Gateway stage drift goes away.
+
+**Not proposed:** access logs (one line per request), a separate feature that's also off.
 
 ---
 
@@ -689,7 +773,7 @@ Testing is **manual**, using the checklist in section 15. A tester runs the UI f
 | # | Change | Verify |
 |---|---|---|
 | 0 | **Before any change:** a full checklist run in dev, plus the prod guardrail baselines (read-only) | Records what already passes or fails in dev, so pre-existing problems aren't blamed on the plan |
-| 1 | P1.4 budgets in both accounts; **D1** (dev's counterpart of P1.2); **D3** | Dev `MultiAZ: false`; `cdk diff` shows only intended changes (`dev` has no undeployed CDK changes since the 27 Oct prod release); quick checklist run |
+| 1 | P1.4 budgets in both accounts; **D1** (dev's counterpart of P1.2); **D3**; **F1** and **F3** in dev; confirm **F2**'s dev subscription | Dev `MultiAZ: false`; `cdk diff` shows only intended changes (`dev` has no undeployed CDK changes since the 27 Oct prod release); `cdk diff` against **prod** shows no Amplify change; checks E10–E12; quick checklist run |
 | 2 | P1.1 standalone proxy (two deploys) | Full checklist run. It covers all three database users: app user (student, instructor, chat, RAG), table creator (sign-up, sign-in, admin), and master (instructor upload; orphan cleanup, engineer-checked). No auth errors in the logs |
 | 3 | P1.3 critical-only alarms; dashboard ≤50 metrics | Synth and deploy pass; the composite references only critical alarms (engineer); quick checklist run |
 | 4 | Sizing profile; **P2.1 rebuild rehearsal** (PostgreSQL 17 at `t4g.small`, pgbench, then `t4g.micro`) | The P2.1 checks (engineer): proxy registers the PostgreSQL 17 target; roles copied; row counts match; `vector` and HNSW index present; initializer rerun clean; pgbench passes; freeze-to-cutover time recorded. Then a **full checklist run**: data from before the rebuild (courses, chats, files) must still be there |
@@ -714,7 +798,7 @@ Testing is **manual**, using the checklist in section 15. A tester runs the UI f
 
 | # | Change | Verify |
 |---|---|---|
-| 1 | P1.2 single-AZ (online); P1.1 (two deploys); P1.3 | Quick checklist run after each deploy; same engineer checks as dev; guardrails for 3–7 days; `RDS:ProxyUsage` at 1,488 vCPU-h a month instead of 4,464; RDS bill drops the next day |
+| 1 | **F2** prod alarm email (re-subscribe and confirm); **F3** in prod; P1.2 single-AZ (online); P1.1 (two deploys); P1.3 | E11 and E12 in prod; quick checklist run after each deploy; same engineer checks as dev; guardrails for 3–7 days; `RDS:ProxyUsage` at 1,488 vCPU-h a month instead of 4,464; RDS bill drops the next day |
 | 2 | **P2.1 rebuild** in the winter break (announced freeze) | P2.1 checks; **full checklist run before unfreezing**; for a week, watch `ReadIOPS`, `ReadLatency`, `SwapUsage` and retrieval p90 (fallback: `t4g.medium` in place) |
 | 3 | P2.2 NAT instance (`t4g.micro`) | Full checklist run; guardrails |
 | 4 | P2.3, after the NAT instance has run cleanly for a week | Quick checklist run; no Bedrock or Secrets Manager errors |
@@ -822,6 +906,9 @@ For each run, record the date, environment, plan step, tester, pass/fail per row
 | E7 | Daily warm-up invocations | Return `{"warmup": true}` without errors |
 | E8 | After P2.1: the data-export tunnel to the new instance endpoint ([data_export.md](docs/guides/data_export.md)) | Connects; guide updated |
 | E9 | After P2.2: NAT reboot test and one Patch Manager run | Egress resumes; patch run succeeds |
+| E10 | After F1 (dev only): a push to the `dev` branch builds dev; a push to `main` doesn't; `dev.<appId>.amplifyapp.com` redirects to `ocelia-dev.arts.ubc.ca`; Amplify drift clean | All true; `ocelia-dev.arts.ubc.ca` still serves the app |
+| E11 | After F3: stage `methodSettings` show `loggingLevel: ERROR`, throttling 100/200, `metricsEnabled: false`; the log group exists with retention; Security Hub APIGateway.1 | Matches; APIGateway.1 PASSED (it can take up to a day to re-evaluate) |
+| E12 | F2: `list-subscriptions-by-topic` on the critical topic | `email` subscription **confirmed**, not `PendingConfirmation` |
 
 ---
 

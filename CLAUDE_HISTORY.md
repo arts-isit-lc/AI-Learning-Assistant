@@ -179,3 +179,22 @@ Details and alternatives are in `AWS_COST_OPTIMIZATION_PLAN.md`, sections 0 and 
 ## 2026-11-19 — Decision: the idle Transit Gateway attachments stay
 
 It's confirmed that the idle ca-west-1 Transit Gateway attachments can't be removed, in either prod (`arts-isit-prod-services`) or dev. They cost $44.64/mo each, and 0 bytes were carried. Track B items B1 and B3 in `AWS_COST_OPTIMIZATION_PLAN.md` are closed, and the plan's totals no longer assume removing them. That's ~$385/mo for both accounts after Phases 1–2, instead of ~$295. The attachments stay in the account baseline (~$104 prod, ~$68 dev); only the baseline split (B2) remains open. `AWS_BASELINE_COST_FINDINGS.md` now carries dated update notes; its original recommendation to delete the attachment is kept for the record.
+
+## 2026-11-19 — Finding: Stage A prep (baselines, drift, API Gateway logging quirk)
+
+- **Prod performance baselines** (30 days to 2026-11-19) are recorded in `AWS_COST_OPTIMIZATION_PLAN.md`, section 1. Chatbot p90 is 12.7 s, retrieval p90 2.05 s, and RDS ReadLatency 0 (all reads served from cache).
+- **Dev matches the code:** `npm test` 42/42 suites (409 tests), and `cdk diff -c environment=dev` shows 0 differences across 7 stacks. For `cdk diff`, export SSO credentials (`aws configure export-credentials`) and unset `AWS_PROFILE`.
+- **API Gateway stage quirk (prod and dev):** the template defines two `*/*` method settings: one from `deployOptions` (`metricsEnabled`, `loggingLevel: ERROR`) and one with the throttling limits. API Gateway merges them into a single entry, so throttling (100/s, burst 200) applies, but **execution-error logging and detailed metrics are off.** Drift detection reports this as drift on the stage. It's pre-existing and unrelated to the cost plan; fix it by merging the settings into one entry if the logs are wanted.
+- **Alarm emails reach nobody, in prod or dev:** neither account's critical SNS topic has a subscription. The template's `EmailSubscription` ([observability-stack.ts:71]) was never confirmed, and SNS deleted it. Dev was re-subscribed with `aws sns subscribe` on 2026-11-19, pending confirmation; prod hasn't been yet. The live subscription is created outside CloudFormation's view, so this needs re-checking whenever the topic is replaced.
+- **The Amplify branch setup lives outside CDK:** dev's Amplify app has a hand-made `dev` branch (auto-build on), and the `ocelia-dev.arts.ubc.ca` domain association points at it. Prod builds `main`, and `ocelia.arts.ubc.ca` points at `main`. CDK defines only `addBranch("main")`, which in dev has auto-build turned off by hand. Neither the domain associations nor dev's `dev` branch are in CDK, and `AMPLIFY_DEFAULT_ORIGIN.dev` still names `main.<appId>`.
+- **Other pre-existing dev drift:**
+  - the dashboard tags are missing
+  - Amplify `main` branch auto-build is off
+  - the Amplify repository URL differs only in letter case, and the custom headers are a formatting false positive
+
+## 2026-11-19 — Decision: include fixes F1–F3 in the cost plan rollout
+
+These have no cost impact but were found during Stage A prep. All go dev first (`AWS_COST_OPTIMIZATION_PLAN.md`, section 5):
+- **F1:** bring the hand-made Amplify setup into CDK (dev builds `dev`, prod builds `main`). Import dev's existing `dev` branch with `--import-existing-resources` if CloudFormation supports importing Amplify branches; otherwise leave it unmanaged. Never recreate it, because the custom domain is mapped to it. Also remove dev's unused `main` branch and point `AMPLIFY_DEFAULT_ORIGIN.dev` and the CORS list at `dev.<appId>`. The domain associations stay outside CDK.
+- **F2:** restore the critical-topic email subscriptions. Dev was done 2026-11-19 (pending confirmation); prod is in Stage B.
+- **F3:** merge the stage method settings into a single `/*/*` entry with throttling, `loggingLevel: ERROR` and an explicit `metricsEnabled: false` (detailed metrics have always been off and would add paid metrics). Create the execution log group in CDK with retention. Security Hub APIGateway.1 is FAILED on the stage in both accounts today.
