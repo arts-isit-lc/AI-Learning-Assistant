@@ -202,3 +202,7 @@ These have no cost impact but were found during Stage A prep. All go dev first (
 ## 2026-11-19 — Finding: orphaned S3 buckets in dev
 
 Dev holds 24 orphaned `aila-apigatewaystack-*` buckets (8 sets each of chat logs, data ingestion and embeddings) and 6 `aila2-*` buckets. They're left behind by earlier deployments under `RemovalPolicy.RETAIN`. The current stack uses one of each (`describe-stack-resources` gives the physical names). Uploaded course documents end up in `aila-multimodalragstack-ir-bucket`, not the ingestion bucket, which is empty. The cost is negligible, but the leftovers may hold old chat logs and documents, so they're a data-retention question. Prod hasn't been checked. Not part of the cost plan.
+
+## 2026-11-19 — Finding: retrieval tries to write to a cache it can only read
+
+`ragRetrievalFunction` logs `EmbeddingCache put failed, continuing without cache store` (`AccessDeniedException` on `dynamodb:PutItem`) on every query, in prod (1,934 times in 30 days) and dev. The IAM is intentionally read-only for retrieval (`multimodal-rag-stack.ts`, "GetItem on EmbeddingCache table (read-only for retrieval)"), but `cache/embedding_cache.py` still calls `put`. It's harmless, because retrieval continues without caching, but it's noise in every log review. The fix is in the code (skip `put` in retrieval), not the IAM: query embeddings rarely repeat, so caching them would only grow the table. Not part of the cost plan.
