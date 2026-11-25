@@ -47,6 +47,7 @@ from .exceptions import (
     UnsupportedFormatError,
 )
 from .ir_builder import IRBuilder
+from .s3_key import parse_s3_key
 
 logger = Logger(service="multimodal-rag-ingestion", log_uncaught_exceptions=True)
 
@@ -76,39 +77,7 @@ _ir_builder = IRBuilder()
 _ir_persistence = IRPersistence(bucket_name=IR_BUCKET_NAME, s3_client=_s3_client)
 
 
-def _parse_s3_key(key: str) -> dict[str, str]:
-    """Parse course_id, module_id, and file_id from the S3 key path.
-
-    Expected key format: courses/{course_id}/{module_id}/{filename}
-
-    Args:
-        key: The S3 object key from the event.
-
-    Returns:
-        Dict with course_id, module_id, file_id, and filename.
-
-    Raises:
-        ValueError: If the key does not match the expected format.
-    """
-    parts = key.split("/")
-    if len(parts) < 4 or parts[0] != "courses":
-        raise ValueError(
-            f"S3 key does not match expected format "
-            f"'courses/{{course_id}}/{{module_id}}/{{filename}}': {key}"
-        )
-
-    course_id = parts[1]
-    module_id = parts[2]
-    filename = parts[3]
-    # file_id is filename without extension
-    file_id = os.path.splitext(filename)[0]
-
-    return {
-        "course_id": course_id,
-        "module_id": module_id,
-        "file_id": file_id,
-        "filename": filename,
-    }
+_parse_s3_key = parse_s3_key
 
 
 def _get_file_extension(filename: str) -> str:
@@ -221,6 +190,7 @@ def _process_record(record: dict[str, Any]) -> dict[str, Any]:
         Result dict with status and details.
     """
     record_start = time.time()
+    file_id: str | None = None  # known once the key parses; used to mark failures
 
     try:
         # Extract bucket and key from the S3 event record
@@ -286,6 +256,7 @@ def _process_record(record: dict[str, Any]) -> dict[str, Any]:
         with _traced_subsegment("AdapterExtraction"):
             raw_elements = _registry.process_file(file_content, file_metadata)
         adapter_latency = time.time() - adapter_start
+        del file_content  # release the source file (up to 200 MB) before the IR is built
 
         logger.info(
             "Adapter extraction complete",
@@ -301,6 +272,7 @@ def _process_record(record: dict[str, Any]) -> dict[str, Any]:
         with _traced_subsegment("IRBuild"):
             document_ir = _ir_builder.build(raw_elements, file_metadata)
         ir_build_latency = time.time() - ir_build_start
+        del raw_elements  # the IR holds what's kept; drop the extraction copies
 
         logger.info(
             "IR build complete",
@@ -364,25 +336,39 @@ def _process_record(record: dict[str, Any]) -> dict[str, Any]:
             "element_count": len(document_ir.elements),
         }
 
+    # Each branch returns normally, so Lambda won't retry: the failure is final
+    # and the UI is told so. (Crashes such as running out of memory never reach
+    # these branches; failure_handler.py marks those files after the retries.)
     except UnsupportedFormatError as exc:
         logger.warning("Unsupported file format", extra={"error": str(exc)})
+        _mark_failed(file_id)
         return {"statusCode": 400, "error": str(exc)}
 
     except FileSizeExceededError as exc:
         logger.warning("File size exceeded", extra={"error": str(exc)})
+        _mark_failed(file_id)
         return {"statusCode": 400, "error": str(exc)}
 
     except ExtractionFailureError as exc:
         logger.exception("Extraction failure")
+        _mark_failed(file_id)
         return {"statusCode": 500, "error": str(exc)}
 
     except ValueError as exc:
         logger.warning("Invalid S3 key format", extra={"error": str(exc)})
+        _mark_failed(file_id)
         return {"statusCode": 400, "error": str(exc)}
 
     except Exception as exc:
         logger.exception("Unexpected error during ingestion")
+        _mark_failed(file_id)
         return {"statusCode": 500, "error": f"Internal error: {type(exc).__name__}"}
+
+
+def _mark_failed(file_id: str | None) -> None:
+    """Show the file as failed in the UI (best-effort; no-op without a file_id)."""
+    if file_id:
+        set_processing_status(file_id, "failed")
 
 
 def _download_file(bucket: str, key: str) -> bytes:

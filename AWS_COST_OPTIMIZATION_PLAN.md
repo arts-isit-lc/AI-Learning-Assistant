@@ -158,7 +158,7 @@ Known pre-existing dev drift, which is the reference for the gate:
 - **Amplify:** dev already builds from a `dev` branch, and `ocelia-dev.arts.ubc.ca` points at it, but both were set up by hand outside CDK. The CDK-defined `main` branch in dev has auto-build off. The repository URL differs only in letter case; the custom headers are a formatting false positive.
 - **Database:** see section 9.
 - **Retrieval embedding-cache warning (pre-existing, both accounts):** every retrieval query logs `EmbeddingCache put failed … AccessDeniedException`. The retrieval role is deliberately read-only on the embedding cache ([multimodal-rag-stack.ts:347](cdk/lib/multimodal-rag-stack.ts#L347)), but the code still attempts `PutItem`. Prod logged it 1,934 times in 30 days. It's harmless (a WARNING; retrieval continues), and it isn't a plan regression. Follow-up: make retrieval use the cache read-only.
-- **Leftover S3 buckets (follow-up, not part of this plan):** dev keeps **24 orphaned `aila-apigatewaystack-*` buckets** (8 sets of chat-log, ingestion and embedding buckets) and **6 from an older `aila2` prefix**. They're left over from earlier deployments under the buckets' RETAIN policy. The cost is negligible (all of dev's S3 is $0.07/mo), but **they may hold old chat logs and course documents**, so review them for data retention, and check prod for the same.
+- **Leftover S3 buckets (follow-up, not part of this plan; update 20 Nov 2026: all 27 dev orphans were deleted (24 empty; 3 holding old chat-log exports and documents, deleted by decision). The 2 `cf-templates-*` buckets are UBC Hybrid Cloud's Transit Gateway templates):** dev keeps **24 orphaned `aila-apigatewaystack-*` buckets** (8 sets of chat-log, ingestion and embedding buckets) and **6 from an older `aila2` prefix**. They're left over from earlier deployments under the buckets' RETAIN policy. The cost is negligible (all of dev's S3 is $0.07/mo), but **they may hold old chat logs and course documents**, so review them for data retention, and check prod for the same.
 
 **Still to do, before the first change:**
 - ~~the baseline checklist run (step 0)~~ skipped by decision (section 0)
@@ -790,7 +790,7 @@ Testing is **manual**, using the checklist in section 15. A tester runs the UI f
   - **E10:** `dev.<appId>` 301-redirects to `ocelia-dev.arts.ubc.ca` with the path kept, and the custom domain serves the app.
   - Not yet checked: a push to `dev` builds dev and a push to `main` doesn't.
   - The IR bucket's CORS preflight from the custom domain returns 200.
-- **F3, E11:** the stage has one `*/*` setting (ERROR logging, throttling 100/200, `metricsEnabled: false`), and the log group exists with 30-day retention. Security Hub APIGateway.1 still needs re-checking after it re-evaluates.
+- **F3, E11:** the stage has one `*/*` setting (ERROR logging, throttling 100/200, `metricsEnabled: false`), and the log group exists with 30-day retention. Security Hub APIGateway.1 **PASSED** in dev on re-evaluation (20 Nov 2026, 08:38 UTC).
 - **F2, E12:** the dev subscription is confirmed.
 - **Diffs and tests:**
   - `npm test`: 43 suites, 419 tests pass.

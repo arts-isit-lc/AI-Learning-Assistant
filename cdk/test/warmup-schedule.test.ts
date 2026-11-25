@@ -43,6 +43,7 @@ function warmupRulesFor(template: Template, logicalId: string): Array<Record<str
 
 const CASES: Array<{ stack: 'rag' | 'api'; functionName: string }> = [
   { stack: 'rag', functionName: 'Test-MultimodalRagStack-ragIngestionFunction' },
+  { stack: 'rag', functionName: 'Test-MultimodalRagStack-ragIngestionFailureFunction' },
   { stack: 'rag', functionName: 'Test-MultimodalRagStack-ragEnrichmentFunction' },
   { stack: 'rag', functionName: 'Test-MultimodalRagStack-ragRetrievalFunction' },
   { stack: 'rag', functionName: 'Test-MultimodalRagStack-chatbotV2Function' },

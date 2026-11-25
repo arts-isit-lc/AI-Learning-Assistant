@@ -238,6 +238,9 @@ export class ApiGatewayStack extends cdk.Stack {
         requireSymbols: true,
       },
       accountRecovery: cognito.AccountRecovery.EMAIL_ONLY,
+      // Security Hub Cognito.6. Deleting the pool would delete every user
+      // account, so it has to be switched off deliberately first.
+      deletionProtection: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
@@ -278,7 +281,9 @@ export class ApiGatewayStack extends cdk.Stack {
       this,
       `${id}-identity-pool`,
       {
-        allowUnauthenticatedIdentities: true,
+        // Security Hub Cognito.2. The SPA never uses guest identities: the
+        // Amplify config sets `allowGuestAccess: false`.
+        allowUnauthenticatedIdentities: false,
         identityPoolName: `${id}-IdentityPool`,
         cognitoIdentityProviders: [
           {
@@ -517,28 +522,11 @@ export class ApiGatewayStack extends cdk.Stack {
       }
     );
 
-    // Create unauthenticated role with no permissions
-    const unauthenticatedRole = new iam.Role(this, `${id}-UnauthenticatedRole`, {
-      assumedBy: new iam.FederatedPrincipal(
-        "cognito-identity.amazonaws.com",
-        {
-          StringEquals: {
-            "cognito-identity.amazonaws.com:aud": this.identityPool.ref,
-          },
-          "ForAnyValue:StringLike": {
-            "cognito-identity.amazonaws.com:amr": "unauthenticated",
-          },
-        },
-        "sts:AssumeRoleWithWebIdentity"
-      ),
-    });
-
     // Attach roles to the identity pool
     new cognito.CfnIdentityPoolRoleAttachment(this, `${id}-IdentityPoolRoles`, {
       identityPoolId: this.identityPool.ref,
       roles: {
         authenticated: studentRole.roleArn,
-        unauthenticated: unauthenticatedRole.roleArn,
       },
     });
 
@@ -834,7 +822,7 @@ export class ApiGatewayStack extends cdk.Stack {
       vpc: vpcStack.vpc,
       environment: {
         SM_DB_CREDENTIALS: db.secretPathTableCreator.secretName,
-        RDS_PROXY_ENDPOINT: db.rdsProxyEndpointTableCreator,
+        RDS_PROXY_ENDPOINT: db.rdsProxyEndpoint,
         // duplicate_course copies raw course files within the IR bucket.
         BUCKET: ragStack.irBucket.bucketName,
         REGION: this.region,
@@ -1011,7 +999,7 @@ export class ApiGatewayStack extends cdk.Stack {
       logGroup: makeLogGroup(`${id}-addStudentOnSignUp`),
       environment: {
         SM_DB_CREDENTIALS: db.secretPathTableCreator.secretName,
-        RDS_PROXY_ENDPOINT: db.rdsProxyEndpointTableCreator,
+        RDS_PROXY_ENDPOINT: db.rdsProxyEndpoint,
       },
       vpc: vpcStack.vpc,
       functionName: `${id}-addStudentOnSignUp`,
@@ -1029,7 +1017,7 @@ export class ApiGatewayStack extends cdk.Stack {
       logGroup: makeLogGroup(`${id}-adjustUserRoles-v9`),
       environment: {
         SM_DB_CREDENTIALS: db.secretPathTableCreator.secretName,
-        RDS_PROXY_ENDPOINT: db.rdsProxyEndpointTableCreator,
+        RDS_PROXY_ENDPOINT: db.rdsProxyEndpoint,
       },
       vpc: vpcStack.vpc,
       functionName: `${id}-adjustUserRoles-v9`,
@@ -1246,6 +1234,7 @@ export class ApiGatewayStack extends cdk.Stack {
       tableName: "DynamoDB-Conversation-Table",
       partitionKey: { name: "SessionId", type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      deletionProtection: true, // Security Hub DynamoDB.6
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
     (conversationTable.node.defaultChild as dynamodb.CfnTable).overrideLogicalId("ConversationTable");
@@ -1404,7 +1393,7 @@ export class ApiGatewayStack extends cdk.Stack {
           BUCKET: ragStack.irBucket.bucketName,
           REGION: this.region,
           SM_DB_CREDENTIALS: db.secretPathAdminName,
-          RDS_PROXY_ENDPOINT: db.rdsProxyEndpointAdmin,
+          RDS_PROXY_ENDPOINT: db.rdsProxyEndpoint,
         },
         functionName: `${id}-GeneratePreSignedURLFunc`,
         layers: [powertoolsLayer, psycopgLayer],
@@ -1573,7 +1562,7 @@ export class ApiGatewayStack extends cdk.Stack {
       layers: [powertoolsLayer, psycopgLayer],
       environment: {
         SM_DB_CREDENTIALS: db.secretPathAdminName,
-        RDS_PROXY_ENDPOINT: db.rdsProxyEndpointAdmin,
+        RDS_PROXY_ENDPOINT: db.rdsProxyEndpoint,
         // V2 files live in the irBucket (see generatePreSignedURL/getFilesFunction).
         BUCKET: ragStack.irBucket.bucketName,
         REGION: this.region,
@@ -1888,6 +1877,27 @@ export class ApiGatewayStack extends cdk.Stack {
         },
       },
       xrayEnabled: true,
+    });
+
+    // Security Hub AppSync.2: log resolver errors only (no request content).
+    // Set on the L1 resource: the L2 `logConfig` prop always adds a
+    // Custom::LogRetention Lambda (never-expire by default). Retention comes from
+    // the explicit log group below instead, as for the Lambda log groups.
+    const eventApiLogsRole = new iam.Role(this, "EventApiLogsRole", {
+      assumedBy: new iam.ServicePrincipal("appsync.amazonaws.com"),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName("service-role/AWSAppSyncPushToCloudWatchLogs"),
+      ],
+    });
+    (this.eventApi.node.defaultChild as appsync.CfnGraphQLApi).logConfig = {
+      cloudWatchLogsRoleArn: eventApiLogsRole.roleArn,
+      fieldLogLevel: "ERROR",
+      excludeVerboseContent: true,
+    };
+    new logs.LogGroup(this, "EventApiLogGroup", {
+      logGroupName: `/aws/appsync/apis/${this.eventApi.apiId}`,
+      retention: logRetention,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     this.appSyncApiId = this.eventApi.apiId;
@@ -2415,6 +2425,7 @@ export class ApiGatewayStack extends cdk.Stack {
       // RAG pipeline (MultimodalRagStack). Retrieval is Tier 1: the chatbot swallows
       // its failures and answers without course material, so errors are otherwise silent.
       { functionName: `${ragStack.node.id}-ragIngestionFunction`, timeoutSeconds: 300, isContainer: true },
+      { functionName: `${ragStack.node.id}-ragIngestionFailureFunction`, timeoutSeconds: 30, isContainer: true },
       { functionName: `${ragStack.node.id}-ragEnrichmentFunction`, timeoutSeconds: 900, isContainer: true },
       { functionName: `${ragStack.node.id}-ragRetrievalFunction`, timeoutSeconds: 60, isContainer: true },
       { functionName: `${ragStack.node.id}-mathComputeFunction`, timeoutSeconds: 30, isContainer: true },

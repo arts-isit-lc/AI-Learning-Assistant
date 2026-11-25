@@ -291,3 +291,52 @@ class TestHandler:
         }
         result = handler(event, _mock_lambda_context())
         assert result["statusCode"] == 400
+
+
+# ---------------------------------------------------------------------------
+# processing_status = 'failed' on failures the handler catches itself
+# ---------------------------------------------------------------------------
+
+
+class TestFailureStatus:
+    """A failure the handler returns from is final (no Lambda retry), so the UI
+    must show 'failed' instead of polling 'ingesting' until it times out."""
+
+    @pytest.fixture
+    def status(self, monkeypatch: pytest.MonkeyPatch) -> MagicMock:
+        mock = MagicMock()
+        monkeypatch.setattr(handler_module, "set_processing_status", mock)
+        mock_s3 = MagicMock()
+        mock_s3.get_object.return_value = {"Body": MagicMock(read=MagicMock(return_value=b"bytes"))}
+        monkeypatch.setattr(handler_module, "_s3_client", mock_s3)
+        return mock
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            ExtractionFailureError(file_key="courses/c1/m1/f1.pdf", reason="parser crash"),
+            FileSizeExceededError(file_size_bytes=250 * 1024 * 1024, file_key="courses/c1/m1/f1.pdf"),
+            RuntimeError("unexpected"),
+        ],
+        ids=["extraction", "size", "unexpected"],
+    )
+    def test_caught_failure_marks_file_failed(
+        self, status: MagicMock, monkeypatch: pytest.MonkeyPatch, error: Exception
+    ) -> None:
+        registry = MagicMock()
+        registry.process_file.side_effect = error
+        monkeypatch.setattr(handler_module, "_registry", registry)
+
+        handler(_make_s3_event(key="courses/c1/m1/f1.pdf"), _mock_lambda_context())
+
+        assert [c.args for c in status.call_args_list] == [("f1", "ingesting"), ("f1", "failed")]
+
+    def test_unsupported_format_marks_file_failed(self, status: MagicMock) -> None:
+        handler(_make_s3_event(key="courses/c1/m1/f1.xyz"), _mock_lambda_context())
+
+        assert status.call_args_list[-1].args == ("f1", "failed")
+
+    def test_invalid_key_writes_no_status(self, status: MagicMock) -> None:
+        handler(_make_s3_event(key="uploads/f1.pdf"), _mock_lambda_context())
+
+        status.assert_not_called()

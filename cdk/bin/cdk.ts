@@ -49,3 +49,10 @@ observabilityStack.addStackDependency(apiStack);
 const dbFlowStack = new DBFlowStack(app, `${StackPrefix}-DBFlowStack`, vpcStack, dbStack, apiStack, { env });
 const amplifyStack = new AmplifyStack(app, `${StackPrefix}-AmplifyStack`, apiStack, { env, environment });
 Tags.of(app).add("app", "AI-Learning-Assistant");
+
+// Termination protection on every stack (Security Hub CloudFormation.3): a
+// stray `cdk destroy` or console delete fails until it is switched off. The
+// control stays failed account-wide because of UBC's StackSet stacks.
+for (const stack of [vpcStack, dbStack, multimodalRagStack, apiStack, observabilityStack, dbFlowStack, amplifyStack]) {
+  stack.terminationProtection = true;
+}

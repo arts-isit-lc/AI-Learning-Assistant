@@ -1,6 +1,7 @@
 import * as cdk from "aws-cdk-lib";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as lambdaEventSources from "aws-cdk-lib/aws-lambda-event-sources";
+import * as lambdaDestinations from "aws-cdk-lib/aws-lambda-destinations";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as sqs from "aws-cdk-lib/aws-sqs";
@@ -28,6 +29,7 @@ export class MultimodalRagStack extends cdk.Stack {
   public readonly enrichmentQueue: sqs.Queue;
   public readonly enrichmentDlq: sqs.Queue;
   public readonly ragIngestionFunction: lambda.DockerImageFunction;
+  public readonly ragIngestionFailureFunction: lambda.DockerImageFunction;
   public readonly ragEnrichmentFunction: lambda.DockerImageFunction;
   public readonly ragRetrievalFunction: lambda.DockerImageFunction;
   public readonly sessionStateTable: dynamodb.Table;
@@ -110,6 +112,7 @@ export class MultimodalRagStack extends cdk.Stack {
           type: dynamodb.AttributeType.STRING,
         },
         billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+        deletionProtection: true, // Security Hub DynamoDB.6
         removalPolicy: cdk.RemovalPolicy.DESTROY,
       }
     );
@@ -129,6 +132,7 @@ export class MultimodalRagStack extends cdk.Stack {
           type: dynamodb.AttributeType.STRING,
         },
         billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+        deletionProtection: true, // Security Hub DynamoDB.6
         removalPolicy: cdk.RemovalPolicy.DESTROY,
       }
     );
@@ -427,7 +431,11 @@ export class MultimodalRagStack extends cdk.Stack {
           platform: ecr_assets.Platform.LINUX_AMD64,
         }),
         architecture: lambda.Architecture.X86_64,
-        memorySize: 1024,
+        // 2048 MB: headroom for a 200 MB upload plus image decoding. At 1024 MB
+        // a 140 MB PDF with large photos ran out of memory in prod; images are
+        // now downscaled during extraction too (CLAUDE_HISTORY.md, 2026-11-24).
+        // Lambda CPU scales with memory, so runs are also faster.
+        memorySize: 2048,
         timeout: Duration.seconds(300),
         tracing: lambda.Tracing.ACTIVE,
         logGroup: makeLogGroup(`${id}-ragIngestionFunction`),
@@ -533,6 +541,91 @@ export class MultimodalRagStack extends cdk.Stack {
       })
     );
 
+    // ─── Ingestion failures → processing_status 'failed' ──────────────────────
+    // S3 invokes ingestion asynchronously. When every attempt fails (1 + 2
+    // retries) with an error the handler can't catch (out of memory, timeout),
+    // Lambda sends the event to this function, which marks the file 'failed' so
+    // the instructor UI says "Processing failed" instead of timing out on
+    // 'ingesting' (CLAUDE_HISTORY.md, 2026-11-24). Same image, own handler.
+    const ragIngestionFailureFunctionName = `${id}-ragIngestionFailureFunction`;
+    const ragIngestionFailureRole = new iam.Role(this, `${id}-ragIngestionFailureRole`, {
+      roleName: `${id}-ragIngestionFailureRole`,
+      assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
+      inlinePolicies: {
+        ragIngestionFailurePolicy: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+              resources: [
+                `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${ragIngestionFailureFunctionName}:*`,
+              ],
+            }),
+            // X-Ray — resource '*' acceptable (service does not support resource-level scoping)
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ["xray:PutTraceSegments", "xray:PutTelemetryRecords"],
+              resources: ["*"],
+            }),
+            // Same DB access as ingestion: write processing_status via the proxy.
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ["secretsmanager:GetSecretValue"],
+              resources: [db.secretPathUser.secretArn],
+            }),
+            // EC2 VPC networking — resource '*' required by AWS for ENI operations
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: [
+                "ec2:CreateNetworkInterface",
+                "ec2:DescribeNetworkInterfaces",
+                "ec2:DeleteNetworkInterface",
+                "ec2:AssignPrivateIpAddresses",
+                "ec2:UnassignPrivateIpAddresses",
+              ],
+              resources: ["*"],
+            }),
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ["rds-db:connect"],
+              resources: [
+                `arn:aws:rds-db:${this.region}:${this.account}:dbuser:${db.dbInstance.instanceResourceId}/*`,
+              ],
+            }),
+          ],
+        }),
+      },
+    });
+
+    this.ragIngestionFailureFunction = new lambda.DockerImageFunction(
+      this,
+      ragIngestionFailureFunctionName,
+      {
+        code: lambda.DockerImageCode.fromImageAsset("./multimodal_rag_v2", {
+          cmd: ["multimodal_rag_v2.ingestion.failure_handler.handler"],
+          platform: ecr_assets.Platform.LINUX_AMD64,
+        }),
+        architecture: lambda.Architecture.X86_64,
+        memorySize: 256,
+        timeout: Duration.seconds(30),
+        tracing: lambda.Tracing.ACTIVE,
+        logGroup: makeLogGroup(ragIngestionFailureFunctionName),
+        vpc: vpc.vpc,
+        functionName: ragIngestionFailureFunctionName,
+        role: ragIngestionFailureRole,
+        environment: {
+          DB_SECRET_ARN: db.secretPathUser.secretArn,
+          DB_PROXY_ENDPOINT: db.rdsProxyEndpoint,
+          REGION: this.region,
+        },
+      }
+    );
+
+    this.ragIngestionFunction.configureAsyncInvoke({
+      retryAttempts: 2, // Lambda's default, stated explicitly: covers transient failures
+      onFailure: new lambdaDestinations.LambdaDestination(this.ragIngestionFailureFunction),
+    });
+
     // ─── SQS Event Source → Enrichment Lambda ─────────────────────────────────
     this.ragEnrichmentFunction.addEventSource(
       new lambdaEventSources.SqsEventSource(this.enrichmentQueue, {
@@ -593,6 +686,7 @@ export class MultimodalRagStack extends cdk.Stack {
         type: dynamodb.AttributeType.STRING,
       },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      deletionProtection: true, // Security Hub DynamoDB.6
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
@@ -952,6 +1046,7 @@ export class MultimodalRagStack extends cdk.Stack {
 
     // ─── Daily keep-warm pings (see lib/warmup.ts) ───────────────────────────
     addDailyWarmup(this, "ragIngestion", this.ragIngestionFunction);
+    addDailyWarmup(this, "ragIngestionFailure", this.ragIngestionFailureFunction);
     addDailyWarmup(this, "ragEnrichment", this.ragEnrichmentFunction);
     addDailyWarmup(this, "ragRetrieval", this.ragRetrievalFunction);
     addDailyWarmup(this, "chatbotV2", this.chatbotV2Function);

@@ -485,3 +485,59 @@ class TestMetadataPreservation:
         # Mutating original should not affect result
         original_meta["key"] = "changed"
         assert result.elements[0].metadata["key"] == "value"
+
+
+# ---------------------------------------------------------------------------
+# Image fitting (every adapter's images end up within the vision limits)
+# ---------------------------------------------------------------------------
+
+
+class TestImageFitting:
+    @staticmethod
+    def _jpeg(width: int, height: int) -> bytes:
+        Image = pytest.importorskip("PIL.Image")
+        import io
+
+        buf = io.BytesIO()
+        Image.new("RGB", (width, height), (120, 60, 30)).save(buf, "JPEG", quality=95)
+        return buf.getvalue()
+
+    def test_oversized_image_is_downscaled_and_hashed_after_fitting(self) -> None:
+        from .image_fit import MAX_IMAGE_BYTES, MAX_LONG_EDGE_PX
+
+        original = self._jpeg(4000, 3000)  # e.g. a photo blob from a PPTX
+        raw = [_make_raw_element(content=original, element_type=ElementType.IMAGE)]
+        result = IRBuilder().build(raw, _make_metadata())
+
+        (element,) = result.elements
+        assert element.content != original
+        assert len(element.content) <= MAX_IMAGE_BYTES
+        assert element.metadata["stored_width"] == MAX_LONG_EDGE_PX
+        assert element.metadata["stored_height"] == 1176
+        # Hash and ID describe the stored bytes, not the discarded original.
+        assert element.content_hash == _compute_content_hash(element.content)
+
+    def test_image_within_limits_is_untouched(self) -> None:
+        small = self._jpeg(800, 600)
+        raw = [_make_raw_element(content=small, element_type=ElementType.IMAGE)]
+        result = IRBuilder().build(raw, _make_metadata())
+
+        (element,) = result.elements
+        assert element.content is small
+        assert "stored_width" not in element.metadata
+
+    def test_undecodable_image_is_kept_as_extracted(self) -> None:
+        raw = [_make_raw_element(content=b"<svg/>", element_type=ElementType.IMAGE)]
+        result = IRBuilder().build(raw, _make_metadata())
+
+        assert result.elements[0].content == b"<svg/>"
+
+    def test_raw_element_is_not_mutated(self) -> None:
+        original = self._jpeg(4000, 3000)
+        raw_element = _make_raw_element(
+            content=original, element_type=ElementType.IMAGE, raw_metadata={"source": "pptx"}
+        )
+        IRBuilder().build([raw_element], _make_metadata())
+
+        assert raw_element.content is original
+        assert raw_element.raw_metadata == {"source": "pptx"}

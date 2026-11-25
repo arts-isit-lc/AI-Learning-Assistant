@@ -2,11 +2,13 @@
 
 Extracts text blocks, images, tables, and formulas from all pages.
 Handles per-page failures gracefully: logs the error and continues.
-Filters out images smaller than 100x100 pixels.
+Filters out images smaller than 100x100 pixels. Images are stored as PNG,
+downscaled to the vision models' limits as they are extracted (image_fit).
 """
 
 from __future__ import annotations
 
+import dataclasses
 import re
 from typing import TYPE_CHECKING
 
@@ -16,6 +18,7 @@ from aws_lambda_powertools import Logger
 
 from ...models.data_models import ElementType, Provenance, RawElement
 from ..base_adapter import BaseAdapter
+from ..image_fit import MAX_LONG_EDGE_PX, FittedImage, fit_image
 
 if TYPE_CHECKING:
     from ...models.data_models import FileMetadata
@@ -163,31 +166,35 @@ class PdfAdapter(BaseAdapter):
                 if width < _MIN_IMAGE_WIDTH or height < _MIN_IMAGE_HEIGHT:
                     continue
 
-                image_bytes = base_image["image"]
                 img_ext = base_image.get("ext", "png")
 
-                # Convert to PNG if not already PNG for consistency
-                if img_ext != "png":
-                    pix = fitz.Pixmap(image_bytes)
-                    if pix.alpha:
-                        pix = fitz.Pixmap(fitz.csRGB, pix)
-                    image_bytes = pix.tobytes("png")
-                    pix = None  # release
+                # PNG for consistency, downscaled to the vision limits as each
+                # image is extracted so full-resolution copies never pile up.
+                fitted = fit_image(base_image["image"], force_png=True)
+                if fitted is None:
+                    # Formats Pillow can't read (JPX, JBIG2, ...): let PyMuPDF decode.
+                    fitted = self._fit_via_pixmap(base_image["image"])
+                base_image = None  # release the source bytes
+
+                raw_metadata = {
+                    "source": "pdf_image",
+                    "width": width,
+                    "height": height,
+                    "original_format": img_ext,
+                }
+                if fitted.resized:
+                    raw_metadata["stored_width"] = fitted.width
+                    raw_metadata["stored_height"] = fitted.height
 
                 elements.append(
                     RawElement(
-                        content=image_bytes,
+                        content=fitted.content,
                         element_type=ElementType.IMAGE,
                         provenance=Provenance(
                             page_num=page_num,
                             position_index=position_index,
                         ),
-                        raw_metadata={
-                            "source": "pdf_image",
-                            "width": width,
-                            "height": height,
-                            "original_format": img_ext,
-                        },
+                        raw_metadata=raw_metadata,
                     )
                 )
                 position_index += 1
@@ -225,12 +232,28 @@ class PdfAdapter(BaseAdapter):
 
         if not page_has_raster_images and page_has_drawings:
             try:
-                # Render page at 2x resolution for clarity
-                pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+                # Render at 2x for clarity, but no larger than the vision models
+                # read, so a poster-sized page doesn't become a huge pixmap.
+                long_edge_pt = max(page.rect.width, page.rect.height) or 1
+                zoom = min(2.0, MAX_LONG_EDGE_PX / long_edge_pt)
+                pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
                 render_width = pix.width
                 render_height = pix.height
                 page_image_bytes = pix.tobytes("png")
                 pix = None  # release
+
+                raw_metadata = {
+                    "source": "pdf_page_render",
+                    "width": render_width,
+                    "height": render_height,
+                    "render_reason": "vector_graphics_detected",
+                }
+                fitted = fit_image(page_image_bytes, force_png=True)  # byte limit
+                if fitted is not None:
+                    page_image_bytes = fitted.content
+                    if fitted.resized:
+                        raw_metadata["stored_width"] = fitted.width
+                        raw_metadata["stored_height"] = fitted.height
 
                 elements.append(
                     RawElement(
@@ -240,12 +263,7 @@ class PdfAdapter(BaseAdapter):
                             page_num=page_num,
                             position_index=position_index,
                         ),
-                        raw_metadata={
-                            "source": "pdf_page_render",
-                            "width": render_width,
-                            "height": render_height,
-                            "render_reason": "vector_graphics_detected",
-                        },
+                        raw_metadata=raw_metadata,
                     )
                 )
                 position_index += 1
@@ -256,6 +274,33 @@ class PdfAdapter(BaseAdapter):
                 )
 
         return elements
+
+    @staticmethod
+    def _fit_via_pixmap(image_bytes: bytes) -> FittedImage:
+        """Decode with PyMuPDF (for formats Pillow can't read), then fit as PNG.
+
+        Raises if PyMuPDF can't decode or encode it either; the caller skips
+        the image, as it did before.
+        """
+        pix = fitz.Pixmap(image_bytes)
+        # Halve while that still leaves at least the target size, so the PNG
+        # handed to Pillow for the final resize stays small.
+        shrink = 0
+        while max(pix.width, pix.height) >> (shrink + 1) >= MAX_LONG_EDGE_PX:
+            shrink += 1
+        if shrink:
+            pix.shrink(shrink)
+        if pix.colorspace is not None and pix.colorspace.n == 4:
+            pix = fitz.Pixmap(fitz.csRGB, pix)  # PNG can't hold CMYK
+        width, height = pix.width, pix.height
+        png = pix.tobytes("png")
+        pix = None  # release
+        fitted = fit_image(png, force_png=True) or FittedImage(
+            png, width, height, resized=False
+        )
+        if shrink and not fitted.resized:
+            fitted = dataclasses.replace(fitted, resized=True)
+        return fitted
 
     def _extract_tables(self, page: fitz.Page) -> list[str]:
         """Extract tables from a PDF page.

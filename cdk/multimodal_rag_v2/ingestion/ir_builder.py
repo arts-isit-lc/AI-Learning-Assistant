@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 from collections import Counter
 
@@ -17,6 +18,7 @@ from ..models.data_models import (
     RawElement,
 )
 from .exceptions import ExtractionFailureError
+from .image_fit import fit_image
 
 logger = Logger(service="multimodal-rag-ingestion")
 
@@ -34,6 +36,7 @@ class IRBuilder:
     - Deduplicate elements by content_hash (first occurrence wins)
     - Sort elements by provenance order (page_num, position_index)
     - Filter images smaller than 100x100 pixels
+    - Fit images to the vision models' size limits (see image_fit)
     """
 
     def build(
@@ -70,12 +73,19 @@ class IRBuilder:
         elements: list[IRElement] = []
         dedup_count = 0
         filtered_small_count = 0
+        fitted_image_count = 0
 
         for raw in raw_elements:
             # Filter small images
             if raw.element_type == ElementType.IMAGE and self._is_small_image(raw):
                 filtered_small_count += 1
                 continue
+
+            # Fit every adapter's images to the vision limits before hashing.
+            # PDF images already fit, so for them this only reads the header.
+            if raw.element_type == ElementType.IMAGE and isinstance(raw.content, bytes):
+                raw, changed = self._fit_image(raw)
+                fitted_image_count += changed
 
             # Compute content bytes for hashing
             content_bytes = self._get_content_bytes(raw.content)
@@ -129,6 +139,7 @@ class IRBuilder:
                 "final_element_count": len(elements),
                 "deduplicated_count": dedup_count,
                 "filtered_small_images": filtered_small_count,
+                "fitted_images": fitted_image_count,
                 "element_type_breakdown": {k.value: v for k, v in element_count.items()},
                 "max_page_number": max_page,
                 "ir_version": IR_VERSION,
@@ -166,6 +177,22 @@ class IRBuilder:
             # If dimensions aren't available, don't filter
             return False
         return width < _MIN_IMAGE_WIDTH or height < _MIN_IMAGE_HEIGHT
+
+    @staticmethod
+    def _fit_image(raw: RawElement) -> tuple[RawElement, bool]:
+        """Return the element with its image fitted to the vision limits.
+
+        The second value is True when the bytes changed. An image that can't
+        be decoded is kept as extracted, as before.
+        """
+        fitted = fit_image(raw.content)  # type: ignore[arg-type]
+        if fitted is None or fitted.content is raw.content:
+            return raw, False
+        metadata = dict(raw.raw_metadata or {})
+        if fitted.resized:
+            metadata["stored_width"] = fitted.width
+            metadata["stored_height"] = fitted.height
+        return dataclasses.replace(raw, content=fitted.content, raw_metadata=metadata), True
 
     @staticmethod
     def _sort_key(element: IRElement) -> tuple[int, int, int]:

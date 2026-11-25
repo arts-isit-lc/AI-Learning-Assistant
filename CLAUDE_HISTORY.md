@@ -224,3 +224,102 @@ To simplify the rollout, the cost plan no longer creates its own AWS Budgets or 
 - **Branches are now `RemovalPolicy.RETAIN`.** The custom domains (outside CDK) are mapped to them, so taking a branch out of code must not delete it.
 - **An API Gateway execution log group must use a literal stage name.** Referencing `deploymentStage.stageName` creates a cycle with the stage's dependency on the log group.
 - **Change sets list a `SpecRestApi` with an `AWS::Include` body as modified** whenever the stack has other changes, even when the include location is unchanged.
+
+## 2026-11-20 — Finding: Security Hub score in dev (86.8%) is mostly not OCELIA's to fix
+
+Dev runs only AWS Foundational Security Best Practices, managed from a UBC delegated-admin account. Findings are aggregated from six regions (ca-central-1, ca-west-1, us-east-1/2, us-west-1/2). The score is per control: 322 of 371 pass and 49 fail. A control fails if any of its resources fails, in any region.
+- **16 controls fail only on UBC-owned resources:** account settings such as Config.1, GuardDuty.1 (other regions), Inspector.1–4, Macie.1, SSM.6/7, IAM.7, S3.1, EC2.172 and EC2.182; the Control Tower VPC's default SG and NACL (EC2.2, EC2.21); and the CrowdStrike secret (SecretsManager.3). **EC2.172 (VPC Block Public Access) must never be enabled in these accounts:** it blocks internet-gateway traffic, which would cut NAT egress for chat and ingestion.
+- **14 controls are mixed,** so OCELIA alone can't make them pass: CloudFormation.3/4 (104 UBC StackSet stacks), EC2.10/55–58/60 (VPC interface endpoints; adding them for OCELIA would contradict P2.3), EC2.15, S3.5/S3.9/S3.13, SecretsManager.1/4.
+- **17 controls fail only on OCELIA's current resources,** and **2 on a stopped SageMaker notebook** (`view-data-notebook`, in AILA's isolated subnet, created 2025-11-03, owner unknown).
+- **The cleanup backlog affects the score:** the 27 orphaned `aila-`/`aila2-` buckets are the only OCELIA buckets failing S3.5 (TLS-only); the current buckets pass. `undefined-VpcStack` is a ROLLBACK_COMPLETE shell from 2026-06-30.
+- **The identity pool's `allowUnauthenticatedIdentities: true` is unused.** The frontend sets `allowGuestAccess: false`, and the unauthenticated role has no permissions, so Cognito.2 can be fixed for free.
+- **APIGateway.1 passes since fix F3.**
+- **Ceiling without UBC:** about 92%.
+
+## 2026-11-20 — Cleanup: dev leftovers from the Security Hub review
+
+- **Deleted:** `undefined-VpcStack` (a ROLLBACK_COMPLETE shell from 2026-06-30; all its resources were already gone) and the **24 empty orphaned `aila-`/`aila2-` buckets**. Before deleting, each was confirmed to have zero objects, versions and multipart uploads, and no live Lambda environment, SSM parameter or AILA stack template referenced any of them.
+- **Then deleted by decision (data minimisation; nothing used them):** three orphaned buckets that held data. One held chat-log CSV exports keyed by instructor email (Apr–Jun 2025, likely student conversations), one 52 course documents (75 MB, Jun 2025), and one a single `test.pdf`.
+- **Not OCELIA's:** the two `cf-templates-1amajmft876tv-*` buckets hold UBC Hybrid Cloud's `VPC-TGW-v1-CA-West.yaml` (2025-01-22, the Transit Gateway setup). They still fail S3.5, S3.9 and S3.13, so those controls can't pass from OCELIA cleanup alone.
+- **Deleted by decision, together with its execution role and customer-managed policy: SageMaker `view-data-notebook`** (owner unknown; the role was last used 2026-04-29): it was stopped, had a 5 GB volume, and was attached to the **database security group** in AILA's isolated subnet, with direct internet access and root access on. Its execution role (`AmazonSageMaker-ExecutionRole-20250328T133832`) had `AmazonSageMakerFullAccess`. It looked like an ad-hoc database browsing tool; data_export.md's SSM tunnel is the supported route.
+
+## 2026-11-20 — Decision: Security Hub fixes that add no running cost
+
+Rule from the team: fix only what doesn't raise the monthly bill. Done in code (dev first; prod follows with Stage B):
+- **Cognito.2:** the identity pool no longer allows guest identities, and the unused unauthenticated role was removed. The SPA already sets `allowGuestAccess: false`.
+- **Cognito.6 and DynamoDB.6:** deletion protection on the user pool and all 4 DynamoDB tables.
+- **AppSync.2:** the Event API logs resolver errors only (`excludeVerboseContent`). It's set on the L1 `CfnGraphQLApi`, because the L2 `logConfig` always adds a `Custom::LogRetention` Lambda (never-expire by default). An explicit log group carries the retention.
+- **RDS.9 and RDS.36:** `postgresql` and `upgrade` logs are exported. `cloudwatchLogsRetention` was already set but applied to nothing. Retention uses CDK's `Custom::LogRetention` in DatabaseStack, because an explicit log group would race RDS, which creates the group when exports are enabled. Measured volume is about 100 KB a day in dev.
+- **RDS.11 and RDS.8:** 7-day backups and deletion protection in both environments. Backup storage is free up to the allocated storage. **The P2.1 rebuild must now turn off deletion protection in dev too**, as in prod.
+- **RDS.10:** dev's drifted `EnableIAMDatabaseAuthentication` was set back to true with the CLI, an online change. The template already said true.
+- **CloudFormation.3 hygiene:** termination protection on all 7 stacks. The control still fails because of UBC's StackSets.
+
+**Not done, and why:**
+- **DynamoDB.2 (point-in-time recovery):** the only fix with a measurable cost (~$0.03/mo in dev).
+- **Cognito.1/.4 (Plus tier, about $0.02 per MAU), Cognito.5 (MFA) and RDS.6 (dev Enhanced Monitoring):** cost or user-experience trade-offs; open for the team.
+- **RDS.5, RDS.23, KMS.2:** accepted risks. Suppressing them needs UBC security's agreement. Per the Security Hub docs, a control whose findings are all suppressed shows **No data**, not Passed.
+- **EC2.10/55–58/60:** would need about $96/mo of interface endpoints, the opposite of P2.3.
+- **EC2.15:** deferred to P2.2 (NAT instance public IP).
+- **SecretsManager.1/.4:** rotation is a separate project.
+- **16 UBC-only controls:** listed in the 2026-11-20 finding. **Never enable EC2.172 in OCELIA's accounts.**
+
+**Deployed to dev 2026-11-20 and verified live:**
+- the database is the same instance; backups 7 days, deletion protection on, IAM authentication on, `postgresql`/`upgrade` exports with 14-day log groups
+- the user pool's deletion protection is ACTIVE and the identity pool allows no guests
+- all 4 tables have deletion protection
+- AppSync logs at ERROR with verbose content excluded, into a log group with 30-day retention
+- all 7 stacks have termination protection
+- health after the deploy: the site returns 200, `orphanCleanupFunc` (master user, via the shared proxy) returns 200, and no Lambda errors
+
+**Found while checking:** `AILA-dev-ApiGateway-MissingTraffic` (Count, 15 × 60 s, missing data treated as breaching) pages the **Critical** topic whenever dev's API is idle for 15 minutes. Now that F2 restored the email subscription, idle dev sends alert emails. Handle in Stage A step 3 (P1.3): drop the alarm in dev, or stop it paging.
+
+## 2026-11-24 — Finding: large-image PDFs OOM the ingestion Lambda and stay at "Reading document"
+
+**Symptom (prod):** A 140.8 MB, 30-page PDF stays at "Reading document" (`ingesting`) and the wizard shows "Timed out". The same file has failed 6 times: 5 uploads on 2026-11-20 and 1 on 2026-11-24. This is not the idle-Inactive problem from 2026-10-26: each attempt is warm and gets through extraction.
+
+**Root cause (CloudWatch logs):** Every attempt ends with `Runtime.OutOfMemory` at 1024 MB (`ragIngestionFunction`), about 3 s after "Images uploaded to S3", inside `IRPersistence.persist`. The PDF has only 7 images, but they extract to about 125 MB of PNG (largest 46.6 MB). At persist time the process holds the PDF bytes (141 MB), the image bytes (125 MB), their base64 strings in the serialized dict (~167 MB), the `json.dumps` string (~167 MB) and its `.encode()` copy (~167 MB), plus the runtime. Lambda's 2 async retries repeat the same OOM, so each upload costs 3 attempts of about 41 s.
+
+**Why the UI never shows "failed":** An OOM kills the process, so none of the handler's `except` blocks run. `processing_status` stays `ingesting`. The function has no EventInvokeConfig or on-failure destination, so the event is dropped silently after the retries.
+
+**Why nobody was told:** The ingestion ErrorRate alarms did go to ALARM (2026-11-19, 11-20, 11-24), but RAG alarms publish to `AILA-prod-Warning`, which has no subscribers. The F2 fix covers the Critical topic only, so it would not have caught this either.
+
+**Second, hidden limit:** Bedrock rejects any image whose base64 is over 5 MB (seen in prod enrichment logs: `image exceeds 5 MB maximum: 8007176 bytes > 5242880 bytes`). `vision_service.py` sends images without resizing. Even with more ingestion memory, 5 of this PDF's 7 images could not be described.
+
+**Side effect:** Each failed upload leaves the source PDF and its extracted images in the IR bucket, and a `processing_status` row stuck at `ingesting`.
+
+## 2026-11-25 — Decision: fit images to the vision limits, 2048 MB ingestion, mark crashed ingestions 'failed'
+
+Fixes the finding above. Implemented on `dev`.
+
+**1. Images are downscaled during ingestion** (`ingestion/image_fit.py`). Every image is capped at 1568 px on the long edge and 3,932,160 bytes, which is Bedrock's 5 MB base64 limit. 1568 px is the most Haiku 4.5 and Sonnet 4.5 read; larger images are downscaled by the model anyway. Re-encoded images are PNG, because image escalation derives the media type from the `.png` S3 key. The PDF adapter fits each image as it is extracted, so full-resolution PNGs never pile up, and it caps the page-render zoom. `IRBuilder` applies the same fit to every adapter's images (PPTX, DOCX, HTML, plain images); for an image that already fits, this is a header read. `width`/`height` metadata keep the source size, which the small-image filter uses, and `stored_width`/`stored_height` are added when an image is downscaled. An image Pillow can't decode is kept as extracted, as before. The PDF adapter then tries PyMuPDF instead.
+- Measured locally on a synthetic 120 MB PDF with 7 large photos: peak memory went from 1,816 MB to 587 MB, stored image bytes from 359 MB to 25 MB, the IR document from 479 MB to 34 MB, and extraction from 8.7 s to 2.4 s.
+- Students see these images through the figure view, so 1568 px is also the display resolution. Raise `MAX_LONG_EDGE_PX` (to 2576 px) together with a move to a high-resolution vision model. Stored images only change when a file is re-ingested.
+
+**2. Ingestion memory is 2048 MB, up from 1024.** This is headroom for 200 MB uploads and image decoding. CPU scales with memory, so runs are shorter, and the cost per upload is roughly unchanged.
+
+**3. Files whose ingestion fails are marked `failed`:**
+- When the handler catches an error itself (unsupported format, size limit, extraction failure, unexpected error), it writes `processing_status='failed'`. Those paths return normally, so Lambda never retries them.
+- For crashes the handler can't catch (out of memory, timeout), there is an async on-failure destination. After 1 attempt plus 2 retries, Lambda sends the invocation record to `ragIngestionFailureFunction`, which marks the file `failed`. That function uses the same image with its own command (`ingestion.failure_handler.handler`), 256 MB, and its own least-privilege role. Like the other container functions, it has a daily warm-up and Tier 2 alarms.
+- The wizard already treats `failed` as final ("Processing failed"), so no frontend change was needed. `parse_s3_key` moved to `ingestion/s3_key.py` so the failure function doesn't load the document adapters.
+
+**Alternatives considered:**
+- *Memory increase only:* not enough. The synthetic file peaked at 1.8 GB, and oversized images would still fail in vision enrichment.
+- *Downscaling only in enrichment:* the OOM happens in ingestion, before enrichment runs.
+- *Making the ingestion function its own failure destination:* risks a failure loop, and it's an unusual pattern.
+- *An SQS queue as the destination, consumed by enrichment:* mixes two responsibilities in one function.
+- *Treating a long-running `ingesting` as failed in the UI:* leaves the database wrong.
+
+**Not addressed:** images stored before this change still exceed the limits; re-ingesting a file fixes its images. Also, PPTX and DOCX images that are JPEG are stored under `.png` keys, so image escalation labels them `image/png`. That is a pre-existing mismatch and is unchanged for images within the limits.
+
+**Deployed to dev 2026-11-25** (`AILA-MultimodalRagStack` and `AILA-ObservabilityStack`, with `--exclusively`). Beforehand, `cdk diff` showed no differences in the other 5 stacks. After the deploy:
+- Ingestion is at 2048 MB, and its EventInvokeConfig has 2 retries with an on-failure destination of `ragIngestionFailureFunction`.
+- The failure function's two alarms are OK.
+- Warm-up invocations of ingestion, the failure function, enrichment and retrieval all returned `{"warmup": true}` on the new image.
+- A synthetic failure record for the nil UUID reached the database through the VPC and proxy, and the update matched no rows.
+- **End to end in dev (2026-11-25, the same 140.8 MB PDF that failed in prod):**
+  - The source images turned out to be lossless PNGs, 3–33 MP each. 5 of the 7 were downscaled to 1.95–2.99 MB; the other 2 were already within the limits.
+  - Ingestion succeeded on the first attempt in 29.2 s, with a peak of 781 MB at 2048 MB. In prod, all 3 attempts ran out of memory at 1024 MB.
+  - The IR document was 17.3 MB.
+  - Enrichment described all 7 images with no vision errors and stored 166 retrieval units. Status reached `complete` about 73 s after the upload landed in S3.
+
+**Deploy note:** the CDK CLI can't use the `vincent.adm-dev2` profile directly ("Unable to resolve AWS account"). Its SSO session name, `'create new profile'`, contains spaces; the AWS CLI accepts that, but the SDK the CDK uses does not. Workaround: `eval "$(aws configure export-credentials --profile vincent.adm-dev2 --format env)"`, unset `AWS_PROFILE`, then run `cdk`.

@@ -20,9 +20,8 @@ export class DatabaseStack extends Stack {
     public readonly secretPathAdminName: string;
     public readonly secretPathUser: secretsmanager.Secret;
     public readonly secretPathTableCreator: secretsmanager.Secret;
-    public readonly rdsProxyEndpoint: string; 
-    public readonly rdsProxyEndpointTableCreator: string; 
-    public readonly rdsProxyEndpointAdmin: string; 
+    /** Endpoint of the single shared RDS Proxy, used by every database client. */
+    public readonly rdsProxyEndpoint: string;
     constructor(scope: Construct, id: string, vpcStack: VpcStack, props?: DatabaseStackProps){
         super(scope, id, props);
         
@@ -98,11 +97,18 @@ export class DatabaseStack extends Stack {
             storageType: rds.StorageType.GP3,
             allowMajorVersionUpgrade: false,
             autoMinorVersionUpgrade: true,
-            backupRetention: Duration.days(isProduction ? 7 : 1),
+            // Security Hub RDS.11 (>= 7 days) and RDS.8, in both environments.
+            // Backup storage is free up to the allocated storage, so 7 days
+            // costs nothing extra. Deletion protection means the P2.1 rebuild
+            // must switch it off first in dev, just as in prod.
+            backupRetention: Duration.days(7),
             deleteAutomatedBackups: true,
-            deletionProtection: isProduction,
+            deletionProtection: true,
             databaseName: "aila",
             publiclyAccessible: false,
+            // Security Hub RDS.9 / RDS.36. Without the exports, the retention
+            // below applied to nothing. The volume is tiny (~100 KB/day in dev).
+            cloudwatchLogsExports: ['postgresql', 'upgrade'],
             cloudwatchLogsRetention: isProduction ? logs.RetentionDays.SIX_MONTHS : logs.RetentionDays.TWO_WEEKS,
             storageEncrypted: true, // storage encryption at rest
             monitoringInterval: isProduction ? Duration.seconds(60) : Duration.seconds(0),
@@ -145,52 +151,60 @@ export class DatabaseStack extends Stack {
             ],
           }));
 
-          // /**
-        //  * 
-        //  * Create an RDS proxy that sit between lambda and RDS
-        //  */
-        const rdsProxy = this.dbInstance.addProxy(id+'-proxy', {
-            secrets: [this.secretPathUser!],
-            vpc: vpcStack.vpc,
-            role: rdsProxyRole,
-            securityGroups: this.dbInstance.connections.securityGroups,
-            requireTLS: true,
-        });
-        const rdsProxyTableCreator = this.dbInstance.addProxy(id+'+proxy', {
-            secrets: [this.secretPathTableCreator!],
-            vpc: vpcStack.vpc,
-            role: rdsProxyRole,
-            securityGroups: this.dbInstance.connections.securityGroups,
-            requireTLS: true,
-        });
-
         const secretPathAdmin = secretmanager.Secret.fromSecretNameV2(this, 'AdminSecret', this.secretPathAdminName);
-        
-        const rdsProxyAdmin = this.dbInstance.addProxy(id + '-proxy-admin', {
-            secrets: [secretPathAdmin],
+
+        /**
+         * One shared RDS Proxy for all three database users (P1.1 in
+         * AWS_COST_OPTIMIZATION_PLAN.md). Each client authenticates as its own
+         * user and the proxy picks the matching secret, so the app user, the
+         * table creator and the master user each keep their own credentials.
+         *
+         * It's a standalone construct, not `dbInstance.addProxy(...)`: a proxy
+         * created by addProxy is a child of the instance, so replacing the
+         * instance (the P2.1 rebuild) would replace the proxy and change the
+         * endpoint other stacks import. A standalone proxy keeps its endpoint;
+         * only its target changes.
+         *
+         * Settings match the three proxies it replaces (TLS required, 30 min
+         * idle client timeout, full connection pool, debug logging off).
+         */
+        const sharedProxy = new rds.DatabaseProxy(this, `${id}-sharedProxy`, {
+            proxyTarget: rds.ProxyTarget.fromInstance(this.dbInstance),
+            secrets: [this.secretPathUser, this.secretPathTableCreator, secretPathAdmin],
             vpc: vpcStack.vpc,
             role: rdsProxyRole,
             securityGroups: this.dbInstance.connections.securityGroups,
             requireTLS: true,
+            idleClientTimeout: Duration.minutes(30),
+            maxConnectionsPercent: 100,
+            debugLogging: false,
         });
-        // Workaround for bug where TargetGroupName is not set but required
-        let targetGroup = rdsProxy.node.children.find((child:any) => {
-            return child instanceof rds.CfnDBProxyTargetGroup
-        }) as rds.CfnDBProxyTargetGroup
 
-        targetGroup.addPropertyOverride('TargetGroupName', 'default');   
+        this.dbInstance.grantConnect(rdsProxyRole);
+        this.rdsProxyEndpoint = sharedProxy.endpoint;
 
-        let targetGroupTableCreator = rdsProxyTableCreator.node.children.find((child:any) => {
-            return child instanceof rds.CfnDBProxyTargetGroup
-        }) as rds.CfnDBProxyTargetGroup
-
-        targetGroup.addPropertyOverride('TargetGroupName', 'default');  
-        targetGroupTableCreator.addPropertyOverride('TargetGroupName', 'default');   
- 
-        this.dbInstance.grantConnect(rdsProxyRole);      
-        this.rdsProxyEndpoint = rdsProxy.endpoint;
-        this.rdsProxyEndpointTableCreator = rdsProxyTableCreator.endpoint;
-        this.rdsProxyEndpointAdmin = rdsProxyAdmin.endpoint;
+        /**
+         * TEMPORARY (P1.1 deploy 1 of 2): the three per-user proxies this
+         * replaces. Nothing in this app uses them any more, but other stacks
+         * still import their endpoint exports until those stacks are deployed,
+         * and CloudFormation refuses to remove an export that is in use. Keep
+         * them (same construct IDs) and pin their exports for one deploy, then
+         * delete this block in deploy 2.
+         */
+        const legacyProxyProps = {
+            vpc: vpcStack.vpc,
+            role: rdsProxyRole,
+            securityGroups: this.dbInstance.connections.securityGroups,
+            requireTLS: true,
+        };
+        const legacyProxies = [
+            this.dbInstance.addProxy(id + '-proxy', { ...legacyProxyProps, secrets: [this.secretPathUser] }),
+            this.dbInstance.addProxy(id + '+proxy', { ...legacyProxyProps, secrets: [this.secretPathTableCreator] }),
+            this.dbInstance.addProxy(id + '-proxy-admin', { ...legacyProxyProps, secrets: [secretPathAdmin] }),
+        ];
+        for (const proxy of legacyProxies) {
+            this.exportValue(proxy.endpoint);
+        }
 
     }
 }
