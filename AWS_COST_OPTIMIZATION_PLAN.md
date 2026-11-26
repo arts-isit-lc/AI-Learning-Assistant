@@ -13,6 +13,7 @@ USD per month, before tax (AWS adds about 11%). Companion documents: [HOSTING_OP
 - **The team's decisions (section 0) unlock most of the savings.** Phase 1 brings OCELIA's prod share to **~$251** and Phase 2 to **~$146 (−62%)**. Chat response times don't change.
 - **Every change is proven in dev before it touches prod** (section 12). Prod follows once dev passes a validation gate, and the dev hibernate switch (Phase 4) is revisited after both environments are stable.
 - **Dev cost another $296** with almost no use. It keeps prod's infrastructure at smaller sizes (section 9): **~$135**, or ~$126 with nightly stops.
+  - *Update, 26 November 2026:* Stage A steps 2–4 and 6 are done in dev. **P2.2 is blocked by a UBC SCP** that denies every route change (section 12), so dev keeps its NAT Gateway: **~$155–165**, from ~$280 before the steps.
 - **Both accounts together: ~$780 → ~$385 a month.** The two idle Transit Gateway attachments ($44.64/mo each) **can't be removed** (confirmed 19 November 2026), so they stay in the baseline.
 
 | Prod | OCELIA share | Baseline | Total | Incl. tax | Work |
@@ -28,6 +29,7 @@ USD per month, before tax (AWS adds about 11%). Companion documents: [HOSTING_OP
 | Today (Oct 2026) | $228 | $68 | **$296** |
 | After the same phases, at dev sizes | ~$67 | $68 | **~$135** |
 | + D4 nightly stop | ~$58 (~$41 if the proxy stops billing too) | $68 | ~$126 (~$109) |
+| *Actual target while P2.2 is blocked (26 Nov 2026): NAT Gateway stays, +~$32* | ~$90–100 | ~$56–68 | **~$155–165** |
 | *Later:* Phase 4 hibernate switch instead of D4 (dev on ~40 h/mo) | ~$9 | $68 | ~$77 |
 
 ---
@@ -40,7 +42,7 @@ USD per month, before tax (AWS adds about 11%). Companion documents: [HOSTING_OP
 | **The database may be dropped and recreated to resize it** | Storage can shrink from 100 GB to 20 GB, which RDS can't do in place. The class change goes into the same rebuild (P2.1). The data is still copied across; losing data isn't part of the plan |
 | **Dev keeps prod's infrastructure, at a smaller scale** | No dev-only removals: WAF, monitoring and the proxy stay. Only sizes differ, set in one sizing profile (section 9) |
 | **Rebuild on PostgreSQL 17** | P2.1 targets 17 (standard support to Feb 2030) with Extended Support disabled. Next major upgrade in early 2029 |
-| **NAT instance in both accounts** | P2.2 goes ahead (`t4g.micro` prod, `t4g.nano` dev). The patching and minutes-long recovery are accepted; P2.3 follows |
+| **NAT instance in both accounts** | P2.2 goes ahead (`t4g.micro` prod, `t4g.nano` dev). The patching and minutes-long recovery are accepted; P2.3 follows. **Blocked 26 Nov 2026:** a UBC SCP denies route changes (section 12); P2.3 went ahead on the NAT Gateway |
 | **Critical-tier alarms only, in both accounts** | P1.3 drops all 43 warning-tier alarms. Critical alarms and the `SystemHealthCritical` composite stay |
 | **Trim the dashboard to ≤50 metrics; keep D4 (nightly dev stops)** | Both stay in the plan |
 | **Drop P1.5 (secret caching) and P1.6 (API Gateway X-Ray)** | Both moved to section 11 |
@@ -777,11 +779,11 @@ Testing is **manual**, using the checklist in section 15. A tester runs the UI f
 |---|---|---|
 | 0 | **Before any change:** a full checklist run in dev, plus the prod guardrail baselines (read-only) | Records what already passes or fails in dev, so pre-existing problems aren't blamed on the plan |
 | 1 ✅ 19 Nov | **D1** (dev's counterpart of P1.2); **D3**; **F1** and **F3** in dev; confirm **F2**'s dev subscription | Dev `MultiAZ: false`; `cdk diff` shows only intended changes (`dev` has no undeployed CDK changes since the 27 Oct prod release); `cdk diff` against **prod** shows no Amplify change; checks E10–E12; quick checklist run |
-| 2 | P1.1 standalone proxy (two deploys) | Full checklist run. It covers all three database users: app user (student, instructor, chat, RAG), table creator (sign-up, sign-in, admin), and master (instructor upload; orphan cleanup, engineer-checked). No auth errors in the logs |
-| 3 | P1.3 critical-only alarms; dashboard ≤50 metrics | Synth and deploy pass; the composite references only critical alarms (engineer); quick checklist run |
-| 4 | Sizing profile; **P2.1 rebuild rehearsal** (PostgreSQL 17 at `t4g.small`, pgbench, then `t4g.micro`) | The P2.1 checks (engineer): proxy registers the PostgreSQL 17 target; roles copied; row counts match; `vector` and HNSW index present; initializer rerun clean; pgbench passes; freeze-to-cutover time recorded. Then a **full checklist run**: data from before the rebuild (courses, chats, files) must still be there |
-| 5 | P2.2 NAT instance (`t4g.nano`) | Full checklist run (chat streaming and ingestion depend on NAT); NAT reboot test and one SSM Patch Manager run (engineer) |
-| 6 | P2.3 remove the endpoints, after step 5 has run cleanly for a few days | Quick checklist run (chat uses Bedrock through NAT) |
+| 2 ✅ 25 Nov | P1.1 standalone proxy (two deploys) | Full checklist run. It covers all three database users: app user (student, instructor, chat, RAG), table creator (sign-up, sign-in, admin), and master (instructor upload; orphan cleanup, engineer-checked). No auth errors in the logs |
+| 3 ✅ 25 Nov | P1.3 critical-only alarms; dashboard ≤50 metrics | Synth and deploy pass; the composite references only critical alarms (engineer); quick checklist run |
+| 4 ✅ 26 Nov | Sizing profile; **P2.1 rebuild rehearsal** (PostgreSQL 17 at `t4g.small`, pgbench, then `t4g.micro`) | The P2.1 checks (engineer): proxy registers the PostgreSQL 17 target; roles copied; row counts match; `vector` and HNSW index present; initializer rerun clean; pgbench passes; freeze-to-cutover time recorded. Then a **full checklist run**: data from before the rebuild (courses, chats, files) must still be there |
+| 5 ⛔ blocked | P2.2 NAT instance (`t4g.nano`) | Full checklist run (chat streaming and ingestion depend on NAT); NAT reboot test and one SSM Patch Manager run (engineer) |
+| 6 ✅ 26 Nov | P2.3 remove the endpoints, after step 5 has run cleanly for a few days | Quick checklist run (chat uses Bedrock through NAT) |
 
 **Step 1 results (19 November 2026):**
 - **D1:** dev is single-AZ (ca-central-1b), online, with no downtime.
@@ -806,6 +808,21 @@ Testing is **manual**, using the checklist in section 15. A tester runs the UI f
   - 0 errors across the 12 invoked Lambdas, all DLQs empty, no alarms in ALARM.
   - API Gateway: 137 requests with 0 4xx and 0 5xx; the execution log is empty, as expected with no failures.
   - No proxy or secret auth errors. The only retrieval warning is the known EmbeddingCache `put` (section 4).
+
+**Steps 2–6 results (25–26 November 2026, dev).** Run from the CLI. Engineer checks stood in for the checklist, so **the full checklist (section 15) still has to run** before the gate. Details are in `CLAUDE_HISTORY.md` (2026-11-26).
+- **How the rollout is controlled:** each step is a flag in `cdk/lib/constants/sizing.ts`. Prod's flags still hold today's values, and prod's synthesized templates are unchanged. Stage B flips prod's flags in order.
+- **Step 2 (P1.1):** the 3 old proxies were deleted after 6 days with no client connections. Master, table-creator and app-user calls all succeed through the shared proxy.
+- **Step 3 (P1.3):** 32 warning alarms removed (35 metric alarms plus 2 composites remain). `SQS-QueueDepth-Warning` and `SQS-QueueAge-Warning` stay, because `DataPipelineHealth` reads them. The dashboard graphs 30 metrics. Check next month's Cost Explorer for the dashboard charge: it isn't confirmed whether alarm-status widgets count toward the 50.
+- **Step 4 (P2.1):**
+  - `aila-databasestack-postgres` runs `db.t4g.micro`, 20 GB gp3, PostgreSQL 17.9, with Extended Support disabled.
+  - The copy took 57 s: 13/13 tables matched on row count, and 24/24 indexes were valid. Only the 2 live app users were copied, not 45 leftover pre-ADR-017 roles.
+  - pgbench p95 at 3 / 30 clients: original `t3.micro` 25.6 / 305 ms; `t4g.small` 17.2 / 187 ms; `t4g.micro` 17.1 / 203 ms.
+  - The cutover took ~6 min. The initializer re-ran cleanly, and retrieval returned course material.
+  - The original instance was deleted. Its final snapshot, `aila-databasestack-snapshot-ailadatabasestackdatabase5e4d381f-oxzjhwqts9li`, is kept until about 26 Dec 2026.
+  - Freeze-to-cutover time: there was no formal freeze (dev had no traffic). A re-check showed the original unchanged before the cutover.
+- **Step 5 (P2.2) is blocked.** A UBC organization SCP denies `ec2:ReplaceRoute`, `CreateRoute`, `DeleteRoute` and `CreateRouteTable`, even for the admin role. The deploy failed on the route update and was rolled back (`continue-update-rollback`, skipping the two unchanged routes); egress was never interrupted. It needs UBC Hybrid Cloud to allow the change, or make it. **Prod is in the same organization, so expect the same.** Phase 4's hibernate switch is affected too.
+- **Step 6 (P2.3):** both interface endpoints were removed. Secrets Manager and Bedrock resolve to public addresses and go out through the NAT Gateway, and retrieval works. There's been no soak, because the managed NAT Gateway, not a NAT instance, carries the traffic.
+- **After all steps:** `cdk diff` shows 0 differences across dev's 6 stacks, there were 0 Lambda errors, and the DLQs are empty.
 
 **Dev validation gate.** All of these must hold before Stage B:
 - **The full checklist (section 15) passes after the last dev change**, with every failure fixed or explained (step 0 was skipped, so there's no earlier run to match a failure against).

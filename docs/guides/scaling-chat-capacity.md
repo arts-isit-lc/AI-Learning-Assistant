@@ -171,10 +171,10 @@ Prod has never had more than 2 chat turns running at once. At that load the data
 
 **Not in prod.** A test there would share the Bedrock quota and database with real students, and every turn costs money. Use dev, set up to match prod:
 
-1. **Database size.** Dev runs `db.t3.micro`. Resize it for the test:
+1. **Database size.** Dev runs `db.t4g.micro` (PostgreSQL 17, since the P2.1 rebuild on 2026-11-26). Resize it to prod's class for the test (`db.t3.medium` today, `db.t4g.small` once prod is rebuilt):
    ```bash
    aws rds modify-db-instance --db-instance-identifier <dev db id> \
-     --db-instance-class db.t3.medium --apply-immediately
+     --db-instance-class <prod class> --apply-immediately
    ```
    This takes the database offline for a few minutes and puts CloudFormation out of sync with the real instance until it is reverted. Prod's Multi-AZ standby doesn't serve reads, so single-AZ is a fair comparison.
 2. **Data volume.** Compare `SELECT count(*) FROM retrieval_units;` in dev and prod. Vector search cost grows with the number of rows. Upload realistic course material to the test module if dev has much less.
@@ -263,7 +263,7 @@ Increase the stage targets (500, 700, and so on) on later runs until something f
 
 ### Phase B (optional): database-only test with pgbench
 
-This stresses just the vector search, without any Bedrock cost. Run it from a machine inside the VPC: an AWS CloudShell VPC environment in the private subnets, or a small EC2 instance if those subnets have no internet route for installing `postgresql16`. Connect through the RDS Proxy endpoint, using the user credentials from the `DB_SECRET_ARN` secret.
+This stresses just the vector search, without any Bedrock cost. Run it from a machine inside the VPC: an AWS CloudShell VPC environment in the private subnets, or a small EC2 instance if those subnets have no internet route for installing `postgresql17` (the client must be at least the server's major version). Connect through the RDS Proxy endpoint, using the user credentials from the `DB_SECRET_ARN` secret.
 
 `retrieval.sql` uses a random existing embedding as the query vector. Copy the real `WHERE` clause from the vector store's `search` method and `_append_metadata_filter` in [retrieval/handler.py](../../cdk/multimodal_rag_v2/retrieval/handler.py). The module filter changes how Postgres runs the query, so leaving it out gives misleading numbers.
 
@@ -306,7 +306,7 @@ Build a temporary CloudWatch dashboard before the test with these metrics:
 
 ### Cleanup
 
-1. Revert the dev database size (`--db-instance-class db.t3.micro --apply-immediately`).
+1. Revert the dev database size (`--db-instance-class db.t4g.micro --apply-immediately`).
 2. Delete the test users, course and sessions.
 3. Check Bedrock spend in Cost Explorer.
 4. Record the measured capacity, and whichever limit failed first, in `CLAUDE_HISTORY.md`.

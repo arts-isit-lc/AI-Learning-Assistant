@@ -14,6 +14,7 @@ let apiTemplate: Template;
 let dbTemplate: Template;
 let dbFlowTemplate: Template;
 let ragTemplate: Template;
+let vpcTemplate: Template;
 
 beforeAll(() => {
   const stacks = createTestStacks();
@@ -21,6 +22,7 @@ beforeAll(() => {
   dbTemplate = stacks.dbTemplate;
   dbFlowTemplate = stacks.dbFlowTemplate;
   ragTemplate = stacks.ragTemplate;
+  vpcTemplate = stacks.vpcTemplate;
 });
 
 /**
@@ -242,6 +244,55 @@ function isManagedPolicy(arn: unknown, policyName: string): boolean {
   return false;
 }
 
+/**
+ * CloudWatch Logs actions that stay scoped to log streams. Every other logs:
+ * action is a log-group action and, from 2027-04-26, needs a log group ARN.
+ */
+const LOG_STREAM_ACTIONS = new Set([
+  'logs:CreateLogStream',
+  'logs:PutLogEvents',
+  'logs:GetLogEvents',
+  'logs:DeleteLogStream',
+]);
+
+/**
+ * Helper: render a policy Resource value to a string. Unresolvable pieces
+ * become `<token>`; a LogGroup's `Arn` attribute renders in its real
+ * `log-group:<name>:*` form.
+ */
+function renderArn(value: unknown, resources: Record<string, { Type?: string }>): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'object' && value !== null) {
+    const obj = value as Record<string, unknown>;
+    if (Array.isArray(obj['Fn::Join'])) {
+      const [sep, parts] = obj['Fn::Join'] as [string, unknown[]];
+      return parts.map((p) => renderArn(p, resources)).join(sep);
+    }
+    if (Array.isArray(obj['Fn::GetAtt'])) {
+      const [ref, attr] = obj['Fn::GetAtt'] as [string, string];
+      if (attr === 'Arn' && resources[ref]?.Type === 'AWS::Logs::LogGroup') {
+        return 'arn:aws:logs:<token>:<token>:log-group:<token>:*';
+      }
+    }
+  }
+  return '<token>';
+}
+
+/**
+ * Helper: true for a log-stream ARN (`log-group:<name>:*` or
+ * `log-group:<name>:log-stream:<stream>`), which stops granting log-group
+ * actions on 2027-04-26.
+ */
+function isLogStreamArn(arn: string): boolean {
+  if (!arn.startsWith('arn:') || !arn.includes(':logs:')) return false;
+  const resource = arn.split(':').slice(5).join(':');
+  return (
+    resource.startsWith('log-group:') &&
+    resource !== 'log-group:*' &&
+    (resource.endsWith(':*') || resource.includes(':log-stream:'))
+  );
+}
+
 const allTemplates = () => [
   { name: 'ApiGatewayStack', template: apiTemplate },
   { name: 'DatabaseStack', template: dbTemplate },
@@ -400,6 +451,56 @@ describe('IAM Policy Guardrails', () => {
         );
       }
     }
+  });
+
+  /**
+   * CloudWatch Logs IAM change (AWS notice, enforced 2027-04-26): log-group
+   * actions (CreateLogGroup, DescribeLogStreams, ...) must be granted on a
+   * log group ARN; a log-stream ARN (`log-group:<name>:*`) stops granting them.
+   * Each log-group action a policy grants on a log-stream ARN must also be
+   * granted, in the same policy, on a log group ARN or '*'.
+   */
+  test('CloudWatch Logs log-group actions are not granted only via log-stream ARNs', () => {
+    const templates = [
+      { name: 'ApiGatewayStack', template: apiTemplate },
+      { name: 'DatabaseStack', template: dbTemplate },
+      { name: 'DBFlowStack', template: dbFlowTemplate },
+      { name: 'MultimodalRagStack', template: ragTemplate },
+      { name: 'VpcStack', template: vpcTemplate },
+    ];
+    const offenders: string[] = [];
+
+    for (const { name, template } of templates) {
+      const resources = (template.toJSON().Resources ?? {}) as Record<string, { Type?: string }>;
+      const byPolicy = new Map<string, Array<Record<string, unknown>>>();
+      for (const { logicalId, statement } of [
+        ...collectPolicyStatements(template),
+        ...collectInlineRoleStatements(template),
+      ]) {
+        byPolicy.set(logicalId, [...(byPolicy.get(logicalId) ?? []), statement]);
+      }
+
+      for (const [policyId, statements] of byPolicy) {
+        const streamOnly = new Set<string>();
+        const onGroup = new Set<string>();
+        for (const statement of statements) {
+          if (statement.Effect !== 'Allow') continue;
+          const groupActions = ([] as unknown[])
+            .concat(statement.Action)
+            .filter((a): a is string => typeof a === 'string')
+            .filter((a) => a.startsWith('logs:') && !LOG_STREAM_ACTIONS.has(a));
+          if (groupActions.length === 0) continue;
+          const arns = ([] as unknown[]).concat(statement.Resource).map((r) => renderArn(r, resources));
+          const target = arns.some((arn) => !isLogStreamArn(arn)) ? onGroup : streamOnly;
+          groupActions.forEach((a) => target.add(a));
+        }
+        for (const action of streamOnly) {
+          if (!onGroup.has(action)) offenders.push(`${name}/${policyId}: ${action}`);
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
   });
 
   /**

@@ -1,5 +1,9 @@
+import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 import { createTestStacks } from './helpers/stack-setup';
+import { VpcStack } from '../lib/vpc-stack';
+import { DatabaseStack } from '../lib/database-stack';
+import { sizingFor } from '../lib/constants/sizing';
 
 // P1.1 in AWS_COST_OPTIMIZATION_PLAN.md: one standalone RDS Proxy holds the
 // secrets of all three database users, and every database client connects
@@ -36,7 +40,10 @@ describe('Shared RDS Proxy', () => {
     const secretRefs = JSON.stringify(auth);
     expect(secretRefs).toContain('userCredentialsrdsDbCredential');
     expect(secretRefs).toContain('userCredentialsTableCreator');
-    expect(secretRefs).toContain('credentials/rdsDbCredential');
+    // The master user's secret: the original instance's by name, or the
+    // rebuilt instance's standalone secret once P2.1 has cut over.
+    const cutOver = ['cutover', 'done'].includes(sizingFor('dev').database.rebuild);
+    expect(secretRefs).toContain(cutOver ? 'TestDatabaseStackadminSecret' : 'credentials/rdsDbCredential');
   });
 
   test('keeps the settings of the proxies it replaces', () => {
@@ -52,6 +59,27 @@ describe('Shared RDS Proxy', () => {
       DBProxyName: { Ref: id },
       ConnectionPoolConfigurationInfo: { MaxConnectionsPercent: 100 },
     });
+  });
+});
+
+describe('Legacy per-user proxies (P1.1 deploy 2 is per environment)', () => {
+  function proxyCount(environment: 'dev' | 'prod'): number {
+    const app = new cdk.App({ context: { StackPrefix: 'Test', environment } });
+    const env = { account: '123456789012', region: 'ca-central-1' };
+    const vpc = new VpcStack(app, `Test-${environment}-VpcStack`, { env, environment });
+    const db = new DatabaseStack(app, `Test-${environment}-DatabaseStack`, vpc, { env, environment });
+    return Object.keys(Template.fromStack(db).findResources('AWS::RDS::DBProxy')).length;
+  }
+
+  test('dev has run deploy 2: the shared proxy is the only one', () => {
+    expect(sizingFor('dev').legacyProxies).toBe(false);
+    expect(proxyCount('dev')).toBe(1);
+  });
+
+  test('environments still on deploy 1 keep the three legacy proxies too', () => {
+    // Flipping prod's flag before its deploy 1 would remove exports that
+    // ApiGatewayStack and MultimodalRagStack still import, and fail the deploy.
+    expect(proxyCount('prod')).toBe(sizingFor('prod').legacyProxies ? 4 : 1);
   });
 });
 

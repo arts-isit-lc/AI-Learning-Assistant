@@ -87,6 +87,10 @@ export class ApiGatewayStack extends cdk.Stack {
     // Named to match Lambda's default (`/aws/lambda/<functionName>`) so the IAM
     // log-group scoping and the ObservabilityStack alarms/metric filters keep
     // resolving. DESTROY removal matches the prior ephemeral-in-dev behavior.
+    // Because the group is created here, execution roles grant only
+    // logs:CreateLogStream/PutLogEvents on `log-group:<name>:*`, never
+    // logs:CreateLogGroup. From 2027-04-26 CloudWatch Logs stops granting
+    // log-group actions via that `:*` ARN (see CLAUDE_HISTORY.md).
     const makeLogGroup = (functionName: string) =>
       new logs.LogGroup(this, `${functionName}-LogGroup`, {
         logGroupName: `/aws/lambda/${functionName}`,
@@ -565,7 +569,6 @@ export class ApiGatewayStack extends cdk.Stack {
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: [
-          "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents",
         ],
@@ -758,7 +761,6 @@ export class ApiGatewayStack extends cdk.Stack {
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: [
-          "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents",
         ],
@@ -869,7 +871,6 @@ export class ApiGatewayStack extends cdk.Stack {
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: [
-          "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents",
         ],
@@ -948,7 +949,6 @@ export class ApiGatewayStack extends cdk.Stack {
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: [
-          "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents",
         ],
@@ -1066,7 +1066,6 @@ export class ApiGatewayStack extends cdk.Stack {
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: [
-          "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents",
         ],
@@ -1500,7 +1499,7 @@ export class ApiGatewayStack extends cdk.Stack {
     // CloudWatch Logs permission (scoped to the function's log group)
     orphanCleanupRole.addToPolicy(new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
-      actions: ['logs:CreateLogGroup', 'logs:CreateLogStream', 'logs:PutLogEvents'],
+      actions: ['logs:CreateLogStream', 'logs:PutLogEvents'],
       resources: [
         `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${id}-orphanCleanupFunc:*`,
       ],
@@ -1947,7 +1946,6 @@ export class ApiGatewayStack extends cdk.Stack {
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: [
-          "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents",
         ],
@@ -2082,7 +2080,6 @@ export class ApiGatewayStack extends cdk.Stack {
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: [
-          "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents",
         ],

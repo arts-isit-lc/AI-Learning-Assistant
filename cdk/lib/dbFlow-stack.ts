@@ -50,16 +50,24 @@ export class DBFlowStack extends Stack {
             ],
           })
         );
+        // CloudWatch Logs. Unlike the other stacks' Lambdas, this function's
+        // log group isn't CDK-managed: Lambda created it on first run (it
+        // already exists in deployed environments, so adding a LogGroup here
+        // would collide). Log-group actions need the bare group ARN; from 2027-04-26
+        // the `:*` (log-stream) ARN no longer grants them.
+        const initializerLogGroupArn = `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${id}-initializerFunction`;
         lambdaRole.addToPolicy(
           new iam.PolicyStatement({
             effect: iam.Effect.ALLOW,
-            actions: [
-              // CloudWatch Logs
-              "logs:CreateLogGroup",
-              "logs:CreateLogStream",
-              "logs:PutLogEvents",
-            ],
-            resources: [`arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${id}-initializerFunction:*`],
+            actions: ["logs:CreateLogGroup"],
+            resources: [initializerLogGroupArn],
+          })
+        );
+        lambdaRole.addToPolicy(
+          new iam.PolicyStatement({
+            effect: iam.Effect.ALLOW,
+            actions: ["logs:CreateLogStream", "logs:PutLogEvents"],
+            resources: [`${initializerLogGroupArn}:*`],
           })
         );
         lambdaRole.addToPolicy(

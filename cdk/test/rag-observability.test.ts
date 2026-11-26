@@ -1,5 +1,5 @@
 import { Template } from 'aws-cdk-lib/assertions';
-import { createObservabilityTemplate, createTestStacks } from './helpers/stack-setup';
+import { createObservabilityTemplate, createTestStacks, FULL_ALARM_TIER } from './helpers/stack-setup';
 
 /**
  * RAG pipeline observability (MultimodalRagStack functions and DLQs).
@@ -10,7 +10,7 @@ import { createObservabilityTemplate, createTestStacks } from './helpers/stack-s
  * critical, emailing depth alarm as the messages DLQ.
  */
 
-const template = createObservabilityTemplate();
+const template = createObservabilityTemplate(FULL_ALARM_TIER);
 
 function topicId(topicName: string): string {
   return Object.keys(

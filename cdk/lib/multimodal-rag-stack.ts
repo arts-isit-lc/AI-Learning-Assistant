@@ -52,11 +52,31 @@ export class MultimodalRagStack extends cdk.Stack {
     // Browser origins allowed to reach the presigned-URL IR bucket below.
     const allowedOrigins = resolveAllowedOrigins(this, environment);
 
+    // rds-db:connect on the DB instance's resource ID. Nothing uses IAM
+    // database auth (clients sign in with Secrets Manager passwords through
+    // the proxy), so DatabaseStack drops these at the P2.1 cutover.
+    const rdsDbConnectStatements = (): iam.PolicyStatement[] =>
+      db.rdsDbConnectGrants
+        ? [
+            new iam.PolicyStatement({
+              effect: iam.Effect.ALLOW,
+              actions: ["rds-db:connect"],
+              resources: [
+                `arn:aws:rds-db:${this.region}:${this.account}:dbuser:${db.dbInstance.instanceResourceId}/*`,
+              ],
+            }),
+          ]
+        : [];
+
     // Explicit CloudWatch log group per Lambda, replacing the deprecated
     // `logRetention` prop (which managed the group via a custom resource).
     // Named to match Lambda's default (`/aws/lambda/<functionName>`) so the IAM
     // log-group scoping and the ObservabilityStack alarms/metric filters keep
     // resolving. DESTROY removal matches the prior ephemeral-in-dev behavior.
+    // Because the group is created here, execution roles grant only
+    // logs:CreateLogStream/PutLogEvents on `log-group:<name>:*`, never
+    // logs:CreateLogGroup. From 2027-04-26 CloudWatch Logs stops granting
+    // log-group actions via that `:*` ARN (see CLAUDE_HISTORY.md).
     const makeLogGroup = (functionName: string) =>
       new logs.LogGroup(this, `${functionName}-LogGroup`, {
         logGroupName: `/aws/lambda/${functionName}`,
@@ -176,7 +196,6 @@ export class MultimodalRagStack extends cdk.Stack {
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: [
-                "logs:CreateLogGroup",
                 "logs:CreateLogStream",
                 "logs:PutLogEvents",
               ],
@@ -218,14 +237,7 @@ export class MultimodalRagStack extends cdk.Stack {
               ],
               resources: ["*"],
             }),
-            // RDS Proxy connect — specific instance resource ID
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: ["rds-db:connect"],
-              resources: [
-                `arn:aws:rds-db:${this.region}:${this.account}:dbuser:${db.dbInstance.instanceResourceId}/*`,
-              ],
-            }),
+            ...rdsDbConnectStatements(),
           ],
         }),
       },
@@ -283,19 +295,11 @@ export class MultimodalRagStack extends cdk.Stack {
               ],
               resources: ["*"],
             }),
-            // RDS Proxy connect — specific instance resource ID
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: ["rds-db:connect"],
-              resources: [
-                `arn:aws:rds-db:${this.region}:${this.account}:dbuser:${db.dbInstance.instanceResourceId}/*`,
-              ],
-            }),
+            ...rdsDbConnectStatements(),
             // CloudWatch Logs scoped to enrichment function log group
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: [
-                "logs:CreateLogGroup",
                 "logs:CreateLogStream",
                 "logs:PutLogEvents",
               ],
@@ -370,14 +374,7 @@ export class MultimodalRagStack extends cdk.Stack {
               ],
               resources: ["*"],
             }),
-            // RDS Proxy connect — specific instance resource ID
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: ["rds-db:connect"],
-              resources: [
-                `arn:aws:rds-db:${this.region}:${this.account}:dbuser:${db.dbInstance.instanceResourceId}/*`,
-              ],
-            }),
+            ...rdsDbConnectStatements(),
             // S3 GetObject on IR bucket (for image escalation)
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
@@ -399,7 +396,6 @@ export class MultimodalRagStack extends cdk.Stack {
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: [
-                "logs:CreateLogGroup",
                 "logs:CreateLogStream",
                 "logs:PutLogEvents",
               ],
@@ -556,7 +552,7 @@ export class MultimodalRagStack extends cdk.Stack {
           statements: [
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+              actions: ["logs:CreateLogStream", "logs:PutLogEvents"],
               resources: [
                 `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${ragIngestionFailureFunctionName}:*`,
               ],
@@ -585,13 +581,7 @@ export class MultimodalRagStack extends cdk.Stack {
               ],
               resources: ["*"],
             }),
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: ["rds-db:connect"],
-              resources: [
-                `arn:aws:rds-db:${this.region}:${this.account}:dbuser:${db.dbInstance.instanceResourceId}/*`,
-              ],
-            }),
+            ...rdsDbConnectStatements(),
           ],
         }),
       },
@@ -644,7 +634,7 @@ export class MultimodalRagStack extends cdk.Stack {
             // CloudWatch Logs — scoped to specific log group
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
-              actions: ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+              actions: ["logs:CreateLogStream", "logs:PutLogEvents"],
               resources: [`arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/${id}-mathComputeFunction:*`],
             }),
             // X-Ray — resource '*' acceptable
@@ -813,19 +803,11 @@ export class MultimodalRagStack extends cdk.Stack {
               ],
               resources: ["*"],
             }),
-            // RDS Proxy connect — specific instance resource ID
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: ["rds-db:connect"],
-              resources: [
-                `arn:aws:rds-db:${this.region}:${this.account}:dbuser:${db.dbInstance.instanceResourceId}/*`,
-              ],
-            }),
+            ...rdsDbConnectStatements(),
             // CloudWatch Logs — scoped to chatbotV2Function log group
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: [
-                "logs:CreateLogGroup",
                 "logs:CreateLogStream",
                 "logs:PutLogEvents",
               ],
@@ -974,19 +956,11 @@ export class MultimodalRagStack extends cdk.Stack {
               ],
               resources: ["*"],
             }),
-            // RDS Proxy connect — specific instance resource ID
-            new iam.PolicyStatement({
-              effect: iam.Effect.ALLOW,
-              actions: ["rds-db:connect"],
-              resources: [
-                `arn:aws:rds-db:${this.region}:${this.account}:dbuser:${db.dbInstance.instanceResourceId}/*`,
-              ],
-            }),
+            ...rdsDbConnectStatements(),
             // CloudWatch Logs — scoped to consumer function log group
             new iam.PolicyStatement({
               effect: iam.Effect.ALLOW,
               actions: [
-                "logs:CreateLogGroup",
                 "logs:CreateLogStream",
                 "logs:PutLogEvents",
               ],

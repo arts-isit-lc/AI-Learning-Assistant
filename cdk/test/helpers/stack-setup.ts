@@ -6,6 +6,7 @@ import { ApiGatewayStack } from '../../lib/api-gateway-stack';
 import { MultimodalRagStack } from '../../lib/multimodal-rag-stack';
 import { DBFlowStack } from '../../lib/dbFlow-stack';
 import { ObservabilityStack } from '../../lib/observability-stack';
+import { EnvironmentSizing } from '../../lib/constants/sizing';
 
 export function createTestStacks() {
   const app = new cdk.App({
@@ -22,6 +23,7 @@ export function createTestStacks() {
     dbTemplate: Template.fromStack(dbStack),
     dbFlowTemplate: Template.fromStack(dbFlowStack),
     ragTemplate: Template.fromStack(ragStack),
+    vpcTemplate: Template.fromStack(vpcStack),
     lambdaFunctionInfos: apiStack.lambdaFunctionInfos,
   };
 }
@@ -30,8 +32,12 @@ export function createTestStacks() {
  * Creates a standalone ObservabilityStack template for testing.
  * Uses a separate CDK app to avoid cross-stack reference resolution
  * issues during synthesis with the other stacks.
+ *
+ * `sizing` overrides dev's sizing profile. Dev is critical-only (P1.3), so
+ * tests of the warning tier (prod's alarms until Stage B) pass
+ * FULL_ALARM_TIER.
  */
-export function createObservabilityTemplate(): Template {
+export function createObservabilityTemplate(sizing?: Partial<EnvironmentSizing>): Template {
   const app = new cdk.App({
     context: { StackPrefix: 'Test', environment: 'dev' },
   });
@@ -40,6 +46,7 @@ export function createObservabilityTemplate(): Template {
   const observabilityStack = new ObservabilityStack(app, 'Test-ObservabilityStack', {
     env,
     environment: 'dev',
+    sizing,
     apiGatewayRestApiId: 'Test-ApiGatewayStack-API',
     apiGatewayStageName: 'prod',
     lambdaFunctions: [
@@ -85,3 +92,9 @@ export function createObservabilityTemplate(): Template {
 
   return Template.fromStack(observabilityStack);
 }
+
+/** The warning tier and the original dashboard (prod's profile until Stage B). */
+export const FULL_ALARM_TIER: Partial<EnvironmentSizing> = {
+  warningAlarms: true,
+  freeTierDashboard: false,
+};

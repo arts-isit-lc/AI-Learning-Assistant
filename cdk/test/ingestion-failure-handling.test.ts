@@ -1,5 +1,9 @@
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { createTestStacks } from './helpers/stack-setup';
+import { sizingFor } from '../lib/constants/sizing';
+
+// rds-db:connect was never used; DatabaseStack drops it at the P2.1 cutover.
+const CUT_OVER = ['cutover', 'done'].includes(sizingFor('dev').database.rebuild);
 
 /**
  * Ingestion failures reach the UI (CLAUDE_HISTORY.md, 2026-11-24).
@@ -92,8 +96,8 @@ describe('ingestion failure handling', () => {
     expect(JSON.stringify(logs?.Resource)).toContain(
       '/aws/lambda/Test-MultimodalRagStack-ragIngestionFailureFunction:*'
     );
-    expect(statements.map((s) => s.Action)).toEqual(
-      expect.arrayContaining(['secretsmanager:GetSecretValue', 'rds-db:connect'])
-    );
+    const actions = statements.map((s) => s.Action);
+    expect(actions).toEqual(expect.arrayContaining(['secretsmanager:GetSecretValue']));
+    expect(actions.includes('rds-db:connect')).toBe(!CUT_OVER);
   });
 });

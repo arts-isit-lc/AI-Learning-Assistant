@@ -25,7 +25,7 @@ Connect to the AILA RDS database via an SSM tunnel through a temporary bastion E
 
 ```bash
 brew install --cask session-manager-plugin   # SSM plugin
-brew install libpq                           # psql client
+brew install libpq                           # psql client (must be at least the server's major version: 17 in dev)
 brew install --cask pgadmin4                 # GUI (optional)
 ```
 
@@ -39,9 +39,9 @@ brew install --cask pgadmin4                 # GUI (optional)
 | Account | 724772090264 |
 | Subnet | subnet-071e1f8011d6613dd |
 | Security Group | sg-01b40b148d50b1d2d |
-| RDS Endpoint | aila-databasestack-ailadatabasestackdatabase5e4d38-irqydsbvk7zf.c98g4kw8aeji.ca-central-1.rds.amazonaws.com |
-| Secret | AILA-DatabaseStack-AILA/credentials/rdsDbCredential |
-| Database | aila |
+| RDS Endpoint | aila-databasestack-postgres.c98g4kw8aeji.ca-central-1.rds.amazonaws.com |
+| Secret | AILA-DatabaseStack-AILA/credentials/rdsDbCredential-v2 |
+| Database | aila (PostgreSQL 17, rebuilt 2026-11-26) |
 
 ### Terminal 1: Tunnel
 
@@ -72,7 +72,7 @@ aws ssm describe-instance-information --region ca-central-1 \
 # Start tunnel (keeps this terminal occupied)
 aws ssm start-session --region ca-central-1 --target $INSTANCE_ID \
   --document-name AWS-StartPortForwardingSessionToRemoteHost \
-  --parameters '{"host":["aila-databasestack-ailadatabasestackdatabase5e4d38-irqydsbvk7zf.c98g4kw8aeji.ca-central-1.rds.amazonaws.com"],"portNumber":["5432"],"localPortNumber":["5432"]}'
+  --parameters '{"host":["aila-databasestack-postgres.c98g4kw8aeji.ca-central-1.rds.amazonaws.com"],"portNumber":["5432"],"localPortNumber":["5432"]}'
 ```
 
 ### Terminal 2: Connect
@@ -81,7 +81,7 @@ aws ssm start-session --region ca-central-1 --target $INSTANCE_ID \
 # Get credentials
 export $(aws configure export-credentials --profile vincent.adm-dev2 --format env | xargs)
 aws secretsmanager get-secret-value --region ca-central-1 \
-  --secret-id "AILA-DatabaseStack-AILA/credentials/rdsDbCredential" \
+  --secret-id "AILA-DatabaseStack-AILA/credentials/rdsDbCredential-v2" \
   --query 'SecretString' --output text
 
 # Connect with psql (paste password from above)

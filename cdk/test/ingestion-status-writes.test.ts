@@ -1,5 +1,10 @@
 import { Match } from 'aws-cdk-lib/assertions';
 import { createTestStacks } from './helpers/stack-setup';
+import { sizingFor } from '../lib/constants/sizing';
+
+// rds-db:connect was never used (clients sign in with Secrets Manager passwords
+// through the proxy); DatabaseStack drops it at the P2.1 cutover.
+const CUT_OVER = ['cutover', 'done'].includes(sizingFor('dev').database.rebuild);
 
 /**
  * Scope B (per-stage processing_status): the ingestion Lambda now writes
@@ -24,7 +29,7 @@ describe('ingestion Lambda DB access (per-stage status writes)', () => {
     });
   });
 
-  test('ingestion role can read the DB secret and connect to the RDS proxy (least privilege)', () => {
+  test('ingestion role can read the DB secret (least privilege)', () => {
     ragTemplate.hasResourceProperties('AWS::IAM::Role', {
       RoleName: Match.stringLikeRegexp('ragIngestionRole'),
       Policies: Match.arrayWith([
@@ -32,11 +37,14 @@ describe('ingestion Lambda DB access (per-stage status writes)', () => {
           PolicyDocument: {
             Statement: Match.arrayWith([
               Match.objectLike({ Action: 'secretsmanager:GetSecretValue' }),
-              Match.objectLike({ Action: 'rds-db:connect' }),
             ]),
           },
         }),
       ]),
     });
+    const [role] = Object.values(ragTemplate.findResources('AWS::IAM::Role', {
+      Properties: { RoleName: Match.stringLikeRegexp('ragIngestionRole$') },
+    }));
+    expect(JSON.stringify(role.Properties.Policies).includes('rds-db:connect')).toBe(!CUT_OVER);
   });
 });

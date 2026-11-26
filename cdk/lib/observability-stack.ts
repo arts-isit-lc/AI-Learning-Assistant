@@ -8,9 +8,18 @@ import * as logs from "aws-cdk-lib/aws-logs";
 import * as xray from "aws-cdk-lib/aws-xray";
 import { Construct } from "constructs";
 import { LambdaFunctionInfo } from "./api-gateway-stack";
+import { EnvironmentSizing, sizingFor } from "./constants/sizing";
+
+/** Free-tier limit on metrics per dashboard (3 such dashboards are free). */
+const FREE_TIER_DASHBOARD_METRICS = 50;
 
 export interface ObservabilityStackProps extends cdk.StackProps {
   environment: string;
+  /**
+   * Overrides the environment's sizing profile (constants/sizing.ts). Tests
+   * use it to cover both alarm tiers; deployments leave it unset.
+   */
+  sizing?: Partial<EnvironmentSizing>;
   apiGatewayRestApiId: string;
   apiGatewayStageName: string;
   lambdaFunctions: LambdaFunctionInfo[];
@@ -45,6 +54,11 @@ export class ObservabilityStack extends cdk.Stack {
 
     this.appEnvironment = props.environment;
     this.isProd = props.environment === "prod";
+    // P1.3 (AWS_COST_OPTIMIZATION_PLAN.md): with warningAlarms off, only the
+    // critical tier is created. The two SQS backlog alarms stay either way,
+    // because the DataPipelineHealth composite reads them.
+    const sizing = { ...sizingFor(props.environment), ...props.sizing };
+    const warningAlarms = sizing.warningAlarms;
 
     // --- Alarm threshold configuration (environment-aware) ---
     const thresholds = this.getAlarmThresholds();
@@ -141,7 +155,8 @@ export class ObservabilityStack extends cdk.Stack {
         period: cdk.Duration.minutes(1),
       });
 
-      // Warning alarm
+      // Warning alarm (warning tier only)
+      if (warningAlarms) {
       const errorRateWarning = new cloudwatch.MathExpression({
         expression: "(errors / invocations) * 100",
         usingMetrics: {
@@ -172,6 +187,7 @@ export class ObservabilityStack extends cdk.Stack {
 
       warningAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.warningTopic));
       this.lambdaErrorWarningAlarms.push(warningAlarm);
+      } // end warning-tier error rate alarm
 
       // Critical alarm
       const errorRateCritical = new cloudwatch.MathExpression({
@@ -212,8 +228,8 @@ export class ObservabilityStack extends cdk.Stack {
       );
       this.lambdaErrorCriticalAlarms.push(criticalAlarm);
 
-      // --- Lambda duration alarm (p99, 80% of timeout) — Tier 1 only ---
-      if (tier === 1) {
+      // --- Lambda duration alarm (p99, 80% of timeout) — Tier 1, warning tier ---
+      if (tier === 1 && warningAlarms) {
         const durationThresholdMs = fn.timeoutSeconds * 1000 * 0.80;
 
       const durationMetric = new cloudwatch.Metric({
@@ -308,7 +324,7 @@ export class ObservabilityStack extends cdk.Stack {
       label: "API Gateway 5xx Error Rate %",
     });
 
-    const apiGw5xxWarningAlarm = apiGw5xxWarningExpression.createAlarm(this, "ApiGw5xxWarning", {
+    const apiGw5xxWarningAlarm = !warningAlarms ? undefined : apiGw5xxWarningExpression.createAlarm(this, "ApiGw5xxWarning", {
       alarmName: `AILA-${this.appEnvironment}-ApiGateway-5xx-Warning`,
       alarmDescription: [
         `API Gateway 5xx error rate exceeded ${thresholds.apiGateway5xxWarning}% (minimum ${thresholds.apiGatewayMinRequests} requests required).`,
@@ -326,7 +342,7 @@ export class ObservabilityStack extends cdk.Stack {
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
     });
 
-    apiGw5xxWarningAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.warningTopic));
+    apiGw5xxWarningAlarm?.addAlarmAction(new cloudwatchActions.SnsAction(this.warningTopic));
 
     // 5xx Critical alarm (5% threshold with minimum 50 requests)
     const apiGw5xxCriticalExpression = new cloudwatch.MathExpression({
@@ -414,7 +430,7 @@ export class ObservabilityStack extends cdk.Stack {
       period: cdk.Duration.minutes(1),
     });
 
-    const rdsCpuWarningAlarm = rdsCpuMetric.createAlarm(this, "RdsCpuWarning", {
+    const rdsCpuWarningAlarm = !warningAlarms ? undefined : rdsCpuMetric.createAlarm(this, "RdsCpuWarning", {
       alarmName: `AILA-${this.appEnvironment}-RDS-CPU-Warning`,
       alarmDescription: [
         `RDS instance ${props.rdsInstanceId} CPU utilization exceeded ${thresholds.rdsCpuWarning}%.`,
@@ -432,7 +448,7 @@ export class ObservabilityStack extends cdk.Stack {
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
     });
 
-    rdsCpuWarningAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.warningTopic));
+    rdsCpuWarningAlarm?.addAlarmAction(new cloudwatchActions.SnsAction(this.warningTopic));
 
     // --- RDS CPU Critical Alarm (Req 7.2) ---
     this.rdsCpuCriticalAlarm = rdsCpuMetric.createAlarm(this, "RdsCpuCritical", {
@@ -467,7 +483,7 @@ export class ObservabilityStack extends cdk.Stack {
       period: cdk.Duration.minutes(1),
     });
 
-    const rdsStorageWarningAlarm = rdsFreeStorageMetric.createAlarm(this, "RdsStorageWarning", {
+    const rdsStorageWarningAlarm = !warningAlarms ? undefined : rdsFreeStorageMetric.createAlarm(this, "RdsStorageWarning", {
       alarmName: `AILA-${this.appEnvironment}-RDS-Storage-Warning`,
       alarmDescription: [
         `RDS instance ${props.rdsInstanceId} free storage space fell below 20% of ${props.rdsAllocatedStorage} GB allocated (${(storageWarningBytes / (1024 * 1024 * 1024)).toFixed(1)} GB).`,
@@ -485,7 +501,7 @@ export class ObservabilityStack extends cdk.Stack {
       comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
     });
 
-    rdsStorageWarningAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.warningTopic));
+    rdsStorageWarningAlarm?.addAlarmAction(new cloudwatchActions.SnsAction(this.warningTopic));
 
     // --- RDS Storage Critical Alarm (Req 7.4) ---
     const storageCriticalBytes = props.rdsAllocatedStorage * 1024 * 1024 * 1024 * 0.10;
@@ -522,7 +538,7 @@ export class ObservabilityStack extends cdk.Stack {
       period: cdk.Duration.minutes(1),
     });
 
-    const rdsConnectionsAlarm = rdsConnectionsMetric.createAlarm(this, "RdsConnectionsWarning", {
+    const rdsConnectionsAlarm = !warningAlarms ? undefined : rdsConnectionsMetric.createAlarm(this, "RdsConnectionsWarning", {
       alarmName: `AILA-${this.appEnvironment}-RDS-Connections-Warning`,
       alarmDescription: [
         `RDS instance ${props.rdsInstanceId} database connections exceeded 80% of max_connections (${connectionsThreshold} of ${maxConnections}).`,
@@ -540,7 +556,7 @@ export class ObservabilityStack extends cdk.Stack {
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
     });
 
-    rdsConnectionsAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.warningTopic));
+    rdsConnectionsAlarm?.addAlarmAction(new cloudwatchActions.SnsAction(this.warningTopic));
 
     // --- RDS Latency Alarm (Req 7.6) ---
     // RDS reports latency in seconds, so 100ms = 0.1 seconds
@@ -570,7 +586,7 @@ export class ObservabilityStack extends cdk.Stack {
       label: "RDS Max Latency (Read/Write) p99",
     });
 
-    const rdsLatencyAlarm = rdsLatencyExpression.createAlarm(this, "RdsLatencyWarning", {
+    const rdsLatencyAlarm = !warningAlarms ? undefined : rdsLatencyExpression.createAlarm(this, "RdsLatencyWarning", {
       alarmName: `AILA-${this.appEnvironment}-RDS-Latency-Warning`,
       alarmDescription: [
         `RDS instance ${props.rdsInstanceId} read or write latency exceeded 100ms (0.1s).`,
@@ -588,7 +604,7 @@ export class ObservabilityStack extends cdk.Stack {
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
     });
 
-    rdsLatencyAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.warningTopic));
+    rdsLatencyAlarm?.addAlarmAction(new cloudwatchActions.SnsAction(this.warningTopic));
 
     // --- SQS and DLQ Alarms (Req 5.1, 5.2, 5.3, 8.3, 8.4, 8.5, 23.2) ---
 
@@ -718,7 +734,7 @@ export class ObservabilityStack extends cdk.Stack {
       period: cdk.Duration.minutes(1),
     });
 
-    const appSync5xxAlarm = appSync5xxMetric.createAlarm(this, "AppSync5xxAlarm", {
+    const appSync5xxAlarm = !warningAlarms ? undefined : appSync5xxMetric.createAlarm(this, "AppSync5xxAlarm", {
       alarmName: `AILA-${this.appEnvironment}-AppSync-5xx-Warning`,
       alarmDescription: [
         `AppSync GraphQL API 5xx error count exceeded ${thresholds.appSync5xxThreshold}.`,
@@ -736,7 +752,7 @@ export class ObservabilityStack extends cdk.Stack {
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
     });
 
-    appSync5xxAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.warningTopic));
+    appSync5xxAlarm?.addAlarmAction(new cloudwatchActions.SnsAction(this.warningTopic));
 
     // AppSync Latency Alarm (Req 9.2)
     const appSyncLatencyMetric = new cloudwatch.Metric({
@@ -747,7 +763,7 @@ export class ObservabilityStack extends cdk.Stack {
       period: cdk.Duration.minutes(1),
     });
 
-    const appSyncLatencyAlarm = appSyncLatencyMetric.createAlarm(this, "AppSyncLatencyAlarm", {
+    const appSyncLatencyAlarm = !warningAlarms ? undefined : appSyncLatencyMetric.createAlarm(this, "AppSyncLatencyAlarm", {
       alarmName: `AILA-${this.appEnvironment}-AppSync-Latency-Warning`,
       alarmDescription: [
         `AppSync GraphQL API p99 latency exceeded ${thresholds.appSyncLatencyMs}ms.`,
@@ -765,7 +781,7 @@ export class ObservabilityStack extends cdk.Stack {
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
     });
 
-    appSyncLatencyAlarm.addAlarmAction(new cloudwatchActions.SnsAction(this.warningTopic));
+    appSyncLatencyAlarm?.addAlarmAction(new cloudwatchActions.SnsAction(this.warningTopic));
 
     // --- Composite Alarms (Req 21.1, 21.2, 21.3, 21.4, 21.5) ---
 
@@ -830,27 +846,48 @@ export class ObservabilityStack extends cdk.Stack {
 
     // --- CloudWatch Dashboard (Req 20.1, 20.2, 20.3, 20.4, 20.5, 20.6, 20.7, 18.3) ---
 
-    // Widget 1: Lambda Errors (Req 20.1)
-    const lambdaErrorsWidget = new cloudwatch.GraphWidget({
-      title: "Lambda Errors",
-      left: props.lambdaFunctions.map(
-        (fn) =>
+    // P1.3: a dashboard is free only up to 50 metrics. The free-tier version
+    // graphs the Tier 1 functions one by one, plus an account-wide Lambda error
+    // total; every alarmed function still appears in the alarm status widgets.
+    const graphedFunctions = sizing.freeTierDashboard
+      ? props.lambdaFunctions.filter((fn) => getFunctionTier(fn.functionName) === 1)
+      : props.lambdaFunctions;
+    const allFunctionErrors = sizing.freeTierDashboard
+      ? [
           new cloudwatch.Metric({
             namespace: "AWS/Lambda",
             metricName: "Errors",
-            dimensionsMap: { FunctionName: fn.functionName },
             statistic: "Sum",
             period: cdk.Duration.minutes(1),
-            label: fn.functionName,
-          })
-      ),
+            label: "All functions",
+          }),
+        ]
+      : [];
+
+    // Widget 1: Lambda Errors (Req 20.1)
+    const lambdaErrorsWidget = new cloudwatch.GraphWidget({
+      title: "Lambda Errors",
+      left: [
+        ...allFunctionErrors,
+        ...graphedFunctions.map(
+          (fn) =>
+            new cloudwatch.Metric({
+              namespace: "AWS/Lambda",
+              metricName: "Errors",
+              dimensionsMap: { FunctionName: fn.functionName },
+              statistic: "Sum",
+              period: cdk.Duration.minutes(1),
+              label: fn.functionName,
+            })
+        ),
+      ],
       width: 12,
     });
 
     // Widget 2: Lambda Duration (Req 20.1)
     const lambdaDurationWidget = new cloudwatch.GraphWidget({
       title: "Lambda Duration (p99)",
-      left: props.lambdaFunctions.map(
+      left: graphedFunctions.map(
         (fn) =>
           new cloudwatch.Metric({
             namespace: "AWS/Lambda",
@@ -972,7 +1009,8 @@ export class ObservabilityStack extends cdk.Stack {
       ...lambdaThrottleAlarms,
     ];
 
-    const infrastructureAlarms: cloudwatch.IAlarm[] = [
+    // Warning-tier entries are undefined when warningAlarms is off.
+    const infrastructureAlarms: cloudwatch.IAlarm[] = ([
       apiGw5xxWarningAlarm,
       this.apiGateway5xxCriticalAlarm,
       missingTrafficAlarm,
@@ -990,7 +1028,7 @@ export class ObservabilityStack extends cdk.Stack {
       appSyncLatencyAlarm,
       systemHealthCriticalAlarm,
       dataPipelineHealthAlarm,
-    ];
+    ] as Array<cloudwatch.IAlarm | undefined>).filter((alarm): alarm is cloudwatch.IAlarm => alarm !== undefined);
 
     const lambdaAlarmStatusWidget = new cloudwatch.AlarmStatusWidget({
       title: "Lambda Alarm Status",
@@ -1046,6 +1084,22 @@ export class ObservabilityStack extends cdk.Stack {
       ),
       width: 12,
     });
+
+    // Fail synth rather than silently going back to a billed dashboard.
+    if (sizing.freeTierDashboard) {
+      const graphWidgets = [
+        lambdaErrorsWidget, lambdaDurationWidget, apiGatewayWidget, rdsWidget,
+        sqsWidget, appSyncWidget, lambdaInitDurationWidget,
+      ];
+      const metricCount = graphWidgets
+        .flatMap((widget) => widget.toJson())
+        .reduce((sum, json) => sum + (json.properties?.metrics?.length ?? 0), 0);
+      if (metricCount > FREE_TIER_DASHBOARD_METRICS) {
+        throw new Error(
+          `ObservabilityStack: the dashboard graphs ${metricCount} metrics; the free tier allows ${FREE_TIER_DASHBOARD_METRICS}.`
+        );
+      }
+    }
 
     // Create the dashboard with widgets arranged in rows
     new cloudwatch.Dashboard(this, "OperationalDashboard", {

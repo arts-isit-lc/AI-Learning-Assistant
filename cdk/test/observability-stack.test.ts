@@ -1,6 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
-import { createObservabilityTemplate } from './helpers/stack-setup';
+import { createObservabilityTemplate, FULL_ALARM_TIER } from './helpers/stack-setup';
 import { ObservabilityStack } from '../lib/observability-stack';
 
 /**
@@ -19,7 +19,7 @@ let devTemplate: Template;
 let prodTemplate: Template;
 
 beforeAll(() => {
-  devTemplate = createObservabilityTemplate();
+  devTemplate = createObservabilityTemplate(FULL_ALARM_TIER);
 
   // Create prod template for environment-specific threshold tests
   const prodApp = new cdk.App({

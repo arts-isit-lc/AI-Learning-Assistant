@@ -323,3 +323,56 @@ Fixes the finding above. Implemented on `dev`.
   - Enrichment described all 7 images with no vision errors and stored 166 retrieval units. Status reached `complete` about 73 s after the upload landed in S3.
 
 **Deploy note:** the CDK CLI can't use the `vincent.adm-dev2` profile directly ("Unable to resolve AWS account"). Its SSO session name, `'create new profile'`, contains spaces; the AWS CLI accepts that, but the SDK the CDK uses does not. Workaround: `eval "$(aws configure export-credentials --profile vincent.adm-dev2 --format env)"`, unset `AWS_PROFILE`, then run `cdk`.
+
+## 2026-11-26 — Decision: a per-environment sizing profile drives the cost-plan rollout
+
+`cdk/lib/constants/sizing.ts` holds each environment's sizes and one flag per cost-plan step: `legacyProxies` (P1.1), `warningAlarms` and `freeTierDashboard` (P1.3), `database.rebuild` (P2.1: `none` → `created` → `cutover` → `done`, one deploy each), `nat` (P2.2) and `interfaceEndpoints` (P2.3). Stage A moves dev's flags; prod's stay at today's values, so the `dev` branch can go to prod at any time (for example, the ingestion fix) without taking prod through a step early. Stage B flips prod's flags in the plan's order. After each change, prod's synthesized templates were compared with a baseline: they're unchanged apart from `CDKMetadata`.
+
+**Why flags rather than sequential commits:** P1.1 and P2.1 are multi-deploy sequences, and prod has to replay them. With flags, every intermediate state is still in the code, and tests cover each stage (`database-rebuild.test.ts`, `critical-only-alarms.test.ts`, `nat-and-endpoints.test.ts`, `shared-proxy.test.ts`).
+
+## 2026-11-26 — Finding: Stage A steps 2–4 in dev (P1.1, P1.3, P2.1)
+
+Run from the CLI on 2026-11-25/26, with engineer checks substituted for the manual checklist (to be run before the dev gate).
+- **P1.1 deploy 2:** before removing the 3 per-user proxies, their `ClientConnections` had been 0 since the 19 Nov cutover and nothing imported their exports. Afterwards, each database user made a real call through the shared proxy: master (`orphanCleanupFunc`), table creator (admin `GET /admin/courses`), app user (ingestion failure handler).
+- **P1.3:** 32 warning alarms removed (67 → 35 metric alarms, plus 2 composites). **The `DataPipelineHealth` composite reads `SQS-QueueDepth-Warning` and `SQS-QueueAge-Warning`**, so those two stay despite the name. The dashboard now graphs 30 metrics (Tier 1 functions plus an account-wide Lambda error total), and synth fails above 50. It isn't confirmed whether alarm-status widgets count toward the free tier's 50 metrics; check the dashboard usage type in Cost Explorer.
+- **`AILA-dev-ApiGateway-MissingTraffic` doesn't page in dev:** its actions are disabled (`actionsEnabled: isProd`). The 2026-11-20 entry overstated this.
+- **P2.1 rebuild** (`aila-databasestack-postgres`, fixed identifier, standalone admin secret `…/rdsDbCredential-v2`, its own security group shared with the proxy):
+  - `EngineVersion: '17'` (major only) got **17.9**, RDS's default minor, not the newest (17.12). Auto minor upgrades move it forward, and a retired minor can't break a new instance the way the `VER_16_10` pin did.
+  - **Dev had 47 leftover login roles** from before ADR-017. Only the two in the current secrets were copied, with `readwrite` and `tablecreator`. Before the copy, a check confirmed no object granted to anyone but the master user and those two group roles. All tables are owned by the master user.
+  - The copy took **57 s** for 268 MB: dump 27 s (115 MB), a single-transaction `pg_restore --exit-on-error` 29 s with no errors, then `ANALYZE`. All 13 tables matched on row count, and all 24 indexes were valid. pgvector went from 0.8.0 to 0.8.1. The only privilege difference is PostgreSQL 17's new `MAINTAIN` privilege on the owner's ACL.
+  - **pgbench** (retrieval's real vector search, module-scoped, 60 s, p95): original `t3.micro` PG16 25.6 ms at 3 clients and 305 ms at 30; `t4g.small` PG17 17.2 and 187 ms; `t4g.micro` PG17 17.1 and 203 ms. No failures, and the cache hit rate was 100%.
+  - The cutover deployed 5 stacks in ~6 min. The proxy's target, admin secret and security group all changed in place. The initializer re-ran cleanly against the restored data (it reuses the stored credentials, ADR-017). Retrieval returned course material.
+  - The unused `rds-db:connect` grants (6 in MultimodalRagStack, 1 in the proxy role) were dropped at the cutover. No code generates IAM auth tokens.
+  - Deploy C deleted the original instance, with its final snapshot kept. Before Deploy C, deletion protection was turned off with the CLI.
+- **The bastion role can't read secrets** (`AILA-BastionSSMRole` has only `AmazonSSMManagedInstanceCore`). The copy ran on the bastion with a temporary inline policy, `TempP21DatabaseCopy`, which was removed afterwards. For prod, add the same temporary policy, or run the copy from a VPC CloudShell environment.
+- **Retrieval leaves its connections `idle in transaction`** after a query (psycopg2 doesn't autocommit). This is pre-existing. It can pin proxy connections under load; follow up with the scaling work.
+- **A CLI deploy can report failure when only the local network dropped** (`getaddrinfo ENOTFOUND` while monitoring). CloudFormation finishes anyway. Check `describe-stacks` before retrying.
+
+## 2026-11-26 — Finding: UBC's SCP blocks every route change, so P2.2 (NAT instance) can't be done by OCELIA
+
+The dev deploy of P2.2 failed on the two private subnets' `DefaultRoute` updates: `ec2:ReplaceRoute` was explicitly denied by an organization SCP (`p-46peec1v`) for CloudFormation's execution role. EC2 `--dry-run` with the admin SSO role shows the SCP also denies `CreateRoute`, `DeleteRoute` and `CreateRouteTable`. Deleting VPC endpoints is allowed. The VPC's routes were created in 2025, so the SCP came later. Prod hasn't been checked, but it's in the same organization.
+
+**Recovery that worked:** the rollback needed `ReplaceRoute` too and left `AILA-VpcStack` in `UPDATE_ROLLBACK_FAILED`. The live routes had never changed, so `continue-update-rollback --resources-to-skip <both DefaultRoute logical IDs>` was safe. The stack reached `UPDATE_ROLLBACK_COMPLETE` and deleted the NAT instance. Egress was never interrupted.
+
+**Effects:**
+- **P2.2 is blocked in both environments** until UBC Hybrid Cloud allows the route change or makes it. The NAT instance code stays behind `sizing.nat`. Its AMI is pinned in `NAT_INSTANCE_AMI`, because `cdk.context.json` is git-ignored and a lookup pin wouldn't travel. The default user data uses `ip route`, not net-tools.
+- **Phase 4's hibernate switch** assumed removing and restoring NAT. Recreating a NAT Gateway changes the route target, which the SCP also blocks.
+- **P2.3 goes ahead without P2.2.** It removes the Secrets Manager and Bedrock interface endpoints, and those calls use the managed NAT Gateway (data processing is cents). The plan sequenced P2.3 after P2.2 only because a NAT instance would be less reliable.
+- **P2.3 deployed to dev on 2026-11-26.** Both interface endpoints are gone. From a private subnet, Secrets Manager and Bedrock Runtime resolve to public addresses and answer through the NAT Gateway, and retrieval returns course material. `cdk diff` shows 0 differences across dev's 6 stacks, and there were 0 Lambda errors.
+
+## 2026-11-26 — Decision: CloudWatch Logs IAM grants use log group ARNs (AWS change enforced 2027-04-26)
+
+**Context:** AWS emailed the dev account (724772090264): *"[Action required] Update CloudWatch Logs IAM policies by April 26, 2027 to avoid losing access."* From that date, log-group actions (`CreateLogGroup`, `DescribeLogStreams`, `PutRetentionPolicy`, …) need a log group ARN (`arn:aws:logs:<r>:<a>:log-group:<name>`). A log-stream ARN (`log-group:<name>:*` or `…:log-stream:…`) stops granting them. Only `PutLogEvents`, `GetLogEvents`, `CreateLogStream` and `DeleteLogStream` stay stream-scoped. AWS states the rollout is region by region. The AWS notice isn't public; its text is quoted in [aws-solutions-constructs#1494](https://github.com/awslabs/aws-solutions-constructs/issues/1494).
+
+**Finding (dev, read-only scan of all 112 roles):** 17 affected statements, all OCELIA's. Nothing from the org StackSets (Control Tower, CrowdStrike, Cloudability, …) is affected. AWS-managed policies (`AWSLambdaBasicExecutionRole` etc.) use `Resource: "*"` and are unaffected.
+- 15 Lambda roles granted `logs:CreateLogGroup` on `log-group:/aws/lambda/<fn>:*`. Unused: CDK creates every one of these groups (`makeLogGroup`), so Lambda never calls it.
+- The DBFlow initializer role, same pattern. This is the only function whose group Lambda created itself (Feb 2025, no retention), so the permission matters on a brand-new environment.
+- The CDK-generated VPC flow log role grants `logs:DescribeLogStreams` on the group's `Arn` attribute (`…:*`). AWS documents that permission as required for flow logs. `aws-cdk-lib` main still does this (checked 2026-11-26), so upgrading won't fix it.
+
+**Decision:**
+- Lambda roles with a CDK-managed group: drop `logs:CreateLogGroup`. This also stops Lambda from recreating a deleted group with no retention.
+- DBFlow initializer: `logs:CreateLogGroup` moves to its own statement on the bare group ARN. Making the group CDK-managed was rejected because it would collide with the existing group (verified in dev; prod ran the same initializer, so presumably the same).
+- VPC flow logs: `VpcStack.grantFlowLogDescribeLogStreams` adds `logs:DescribeLogStreams` on the bare group ARN (both VPC branches). Remove it once `aws-cdk-lib` grants it correctly. CDK's original `…:*` statement stays, so a per-statement scan, possibly including AWS's, may still list that role even though access is preserved.
+- Guardrail test in `cdk/test/iam-policies.test.ts`: each log-group action granted on a log-stream ARN must also be granted on a group ARN or `*` in the same policy. Covers the API Gateway, Database, DBFlow, RAG and VPC stacks.
+
+**Status:** `cdk diff` in dev showed only these 17 IAM changes (4 stacks). **Deployed to dev 2026-11-26** (VpcStack, MultimodalRagStack, ApiGatewayStack, DBFlowStack, `--exclusively`). Afterwards: all 4 stacks `UPDATE_COMPLETE`; `cdk diff` shows 0 differences across 7 stacks; the live scan (per role) finds 0 affected; the VPC flow log reports `DeliverLogsStatus: SUCCESS`, and new flow-log events arrived after the update. The DBFlow initializer trigger didn't re-run. Not yet deployed to prod (a separate account; check it with the same scan after an SSO login).
