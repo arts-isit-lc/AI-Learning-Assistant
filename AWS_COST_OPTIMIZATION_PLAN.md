@@ -113,6 +113,7 @@ From Cost Explorer, grouped by usage type (pulled 19 November 2026). Dev is in s
 | F1 | Bring the Amplify branch setup into CDK (dev builds `dev`, prod builds `main`) | – | None | ½ day | Low (import first; fallback documented) |
 | F2 | Restore alarm email subscriptions (dev done and confirmed; prod in Stage B) | – | None | 15 min | None |
 | F3 | API Gateway execution-error logging: one `/*/*` setting, log group with retention | Pennies | None | ½ day | Low; fixes Security Hub APIGateway.1 |
+| F4 | CloudWatch Logs IAM grants use log group ARNs (AWS deadline **26 April 2027**; dev done 26 Nov; prod in Stage B step 1) | – | None | Done in code | Low; IAM only |
 | **Phase 2: right-size the database and network** | | | | | |
 | P2.1 | **Rebuild the database:** `db.t4g.small`, 20 GB gp3, PostgreSQL 17, Extended Support disabled (dev first, as a rehearsal) | **~$43** (~$16 if `t4g.medium`) | Neutral, if the memory gate passes | 3–4 days incl. rehearsal | Medium |
 | P2.2 | NAT Gateway → NAT instance | **~$30** | Negligible | 1–2 days | Medium |
@@ -350,6 +351,14 @@ Prod's 11 5xx errors in the last 30 days have no recorded cause. The 26 October 
    - **Drift:** the API Gateway stage drift goes away.
 
 **Not proposed:** access logs (one line per request), a separate feature that's also off.
+
+#### F4 CloudWatch Logs IAM grants use log group ARNs
+
+**Why:** AWS notice *"[Action required] Update CloudWatch Logs IAM policies by April 26, 2027"*. From that date, log-group actions (`CreateLogGroup`, `DescribeLogStreams`, …) are no longer granted by a log-stream ARN (`log-group:<name>:*`). Dev had 17 affected statements, all OCELIA's: 15 Lambda roles, the DBFlow initializer role, and the CDK-generated VPC flow log role. Prod is deployed from the same code, so expect the same 17. Details are in `CLAUDE_HISTORY.md` (2026-11-26).
+
+**Change (in code, not behind a sizing flag):** drop the unused `CreateLogGroup` from Lambda roles whose log group CDK creates. Grant the initializer's `CreateLogGroup` on the bare group ARN. Add `DescribeLogStreams` on the bare group ARN to the flow log role. A guardrail test in `cdk/test/iam-policies.test.ts` stops it from coming back.
+
+**Rollout:** dev deployed and verified on 26 November 2026. **Prod ships with the first Stage B deploy of VpcStack, MultimodalRagStack, ApiGatewayStack and DBFlowStack** (step 1), and is verified with E13. **If Stage B step 1 hasn't reached prod by early April 2027, deploy F4 to prod on its own:** check `cdk diff -c environment=prod` first, then deploy those 4 stacks with `--exclusively`.
 
 ---
 
@@ -811,6 +820,7 @@ Testing is **manual**, using the checklist in section 15. A tester runs the UI f
 
 **Steps 2–6 results (25–26 November 2026, dev).** Run from the CLI. Engineer checks stood in for the checklist, so **the full checklist (section 15) still has to run** before the gate. Details are in `CLAUDE_HISTORY.md` (2026-11-26).
 - **How the rollout is controlled:** each step is a flag in `cdk/lib/constants/sizing.ts`. Prod's flags still hold today's values, and prod's synthesized templates are unchanged. Stage B flips prod's flags in order.
+  - **Exception (26 November 2026):** F4 isn't behind a flag. Prod's templates now also differ by F4's 17 IAM statements (VpcStack, MultimodalRagStack, ApiGatewayStack, DBFlowStack), so any prod deploy of those stacks ships it.
 - **Step 2 (P1.1):** the 3 old proxies were deleted after 6 days with no client connections. Master, table-creator and app-user calls all succeed through the shared proxy.
 - **Step 3 (P1.3):** 32 warning alarms removed (35 metric alarms plus 2 composites remain). `SQS-QueueDepth-Warning` and `SQS-QueueAge-Warning` stay, because `DataPipelineHealth` reads them. The dashboard graphs 30 metrics. Check next month's Cost Explorer for the dashboard charge: it isn't confirmed whether alarm-status widgets count toward the 50.
 - **Step 4 (P2.1):**
@@ -838,11 +848,11 @@ Testing is **manual**, using the checklist in section 15. A tester runs the UI f
 
 | # | Change | Verify |
 |---|---|---|
-**Before Stage B:** set up prod test accounts (student, instructor, admin) and a test course for the checklist, kept away from real students and course analytics. Clean up test sessions afterwards.
+**Before Stage B:** set up prod test accounts (student, instructor, admin) and a test course for the checklist, kept away from real students and course analytics. Clean up test sessions afterwards. Also run E13's scan against prod for a baseline. Expect the same 17 affected roles as dev; anything else is prod-only and needs its own fix before 26 April 2027.
 
 | # | Change | Verify |
 |---|---|---|
-| 1 | **F2** prod alarm email (re-subscribe and confirm); **F3** in prod; P1.2 single-AZ (online); P1.1 (two deploys); P1.3 | E11 and E12 in prod; quick checklist run after each deploy; same engineer checks as dev; guardrails for 3–7 days; `RDS:ProxyUsage` at 1,488 vCPU-h a month instead of 4,464; RDS bill drops the next day |
+| 1 | **F2** prod alarm email (re-subscribe and confirm); **F3** in prod; **F4** (ships with the first deploy of its 4 stacks); P1.2 single-AZ (online); P1.1 (two deploys); P1.3 | E11, E12 and E13 in prod; quick checklist run after each deploy; same engineer checks as dev; guardrails for 3–7 days; `RDS:ProxyUsage` at 1,488 vCPU-h a month instead of 4,464; RDS bill drops the next day |
 | 2 | **P2.1 rebuild** in the winter break (announced freeze) | P2.1 checks; **full checklist run before unfreezing**; for a week, watch `ReadIOPS`, `ReadLatency`, `SwapUsage` and retrieval p90 (fallback: `t4g.medium` in place) |
 | 3 | P2.2 NAT instance (`t4g.micro`) | Full checklist run; guardrails |
 | 4 | P2.3, after the NAT instance has run cleanly for a week | Quick checklist run; no Bedrock or Secrets Manager errors |
@@ -953,6 +963,7 @@ For each run, record the date, environment, plan step, tester, pass/fail per row
 | E10 | After F1 (dev only): a push to the `dev` branch builds dev; a push to `main` doesn't; `dev.<appId>.amplifyapp.com` redirects to `ocelia-dev.arts.ubc.ca`; Amplify drift clean | All true; `ocelia-dev.arts.ubc.ca` still serves the app |
 | E11 | After F3: stage `methodSettings` show `loggingLevel: ERROR`, throttling 100/200, `metricsEnabled: false`; the log group exists with retention; Security Hub APIGateway.1 | Matches; APIGateway.1 PASSED (it can take up to a day to re-evaluate) |
 | E12 | F2: `list-subscriptions-by-topic` on the critical topic | `email` subscription **confirmed**, not `PendingConfirmation` |
+| E13 | After F4: `python3 -I scripts/check_cloudwatch_logs_iam.py <profile>`; `aws ec2 describe-flow-logs` on the OCELIA flow log; new events in a few Lambda log groups after the deploy | `No affected roles or policies` (exit 0); `DeliverLogsStatus: SUCCESS`; Lambda logs still arriving |
 
 ---
 
